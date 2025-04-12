@@ -40,3 +40,22 @@ function processFileUpload(formBlob, fileName, taskId, userEmail) {
     return handleError(e.message, "processFileUpload");
   }
 }
+// Get evidence for a specific task
+function getEvidenceForTask(taskId) {
+  try {
+    var sheet = getSheet("Evidence Uploads");
+    var data = sheet.getDataRange().getValues();
+    var evidence = [];
+    
+    // Skip header row
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][1] == taskId) {
+        evidence.push(data[i]);
+      }
+    }
+    
+    return evidence;
+  } catch (e) {
+    return handleError(e.message, "getEvidenceForTask");
+  }
+}
