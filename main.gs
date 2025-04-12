@@ -65,3 +65,20 @@ function updateLastLogin(email) {
     }
   }
 }
+
+// Process logout request
+function logout() {
+  var authInfo = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);
+  
+  // Log the action
+  try {
+    var user = Session.getActiveUser().getEmail();
+    logAction('User Logout', null, user, 'User logged out');
+  } catch (e) {
+    // If logging fails, continue with logout
+  }
+  
+  return HtmlService.createHtmlOutput(
+    '<script>window.top.location.href="' + authInfo.getAuthorizationUrl() + '";</script>'
+  );
+}
