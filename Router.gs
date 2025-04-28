@@ -1,0 +1,49 @@
+/**
+ * Router.gs
+ * Main routing script for the web app: detects the user, verifies domain,
+ * and serves the correct HTML page based on the user role.
+ */
+function doGet(e) {
+  try {
+    // Get the active user's email
+    var email = Session.getActiveUser().getEmail();
+    if (!email) {
+      // If not logged in, prompt to log in
+      return HtmlService.createHtmlOutput("Please log in to use this application.");
+    }
+    // Check that email domain is allowed
+    var allowedDomain = 'hasspetroleum.com';
+    /*if (email.split('@').pop().toLowerCase() !== allowedDomain) {
+      return HtmlService.createHtmlOutput("Unauthorized: Your account is not from @" + allowedDomain + " domain.");
+    }*/
+    // Lookup the user's role from the User Access sheet
+    var role = getUserRole(email);
+    if (!role) {
+      return HtmlService.createHtmlOutput("Access Denied: Your user role is not defined in the system.");
+    }
+    // Serve the HTML page based on role
+    var template;
+    switch (role.toLowerCase()) {
+      case 'manager':
+      case 'admin': // treat 'Admin' as a Manager role as well
+        template = HtmlService.createTemplateFromFile('Manager'); // Manager.html
+        break;
+      case 'auditor':
+        template = HtmlService.createTemplateFromFile('Auditor'); // Auditor.html
+        break;
+      case 'auditee':
+        template = HtmlService.createTemplateFromFile('Auditee'); // Auditee.html
+        break;
+      default:
+        return HtmlService.createHtmlOutput("Access Denied: Your role '" + role + "' is not recognized.");
+    }
+    // Evaluate and return the HTML, set a title and allow iframes (if needed)
+    return template.evaluate()
+                   .setTitle('Audit Tracker')
+                   .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } catch (err) {
+    // Log any errors and return a message
+    logError('doGet', err.toString());
+    return HtmlService.createHtmlOutput("Error: " + err.toString());
+  }
+}
