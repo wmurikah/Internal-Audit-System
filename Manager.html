@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Audit Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .brand-logo { padding-left: 10px; }
+    .error-message { color: #f44336; font-weight: bold; }
+    .success-message { color: #4CAF50; font-weight: bold; }
+    .filter-section { margin-bottom: 15px; }
+  </style>
+</head>
+
+<body>
+<nav class="blue darken-4">
+  <div class="nav-wrapper">
+    <a href="#" class="brand-logo">
+      Audit Tracker
+    </a>
+    <ul id="nav-mobile" class="right">
+      <li><a href="#">Logout</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container" style="margin-top: 30px;">
+  <div class="row">
+    <div class="col s12">
+      <ul class="tabs">
+        <li class="tab col s4"><a href="#plans" class="active">Action Plans</a></li>
+        <li class="tab col s4"><a href="#users">Users</a></li>
+        <li class="tab col s4"><a href="#reports">Reports</a></li>
+      </ul>
+    </div>
+
+    <!-- Action Plans Tab -->
+    <div id="plans" class="col s12">
+      <h5>Manage Action Plans</h5>
+
+      <div class="row filter-section">
+        <div class="input-field col s12 m3">
+          <select id="yearFilter">
+            <option value="All" selected>All Years</option>
+            <!-- Will be populated dynamically -->
+          </select>
+          <label>Filter by Year</label>
+        </div>
+        <div class="input-field col s12 m3">
+          <select id="affiliateFilter">
+            <option value="All" selected>All Affiliates</option>
+            <!-- Will be populated dynamically -->
+          </select>
+          <label>Filter by Affiliate</label>
+        </div>
+        <div class="input-field col s12 m3">
+          <select id="statusFilter">
+            <option value="All" selected>All Statuses</option>
+            <option value="Implemented">Implemented</option>
+            <option value="Not Implemented">Not Implemented</option>
+            <option value="Not Due">Not Due</option>
+          </select>
+          <label>Filter by Status</label>
+        </div>
+        <div class="col s12 m3">
+          <button class="btn blue waves-effect waves-light" onclick="loadActionPlans()">
+            Reload Data
+          </button>
+          <button class="btn orange waves-effect waves-light" onclick="runDiagnostics()">
+            Run Diagnostics
+          </button>
+        </div>
+      </div>
+
+      <div id="loadingIndicator" class="center-align" style="display:none;">
+        <div class="preloader-wrapper small active">
+          <div class="spinner-layer spinner-blue-only">
+            <div class="circle-clipper left">
+              <div class="circle"></div>
+            </div>
+            <div class="gap-patch">
+              <div class="circle"></div>
+            </div>
+            <div class="circle-clipper right">
+              <div class="circle"></div>
+            </div>
+          </div>
+        </div>
+        <p>Loading data...</p>
+      </div>
+
+      <div id="statusMessage" class="center-align"></div>
+
+      <table class="highlight responsive-table">
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>Year</th>
+            <th>Affiliate</th>
+            <th>Audit Name</th>
+            <th>Observation Title</th>
+            <th>Action Plan</th>
+            <th>Assigned To</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="plansBody">
+          <tr><td colspan="10" class="center-align">Please click "Reload Data" or "Run Diagnostics"</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Task Details Modal -->
+      <div id="taskDetailModal" class="modal">
+        <div class="modal-content">
+          <h4>Task Details</h4>
+          <ul class="collection" id="taskDetails"></ul>
+        </div>
+        <div class="modal-footer">
+          <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div id="users" class="col s12">
+      <h5>User Management (Coming Soon)</h5>
+      <p>This section will allow you to manage Auditors and Auditees later.</p>
+    </div>
+
+    <!-- Reports Tab -->
+    <div id="reports" class="col s12">
+      <h5>Summary Charts</h5>
+      <div class="row">
+        <div class="col s12 m6">
+          <canvas id="actionPlanChart"></canvas>
+        </div>
+        <div class="col s12 m6">
+          <canvas id="userChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="page-footer blue darken-4" style="margin-top: 50px;">
+  <div class="container">
+    <div class="row">
+      <div class="col s12">
+        <span class="white-text">© 2025 Hass Petroleum Audit Tracker</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+
+<script>
+let allTasks = [];
+let yearOptions = [];
+let affiliateOptions = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize Materialize components
+  initializeMaterialize();
+});
+
+function initializeMaterialize() {
+  var selects = document.querySelectorAll('select');
+  M.FormSelect.init(selects);
+  
+  var tabs = document.querySelectorAll('.tabs');
+  M.Tabs.init(tabs);
+  
+  var modals = document.querySelectorAll('.modal');
+  M.Modal.init(modals);
+}
+
+function showLoading(show) {
+  const loader = document.getElementById('loadingIndicator');
+  if (show) {
+    loader.style.display = 'block';
+  } else {
+    loader.style.display = 'none';
+  }
+}
+
+function showMessage(message, isError) {
+  const statusDiv = document.getElementById('statusMessage');
+  statusDiv.innerHTML = `<p class="${isError ? 'error-message' : 'success-message'}">${message}</p>`;
+  setTimeout(() => {
+    statusDiv.innerHTML = '';
+  }, 5000);
+}
+
+function loadActionPlans() {
+  showLoading(true);
+  document.getElementById('plansBody').innerHTML = '';
+  showMessage('Requesting data from server...', false);
+  
+  try {
+    google.script.run
+      .withSuccessHandler(function(response) {
+        showLoading(false);
+        console.log('Server response:', response);
+        
+        if (response && response.error) {
+          showMessage('Error: ' + response.error, true);
+          document.getElementById('plansBody').innerHTML = 
+            `<tr><td colspan="10" class="center-align">Error loading data: ${response.error}</td></tr>`;
+          return;
+        }
+        
+        if (!response || !Array.isArray(response) || response.length === 0) {
+          showMessage('No data returned from server', true);
+          document.getElementById('plansBody').innerHTML = 
+            '<tr><td colspan="10" class="center-align">No action plans found</td></tr>';
+          return;
+        }
+        
+        allTasks = response;
+        showMessage(`Loaded ${allTasks.length} action plans successfully`, false);
+        
+        // Populate filter dropdowns with unique values
+        populateFilters();
+        
+        // Display the tasks
+        applyFilters();
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        console.error('Server error:', error);
+        showMessage('Server error: ' + error, true);
+        document.getElementById('plansBody').innerHTML = 
+          `<tr><td colspan="10" class="center-align">Failed to load data: ${error}</td></tr>`;
+      })
+      .getAllTasks();
+  } catch (err) {
+    showLoading(false);
+    console.error('Client error:', err);
+    showMessage('Client error: ' + err.message, true);
+    document.getElementById('plansBody').innerHTML = 
+      `<tr><td colspan="10" class="center-align">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function populateFilters() {
+  // Extract unique years
+  const yearFilter = document.getElementById('yearFilter');
+  yearFilter.innerHTML = '<option value="All">All Years</option>';
+  
+  const years = new Set();
+  allTasks.forEach(task => {
+    if (task && task.year) {
+      years.add(String(task.year));
+    }
+  });
+  
+  // If no years found, add defaults
+  if (years.size === 0) {
+    ['2022', '2023', '2024', '2025'].forEach(year => years.add(year));
+  }
+  
+  // Sort years
+  const sortedYears = Array.from(years).sort((a, b) => b - a); // Descending order
+  
+  // Add year options to dropdown
+  sortedYears.forEach(year => {
+    const option = document.createElement('option');
+    option.value = year;
+    option.textContent = year;
+    yearFilter.appendChild(option);
+  });
+  
+  // Extract unique affiliates
+  const affiliateFilter = document.getElementById('affiliateFilter');
+  affiliateFilter.innerHTML = '<option value="All">All Affiliates</option>';
+  
+  const affiliates = new Set();
+  allTasks.forEach(task => {
+    if (task && task.affiliate && task.affiliate.trim() !== '') {
+      affiliates.add(task.affiliate);
+    }
+  });
+  
+  // Sort affiliates alphabetically
+  const sortedAffiliates = Array.from(affiliates).sort();
+  
+  // Add affiliate options to dropdown
+  sortedAffiliates.forEach(affiliate => {
+    const option = document.createElement('option');
+    option.value = affiliate;
+    option.textContent = affiliate;
+    affiliateFilter.appendChild(option);
+  });
+  
+  // Reinitialize Materialize dropdowns after modifying them
+  M.FormSelect.init(document.querySelectorAll('select'));
+}
+
+function applyFilters() {
+  const yearValue = document.getElementById('yearFilter').value;
+  const affiliateValue = document.getElementById('affiliateFilter').value;
+  const statusValue = document.getElementById('statusFilter').value;
+  
+  const filtered = allTasks.filter(task => {
+    if (!task) return false;
+    
+    // Apply year filter
+    if (yearValue !== 'All' && String(task.year) !== yearValue) {
+      return false;
+    }
+    
+    // Apply affiliate filter
+    if (affiliateValue !== 'All' && task.affiliate !== affiliateValue) {
+      return false;
+    }
+    
+    // Apply status filter
+    if (statusValue !== 'All' && 
+        (!task.status || task.status.toLowerCase() !== statusValue.toLowerCase())) {
+      return false;
+    }
+    
+    return true;
+  });
+  
+  populateTasks(filtered);
+}
+
+function populateTasks(tasks) {
+  const tbody = document.getElementById('plansBody');
+  tbody.innerHTML = '';
+
+  if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="center-align">No Action Plans Found</td></tr>';
+    return;
+  }
+
+  tasks.forEach(task => {
+    if (!task) return; // Skip null tasks
+    
+    const row = tbody.insertRow();
+    
+    // Task ID cell with link
+    const idCell = row.insertCell();
+    const idLink = document.createElement('a');
+    idLink.href = "#taskDetailModal";
+    idLink.className = "modal-trigger";
+    idLink.textContent = task.taskId || '';
+    idLink.onclick = function() { viewTaskDetails(task.taskId); };
+    idCell.appendChild(idLink);
+    
+    // Year and Affiliate cells
+    row.insertCell().textContent = task.year || '';
+    row.insertCell().textContent = task.affiliate || '';
+    
+    // Other cells
+    row.insertCell().textContent = task.auditName || '';
+    row.insertCell().textContent = task.observationTitle || '';
+    row.insertCell().textContent = task.actionPlan || '';
+    row.insertCell().textContent = task.assignedTo || '';
+    
+    // Due date cell
+    const dueDateCell = row.insertCell();
+    if (task.dueDate) {
+      try {
+        let dateStr = task.dueDate;
+        if (typeof dateStr === 'string' && dateStr.includes('T')) {
+          dateStr = dateStr.split('T')[0]; // Extract date part from ISO string
+        }
+        dueDateCell.textContent = dateStr;
+      } catch (e) {
+        dueDateCell.textContent = String(task.dueDate);
+      }
+    } else {
+      dueDateCell.textContent = '';
+    }
+
+    // Status cell with badge
+    const statusCell = row.insertCell();
+    const status = task.status || '';
+    if (status.toLowerCase() === 'implemented') {
+      statusCell.innerHTML = `<span class="new badge green" data-badge-caption="Implemented"></span>`;
+    } else if (status.toLowerCase() === 'not implemented') {
+      statusCell.innerHTML = `<span class="new badge red" data-badge-caption="Not Implemented"></span>`;
+    } else if (status.toLowerCase() === 'not due') {
+      statusCell.innerHTML = `<span class="new badge orange" data-badge-caption="Not Due"></span>`;
+    } else {
+      statusCell.textContent = status;
+    }
+
+    // Actions cell
+    const actionsCell = row.insertCell();
+    const editBtn = document.createElement('a');
+    editBtn.className = 'btn-small orange waves-effect waves-light';
+    editBtn.style.marginRight = '5px';
+    editBtn.textContent = 'Edit';
+    actionsCell.appendChild(editBtn);
+    
+    const deleteBtn = document.createElement('a');
+    deleteBtn.className = 'btn-small red waves-effect waves-light';
+    deleteBtn.textContent = 'Delete';
+    actionsCell.appendChild(deleteBtn);
+  });
+}
+
+// Add event listeners to the filter dropdowns
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('yearFilter').addEventListener('change', applyFilters);
+  document.getElementById('affiliateFilter').addEventListener('change', applyFilters);
+  document.getElementById('statusFilter').addEventListener('change', applyFilters);
+});
+
+function viewTaskDetails(taskId) {
+  if (!allTasks || !Array.isArray(allTasks)) {
+    showMessage('No tasks loaded', true);
+    return;
+  }
+  
+  const task = allTasks.find(t => t && (String(t.taskId) === String(taskId)));
+  if (task) {
+    const detailsList = document.getElementById('taskDetails');
+    detailsList.innerHTML = '';
+    
+    // Create list items for each property
+    const properties = [
+      {label: 'Task ID', value: task.taskId},
+      {label: 'Year', value: task.year},
+      {label: 'Affiliate', value: task.affiliate},
+      {label: 'Business Unit', value: task.businessUnit},
+      {label: 'Audit Name', value: task.auditName},
+      {label: 'Observation Title', value: task.observationTitle},
+      {label: 'Description', value: task.description},
+      {label: 'Rating', value: task.rating},
+      {label: 'Risk', value: task.risk},
+      {label: 'Management Response', value: task.managementResponse},
+      {label: 'Action Plan', value: task.actionPlan},
+      {label: 'Due Date', value: task.dueDate},
+      {label: 'Assigned To', value: task.assignedTo},
+      {label: 'Status', value: task.status},
+      {label: 'Date Assigned', value: task.dateAssigned},
+      {label: 'Date Completed', value: task.dateCompleted},
+      {label: 'Evidence Link', value: task.evidenceLink},
+      {label: 'Completion Notes', value: task.completionNotes}
+    ];
+    
+    properties.forEach(prop => {
+      const li = document.createElement('li');
+      li.className = 'collection-item';
+      li.innerHTML = `<strong>${prop.label}:</strong> ${prop.value || ''}`;
+      detailsList.appendChild(li);
+    });
+    
+    // Open the modal
+    const modalElem = document.getElementById('taskDetailModal');
+    const modalInstance = M.Modal.getInstance(modalElem);
+    modalInstance.open();
+  } else {
+    showMessage(`Task with ID ${taskId} not found`, true);
+  }
+}
+
+function runDiagnostics() {
+  showLoading(true);
+  document.getElementById('plansBody').innerHTML = '';
+  showMessage('Running diagnostics...', false);
+  
+  try {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        showLoading(false);
+        console.log('Diagnostics result:', result);
+        
+        let htmlOutput = '<tr><td colspan="10">';
+        htmlOutput += '<h5>Diagnostics Results:</h5>';
+        htmlOutput += '<pre style="text-align: left; background: #f5f5f5; padding: 10px; overflow-x: auto;">';
+        htmlOutput += JSON.stringify(result, null, 2);
+        htmlOutput += '</pre>';
+        
+        if (result && result.error) {
+          showMessage('Diagnostics found an error: ' + result.error, true);
+        } else if (result && result.success) {
+          showMessage('Diagnostics completed successfully', false);
+        }
+        
+        htmlOutput += '</td></tr>';
+        document.getElementById('plansBody').innerHTML = htmlOutput;
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        console.error('Diagnostics error:', error);
+        showMessage('Diagnostics error: ' + error, true);
+        document.getElementById('plansBody').innerHTML = 
+          `<tr><td colspan="10" class="center-align">Diagnostics failed: ${error}</td></tr>`;
+      })
+      .debugGetAllTasks();
+  } catch (err) {
+    showLoading(false);
+    console.error('Client diagnostics error:', err);
+    showMessage('Client diagnostics error: ' + err.message, true);
+    document.getElementById('plansBody').innerHTML = 
+      `<tr><td colspan="10" class="center-align">Error: ${err.message}</td></tr>`;
+  }
+}
+</script>
+
+</body>
+</html>
