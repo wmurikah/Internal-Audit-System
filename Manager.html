@@ -346,11 +346,167 @@
       </div>
     </div>
 
-    <!-- Users Tab -->
-    <div id="users" class="col s12">
-      <h5>User Management (Coming Soon)</h5>
-      <p>This section will allow you to manage Auditors and Auditees later.</p>
+<!-- Users Tab -->
+<div id="users" class="col s12">
+  <div class="section-title">
+    <h5>User Management</h5>
+    <div>
+      <button class="btn blue waves-effect waves-light" onclick="loadUsers()">
+        <i class="material-icons left">refresh</i>Refresh
+      </button>
+      <button class="btn green waves-effect waves-light modal-trigger" href="#addUserModal">
+        <i class="material-icons left">person_add</i>Add User
+      </button>
     </div>
+  </div>
+  
+  <!-- Filter row -->
+  <div class="row filter-section" style="margin-bottom: 5px;">
+    <div class="col s12 m4">
+      <div class="input-field" style="margin-top: 0; margin-bottom: 0;">
+        <select id="roleFilter" onchange="filterUsers()">
+          <option value="All" selected>All Roles</option>
+          <option value="Manager">Manager</option>
+          <option value="Auditor">Auditor</option>
+          <option value="Auditee">Auditee</option>
+        </select>
+        <label>Filter by Role</label>
+      </div>
+    </div>
+    
+    <div class="col s12 m8">
+      <div class="input-field" style="margin-top: 0; margin-bottom: 0;">
+        <input id="userSearchInput" type="text" onkeyup="filterUsers()">
+        <label for="userSearchInput">Search by Name or Email</label>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Loading indicator -->
+  <div id="userLoadingIndicator" class="center-align" style="display:none; margin: 20px 0;">
+    <div class="preloader-wrapper small active">
+      <div class="spinner-layer spinner-blue-only">
+        <div class="circle-clipper left">
+          <div class="circle"></div>
+        </div>
+        <div class="gap-patch">
+          <div class="circle"></div>
+        </div>
+        <div class="circle-clipper right">
+          <div class="circle"></div>
+        </div>
+      </div>
+    </div>
+    <p>Loading users...</p>
+  </div>
+  
+  <!-- Status message -->
+  <div id="userStatusMessage" class="center-align"></div>
+  
+  <!-- Users table -->
+  <div class="card">
+    <div class="card-content">
+      <table class="striped highlight responsive-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th style="width: 150px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <!-- User rows will be inserted here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <!-- Add User Modal -->
+  <div id="addUserModal" class="modal">
+    <div class="modal-content">
+      <h5>Add New User</h5>
+      <form id="addUserForm">
+        <div class="input-field">
+          <input id="newUserName" type="text" required>
+          <label for="newUserName">Full Name</label>
+        </div>
+        
+        <div class="input-field">
+          <input id="newUserEmail" type="email" required>
+          <label for="newUserEmail">Email Address</label>
+        </div>
+        
+        <div class="input-field">
+          <select id="newUserRole" required>
+            <option value="" disabled selected>Choose role</option>
+            <option value="Manager">Manager</option>
+            <option value="Auditor">Auditor</option>
+            <option value="Auditee">Auditee</option>
+          </select>
+          <label>Role</label>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn waves-effect waves-light" onclick="addUser()">
+        Add User
+      </button>
+      <a class="modal-close waves-effect waves-light btn-flat">Cancel</a>
+    </div>
+  </div>
+  
+  <!-- Edit User Modal -->
+  <div id="editUserModal" class="modal">
+    <div class="modal-content">
+      <h5>Edit User</h5>
+      <form id="editUserForm">
+        <input type="hidden" id="editUserIndex">
+        
+        <div class="input-field">
+          <input id="editUserName" type="text" required>
+          <label for="editUserName">Full Name</label>
+        </div>
+        
+        <div class="input-field">
+          <input id="editUserEmail" type="email" required>
+          <label for="editUserEmail">Email Address</label>
+        </div>
+        
+        <div class="input-field">
+          <select id="editUserRole" required>
+            <option value="Manager">Manager</option>
+            <option value="Auditor">Auditor</option>
+            <option value="Auditee">Auditee</option>
+          </select>
+          <label>Role</label>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn waves-effect waves-light" onclick="updateUser()">
+        Update User
+      </button>
+      <a class="modal-close waves-effect waves-light btn-flat">Cancel</a>
+    </div>
+  </div>
+  
+  <!-- Delete User Confirmation Modal -->
+  <div id="deleteUserModal" class="modal">
+    <div class="modal-content">
+      <h5>Confirm Delete</h5>
+      <p>Are you sure you want to delete this user?</p>
+      <p>This action cannot be undone.</p>
+      <p id="deleteUserName" class="red-text"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn red waves-effect waves-light" onclick="deleteUser()">
+        Delete
+      </button>
+      <a class="modal-close waves-effect waves-light btn-flat">Cancel</a>
+    </div>
+  </div>
+</div>
 
     <!-- Reports Tab -->
    <div id="reports" class="col s12">
@@ -406,30 +562,7 @@
     </div>
   </div>
   
-  <div class="row">
-    <div class="col s12 m6">
-      <div class="card" style="background-color: white;">
-        <div class="card-content">
-          <span class="card-title" style="font-weight: 500;">Not Implemented High Risk Action Plans</span>
-          <div style="height: 350px;">
-            <canvas id="highRiskActionPlansChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col s12 m6">
-      <div class="card" style="background-color: white;">
-        <div class="card-content">
-          <span class="card-title" style="font-weight: 500;">Action Plan Status per Audit Area</span>
-          <div style="height: 350px;">
-            <canvas id="actionPlanStatusChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-      
+     
       <div class="row">
         <div class="col s12 m6">
           <div class="card">
@@ -1652,3 +1785,5 @@ function updateActionPlanStatusChart(tasks) {
 
 </body>
 </html>
+  
+  
