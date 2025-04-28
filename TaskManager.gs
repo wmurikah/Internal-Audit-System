@@ -213,6 +213,7 @@ function updateTask(data) {
     ];
 
     sheet.getRange(rowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
+    logAudit('UPDATE', data.taskId, 'Task updated');
     return {success: true, message: "Task updated successfully"};
   } catch (e) {
     Logger.log("Error in updateTask: " + e.toString());
@@ -246,6 +247,7 @@ function deleteTask(taskId) {
     }
 
     sheet.deleteRow(rowIndex);
+    logAudit('DELETE', taskId, 'Task deleted');
     return {success: true, message: "Task deleted successfully"};
   } catch (e) {
     Logger.log("Error in deleteTask: " + e.toString());
@@ -253,7 +255,12 @@ function deleteTask(taskId) {
   }
 }
 
-// Add a doGet function for web app deployment
+// Get current user's email
+function getCurrentUserEmail() {
+  return Session.getActiveUser().getEmail();
+}
+
+// Add a doGet function for direct web app deployment
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Manager')
     .setTitle('Audit Tracker')
