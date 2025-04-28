@@ -12,6 +12,14 @@
     .error-message { color: #f44336; font-weight: bold; }
     .success-message { color: #4CAF50; font-weight: bold; }
     .filter-section { margin-bottom: 15px; }
+    .btn-container { display: flex; justify-content: flex-start; padding-top: 20px; }
+    .btn-container .btn { margin-right: 10px; }
+    .action-btn { margin: 2px; height: 30px; line-height: 30px; padding: 0 10px; }
+    .status-badge { border-radius: 2px; color: white; padding: 3px 10px; text-align: center; display: inline-block; }
+    .status-implemented { background-color: #4CAF50; }
+    .status-not-implemented { background-color: #F44336; }
+    .status-not-due { background-color: #FF9800; }
+    .edit-form .input-field { margin-top: 10px; margin-bottom: 10px; }
   </style>
 </head>
 
@@ -40,38 +48,49 @@
     <!-- Action Plans Tab -->
     <div id="plans" class="col s12">
       <h5>Manage Action Plans</h5>
-
+      
       <div class="row filter-section">
-        <div class="input-field col s12 m3">
-          <select id="yearFilter">
-            <option value="All" selected>All Years</option>
-            <!-- Will be populated dynamically -->
-          </select>
-          <label>Filter by Year</label>
+        <div class="col s12 m4">
+          <div class="input-field">
+            <select id="yearFilter">
+              <option value="All" selected>All Years</option>
+            </select>
+            <label>Filter by Year</label>
+          </div>
         </div>
-        <div class="input-field col s12 m3">
-          <select id="affiliateFilter">
-            <option value="All" selected>All Affiliates</option>
-            <!-- Will be populated dynamically -->
-          </select>
-          <label>Filter by Affiliate</label>
+        
+        <div class="col s12 m4">
+          <div class="input-field">
+            <select id="affiliateFilter">
+              <option value="All" selected>All Affiliates</option>
+            </select>
+            <label>Filter by Affiliate</label>
+          </div>
         </div>
-        <div class="input-field col s12 m3">
-          <select id="statusFilter">
-            <option value="All" selected>All Statuses</option>
-            <option value="Implemented">Implemented</option>
-            <option value="Not Implemented">Not Implemented</option>
-            <option value="Not Due">Not Due</option>
-          </select>
-          <label>Filter by Status</label>
+        
+        <div class="col s12 m4">
+          <div class="input-field">
+            <select id="statusFilter">
+              <option value="All" selected>All Statuses</option>
+              <option value="Implemented">Implemented</option>
+              <option value="Not Implemented">Not Implemented</option>
+              <option value="Not Due">Not Due</option>
+            </select>
+            <label>Filter by Status</label>
+          </div>
         </div>
-        <div class="col s12 m3">
-          <button class="btn blue waves-effect waves-light" onclick="loadActionPlans()">
-            Reload Data
-          </button>
-          <button class="btn orange waves-effect waves-light" onclick="runDiagnostics()">
-            Run Diagnostics
-          </button>
+      </div>
+      
+      <div class="row">
+        <div class="col s12">
+          <div class="btn-container">
+            <button class="btn blue waves-effect waves-light" onclick="loadActionPlans()">
+              <i class="material-icons left">refresh</i>Reload Data
+            </button>
+            <button class="btn orange waves-effect waves-light" onclick="runDiagnostics()">
+              <i class="material-icons left">bug_report</i>Run Diagnostics
+            </button>
+          </div>
         </div>
       </div>
 
@@ -94,25 +113,29 @@
 
       <div id="statusMessage" class="center-align"></div>
 
-      <table class="highlight responsive-table">
-        <thead>
-          <tr>
-            <th>Task ID</th>
-            <th>Year</th>
-            <th>Affiliate</th>
-            <th>Audit Name</th>
-            <th>Observation Title</th>
-            <th>Action Plan</th>
-            <th>Assigned To</th>
-            <th>Due Date</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="plansBody">
-          <tr><td colspan="10" class="center-align">Please click "Reload Data" or "Run Diagnostics"</td></tr>
-        </tbody>
-      </table>
+      <div class="row">
+        <div class="col s12">
+          <table class="highlight responsive-table">
+            <thead>
+              <tr>
+                <th>Task ID</th>
+                <th>Year</th>
+                <th>Affiliate</th>
+                <th>Audit Name</th>
+                <th>Observation Title</th>
+                <th>Action Plan</th>
+                <th>Assigned To</th>
+                <th>Due Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="plansBody">
+              <tr><td colspan="10" class="center-align">Please click "Reload Data" or "Run Diagnostics"</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <!-- Task Details Modal -->
       <div id="taskDetailModal" class="modal">
@@ -122,6 +145,115 @@
         </div>
         <div class="modal-footer">
           <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+        </div>
+      </div>
+
+      <!-- Edit Task Modal -->
+      <div id="editTaskModal" class="modal">
+        <div class="modal-content">
+          <h4>Edit Task</h4>
+          <form id="editTaskForm" class="edit-form">
+            <input type="hidden" id="edit-taskId">
+            
+            <div class="row">
+              <div class="input-field col s12 m6">
+                <input id="edit-year" type="text">
+                <label for="edit-year">Year</label>
+              </div>
+              <div class="input-field col s12 m6">
+                <input id="edit-affiliate" type="text">
+                <label for="edit-affiliate">Affiliate</label>
+              </div>
+            </div>
+            
+            <div class="row">
+              <div class="input-field col s12 m6">
+                <input id="edit-businessUnit" type="text">
+                <label for="edit-businessUnit">Business Unit</label>
+              </div>
+              <div class="input-field col s12 m6">
+                <input id="edit-auditName" type="text">
+                <label for="edit-auditName">Audit Name</label>
+              </div>
+            </div>
+            
+            <div class="input-field">
+              <input id="edit-observationTitle" type="text">
+              <label for="edit-observationTitle">Observation Title</label>
+            </div>
+            
+            <div class="input-field">
+              <textarea id="edit-description" class="materialize-textarea"></textarea>
+              <label for="edit-description">Description</label>
+            </div>
+            
+            <div class="row">
+              <div class="input-field col s12 m6">
+                <input id="edit-rating" type="text">
+                <label for="edit-rating">Rating</label>
+              </div>
+              <div class="input-field col s12 m6">
+                <input id="edit-risk" type="text">
+                <label for="edit-risk">Risk</label>
+              </div>
+            </div>
+            
+            <div class="input-field">
+              <textarea id="edit-managementResponse" class="materialize-textarea"></textarea>
+              <label for="edit-managementResponse">Management Response</label>
+            </div>
+            
+            <div class="input-field">
+              <textarea id="edit-actionPlan" class="materialize-textarea"></textarea>
+              <label for="edit-actionPlan">Action Plan</label>
+            </div>
+            
+            <div class="row">
+              <div class="input-field col s12 m6">
+                <input id="edit-dueDate" type="date">
+                <label for="edit-dueDate">Due Date</label>
+              </div>
+              <div class="input-field col s12 m6">
+                <input id="edit-assignedTo" type="text">
+                <label for="edit-assignedTo">Assigned To</label>
+              </div>
+            </div>
+            
+            <div class="input-field">
+              <select id="edit-status">
+                <option value="Implemented">Implemented</option>
+                <option value="Not Implemented">Not Implemented</option>
+                <option value="Not Due">Not Due</option>
+              </select>
+              <label>Status</label>
+            </div>
+            
+            <div class="input-field">
+              <textarea id="edit-completionNotes" class="materialize-textarea"></textarea>
+              <label for="edit-completionNotes">Completion Notes</label>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn waves-effect waves-light" onclick="saveTaskChanges()">
+            Save Changes
+          </button>
+          <a href="#!" class="modal-close waves-effect waves-light btn-flat">Cancel</a>
+        </div>
+      </div>
+      
+      <!-- Delete Confirmation Modal -->
+      <div id="deleteConfirmModal" class="modal">
+        <div class="modal-content">
+          <h4>Confirm Delete</h4>
+          <p>Are you sure you want to delete task <span id="delete-taskId"></span>?</p>
+          <p>This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn red waves-effect waves-light" onclick="confirmDeleteTask()">
+            Delete
+          </button>
+          <a href="#!" class="modal-close waves-effect waves-light btn-flat">Cancel</a>
         </div>
       </div>
     </div>
@@ -161,23 +293,26 @@
 
 <script>
 let allTasks = [];
-let yearOptions = [];
-let affiliateOptions = [];
+let currentTaskId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
   // Initialize Materialize components
   initializeMaterialize();
+  
+  // Add event listeners to filters
+  document.getElementById('yearFilter').addEventListener('change', applyFilters);
+  document.getElementById('affiliateFilter').addEventListener('change', applyFilters);
+  document.getElementById('statusFilter').addEventListener('change', applyFilters);
+  
+  // Load data
+  setTimeout(loadActionPlans, 500);
 });
 
 function initializeMaterialize() {
-  var selects = document.querySelectorAll('select');
-  M.FormSelect.init(selects);
-  
-  var tabs = document.querySelectorAll('.tabs');
-  M.Tabs.init(tabs);
-  
-  var modals = document.querySelectorAll('.modal');
-  M.Modal.init(modals);
+  M.Tabs.init(document.querySelectorAll('.tabs'));
+  M.Modal.init(document.querySelectorAll('.modal'));
+  M.FormSelect.init(document.querySelectorAll('select'));
+  M.updateTextFields();
 }
 
 function showLoading(show) {
@@ -344,29 +479,46 @@ function populateTasks(tasks) {
   tasks.forEach(task => {
     if (!task) return; // Skip null tasks
     
-    const row = tbody.insertRow();
+    const row = document.createElement('tr');
     
     // Task ID cell with link
-    const idCell = row.insertCell();
+    const idCell = document.createElement('td');
     const idLink = document.createElement('a');
     idLink.href = "#taskDetailModal";
     idLink.className = "modal-trigger";
     idLink.textContent = task.taskId || '';
     idLink.onclick = function() { viewTaskDetails(task.taskId); };
     idCell.appendChild(idLink);
+    row.appendChild(idCell);
     
     // Year and Affiliate cells
-    row.insertCell().textContent = task.year || '';
-    row.insertCell().textContent = task.affiliate || '';
+    const yearCell = document.createElement('td');
+    yearCell.textContent = task.year || '';
+    row.appendChild(yearCell);
+    
+    const affiliateCell = document.createElement('td');
+    affiliateCell.textContent = task.affiliate || '';
+    row.appendChild(affiliateCell);
     
     // Other cells
-    row.insertCell().textContent = task.auditName || '';
-    row.insertCell().textContent = task.observationTitle || '';
-    row.insertCell().textContent = task.actionPlan || '';
-    row.insertCell().textContent = task.assignedTo || '';
+    const auditNameCell = document.createElement('td');
+    auditNameCell.textContent = task.auditName || '';
+    row.appendChild(auditNameCell);
+    
+    const observationCell = document.createElement('td');
+    observationCell.textContent = task.observationTitle || '';
+    row.appendChild(observationCell);
+    
+    const actionPlanCell = document.createElement('td');
+    actionPlanCell.textContent = task.actionPlan || '';
+    row.appendChild(actionPlanCell);
+    
+    const assignedToCell = document.createElement('td');
+    assignedToCell.textContent = task.assignedTo || '';
+    row.appendChild(assignedToCell);
     
     // Due date cell
-    const dueDateCell = row.insertCell();
+    const dueDateCell = document.createElement('td');
     if (task.dueDate) {
       try {
         let dateStr = task.dueDate;
@@ -377,44 +529,55 @@ function populateTasks(tasks) {
       } catch (e) {
         dueDateCell.textContent = String(task.dueDate);
       }
-    } else {
-      dueDateCell.textContent = '';
     }
+    row.appendChild(dueDateCell);
 
     // Status cell with badge
-    const statusCell = row.insertCell();
+    const statusCell = document.createElement('td');
     const status = task.status || '';
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'status-badge';
+    statusSpan.textContent = status;
+    
     if (status.toLowerCase() === 'implemented') {
-      statusCell.innerHTML = `<span class="new badge green" data-badge-caption="Implemented"></span>`;
+      statusSpan.classList.add('status-implemented');
     } else if (status.toLowerCase() === 'not implemented') {
-      statusCell.innerHTML = `<span class="new badge red" data-badge-caption="Not Implemented"></span>`;
+      statusSpan.classList.add('status-not-implemented');
     } else if (status.toLowerCase() === 'not due') {
-      statusCell.innerHTML = `<span class="new badge orange" data-badge-caption="Not Due"></span>`;
-    } else {
-      statusCell.textContent = status;
+      statusSpan.classList.add('status-not-due');
     }
+    
+    statusCell.appendChild(statusSpan);
+    row.appendChild(statusCell);
 
-    // Actions cell
-    const actionsCell = row.insertCell();
+    // Actions cell - Edit and Delete buttons
+// Actions cell - Edit and Delete buttons
+    const actionsCell = document.createElement('td');
+    
+    // Edit button
     const editBtn = document.createElement('a');
-    editBtn.className = 'btn-small orange waves-effect waves-light';
-    editBtn.style.marginRight = '5px';
-    editBtn.textContent = 'Edit';
+    editBtn.className = 'btn-small orange waves-effect waves-light action-btn';
+    editBtn.textContent = 'EDIT';
+    editBtn.href = "#editTaskModal";
+    editBtn.classList.add('modal-trigger');
+    editBtn.onclick = function() { openEditTaskModal(task.taskId); };
     actionsCell.appendChild(editBtn);
     
+    // Delete button
     const deleteBtn = document.createElement('a');
-    deleteBtn.className = 'btn-small red waves-effect waves-light';
-    deleteBtn.textContent = 'Delete';
+    deleteBtn.className = 'btn-small red waves-effect waves-light action-btn';
+    deleteBtn.textContent = 'DELETE';
+    deleteBtn.href = "#deleteConfirmModal";
+    deleteBtn.classList.add('modal-trigger');
+    deleteBtn.onclick = function() { openDeleteModal(task.taskId); };
     actionsCell.appendChild(deleteBtn);
+    
+    row.appendChild(actionsCell);
+    
+    // Add the completed row to the table
+    tbody.appendChild(row);
   });
 }
-
-// Add event listeners to the filter dropdowns
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('yearFilter').addEventListener('change', applyFilters);
-  document.getElementById('affiliateFilter').addEventListener('change', applyFilters);
-  document.getElementById('statusFilter').addEventListener('change', applyFilters);
-});
 
 function viewTaskDetails(taskId) {
   if (!allTasks || !Array.isArray(allTasks)) {
@@ -459,10 +622,173 @@ function viewTaskDetails(taskId) {
     // Open the modal
     const modalElem = document.getElementById('taskDetailModal');
     const modalInstance = M.Modal.getInstance(modalElem);
-    modalInstance.open();
+    if (modalInstance) {
+      modalInstance.open();
+    }
   } else {
     showMessage(`Task with ID ${taskId} not found`, true);
   }
+}
+
+// Edit task functionality
+function openEditTaskModal(taskId) {
+  currentTaskId = taskId;
+  const task = allTasks.find(t => t && (String(t.taskId) === String(taskId)));
+  
+  if (!task) {
+    showMessage(`Task with ID ${taskId} not found`, true);
+    return;
+  }
+  
+  // Fill the form with task data
+  document.getElementById('edit-taskId').value = task.taskId;
+  document.getElementById('edit-year').value = task.year || '';
+  document.getElementById('edit-affiliate').value = task.affiliate || '';
+  document.getElementById('edit-businessUnit').value = task.businessUnit || '';
+  document.getElementById('edit-auditName').value = task.auditName || '';
+  document.getElementById('edit-observationTitle').value = task.observationTitle || '';
+  document.getElementById('edit-description').value = task.description || '';
+  document.getElementById('edit-rating').value = task.rating || '';
+  document.getElementById('edit-risk').value = task.risk || '';
+  document.getElementById('edit-managementResponse').value = task.managementResponse || '';
+  document.getElementById('edit-actionPlan').value = task.actionPlan || '';
+  
+  // Format date for the date input (YYYY-MM-DD)
+  let dueDate = '';
+  if (task.dueDate) {
+    if (typeof task.dueDate === 'string' && task.dueDate.includes('T')) {
+      dueDate = task.dueDate.split('T')[0];
+    } else {
+      dueDate = task.dueDate;
+    }
+  }
+  document.getElementById('edit-dueDate').value = dueDate;
+  
+  document.getElementById('edit-assignedTo').value = task.assignedTo || '';
+  document.getElementById('edit-completionNotes').value = task.completionNotes || '';
+  
+  // Set the status dropdown
+  const statusSelect = document.getElementById('edit-status');
+  if (task.status) {
+    // Find the matching option
+    const options = statusSelect.options;
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].value.toLowerCase() === task.status.toLowerCase()) {
+        statusSelect.selectedIndex = i;
+        break;
+      }
+    }
+  }
+  
+  // Update Materialize form elements
+  M.updateTextFields();
+  M.FormSelect.init(document.getElementById('edit-status'));
+  M.textareaAutoResize(document.getElementById('edit-description'));
+  M.textareaAutoResize(document.getElementById('edit-managementResponse'));
+  M.textareaAutoResize(document.getElementById('edit-actionPlan'));
+  M.textareaAutoResize(document.getElementById('edit-completionNotes'));
+}
+
+function saveTaskChanges() {
+  if (!currentTaskId) {
+    showMessage('No task selected for editing', true);
+    return;
+  }
+  
+  const taskData = {
+    taskId: document.getElementById('edit-taskId').value,
+    year: document.getElementById('edit-year').value,
+    affiliate: document.getElementById('edit-affiliate').value,
+    businessUnit: document.getElementById('edit-businessUnit').value,
+    auditName: document.getElementById('edit-auditName').value,
+    observationTitle: document.getElementById('edit-observationTitle').value,
+    description: document.getElementById('edit-description').value,
+    rating: document.getElementById('edit-rating').value,
+    risk: document.getElementById('edit-risk').value,
+    managementResponse: document.getElementById('edit-managementResponse').value,
+    actionPlan: document.getElementById('edit-actionPlan').value,
+    dueDate: document.getElementById('edit-dueDate').value,
+    assignedTo: document.getElementById('edit-assignedTo').value,
+    status: document.getElementById('edit-status').value,
+    completionNotes: document.getElementById('edit-completionNotes').value
+  };
+  
+  // Show loading
+  showLoading(true);
+  
+  // Update the task on the server
+  google.script.run
+    .withSuccessHandler(function(response) {
+      showLoading(false);
+      
+      if (response && response.error) {
+        showMessage('Error updating task: ' + response.error, true);
+        return;
+      }
+      
+      // Close the modal
+      const modalElem = document.getElementById('editTaskModal');
+      const modalInstance = M.Modal.getInstance(modalElem);
+      if (modalInstance) {
+        modalInstance.close();
+      }
+      
+      // Show success message
+      showMessage('Task updated successfully', false);
+      
+      // Reload the data
+      loadActionPlans();
+    })
+    .withFailureHandler(function(error) {
+      showLoading(false);
+      showMessage('Failed to update task: ' + error, true);
+    })
+    .updateTask(taskData);
+}
+
+// Delete task functionality
+function openDeleteModal(taskId) {
+  currentTaskId = taskId;
+  document.getElementById('delete-taskId').textContent = taskId;
+}
+
+function confirmDeleteTask() {
+  if (!currentTaskId) {
+    showMessage('No task selected for deletion', true);
+    return;
+  }
+  
+  // Show loading
+  showLoading(true);
+  
+  // Delete the task on the server
+  google.script.run
+    .withSuccessHandler(function(response) {
+      showLoading(false);
+      
+      if (response && response.error) {
+        showMessage('Error deleting task: ' + response.error, true);
+        return;
+      }
+      
+      // Close the modal
+      const modalElem = document.getElementById('deleteConfirmModal');
+      const modalInstance = M.Modal.getInstance(modalElem);
+      if (modalInstance) {
+        modalInstance.close();
+      }
+      
+      // Show success message
+      showMessage('Task deleted successfully', false);
+      
+      // Reload the data
+      loadActionPlans();
+    })
+    .withFailureHandler(function(error) {
+      showLoading(false);
+      showMessage('Failed to delete task: ' + error, true);
+    })
+    .deleteTask(currentTaskId);
 }
 
 function runDiagnostics() {
