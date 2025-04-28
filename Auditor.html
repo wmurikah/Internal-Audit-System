@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Auditor Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- Materialize CSS and Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body>
+  <nav class="blue darken-4">
+    <div class="nav-wrapper container">
+      <a href="#" class="brand-logo">
+        <img src="logo.png" alt="Logo" style="height: 56px; vertical-align: middle; margin-right: 10px;">
+        Audit Tracker
+      </a>
+      <ul id="nav-mobile" class="right">
+        <li><a href="#">Logout</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container" style="margin-top: 30px;">
+    <h5>Action Plans to Review</h5>
+
+    <!-- Status Filter -->
+    <div class="row">
+      <div class="input-field col s12 m4">
+        <select id="statusFilter" onchange="filterTasks()">
+          <option value="All" selected>All Statuses</option>
+          <option value="Open">Open</option>
+          <option value="Completed">Completed</option>
+          <option value="Pending">Pending</option>
+          <option value="Overdue">Overdue</option>
+        </select>
+        <label>Filter by Status</label>
+      </div>
+    </div>
+
+    <table class="highlight responsive-table">
+      <thead>
+        <tr>
+          <th>Task ID</th>
+          <th>Observation Title</th>
+          <th>Assigned To</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="plansBody">
+        <!-- Loaded dynamically -->
+      </tbody>
+    </table>
+
+    <!-- Comment Modal -->
+    <div id="commentModal" class="modal">
+      <div class="modal-content">
+        <h4>Add Comment</h4>
+        <form id="commentForm">
+          <div class="input-field">
+            <textarea id="comment" class="materialize-textarea"></textarea>
+            <label for="comment">Comment</label>
+          </div>
+          <button class="btn waves-effect waves-light" type="submit">Submit</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <footer class="page-footer blue darken-4" style="margin-top: 50px;">
+    <div class="container">
+      <div class="row">
+        <div class="col s12">
+          <span class="white-text">© 2025 Hass Petroleum Audit Tracker</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script>
+    let allTasks = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+      M.Modal.init(document.querySelectorAll('.modal'));
+      M.FormSelect.init(document.querySelectorAll('select'));
+      loadTasks();
+    });
+
+    function loadTasks() {
+      google.script.run.withSuccessHandler(function(tasks) {
+        allTasks = tasks;
+        populateTasks(tasks);
+      }).getAllTasks();
+    }
+
+    function populateTasks(tasks) {
+      const tbody = document.getElementById('plansBody');
+      tbody.innerHTML = '';
+      tasks.forEach(task => {
+        const row = tbody.insertRow();
+        row.insertCell().textContent = task.taskId || '';
+        row.insertCell().textContent = task.observationTitle || '';
+        row.insertCell().textContent = task.assignedTo || '';
+        row.insertCell().textContent = task.status || '';
+        row.insertCell().innerHTML = `
+          <a class="btn green waves-effect waves-light" style="margin-right:5px;">Approve</a>
+          <a class="btn red waves-effect waves-light" style="margin-right:5px;">Reject</a>
+          <a class="btn blue waves-effect waves-light modal-trigger" href="#commentModal">Comment</a>
+        `;
+      });
+    }
+
+    function filterTasks() {
+      const selectedStatus = document.getElementById('statusFilter').value;
+      if (selectedStatus === 'All') {
+        populateTasks(allTasks);
+      } else {
+        const filtered = allTasks.filter(task => task.status && task.status.toLowerCase() === selectedStatus.toLowerCase());
+        populateTasks(filtered);
+      }
+    }
+  </script>
+</body>
+</html>
