@@ -1,136 +1,280 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Auditee Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <!-- Materialize CSS and Icons -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-</head>
+import React from 'react';
 
-<body>
-  <nav class="blue darken-4">
-    <div class="nav-wrapper container">
-      <a href="#" class="brand-logo">
-        <img src="logo.png" alt="Logo" style="height: 56px; vertical-align: middle; margin-right: 10px;">
-        Audit Tracker
-      </a>
-      <ul id="nav-mobile" class="right">
-        <li><a href="#">Logout</a></li>
-      </ul>
-    </div>
-  </nav>
-
-  <div class="container" style="margin-top: 30px;">
-    <h5>Assigned Action Plans</h5>
-
-    <!-- Status Filter -->
-    <div class="row">
-      <div class="input-field col s12 m4">
-        <select id="statusFilter" onchange="filterTasks()">
-          <option value="All" selected>All Statuses</option>
-          <option value="Open">Open</option>
-          <option value="Completed">Completed</option>
-          <option value="Pending">Pending</option>
-          <option value="Overdue">Overdue</option>
-        </select>
-        <label>Filter by Status</label>
-      </div>
-    </div>
-
-    <table class="highlight responsive-table">
-      <thead>
-        <tr>
-          <th>Task ID</th>
-          <th>Observation Title</th>
-          <th>Due Date</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="plansBody">
-        <!-- Loaded dynamically -->
-      </tbody>
-    </table>
-
-    <!-- Update Modal -->
-    <div id="updateModal" class="modal">
-      <div class="modal-content">
-        <h4>Update Status</h4>
-        <form id="updateForm">
-          <div class="input-field">
-            <input id="newStatus" type="text" required>
-            <label for="newStatus">New Status</label>
+const AuditeeDashboard = () => {
+  return (
+    <div className="bg-gray-100 min-h-screen pb-8">
+      {/* Navigation Bar */}
+      <nav className="bg-blue-900 text-white p-4">
+        <div className="container mx-auto flex justify-between items-center">
+          <div className="flex items-center">
+            <div className="w-12 h-12 bg-white rounded-full mr-3 flex items-center justify-center">
+              <span className="text-blue-900 font-bold text-lg">HP</span>
+            </div>
+            <span className="text-xl font-semibold">Audit Tracker</span>
           </div>
-          <button class="btn waves-effect waves-light" type="submit">Save</button>
-        </form>
-      </div>
-    </div>
-  </div>
+          <div>
+            <button className="text-white">Logout</button>
+          </div>
+        </div>
+      </nav>
 
-  <footer class="page-footer blue darken-4" style="margin-top: 50px;">
-    <div class="container">
-      <div class="row">
-        <div class="col s12">
-          <span class="white-text">© 2025 Hass Petroleum Audit Tracker</span>
+      {/* Main Content */}
+      <div className="container mx-auto mt-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold mb-4">Assigned Action Plans</h2>
+          
+          {/* Status Filter */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Status</label>
+            <select className="w-48 px-3 py-2 border rounded-md">
+              <option>All Statuses</option>
+              <option>Open</option>
+              <option>Completed</option>
+              <option>Pending</option>
+              <option>Overdue</option>
+            </select>
+          </div>
+          
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Observation Title</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap">T-2025-001</td>
+                  <td className="px-6 py-4">Safety Protocol Implementation</td>
+                  <td className="px-6 py-4 whitespace-nowrap">2025-06-30</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                      In Progress
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button className="bg-blue-600 text-white px-3 py-1 rounded mr-2">Update</button>
+                    <button className="bg-teal-600 text-white px-3 py-1 rounded">Details</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap">T-2025-008</td>
+                  <td className="px-6 py-4">Credit Control Procedures</td>
+                  <td className="px-6 py-4 whitespace-nowrap">2025-05-15</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                      Overdue
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button className="bg-blue-600 text-white px-3 py-1 rounded mr-2">Update</button>
+                    <button className="bg-teal-600 text-white px-3 py-1 rounded">Details</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap">T-2024-042</td>
+                  <td className="px-6 py-4">Inventory Reconciliation Process</td>
+                  <td className="px-6 py-4 whitespace-nowrap">2025-07-10</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      Implemented
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button className="bg-blue-600 text-white px-3 py-1 rounded mr-2">Update</button>
+                    <button className="bg-teal-600 text-white px-3 py-1 rounded">Details</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+      
+      {/* Modals */}
+      <div className="fixed inset-0 overflow-y-auto hidden" id="update-modal">
+        <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+          </div>
+          
+          <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+              <div className="sm:flex sm:items-start">
+                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Update Status</h3>
+                  
+                  <form>
+                    <input type="hidden" id="task-id" value="T-2025-001" />
+                    
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">New Status</label>
+                      <select className="w-full px-3 py-2 border rounded-md">
+                        <option>Choose status</option>
+                        <option>Implemented</option>
+                        <option>Not Implemented</option>
+                        <option>In Progress</option>
+                      </select>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Management Response</label>
+                      <textarea className="w-full px-3 py-2 border rounded-md" rows="4"></textarea>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Supporting Evidence</label>
+                      <div className="flex items-center justify-center px-6 py-4 border-2 border-gray-300 border-dashed rounded-md">
+                        <div className="space-y-1 text-center">
+                          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <div className="flex text-sm text-gray-600">
+                            <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
+                              <span>Upload a file</span>
+                              <input id="file-upload" name="file-upload" type="file" className="sr-only" />
+                            </label>
+                            <p className="pl-1">or drag and drop</p>
+                          </div>
+                          <p className="text-xs text-gray-500">PNG, JPG, PDF up to 10MB</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gray-100 p-3 rounded-md hidden" id="file-info">
+                      <p><strong>File:</strong> <span id="file-name">safety_measures.pdf</span></p>
+                      <p><strong>Size:</strong> <span id="file-size">1.2 MB</span></p>
+                      <p><strong>Type:</strong> <span id="file-type">application/pdf</span></p>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <button type="button" className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                Save Changes
+              </button>
+              <button type="button" className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Task Details Modal */}
+      <div className="fixed inset-0 overflow-y-auto hidden" id="details-modal">
+        <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+          </div>
+          
+          <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+              <div className="sm:flex sm:items-start">
+                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">Task Details</h3>
+                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                      In Progress
+                    </span>
+                  </div>
+                  
+                  <h2 className="text-xl font-semibold mb-4">Safety Protocol Implementation</h2>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                      <p><strong>Task ID:</strong> T-2025-001</p>
+                      <p><strong>Year:</strong> 2025</p>
+                      <p><strong>Affiliate:</strong> Kenya</p>
+                      <p><strong>Business Unit:</strong> Operations</p>
+                    </div>
+                    <div>
+                      <p><strong>Audit Name:</strong> Safety Audit 2025</p>
+                      <p><strong>Risk:</strong> High</p>
+                      <p><strong>Rating:</strong> 4</p>
+                      <p><strong>Due Date:</strong> 2025-06-30</p>
+                    </div>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <h4 className="font-medium mb-2">Description:</h4>
+                    <p className="text-gray-700">The safety protocols for fuel handling at station level do not adhere to industry standards. Several critical procedures are missing and staff awareness is limited.</p>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <h4 className="font-medium mb-2">Action Plan:</h4>
+                    <p className="text-gray-700">1. Develop updated safety protocol documentation<br/>2. Train all station staff on new procedures<br/>3. Implement monthly safety checks<br/>4. Document and report compliance</p>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <h4 className="font-medium mb-2">Management Response:</h4>
+                    <p className="text-gray-700">We acknowledge the findings and have begun implementing the new safety protocols. Staff training sessions have been scheduled for next month.</p>
+                  </div>
+                  
+                  <div className="mb-6">
+                    <h4 className="font-medium mb-2">Completion Notes:</h4>
+                    <p className="text-gray-700">Training sessions 50% complete. Documentation has been updated and distributed to all stations.</p>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <h4 className="font-medium mb-3">Evidence History</h4>
+                    
+                    <div className="bg-gray-50 p-3 rounded-md mb-2">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center">
+                            <svg className="h-5 w-5 text-gray-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a3 3 0 006 0V7a1 1 0 112 0v4a5 5 0 01-10 0V7a5 5 0 0110 0v1h-2V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                            </svg>
+                            <span className="font-medium">safety_training_schedule.pdf</span>
+                          </div>
+                          <p className="text-sm text-gray-500 ml-7">Uploaded by j.smith@hasspetroleum.com on 2025-04-10</p>
+                        </div>
+                        <a href="#" className="bg-blue-600 text-white px-3 py-1 text-sm rounded">View</a>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gray-50 p-3 rounded-md">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center">
+                            <svg className="h-5 w-5 text-gray-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a3 3 0 006 0V7a1 1 0 112 0v4a5 5 0 01-10 0V7a5 5 0 0110 0v1h-2V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                            </svg>
+                            <span className="font-medium">updated_safety_protocols.docx</span>
+                          </div>
+                          <p className="text-sm text-gray-500 ml-7">Uploaded by j.smith@hasspetroleum.com on 2025-03-22</p>
+                        </div>
+                        <a href="#" className="bg-blue-600 text-white px-3 py-1 text-sm rounded">View</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex">
+              <button type="button" className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Footer */}
+      <footer className="bg-blue-900 text-white p-4 mt-8">
+        <div className="container mx-auto">
+          <span>© 2025 Hass Petroleum Audit Tracker</span>
+        </div>
+      </footer>
     </div>
-  </footer>
+  );
+};
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  <script>
-    let allTasks = [];
-    let loggedInEmail = '';
-
-    document.addEventListener('DOMContentLoaded', function() {
-      M.Modal.init(document.querySelectorAll('.modal'));
-      M.FormSelect.init(document.querySelectorAll('select'));
-      loadAssignedTasks();
-    });
-
-    function loadAssignedTasks() {
-      google.script.run.withSuccessHandler(function(email) {
-        loggedInEmail = email;
-        google.script.run.withSuccessHandler(function(tasks) {
-          allTasks = tasks.filter(task => task.assignedTo && task.assignedTo.toLowerCase() === email.toLowerCase());
-          populateTasks(allTasks);
-        }).getAllTasks();
-      }).getCurrentUserEmail();
-    }
-
-    function populateTasks(tasks) {
-      const tbody = document.getElementById('plansBody');
-      tbody.innerHTML = '';
-      tasks.forEach(task => {
-        const row = tbody.insertRow();
-        row.insertCell().textContent = task.taskId || '';
-        row.insertCell().textContent = task.observationTitle || '';
-        row.insertCell().textContent = task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '';
-        row.insertCell().textContent = task.status || '';
-        row.insertCell().innerHTML = `
-          <a class="btn blue waves-effect waves-light" style="margin-right:5px;" onclick="openUpdateModal('${task.taskId}')">Update</a>
-          <a class="btn teal waves-effect waves-light">Upload File</a>
-        `;
-      });
-    }
-
-    function filterTasks() {
-      const selectedStatus = document.getElementById('statusFilter').value;
-      if (selectedStatus === 'All') {
-        populateTasks(allTasks);
-      } else {
-        const filtered = allTasks.filter(task => task.status && task.status.toLowerCase() === selectedStatus.toLowerCase());
-        populateTasks(filtered);
-      }
-    }
-
-    function openUpdateModal(taskId) {
-      // Handle opening update modal (future enhancement)
-      var instance = M.Modal.getInstance(document.getElementById('updateModal'));
-      instance.open();
-    }
-  </script>
-</body>
-</html>
+export default AuditeeDashboard;
