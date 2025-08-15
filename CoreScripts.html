@@ -158,7 +158,7 @@
 
                         <div class="chart-container">
                             <h3 class="chart-title">Risk Distribution</h3>
-                            <div id="riskDistributionBars" style="padding: 8px 12px;"></div>
+                            <canvas id="chartRiskDistribution" height="160"></canvas>
                         </div>
                     </div>
                 </div>
@@ -675,6 +675,8 @@
     <script>
         let currentPage = 'dashboard';
         let charts = {};
+        // Register Chart.js datalabels with inlined helpers
+        if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') { Chart.register(ChartDataLabels); }
         Chart.register(ChartDataLabels);
 
         function showPage(pageName) {
@@ -701,26 +703,7 @@
             setTimeout(() => { if (alert.parentElement) alert.remove(); }, 3000);
         }
 
-        function renderRiskBars(riskDistribution) {
-            const total = Object.values(riskDistribution).reduce((a,b)=>a+b,0) || 1;
-            const order = ['High','Medium','Low','Extreme'];
-            const colors = { High:'#f44336', Medium:'#2196f3', Low:'#4caf50', Extreme:'#ff9800' };
-            const container = document.getElementById('riskDistributionBars');
-            if (!container) return;
-            container.innerHTML = '';
-            order.forEach(key => {
-                const pct = Math.round((riskDistribution[key]||0) * 100 / total);
-                const row = document.createElement('div');
-                row.style.margin = '10px 0';
-                row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;">
-                    <div style="width:110px;">${key}:</div>
-                    <div style="flex:1;background:#eee;border-radius:6px;overflow:hidden;">
-                      <div style="width:${pct}%;background:${colors[key]};color:#fff;padding:6px 8px;">${pct}%</div>
-                    </div>
-                </div>`;
-                container.appendChild(row);
-            });
-        }
+        // risk bars replaced by doughnut; helper removed
 
         function doughnutChart(id, labels, data, colors) {
             const ctx = document.getElementById(id);
@@ -829,25 +812,32 @@
             document.getElementById('metricOverdueItems').textContent = snapshot.overdueItems ?? 0;
 
             renderRecentAudits(snapshot.recentAudits || []);
-            renderRiskBars(snapshot.riskDistribution || { High:0, Medium:0, Low:0, Extreme:0 });
+            // Risk distribution as doughnut with callouts (% + count)
+            (function(){
+                const rd = snapshot.riskDistribution || { Extreme:0, High:0, Medium:0, Low:0 };
+                const labels = ['High','Medium','Low','Extreme'];
+                const data = labels.map(k => rd[k]||0);
+                const colors = ['#f44336','#2196f3','#4caf50','#ff9800'];
+                doughnutChart('chartRiskDistribution', labels, data, colors);
+            })();
 
             const ea = snapshot.executiveAnalytics || { businessUnits: [], totalIssuesPerArea:{}, riskRatingPerArea:{}, highRiskNotImplemented:{}, actionStatusPerArea:{} };
             const units = ea.businessUnits || [];
             const totalIssuesData = units.map(u => ea.totalIssuesPerArea[u] || 0);
-            if (window.DashboardCharts) DashboardCharts.doughnutWithCallouts('chartIssuesPerArea', units, totalIssuesData, ['#1e88e5','#43a047','#fb8c00','#8e24aa','#3949ab','#00acc1','#f4511e','#7cb342','#6d4c41','#5e35b1']);
+            doughnutChart('chartIssuesPerArea', units, totalIssuesData, ['#1e88e5','#43a047','#fb8c00','#8e24aa','#3949ab','#00acc1','#f4511e','#7cb342','#6d4c41','#5e35b1']);
 
             const risks = ['Extreme','High','Medium','Low'];
             const riskColors = { Extreme:'#ff6d00', High:'#e53935', Medium:'#1e88e5', Low:'#43a047' };
             const riskDatasets = risks.map(r => ({ label: r, data: units.map(u => (ea.riskRatingPerArea[u] && ea.riskRatingPerArea[u][r]) || 0), backgroundColor: riskColors[r] }));
-            if (window.DashboardCharts) DashboardCharts.stackedWithLabels('chartRiskPerArea', units, riskDatasets);
+            stackedBarChart('chartRiskPerArea', units, riskDatasets);
 
             const highRiskNI = units.map(u => ea.highRiskNotImplemented[u] || 0);
-            if (window.DashboardCharts) DashboardCharts.doughnutWithCallouts('chartHighRiskNotImpl', units, highRiskNI, ['#e53935','#8e24aa','#1e88e5','#43a047','#fb8c00','#00acc1','#6d4c41','#3949ab']);
+            doughnutChart('chartHighRiskNotImpl', units, highRiskNI, ['#e53935','#8e24aa','#1e88e5','#43a047','#fb8c00','#00acc1','#6d4c41','#3949ab']);
 
             const statuses = ['Not Implemented','Implemented','Not Due'];
             const statusColors = { 'Not Implemented':'#e53935', 'Implemented':'#43a047', 'Not Due':'#1e88e5' };
             const statusDatasets = statuses.map(s => ({ label: s, data: units.map(u => (ea.actionStatusPerArea[u] && ea.actionStatusPerArea[u][s]) || 0), backgroundColor: statusColors[s] }));
-            if (window.DashboardCharts) DashboardCharts.stackedWithLabels('chartActionStatus', units, statusDatasets);
+            stackedBarChart('chartActionStatus', units, statusDatasets);
         }
 
         function fetchAndRenderDashboardData() {
@@ -867,13 +857,7 @@
         function refreshData() { fetchAndRenderDashboardData(); showAlert('Refreshed', 'success'); }
 
         document.addEventListener('DOMContentLoaded', function() { fetchAndRenderDashboardData(); });
-        // Load charts module after DOM ready
-        (function(){
-          var s = document.createElement('script');
-          s.src = 'charts.js';
-          s.defer = true;
-          document.body.appendChild(s);
-        })();
+        // charts.js removed; using inline chart helpers only
 
         const style = document.createElement('style');
         style.textContent = `@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .page { animation: fadeIn 0.2s ease; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .nav-link.active { background-color: rgba(255,255,255,0.15) !important; color: white !important; border-right: 3px solid white; } .table tbody tr:hover { background-color: rgba(26, 35, 126, 0.05) !important; } .action-btn:hover { background-color: rgba(26, 35, 126, 0.1) !important; color: #1a237e !important; }`;
