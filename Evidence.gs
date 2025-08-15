@@ -1,9 +1,19 @@
 /**
- * Evidence upload/listing API (Apps Script)
- * - Upload from base64 to Drive (EVIDENCE_FOLDER_ID)
+ * Evidence API (Apps Script)
+ * - Secure server-side upload from base64 to Drive (EVIDENCE_FOLDER_ID)
  * - Persist metadata to Evidence sheet
+ * - Lightweight listing by parent for UI hydration
  */
 
+/**
+ * Upload evidence from base64 string.
+ * @param {string} parentType - 'Audit' | 'Issue' | 'Action' | 'WorkPaper'
+ * @param {string} parentId   - e.g., 'ISS001'
+ * @param {string} fileName   - e.g., 'Policy.pdf'
+ * @param {string} mimeType   - e.g., 'application/pdf'
+ * @param {string} base64Data - raw base64 or data URL
+ * @return {{success:boolean,id?:string,url?:string,record?:Object,error?:string}}
+ */
 function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base64Data) {
   try {
     if (!parentType || !parentId) throw new Error('Parent type and id are required');
@@ -15,8 +25,16 @@ function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base
     if (commaIdx > -1) payload = base64Data.substring(commaIdx + 1);
 
     var bytes = Utilities.base64Decode(payload);
-    // Optional size guard (10 MB default)
-    var maxMb = (getDefaultConfig && getDefaultConfig().MAX_FILE_SIZE_MB) || 10;
+
+    // Size enforcement (falls back to 10 MB if config not available)
+    var maxMb = 10;
+    try {
+      if (typeof getDefaultConfig === 'function') {
+        var cfg = getDefaultConfig();
+        if (cfg && cfg.MAX_FILE_SIZE_MB) maxMb = cfg.MAX_FILE_SIZE_MB;
+      }
+    } catch (e) {}
+
     var sizeMb = bytes.length / (1024 * 1024);
     if (sizeMb > maxMb) throw new Error('File exceeds max size of ' + maxMb + ' MB');
 
@@ -55,6 +73,12 @@ function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base
   }
 }
 
+/**
+ * List evidence records filtered by parent.
+ * @param {string=} parentType
+ * @param {string=} parentId
+ * @param {number=} limit
+ */
 function listEvidence(parentType, parentId, limit) {
   try {
     var all = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Evidence') : [];
@@ -67,6 +91,7 @@ function listEvidence(parentType, parentId, limit) {
     if (limit && filtered.length > limit) filtered = filtered.slice(0, limit);
     return { success: true, items: filtered };
   } catch (e) {
+    Logger.log('listEvidence error: ' + e);
     return { success: false, error: e.message, items: [] };
   }
 }
@@ -81,8 +106,8 @@ function generateEvidenceId_() {
   // Try to ensure uniqueness by checking existing IDs
   var tries = 0;
   while (tries < 5) {
-    var range = sh.getRange(2, 1, Math.max(0, sh.getLastRow() - 1), 1).getValues().flat();
-    if (range.indexOf(id) === -1) break;
+    var rng = sh.getRange(2, 1, Math.max(0, sh.getLastRow() - 1), 1).getValues().flat();
+    if (rng.indexOf(id) === -1) break;
     n++;
     id = 'EVD' + ('000' + n).slice(-3);
     tries++;
