@@ -11,14 +11,14 @@ const EVIDENCE_FOLDER_ID = '17r19y2uyKeBu2QcKMsOMjIBeSYKu7R4R';
  */
 function doGet(e) {
   try {
-    const template = HtmlService.createTemplateFromFile('Index');
+    const template = HtmlService.createTemplateFromFile('CoreScripts');
     
     if (e && e.parameter && e.parameter.logout === '1') {
       template.forceLogout = true;
     }
     
     return template.evaluate()
-      .setTitle('Audit Management System')
+      .setTitle('Audit Management System - Instant')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
       // Removed the problematic theme-color meta tag

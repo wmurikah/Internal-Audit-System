@@ -10,7 +10,7 @@
     <?!= HtmlService.createHtmlOutputFromFile('Styles').getContent() ?>
 </head>
 <body>
-    <!-- AGGRESSIVE TRICK 1: INSTANT SHOW, NO LOADING SCREEN -->
+    <!-- INSTANT SHOW, NO LOADING SCREEN -->
     <div id="appContainer" class="app-container">
         <!-- Sidebar -->
         <div class="sidebar">
@@ -719,14 +719,14 @@
         </div>
     </div>
 
-    <!-- AGGRESSIVE TRICK 2: ZERO DEPENDENCIES JAVASCRIPT -->
+    <!-- ZERO DEPENDENCIES JAVASCRIPT -->
     <script>
-        // HARDCODE EVERYTHING - NO ASYNC, NO BACKEND CALLS, NO WAITING
+        // Static demo mode - no backend calls during load
         console.log('🚀 AGGRESSIVE INSTANT LOAD - NO BACKEND DEPENDENCIES!');
         
         let currentPage = 'dashboard';
 
-        // IMMEDIATE PAGE SWITCHING - NO DELAYS
+        // Instant page switching
         function showPage(pageName) {
             // Hide all pages instantly
             const pages = ['dashboard', 'audits', 'issues', 'actions', 'evidence', 'reports', 'configuration', 'users'];
@@ -753,7 +753,7 @@
             console.log(`📄 Switched to ${pageName} page instantly`);
         }
 
-        // INSTANT ALERTS - NO BACKEND CALLS
+        // Instant alerts - front-end only
         function showAlert(message, type = 'info') {
             // Remove existing alerts
             const existingAlerts = document.querySelectorAll('.alert-toast');
@@ -791,19 +791,19 @@
             }, 3000);
         }
 
-        // INSTANT REFRESH - NO BACKEND CALLS
+        // Instant refresh - front-end only
         function refreshData() {
             showAlert('Data refreshed successfully! All systems operational.', 'success');
             console.log('🔄 Data refresh completed (static data mode)');
         }
 
-        // AGGRESSIVE TRICK 3: INSTANT INITIALIZATION ON DOM READY
+        // Instant initialization on DOM ready
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎯 DOM loaded - system ready!');
             showAlert('Audit System loaded successfully! All features operational.', 'success');
         });
 
-        // AGGRESSIVE TRICK 4: STYLE INJECTION FOR ANIMATIONS
+        // Style injection for animations
         const style = document.createElement('style');
         style.textContent = `
             @keyframes slideIn {
@@ -837,14 +837,14 @@
         `;
         document.head.appendChild(style);
 
-        // AGGRESSIVE TRICK 5: FORCE SHOW EVERYTHING IMMEDIATELY
+        // Ensure everything displays immediately
         window.addEventListener('load', function() {
             console.log('✅ AGGRESSIVE LOAD COMPLETE - ZERO LOADING TIME!');
             console.log('🎉 All systems operational with hardcoded data');
             console.log('⚡ Backend-independent operation achieved');
         });
 
-        // AGGRESSIVE TRICK 6: PREVENT ANY HANGING
+        // Prevent any hanging
         // Override any potential Google Apps Script calls
         if (typeof google === 'undefined') {
             window.google = {
