@@ -1265,4 +1265,42 @@ function getMinimalDashboard() {
     }
   };
 }
+/**
+ * 🔐 USER PERMISSIONS SYSTEM
+ * Defines role-based permissions for the quantum audit system
+ */
+function getPermissions(role) {
+  const permissions = {
+    'AuditManager': [
+      'view_all_audits', 'create_audit', 'edit_audit', 'delete_audit',
+      'view_all_issues', 'create_issue', 'edit_issue', 'close_issue',
+      'view_all_actions', 'assign_actions', 'manage_users',
+      'view_reports', 'export_data', 'system_admin'
+    ],
+    'Auditor': [
+      'view_assigned_audits', 'create_audit', 'edit_own_audit',
+      'view_related_issues', 'create_issue', 'edit_own_issue',
+      'view_related_actions', 'create_workpaper', 'edit_workpaper',
+      'upload_evidence', 'view_reports'
+    ],
+    'Auditee': [
+      'view_assigned_issues', 'comment_on_issues',
+      'view_assigned_actions', 'update_action_status',
+      'upload_evidence', 'view_own_data'
+    ],
+    'SeniorManagement': [
+      'view_all_audits', 'view_all_issues', 'view_all_actions',
+      'view_reports', 'export_data', 'view_analytics'
+    ],
+    'Board': [
+      'view_all_audits', 'view_all_issues', 'view_reports',
+      'view_analytics', 'view_executive_summary'
+    ],
+    'Guest': [
+      'view_public_data'
+    ]
+  };
+  
+  return permissions[role] || permissions['Guest'];
+}
 
