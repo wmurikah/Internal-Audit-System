@@ -41,6 +41,21 @@ function getConfig() {
 /**
  * Updates system configuration
  */
+// Delta-based config updates for lightweight UI operations
+function updateConfigurationDelta(delta){
+  try{
+    const cfg = getConfig();
+    if (delta.addRiskRating){ if (!cfg.riskRatings.includes(delta.addRiskRating)) cfg.riskRatings.push(delta.addRiskRating); }
+    if (delta.removeRiskRating){ cfg.riskRatings = cfg.riskRatings.filter(x=> x !== delta.removeRiskRating); }
+    if (delta.addAuditStatus){ if (!cfg.auditStatuses.includes(delta.addAuditStatus)) cfg.auditStatuses.push(delta.addAuditStatus); }
+    if (delta.removeAuditStatus){ cfg.auditStatuses = cfg.auditStatuses.filter(x=> x !== delta.removeAuditStatus); }
+    return updateConfig(cfg);
+  }catch(e){
+    Logger.log('updateConfigurationDelta error: '+e);
+    return { success:false, error: e.message };
+  }
+}
+
 function updateConfig(newConfig) {
   try {
     const user = getCurrentUser();
@@ -143,6 +158,7 @@ function getDefaultConfig() {
     OPENAI_API_KEY: '',
     SYSTEM_EMAIL: 'audit@company.com',
     EMAIL_NOTIFICATIONS: true,
+    ALLOWED_SIGNIN_DOMAIN: 'hasspetroleum.com',
     AUTO_ASSIGN_ACTIONS: false,
     REQUIRE_EVIDENCE: true,
     MAX_FILE_SIZE_MB: 10

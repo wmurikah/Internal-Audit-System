@@ -7,6 +7,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <?!= HtmlService.createHtmlOutputFromFile('Styles').getContent() ?>
 </head>
 <body>
@@ -562,43 +563,13 @@
                             <div class="config-header">
                                 <h3 class="config-title">Risk Ratings</h3>
                             </div>
-                            <div class="config-body">
-                                <div class="config-item">
-                                    <span class="config-item-name">Extreme</span>
-                                    <div class="config-item-actions">
-                                        <button class="action-btn text-danger" onclick="showAlert('Remove Extreme risk rating', 'warning')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="config-item">
-                                    <span class="config-item-name">High</span>
-                                    <div class="config-item-actions">
-                                        <button class="action-btn text-danger" onclick="showAlert('Remove High risk rating', 'warning')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="config-item">
-                                    <span class="config-item-name">Medium</span>
-                                    <div class="config-item-actions">
-                                        <button class="action-btn text-danger" onclick="showAlert('Remove Medium risk rating', 'warning')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="config-item">
-                                    <span class="config-item-name">Low</span>
-                                    <div class="config-item-actions">
-                                        <button class="action-btn text-danger" onclick="showAlert('Remove Low risk rating', 'warning')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="config-item">
-                                    <button class="btn btn-outline btn-sm" onclick="showAlert('Add new risk rating', 'info')">
-                                        <i class="fas fa-plus"></i> Add Risk Rating
-                                    </button>
+                            <div class="config-body" id="configRiskRatings">
+                                <!-- rendered dynamically from Settings -->
+                            </div>
+                            <div class="card-footer" style="padding:12px 16px;">
+                                <div class="input-group">
+                                    <input id="newRiskRating" class="form-control form-control-sm" placeholder="Add risk rating">
+                                    <button class="btn btn-outline btn-sm" onclick="addRiskRating()"><i class="fas fa-plus"></i> Add</button>
                                 </div>
                             </div>
                         </div>
@@ -607,43 +578,13 @@
                             <div class="config-header">
                                 <h3 class="config-title">Audit Statuses</h3>
                             </div>
-                            <div class="config-body">
-                                <div class="config-item">
-                                    <span class="config-item-name">Planning</span>
-                                    <div class="config-item-actions">
-                                        <button class="action-btn text-danger" onclick="showAlert('Remove Planning status', 'warning')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="config-item">
-                                    <span class="config-item-name">In Progress</span>
-                                    <div class="config-item-actions">
-                                        <button class="action-btn text-danger" onclick="showAlert('Remove In Progress status', 'warning')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="config-item">
-                                    <span class="config-item-name">Review</span>
-                                    <div class="config-item-actions">
-                                        <button class="action-btn text-danger" onclick="showAlert('Remove Review status', 'warning')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="config-item">
-                                    <span class="config-item-name">Completed</span>
-                                    <div class="config-item-actions">
-                                        <button class="action-btn text-danger" onclick="showAlert('Remove Completed status', 'warning')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="config-item">
-                                    <button class="btn btn-outline btn-sm" onclick="showAlert('Add new audit status', 'info')">
-                                        <i class="fas fa-plus"></i> Add Audit Status
-                                    </button>
+                            <div class="config-body" id="configAuditStatuses">
+                                <!-- rendered dynamically from Settings -->
+                            </div>
+                            <div class="card-footer" style="padding:12px 16px;">
+                                <div class="input-group">
+                                    <input id="newAuditStatus" class="form-control form-control-sm" placeholder="Add audit status">
+                                    <button class="btn btn-outline btn-sm" onclick="addAuditStatus()"><i class="fas fa-plus"></i> Add</button>
                                 </div>
                             </div>
                         </div>
@@ -734,6 +675,7 @@
     <script>
         let currentPage = 'dashboard';
         let charts = {};
+        Chart.register(ChartDataLabels);
 
         function showPage(pageName) {
             const pages = ['dashboard', 'audits', 'issues', 'actions', 'evidence', 'reports', 'configuration', 'users'];
@@ -784,10 +726,32 @@
             const ctx = document.getElementById(id);
             if (!ctx) return;
             if (charts[id]) { charts[id].destroy(); }
+            const total = data.reduce((a,b)=>a+b,0) || 1;
             charts[id] = new Chart(ctx, {
                 type: 'doughnut',
                 data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
-                options: { responsive: true, plugins: { legend: { position: 'right' } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' },
+                        datalabels: {
+                            color: '#111',
+                            formatter: (value, ctx) => {
+                                if (!value) return '';
+                                const pct = Math.round((value * 100) / total);
+                                return `${pct}%\n${value}`; // no decimals
+                            },
+                            align: 'end',
+                            anchor: 'end', // callout-like
+                            offset: 6,
+                            clip: false,
+                            textStrokeColor: 'white',
+                            textStrokeWidth: 3,
+                            font: (ctx) => ({ weight: '600', size: Math.max(10, Math.min(16, 10 + Math.log10(total+1)*2)) })
+                        }
+                    }
+                }
             });
         }
 
@@ -798,7 +762,7 @@
             charts[id] = new Chart(ctx, {
                 type: 'bar',
                 data: { labels, datasets },
-                options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' }, datalabels: { color:'#fff', formatter:(v)=> v||'', clamp:true, clip:false, textStrokeColor:'rgba(0,0,0,0.35)', textStrokeWidth:3, font:(ctx)=>({ weight:'700', size: Math.max(9, Math.min(14, 9 + Math.log10(((ctx.chart?.data?.datasets||[]).reduce((s,d)=> s + (Array.isArray(d.data)?d.data.reduce((a,b)=>a+b,0):0),0)) + 1))) }) } } }
             });
         }
 
@@ -811,6 +775,51 @@
                 tr.innerHTML = `<td><strong>${a.id}</strong></td><td>${a.title || ''}</td><td>${a.business_unit || ''}</td><td><span class="badge badge-info">${a.status || ''}</span></td>`;
                 tbody.appendChild(tr);
             });
+        }
+
+        // === Configuration UX (Super Admin) ===
+        function ensureSuperAdminUI(user){
+            const isSuper = (user && user.role === 'AuditManager');
+            const cfgPage = document.getElementById('configurationPage');
+            if (cfgPage) cfgPage.style.display = isSuper ? 'block' : 'none';
+            const link = document.querySelector('button[onclick="showPage(\'configuration\')"]');
+            if (link) link.style.display = isSuper ? 'block' : 'none';
+        }
+
+        function renderConfigArrays(cfg){
+            // riskRatings
+            const rr = document.getElementById('configRiskRatings');
+            if (rr) {
+                rr.innerHTML = '';
+                (cfg.riskRatings||[]).forEach(val => {
+                    const row = document.createElement('div');
+                    row.className='config-item';
+                    row.innerHTML = `<span class="config-item-name">${val}</span>
+                        <div class="config-item-actions"><button class="action-btn text-danger" onclick="removeRiskRating('${val}')"><i class='fas fa-times'></i></button></div>`;
+                    rr.appendChild(row);
+                });
+            }
+            // auditStatuses
+            const as = document.getElementById('configAuditStatuses');
+            if (as) {
+                as.innerHTML = '';
+                (cfg.auditStatuses||[]).forEach(val => {
+                    const row = document.createElement('div');
+                    row.className='config-item';
+                    row.innerHTML = `<span class="config-item-name">${val}</span>
+                        <div class="config-item-actions"><button class="action-btn text-danger" onclick="removeAuditStatus('${val}')"><i class='fas fa-times'></i></button></div>`;
+                    as.appendChild(row);
+                });
+            }
+        }
+
+        function addRiskRating(){ const v = document.getElementById('newRiskRating').value.trim(); if(!v) return; updateConfigOnServer({ addRiskRating:v }); }
+        function removeRiskRating(v){ updateConfigOnServer({ removeRiskRating:v }); }
+        function addAuditStatus(){ const v = document.getElementById('newAuditStatus').value.trim(); if(!v) return; updateConfigOnServer({ addAuditStatus:v }); }
+        function removeAuditStatus(v){ updateConfigOnServer({ removeAuditStatus:v }); }
+
+        function updateConfigOnServer(delta){
+            google.script.run.withSuccessHandler(res=>{ if(res.success){ showAlert('Configuration saved','success'); fetchAndRenderDashboardData(); } else { showAlert(res.error||'Config save failed','danger'); } }).withFailureHandler(err=>{ showAlert('Config error','danger'); console.error(err); }).updateConfigurationDelta(delta);
         }
 
         function hydrateDashboard(snapshot) {
@@ -847,6 +856,9 @@
                     .withSuccessHandler(function(data){ hydrateDashboard(data); })
                     .withFailureHandler(function(err){ console.error('Dashboard load failed', err); showAlert('Failed to load dashboard data', 'danger'); })
                     .getQuantumDashboardData();
+                // fetch user and config for super admin UX
+                google.script.run.withSuccessHandler(function(user){ ensureSuperAdminUI(user); }).getCurrentUser();
+                google.script.run.withSuccessHandler(function(cfg){ renderConfigArrays(cfg); }).getConfig();
             } catch (e) {
                 console.warn('google.script.run not available:', e);
             }
