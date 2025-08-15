@@ -78,23 +78,58 @@
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-icon"><i class="fas fa-clipboard-list"></i></div>
-                            <div class="stat-number">9</div>
+                            <div class="stat-number" id="metricActiveAudits">--</div>
                             <div class="stat-label">Active Audits</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                            <div class="stat-number">10</div>
+                            <div class="stat-number" id="metricOpenIssues">--</div>
                             <div class="stat-label">Open Issues</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
-                            <div class="stat-number">2</div>
+                            <div class="stat-number" id="metricCompletedActions">--</div>
                             <div class="stat-label">Completed Actions</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-icon"><i class="fas fa-clock"></i></div>
-                            <div class="stat-number">20</div>
+                            <div class="stat-number" id="metricOverdueItems">--</div>
                             <div class="stat-label">Overdue Items</div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Total Issues per Audit Area</h3>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chartIssuesPerArea" height="160"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Issues Risk Rating per Audit Area</h3>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chartRiskPerArea" height="160"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Not Implemented High Risk Action Plans</h3>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chartHighRiskNotImpl" height="160"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Action Plan Status per Audit Area</h3>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chartActionStatus" height="160"></canvas>
+                            </div>
                         </div>
                     </div>
 
@@ -114,26 +149,7 @@
                                                 <th>Status</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td><strong>AUD006</strong></td>
-                                                <td>Compliance Review</td>
-                                                <td>Compliance</td>
-                                                <td><span class="badge badge-info">Planning</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>AUD007</strong></td>
-                                                <td>Annual Financial Audit</td>
-                                                <td>Finance</td>
-                                                <td><span class="badge badge-info">Planning</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>AUD011</strong></td>
-                                                <td>Procurement Audit</td>
-                                                <td>Operations</td>
-                                                <td><span class="badge badge-info">Planning</span></td>
-                                            </tr>
-                                        </tbody>
+                                        <tbody id="recentAuditsBody"></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -141,12 +157,7 @@
 
                         <div class="chart-container">
                             <h3 class="chart-title">Risk Distribution</h3>
-                            <div style="text-align: center; padding: 20px;">
-                                <div style="margin: 10px 0; padding: 8px; background: #f44336; color: white; border-radius: 4px;">High: 25%</div>
-                                <div style="margin: 10px 0; padding: 8px; background: #2196f3; color: white; border-radius: 4px;">Medium: 45%</div>
-                                <div style="margin: 10px 0; padding: 8px; background: #4caf50; color: white; border-radius: 4px;">Low: 20%</div>
-                                <div style="margin: 10px 0; padding: 8px; background: #ff9800; color: white; border-radius: 4px;">Extreme: 10%</div>
-                            </div>
+                            <div id="riskDistributionBars" style="padding: 8px 12px;"></div>
                         </div>
                     </div>
                 </div>
@@ -719,145 +730,139 @@
         </div>
     </div>
 
-    <!-- ZERO DEPENDENCIES JAVASCRIPT -->
+    <!-- Progressive hydration JavaScript -->
     <script>
-        // Static demo mode - no backend calls during load
-        console.log('🚀 AGGRESSIVE INSTANT LOAD - NO BACKEND DEPENDENCIES!');
-        
         let currentPage = 'dashboard';
+        let charts = {};
 
-        // Instant page switching
         function showPage(pageName) {
-            // Hide all pages instantly
             const pages = ['dashboard', 'audits', 'issues', 'actions', 'evidence', 'reports', 'configuration', 'users'];
             pages.forEach(page => {
                 const element = document.getElementById(page + 'Page');
                 if (element) element.style.display = 'none';
             });
-            
-            // Remove active class from all nav links
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            // Show selected page instantly
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
             const targetPage = document.getElementById(pageName + 'Page');
-            if (targetPage) {
-                targetPage.style.display = 'block';
-            }
-            
-            // Add active class to clicked nav link
-            event.target.classList.add('active');
-            
+            if (targetPage) targetPage.style.display = 'block';
+            if (event && event.target) event.target.classList.add('active');
             currentPage = pageName;
-            console.log(`📄 Switched to ${pageName} page instantly`);
         }
 
-        // Instant alerts - front-end only
         function showAlert(message, type = 'info') {
-            // Remove existing alerts
             const existingAlerts = document.querySelectorAll('.alert-toast');
             existingAlerts.forEach(alert => alert.remove());
-            
-            // Create new alert
             const alert = document.createElement('div');
             alert.className = `alert alert-${type} alert-toast`;
-            alert.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                z-index: 9999;
-                max-width: 400px;
-                padding: 12px 16px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                animation: slideIn 0.3s ease;
-            `;
-            
-            alert.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>${message}</span>
-                    <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 18px; cursor: pointer; margin-left: 10px;">&times;</button>
-                </div>
-            `;
-            
+            alert.style.cssText = `position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px; padding: 12px 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideIn 0.3s ease;`;
+            alert.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;"><span>${message}</span><button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;font-size:18px;cursor:pointer;margin-left:10px;">&times;</button></div>`;
             document.body.appendChild(alert);
-            
-            // Auto-remove after 3 seconds
-            setTimeout(() => {
-                if (alert.parentElement) {
-                    alert.remove();
-                }
-            }, 3000);
+            setTimeout(() => { if (alert.parentElement) alert.remove(); }, 3000);
         }
 
-        // Instant refresh - front-end only
-        function refreshData() {
-            showAlert('Data refreshed successfully! All systems operational.', 'success');
-            console.log('🔄 Data refresh completed (static data mode)');
+        function renderRiskBars(riskDistribution) {
+            const total = Object.values(riskDistribution).reduce((a,b)=>a+b,0) || 1;
+            const order = ['High','Medium','Low','Extreme'];
+            const colors = { High:'#f44336', Medium:'#2196f3', Low:'#4caf50', Extreme:'#ff9800' };
+            const container = document.getElementById('riskDistributionBars');
+            if (!container) return;
+            container.innerHTML = '';
+            order.forEach(key => {
+                const pct = Math.round((riskDistribution[key]||0) * 100 / total);
+                const row = document.createElement('div');
+                row.style.margin = '10px 0';
+                row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:110px;">${key}:</div>
+                    <div style="flex:1;background:#eee;border-radius:6px;overflow:hidden;">
+                      <div style="width:${pct}%;background:${colors[key]};color:#fff;padding:6px 8px;">${pct}%</div>
+                    </div>
+                </div>`;
+                container.appendChild(row);
+            });
         }
 
-        // Instant initialization on DOM ready
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🎯 DOM loaded - system ready!');
-            showAlert('Audit System loaded successfully! All features operational.', 'success');
-        });
+        function doughnutChart(id, labels, data, colors) {
+            const ctx = document.getElementById(id);
+            if (!ctx) return;
+            if (charts[id]) { charts[id].destroy(); }
+            charts[id] = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+                options: { responsive: true, plugins: { legend: { position: 'right' } } }
+            });
+        }
 
-        // Style injection for animations
+        function stackedBarChart(id, labels, datasets) {
+            const ctx = document.getElementById(id);
+            if (!ctx) return;
+            if (charts[id]) { charts[id].destroy(); }
+            charts[id] = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function renderRecentAudits(rows) {
+            const tbody = document.getElementById('recentAuditsBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            rows.forEach(a => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${a.id}</strong></td><td>${a.title || ''}</td><td>${a.business_unit || ''}</td><td><span class="badge badge-info">${a.status || ''}</span></td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function hydrateDashboard(snapshot) {
+            document.getElementById('metricActiveAudits').textContent = snapshot.activeAudits ?? 0;
+            document.getElementById('metricOpenIssues').textContent = snapshot.openIssues ?? 0;
+            document.getElementById('metricCompletedActions').textContent = snapshot.completedActions ?? 0;
+            document.getElementById('metricOverdueItems').textContent = snapshot.overdueItems ?? 0;
+
+            renderRecentAudits(snapshot.recentAudits || []);
+            renderRiskBars(snapshot.riskDistribution || { High:0, Medium:0, Low:0, Extreme:0 });
+
+            const ea = snapshot.executiveAnalytics || { businessUnits: [], totalIssuesPerArea:{}, riskRatingPerArea:{}, highRiskNotImplemented:{}, actionStatusPerArea:{} };
+            const units = ea.businessUnits || [];
+            const totalIssuesData = units.map(u => ea.totalIssuesPerArea[u] || 0);
+            doughnutChart('chartIssuesPerArea', units, totalIssuesData, ['#1e88e5','#43a047','#fb8c00','#8e24aa','#3949ab','#00acc1','#f4511e','#7cb342','#6d4c41','#5e35b1']);
+
+            const risks = ['Extreme','High','Medium','Low'];
+            const riskColors = { Extreme:'#ff6d00', High:'#e53935', Medium:'#1e88e5', Low:'#43a047' };
+            const riskDatasets = risks.map(r => ({ label: r, data: units.map(u => (ea.riskRatingPerArea[u] && ea.riskRatingPerArea[u][r]) || 0), backgroundColor: riskColors[r] }));
+            stackedBarChart('chartRiskPerArea', units, riskDatasets);
+
+            const highRiskNI = units.map(u => ea.highRiskNotImplemented[u] || 0);
+            doughnutChart('chartHighRiskNotImpl', units, highRiskNI, ['#e53935','#8e24aa','#1e88e5','#43a047','#fb8c00','#00acc1','#6d4c41','#3949ab']);
+
+            const statuses = ['Not Implemented','Implemented','Not Due'];
+            const statusColors = { 'Not Implemented':'#e53935', 'Implemented':'#43a047', 'Not Due':'#1e88e5' };
+            const statusDatasets = statuses.map(s => ({ label: s, data: units.map(u => (ea.actionStatusPerArea[u] && ea.actionStatusPerArea[u][s]) || 0), backgroundColor: statusColors[s] }));
+            stackedBarChart('chartActionStatus', units, statusDatasets);
+        }
+
+        function fetchAndRenderDashboardData() {
+            try {
+                google.script.run
+                    .withSuccessHandler(function(data){ hydrateDashboard(data); })
+                    .withFailureHandler(function(err){ console.error('Dashboard load failed', err); showAlert('Failed to load dashboard data', 'danger'); })
+                    .getQuantumDashboardData();
+            } catch (e) {
+                console.warn('google.script.run not available:', e);
+            }
+        }
+
+        function refreshData() { fetchAndRenderDashboardData(); showAlert('Refreshed', 'success'); }
+
+        document.addEventListener('DOMContentLoaded', function() { fetchAndRenderDashboardData(); });
+
         const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            
-            .page {
-                animation: fadeIn 0.2s ease;
-            }
-            
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-            
-            .nav-link.active {
-                background-color: rgba(255,255,255,0.15) !important;
-                color: white !important;
-                border-right: 3px solid white;
-            }
-            
-            .table tbody tr:hover {
-                background-color: rgba(26, 35, 126, 0.05) !important;
-            }
-            
-            .action-btn:hover {
-                background-color: rgba(26, 35, 126, 0.1) !important;
-                color: #1a237e !important;
-            }
-        `;
+        style.textContent = `@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .page { animation: fadeIn 0.2s ease; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .nav-link.active { background-color: rgba(255,255,255,0.15) !important; color: white !important; border-right: 3px solid white; } .table tbody tr:hover { background-color: rgba(26, 35, 126, 0.05) !important; } .action-btn:hover { background-color: rgba(26, 35, 126, 0.1) !important; color: #1a237e !important; }`;
         document.head.appendChild(style);
 
-        // Ensure everything displays immediately
-        window.addEventListener('load', function() {
-            console.log('✅ AGGRESSIVE LOAD COMPLETE - ZERO LOADING TIME!');
-            console.log('🎉 All systems operational with hardcoded data');
-            console.log('⚡ Backend-independent operation achieved');
-        });
-
-        // Prevent any hanging
-        // Override any potential Google Apps Script calls
         if (typeof google === 'undefined') {
-            window.google = {
-                script: {
-                    run: {
-                        withSuccessHandler: function() { return this; },
-                        withFailureHandler: function() { return this; }
-                    }
-                }
-            };
+            window.google = { script: { run: { withSuccessHandler: function(){return this;}, withFailureHandler: function(){return this;} } } };
         }
-
-        console.log('🏆 AGGRESSIVE ENGINEERING SUCCESS - INSTANT LOAD ACHIEVED!');
     </script>
 </body>
 </html>
