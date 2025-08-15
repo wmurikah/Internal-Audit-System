@@ -10,20 +10,23 @@ function getCurrentUser() {
   try {
     const userEmail = Session.getActiveUser().getEmail();
     
-    if (!userEmail) {
+    // Enforce corporate domain (@hasspetroleum.com) for sign-in
+    const allowedDomain = 'hasspetroleum.com';
+    if (!userEmail || userEmail.split('@')[1] !== allowedDomain) {
       return {
-        email: 'anonymous@system.local',
+        email: userEmail || 'anonymous@system.local',
         role: 'Guest',
-        name: 'Anonymous User',
-        permissions: getPermissions('Guest'),
+        name: 'Unauthorized',
+        permissions: [],
         org_unit: 'Unknown',
         authenticated: false,
-        active: false
+        active: false,
+        error: 'Access restricted to corporate domain'
       };
     }
     
     const users = getSheetData('Users') || [];
-    const user = users.find(u => u.email && u.email.toLowerCase() === userEmail.toLowerCase());
+    const user = users.find(u => u.email && u.email.toLowerCase() === userEmail.toLowerCase() && u.active !== false);
     
     if (!user) {
       // For first-time setup, default to AuditManager
