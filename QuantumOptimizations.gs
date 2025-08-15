@@ -513,6 +513,18 @@ function getQuantumDashboardData() {
         data.userRole = user.role;
         data.userPermissions = user.permissions;
         
+        // Ensure executive analytics present (compute on-the-fly if missing)
+        try {
+          if (!data.executiveAnalytics || !Array.isArray(data.executiveAnalytics.businessUnits) || data.executiveAnalytics.businessUnits.length === 0) {
+            const analytics = buildExecutiveAnalytics();
+            if (analytics && Array.isArray(analytics.businessUnits) && analytics.businessUnits.length >= 0) {
+              data.executiveAnalytics = analytics;
+            }
+          }
+        } catch (eaErr) {
+          console.log('Executive analytics enrichment failed (cache layer): ' + eaErr.message);
+        }
+        
         return data;
       } catch (e) {
         console.log('Quantum cache parse error, trying fallback...');
@@ -529,6 +541,16 @@ function getQuantumDashboardData() {
         const user = getCurrentUserUltra();
         data.userRole = user.role;
         data.userPermissions = user.permissions;
+        
+        // Ensure executive analytics present
+        try {
+          if (!data.executiveAnalytics || !Array.isArray(data.executiveAnalytics.businessUnits) || data.executiveAnalytics.businessUnits.length === 0) {
+            const analytics = buildExecutiveAnalytics();
+            if (analytics) data.executiveAnalytics = analytics;
+          }
+        } catch (eaErr) {
+          console.log('Executive analytics enrichment failed (legacy layer): ' + eaErr.message);
+        }
         
         return data;
       } catch (e) {
@@ -557,6 +579,16 @@ function getQuantumDashboardData() {
         const user = getCurrentUserUltra();
         data.userRole = user.role;
         data.userPermissions = user.permissions;
+        
+        // Ensure executive analytics present
+        try {
+          if (!data.executiveAnalytics || !Array.isArray(data.executiveAnalytics.businessUnits) || data.executiveAnalytics.businessUnits.length === 0) {
+            const analytics = buildExecutiveAnalytics();
+            if (analytics) data.executiveAnalytics = analytics;
+          }
+        } catch (eaErr) {
+          console.log('Executive analytics enrichment failed (persistent layer): ' + eaErr.message);
+        }
         
         console.log(`🚀 Quantum dashboard served from persistent storage`);
         return data;
