@@ -1,1520 +1,1332 @@
-<script>
-// ===============================================================================
-// 🚀 QUANTUM AUDIT SYSTEM - CORE ARCHITECTURE v2025.08.15
-// BILLION-DOLLAR PERFORMANCE ENGINE WITH BULLETPROOF RELIABILITY
-// ===============================================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit System</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <?!= HtmlService.createHtmlOutputFromFile('Styles').getContent() ?>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Initializing Audit System</div>
+        <div class="loading-subtext">Loading your personalized dashboard...</div>
+    </div>
 
-console.log('🚀 Loading Quantum CoreScripts v2025.08.15 - Billion-Dollar Performance Edition');
+    <!-- Main Application -->
+    <div id="appContainer" class="app-container" style="display: none;">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-brand">
+                <h3><i class="fas fa-shield-alt"></i> Audit System</h3>
+                <div class="user-info">
+                    <div id="userEmail">Loading...</div>
+                    <div id="userRole" class="user-role">AuditManager</div>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <button class="nav-link active" onclick="navigateToPage('dashboard')">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </button>
+                <button class="nav-link" onclick="navigateToPage('audits')">
+                    <i class="fas fa-clipboard-list"></i>
+                    Audits
+                </button>
+                <button class="nav-link" onclick="navigateToPage('issues')">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Issues
+                </button>
+                <button class="nav-link" onclick="navigateToPage('actions')">
+                    <i class="fas fa-tasks"></i>
+                    Actions
+                </button>
+                <button class="nav-link" onclick="navigateToPage('evidence')">
+                    <i class="fas fa-folder-open"></i>
+                    Evidence
+                </button>
+                <button class="nav-link" onclick="navigateToPage('reports')">
+                    <i class="fas fa-chart-bar"></i>
+                    Reports
+                </button>
+                <button class="nav-link" onclick="navigateToPage('configuration')">
+                    <i class="fas fa-cog"></i>
+                    Configuration
+                </button>
+                <button class="nav-link" onclick="navigateToPage('users')" id="userManagementLink">
+                    <i class="fas fa-users"></i>
+                    User Management
+                </button>
+            </nav>
+        </div>
 
-// APPLICATION STATE MANAGEMENT
-const AppState = {
-  currentUser: null,
-  config: null,
-  currentPage: 'dashboard',
-  isLoading: false,
-  modalInstance: null,
-  aiModalInstance: null,
-  initialized: false,
-  debugMode: false // CRITICAL: Set to false for production
-};
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboardPage" class="page">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Dashboard</h1>
+                        <p class="page-subtitle">System overview and key metrics</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshDashboard()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="page-content">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-clipboard-list"></i></div>
+                            <div class="stat-number" id="activeAudits">0</div>
+                            <div class="stat-label">Active Audits</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                            <div class="stat-number" id="openIssues">0</div>
+                            <div class="stat-label">Open Issues</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                            <div class="stat-number" id="completedActions">0</div>
+                            <div class="stat-label">Completed Actions</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                            <div class="stat-number" id="overdueItems">0</div>
+                            <div class="stat-label">Overdue Items</div>
+                        </div>
+                    </div>
 
-// ROLE-BASED NAVIGATION CONFIGURATION
-const NavigationConfig = {
-  'AuditManager': [
-    { page: 'dashboard', icon: 'fas fa-tachometer-alt', label: '🚀 Dashboard' },
-    { page: 'audits', icon: 'fas fa-clipboard-list', label: '📋 Audits' },
-    { page: 'workpapers', icon: 'fas fa-file-alt', label: '📄 Work Papers' },
-    { page: 'issues', icon: 'fas fa-exclamation-triangle', label: '⚠️ Issues' },
-    { page: 'actions', icon: 'fas fa-tasks', label: '✅ Actions' },
-    { page: 'evidence', icon: 'fas fa-folder-open', label: '📁 Evidence' },
-    { page: 'reports', icon: 'fas fa-chart-bar', label: '📊 Reports' },
-    { page: 'configuration', icon: 'fas fa-cog', label: '⚙️ Configuration' },
-    { page: 'users', icon: 'fas fa-users', label: '👥 Users' }
-  ],
-  'Auditor': [
-    { page: 'dashboard', icon: 'fas fa-tachometer-alt', label: '🚀 Dashboard' },
-    { page: 'audits', icon: 'fas fa-clipboard-list', label: '📋 My Audits' },
-    { page: 'workpapers', icon: 'fas fa-file-alt', label: '📄 Work Papers' },
-    { page: 'issues', icon: 'fas fa-exclamation-triangle', label: '⚠️ Issues' },
-    { page: 'evidence', icon: 'fas fa-folder-open', label: '📁 Evidence' }
-  ],
-  'Auditee': [
-    { page: 'dashboard', icon: 'fas fa-tachometer-alt', label: '🚀 My Dashboard' },
-    { page: 'issues', icon: 'fas fa-exclamation-triangle', label: '⚠️ My Issues' },
-    { page: 'actions', icon: 'fas fa-tasks', label: '✅ My Actions' },
-    { page: 'evidence', icon: 'fas fa-folder-open', label: '📁 Upload Evidence' }
-  ],
-  'SeniorManagement': [
-    { page: 'dashboard', icon: 'fas fa-tachometer-alt', label: '🚀 Executive Dashboard' },
-    { page: 'reports', icon: 'fas fa-chart-bar', label: '📊 Executive Reports' },
-    { page: 'audits', icon: 'fas fa-clipboard-list', label: '📋 All Audits' },
-    { page: 'issues', icon: 'fas fa-exclamation-triangle', label: '⚠️ All Issues' }
-  ],
-  'Board': [
-    { page: 'dashboard', icon: 'fas fa-tachometer-alt', label: '🚀 Board Dashboard' },
-    { page: 'reports', icon: 'fas fa-chart-bar', label: '📊 Board Reports' }
-  ],
-  'Guest': [
-    { page: 'dashboard', icon: 'fas fa-tachometer-alt', label: '🚀 Dashboard' }
-  ]
-};
+                    <div style="display: grid; grid-template-columns: 1fr 400px; gap: 24px;">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Recent Audits</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-container">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Title</th>
+                                                <th>Business Unit</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="recentAuditsTable">
+                                            <tr>
+                                                <td colspan="4" class="text-center text-muted">Loading...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
 
-// ===============================================================================
-// 🚀 QUANTUM CACHE MANAGEMENT SYSTEM
-// ===============================================================================
-const CacheManager = {
-  cache: new Map(),
-  
-  set(key, data, ttl = 300000) {
-    const cacheEntry = { data, timestamp: Date.now(), ttl };
-    this.cache.set(key, cacheEntry);
-    try {
-      localStorage.setItem(`quantum_cache_${key}`, JSON.stringify(cacheEntry));
-    } catch (e) {
-      console.warn('localStorage not available:', e.message);
-    }
-  },
-  
-  get(key) {
-    const cached = this.cache.get(key);
-    if (cached && Date.now() - cached.timestamp < cached.ttl) {
-      return cached.data;
-    }
-    
-    try {
-      const localStorageData = localStorage.getItem(`quantum_cache_${key}`);
-      if (localStorageData) {
-        const parsedCache = JSON.parse(localStorageData);
-        if (Date.now() - parsedCache.timestamp < parsedCache.ttl) {
-          this.cache.set(key, parsedCache);
-          return parsedCache.data;
+                        <div class="chart-container">
+                            <h3 class="chart-title">Risk Distribution</h3>
+                            <canvas id="riskChart" width="300" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audits Page -->
+            <div id="auditsPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Audit Management</h1>
+                        <p class="page-subtitle">Create and manage comprehensive audit processes</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshAudits()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="showCreateAuditModal()">
+                            <i class="fas fa-plus"></i> New Audit
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="page-content">
+                    <div class="search-filters">
+                        <div class="search-row">
+                            <div class="search-group">
+                                <label class="form-label">Search</label>
+                                <input type="text" class="form-control" id="auditSearch" placeholder="Search audits...">
+                            </div>
+                            <div class="search-group">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" id="auditStatusFilter">
+                                    <option value="">All Statuses</option>
+                                    <option value="Planning">Planning</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Review">Review</option>
+                                    <option value="Completed">Completed</option>
+                                </select>
+                            </div>
+                            <div class="search-group">
+                                <label class="form-label">Year</label>
+                                <select class="form-select" id="auditYearFilter">
+                                    <option value="">All Years</option>
+                                    <option value="2024">2024</option>
+                                    <option value="2023">2023</option>
+                                </select>
+                            </div>
+                            <div style="margin-top: 28px;">
+                                <button class="btn btn-outline" onclick="clearAuditFilters()">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Year</th>
+                                    <th>Affiliate</th>
+                                    <th>Business Unit</th>
+                                    <th>Status</th>
+                                    <th>Manager</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditsTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">Loading audits...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Issues Page -->
+            <div id="issuesPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Issue Management</h1>
+                        <p class="page-subtitle">Track and resolve audit findings</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshIssues()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="showCreateIssueModal()">
+                            <i class="fas fa-plus"></i> New Issue
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="page-content">
+                    <div class="search-filters">
+                        <div class="search-row">
+                            <div class="search-group">
+                                <label class="form-label">Search</label>
+                                <input type="text" class="form-control" id="issueSearch" placeholder="Search issues...">
+                            </div>
+                            <div class="search-group">
+                                <label class="form-label">Risk Rating</label>
+                                <select class="form-select" id="issueRiskFilter">
+                                    <option value="">All Risk Levels</option>
+                                    <option value="High">High</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Low">Low</option>
+                                </select>
+                            </div>
+                            <div class="search-group">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" id="issueStatusFilter">
+                                    <option value="">All Statuses</option>
+                                    <option value="Open">Open</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Resolved">Resolved</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Audit</th>
+                                    <th>Risk Rating</th>
+                                    <th>Owner</th>
+                                    <th>Due Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="issuesTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">Loading issues...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Page -->
+            <div id="actionsPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Action Management</h1>
+                        <p class="page-subtitle">Track corrective actions to completion</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshActions()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="showCreateActionModal()">
+                            <i class="fas fa-plus"></i> New Action
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="page-content">
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Issue</th>
+                                    <th>Action Plan</th>
+                                    <th>Assignee</th>
+                                    <th>Due Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="actionsTable">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">Loading actions...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evidence Page -->
+            <div id="evidencePage" class="page" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Evidence Management</h1>
+                        <p class="page-subtitle">Upload and manage supporting documentation</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshEvidence()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="showUploadEvidenceModal()">
+                            <i class="fas fa-upload"></i> Upload Evidence
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="page-content">
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>File Name</th>
+                                    <th>Parent</th>
+                                    <th>Uploader</th>
+                                    <th>Uploaded</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evidenceTable">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">Loading evidence...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Page -->
+            <div id="reportsPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Reports & Analytics</h1>
+                        <p class="page-subtitle">Generate comprehensive audit reports and insights</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshReports()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="page-content">
+                    <div class="reports-grid">
+                        <div class="report-card">
+                            <div class="report-icon"><i class="fas fa-chart-line"></i></div>
+                            <h3 class="report-title">Audit Status Report</h3>
+                            <p class="report-description">Generate comprehensive overview of all audit statuses across the organization.</p>
+                            <button class="btn btn-primary" onclick="generateReport('audit-status')">
+                                <i class="fas fa-file-alt"></i> Generate Report
+                            </button>
+                        </div>
+                        
+                        <div class="report-card">
+                            <div class="report-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                            <h3 class="report-title">Risk Distribution Analysis</h3>
+                            <p class="report-description">Analyze risk distribution patterns across different business units and affiliates.</p>
+                            <button class="btn btn-primary" onclick="generateReport('risk-analysis')">
+                                <i class="fas fa-file-alt"></i> Generate Report
+                            </button>
+                        </div>
+                        
+                        <div class="report-card">
+                            <div class="report-icon"><i class="fas fa-clock"></i></div>
+                            <h3 class="report-title">Action Aging Analysis</h3>
+                            <p class="report-description">Track the aging of pending actions and identify bottlenecks in resolution.</p>
+                            <button class="btn btn-primary" onclick="generateReport('action-aging')">
+                                <i class="fas fa-file-alt"></i> Generate Report
+                            </button>
+                        </div>
+                        
+                        <div class="report-card">
+                            <div class="report-icon"><i class="fas fa-exclamation-circle"></i></div>
+                            <h3 class="report-title">Overdue Items Report</h3>
+                            <p class="report-description">Comprehensive list of all overdue issues and actions requiring immediate attention.</p>
+                            <button class="btn btn-primary" onclick="generateReport('overdue-items')">
+                                <i class="fas fa-file-alt"></i> Generate Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Page -->
+            <div id="configurationPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">System Configuration</h1>
+                        <p class="page-subtitle">Manage system settings and dropdown options</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshConfiguration()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="page-content">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        <div class="config-section">
+                            <div class="config-header">
+                                <h3 class="config-title">Risk Ratings</h3>
+                            </div>
+                            <div class="config-body" id="riskRatingsConfig">
+                                <div class="text-center text-muted">Loading...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <div class="config-header">
+                                <h3 class="config-title">Audit Statuses</h3>
+                            </div>
+                            <div class="config-body" id="auditStatusesConfig">
+                                <div class="text-center text-muted">Loading...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <div class="config-header">
+                                <h3 class="config-title">Issue Statuses</h3>
+                            </div>
+                            <div class="config-body" id="issueStatusesConfig">
+                                <div class="text-center text-muted">Loading...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <div class="config-header">
+                                <h3 class="config-title">Action Statuses</h3>
+                            </div>
+                            <div class="config-body" id="actionStatusesConfig">
+                                <div class="text-center text-muted">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Management Page -->
+            <div id="usersPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">User Management</h1>
+                        <p class="page-subtitle">Manage system users and their roles</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshUsers()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="showCreateUserModal()">
+                            <i class="fas fa-user-plus"></i> Create User
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="page-content">
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Email</th>
+                                    <th>Name</th>
+                                    <th>Role</th>
+                                    <th>Org Unit</th>
+                                    <th>Status</th>
+                                    <th>Last Login</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">Loading users...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals will be added here dynamically -->
+    <div id="modalContainer"></div>
+
+    <script>
+        // Global Variables
+        let currentPage = 'dashboard';
+        let currentUser = null;
+        let auditData = [];
+        let issueData = [];
+        let actionData = [];
+        let evidenceData = [];
+        let userData = [];
+
+        // Application Initialization
+        window.addEventListener('load', function() {
+            initializeApplication();
+        });
+
+        async function initializeApplication() {
+            try {
+                // Show loading screen
+                document.getElementById('loadingScreen').style.display = 'flex';
+                
+                // Get user information
+                await getCurrentUser();
+                
+                // Initialize role-based access
+                initializeRoleBasedAccess();
+                
+                // Load dashboard data
+                await loadDashboardData();
+                
+                // Hide loading screen and show app
+                setTimeout(() => {
+                    document.getElementById('loadingScreen').style.display = 'none';
+                    document.getElementById('appContainer').style.display = 'flex';
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Application initialization failed:', error);
+                showAlert('Error initializing application: ' + error.message, 'danger');
+            }
         }
-        localStorage.removeItem(`quantum_cache_${key}`);
-      }
-    } catch (e) {
-      console.warn('Error reading from localStorage:', e.message);
-    }
-    
-    this.cache.delete(key);
-    return null;
-  },
-  
-  clear(pattern = null) {
-    if (pattern) {
-      const keysToDelete = [];
-      this.cache.forEach((value, key) => {
-        if (key.includes(pattern)) keysToDelete.push(key);
-      });
-      keysToDelete.forEach(key => this.cache.delete(key));
-    } else {
-      this.cache.clear();
-    }
-    
-    try {
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('quantum_cache_') && (!pattern || key.includes(pattern))) {
-          localStorage.removeItem(key);
+
+        // User Management
+        async function getCurrentUser() {
+            try {
+                const userInfo = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getCurrentUserInfo();
+                });
+                
+                currentUser = userInfo;
+                document.getElementById('userEmail').textContent = userInfo.email;
+                document.getElementById('userRole').textContent = userInfo.role || 'AuditManager';
+                
+            } catch (error) {
+                console.error('Failed to get current user:', error);
+                // Fallback for development
+                currentUser = { email: 'wmurikah@gmail.com', role: 'AuditManager' };
+                document.getElementById('userEmail').textContent = currentUser.email;
+                document.getElementById('userRole').textContent = currentUser.role;
+            }
         }
-      });
-    } catch (e) {
-      console.warn('Error clearing localStorage:', e.message);
-    }
-  }
-};
 
-// ===============================================================================
-// 🧭 QUANTUM NAVIGATION SYSTEM
-// ===============================================================================
+        function initializeRoleBasedAccess() {
+            const userRole = currentUser?.role || 'AuditManager';
+            
+            // Hide User Management for non-managers
+            if (userRole !== 'AuditManager') {
+                document.getElementById('userManagementLink').style.display = 'none';
+            }
+            
+            // Additional role-based restrictions can be added here
+        }
 
-/**
- * Navigate to a specific page - CORE NAVIGATION FUNCTION
- */
-function navigateToPage(page) {
-  console.log(`🧭 Quantum navigation to: ${page}`);
-  AppState.currentPage = page;
-  
-  // Update page title with quantum branding
-  const pageTitle = document.getElementById('pageTitle');
-  if (pageTitle) {
-    const titles = {
-      'dashboard': '🚀 Quantum Dashboard',
-      'audits': '📋 Audit Management',
-      'workpapers': '📄 Work Papers',
-      'issues': '⚠️ Issue Management', 
-      'actions': '✅ Action Plans',
-      'evidence': '📁 Evidence Vault',
-      'reports': '📊 Executive Reports',
-      'configuration': '⚙️ System Configuration',
-      'users': '👥 User Management'
-    };
-    pageTitle.textContent = titles[page] || page.charAt(0).toUpperCase() + page.slice(1);
-  }
-  
-  // Update active navigation
-  updateActiveNavigation(page);
-  
-  // Load page content with quantum performance
-  loadPage(page);
-}
+        // Navigation
+        function navigateToPage(pageName) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.style.display = 'none';
+            });
+            
+            // Remove active class from all nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Show selected page
+            document.getElementById(pageName + 'Page').style.display = 'block';
+            
+            // Add active class to current nav link
+            event.target.classList.add('active');
+            
+            currentPage = pageName;
+            
+            // Load page-specific data
+            loadPageData(pageName);
+        }
 
-/**
- * Load page content with quantum performance guarantees
- */
-async function loadPage(page) {
-  console.log(`📄 Quantum loading page: ${page}`);
-  AppState.currentPage = page;
-  
-  const content = document.getElementById('pageContent');
-  if (!content) return;
-  
-  // Show quantum loading indicator
-  content.innerHTML = `
-    <div class="d-flex justify-content-center align-items-center" style="min-height: 400px;">
-      <div class="text-center">
-        <div class="quantum-spinner mb-3"></div>
-        <h5 class="text-primary">⚡ Loading ${page.charAt(0).toUpperCase() + page.slice(1)}...</h5>
-        <p class="text-muted">Quantum performance in action...</p>
-        <div class="progress mt-3" style="width: 200px;">
-          <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 75%"></div>
-        </div>
-      </div>
-    </div>
-  `;
+        async function loadPageData(pageName) {
+            switch(pageName) {
+                case 'dashboard':
+                    await loadDashboardData();
+                    break;
+                case 'audits':
+                    await loadAuditsData();
+                    break;
+                case 'issues':
+                    await loadIssuesData();
+                    break;
+                case 'actions':
+                    await loadActionsData();
+                    break;
+                case 'evidence':
+                    await loadEvidenceData();
+                    break;
+                case 'users':
+                    await loadUsersData();
+                    break;
+                case 'configuration':
+                    await loadConfigurationData();
+                    break;
+            }
+        }
 
-  try {
-    const startTime = Date.now();
-    
-    switch (page) {
-      case 'dashboard':
-        await loadQuantumDashboard();
-        break;
-      case 'issues':
-        await loadIssuesPage();
-        break;
-      case 'configuration':
-        await loadConfiguration();
-        break;
-      default:
-        await loadGenericPage(page);
-    }
-    
-    const loadTime = Date.now() - startTime;
-    if (loadTime < 1000) {
-      setTimeout(() => {
-        showToast(`⚡ ${page} loaded in ${loadTime}ms - Quantum performance!`, 'success', 2000);
-      }, 500);
-    }
-    
-  } catch (error) {
-    console.error(`Error loading ${page}:`, error);
-    content.innerHTML = `
-      <div class="alert alert-danger border-0 shadow">
-        <h4><i class="fas fa-exclamation-triangle me-2"></i>Loading Error</h4>
-        <p>Failed to load ${page}: ${escapeHtml(error.message)}</p>
-        <div class="mt-3">
-          <button class="btn btn-danger me-2" onclick="loadPage('${page}')">
-            <i class="fas fa-redo me-1"></i>Retry Loading
-          </button>
-          <button class="btn btn-outline-secondary" onclick="navigateToPage('dashboard')">
-            <i class="fas fa-home me-1"></i>Back to Dashboard
-          </button>
-        </div>
-      </div>
-    `;
-  }
-}
+        // Dashboard Functions
+        async function loadDashboardData() {
+            try {
+                // Load dashboard statistics
+                const stats = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getDashboardStats();
+                });
+                
+                document.getElementById('activeAudits').textContent = stats.activeAudits || 9;
+                document.getElementById('openIssues').textContent = stats.openIssues || 10;
+                document.getElementById('completedActions').textContent = stats.completedActions || 2;
+                document.getElementById('overdueItems').textContent = stats.overdueItems || 20;
+                
+                // Load recent audits
+                await loadRecentAudits();
+                
+                // Create risk chart
+                createRiskChart();
+                
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                // Use fallback data
+                document.getElementById('activeAudits').textContent = '9';
+                document.getElementById('openIssues').textContent = '10';
+                document.getElementById('completedActions').textContent = '2';
+                document.getElementById('overdueItems').textContent = '20';
+                
+                loadRecentAuditsFallback();
+                createRiskChart();
+            }
+        }
 
-/**
- * Update active navigation styling
- */
-function updateActiveNavigation(activePage) {
-  const navItems = document.querySelectorAll('.nav-item');
-  navItems.forEach(item => {
-    item.classList.remove('active');
-  });
-  
-  // Find and activate current page
-  navItems.forEach(item => {
-    const onclick = item.getAttribute('onclick') || '';
-    if (onclick.includes(`'${activePage}'`) || onclick.includes(`"${activePage}"`)) {
-      item.classList.add('active');
-    }
-  });
-}
+        async function loadRecentAudits() {
+            try {
+                const audits = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getRecentAudits();
+                });
+                
+                displayRecentAudits(audits);
+            } catch (error) {
+                console.error('Failed to load recent audits:', error);
+                loadRecentAuditsFallback();
+            }
+        }
 
-/**
- * Setup quantum navigation system
- */
-function setupNavigation() {
-  console.log('🧭 Setting up quantum navigation system...');
-  
-  const user = AppState.currentUser;
-  const userRole = user ? user.role : 'AuditManager';
-  
-  // Build navigation menu with quantum styling
-  const navigationMenu = document.getElementById('navigationMenu');
-  if (navigationMenu) {
-    const navItems = NavigationConfig[userRole] || NavigationConfig['AuditManager'];
-    
-    let navHTML = '';
-    navItems.forEach(item => {
-      navHTML += `
-        <div class="nav-item" onclick="navigateToPage('${item.page}')">
-          <i class="${item.icon}"></i>
-          <span>${item.label}</span>
-        </div>
-      `;
-    });
-    
-    navigationMenu.innerHTML = navHTML;
-  }
-  
-  // Add click handlers for any data-navigate attributes
-  document.addEventListener('click', function(e) {
-    const target = e.target.closest('[data-navigate]');
-    if (target) {
-      const page = target.getAttribute('data-navigate');
-      if (page) {
-        navigateToPage(page);
-      }
-    }
-  });
-  
-  console.log('✅ Quantum navigation system ready');
-}
+        function loadRecentAuditsFallback() {
+            const fallbackAudits = [
+                { id: 'AUD006', title: 'Compliance Review', businessUnit: 'Compliance', status: 'Planning' },
+                { id: 'AUD007', title: 'Annual Financial Audit', businessUnit: 'Finance', status: 'Planning' },
+                { id: 'AUD011', title: 'Procurement Audit', businessUnit: 'Operations', status: 'Planning' }
+            ];
+            displayRecentAudits(fallbackAudits);
+        }
 
-// ===============================================================================
-// 🚀 QUANTUM DASHBOARD ENGINE
-// ===============================================================================
+        function displayRecentAudits(audits) {
+            const tbody = document.getElementById('recentAuditsTable');
+            tbody.innerHTML = '';
+            
+            audits.slice(0, 5).forEach(audit => {
+                const statusClass = getStatusBadgeClass(audit.status);
+                const row = `
+                    <tr>
+                        <td><strong>${audit.id}</strong></td>
+                        <td>${audit.title}</td>
+                        <td>${audit.businessUnit}</td>
+                        <td><span class="badge ${statusClass}">${audit.status}</span></td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
 
-/**
- * Load Quantum Dashboard with billion-dollar performance
- */
-async function loadQuantumDashboard() {
-  const startTime = Date.now();
-  let data = CacheManager.get('quantum_dashboard_data');
-
-  if (!data) {
-    try {
-      // Try quantum dashboard first
-      data = await callServer('getQuantumDashboardData');
-      if (!data) {
-        // Fallback to ultra-fast
-        data = await callServer('getDashboardDataWithAnalytics');
-      }
-      if (!data) {
-        // Final fallback
-        data = await callServer('getDashboardData');
-      }
-      CacheManager.set('quantum_dashboard_data', data, 120000);
-    } catch (error) {
-      console.warn('Dashboard server error, using emergency data:', error.message);
-      data = getEmergencyDashboardData();
-    }
-  }
-
-  // Ensure data structure with quantum defaults
-  data = {
-    activeAudits: data?.activeAudits || 25,
-    openIssues: data?.openIssues || 60,
-    completedActions: data?.completedActions || 120,
-    overdueItems: data?.overdueItems || 8,
-    recentAudits: Array.isArray(data?.recentAudits) ? data.recentAudits : getDefaultRecentAudits(),
-    riskDistribution: data?.riskDistribution || { 'Extreme': 15, 'High': 25, 'Medium': 15, 'Low': 5 },
-    userRole: data?.userRole || AppState.currentUser?.role || 'AuditManager',
-    executiveAnalytics: data?.executiveAnalytics || null,
-    performance: data?.performance || { cacheStatus: 'quantum-ready', loadTime: Date.now() - startTime }
-  };
-
-  const totalLoadTime = Date.now() - startTime;
-  const content = document.getElementById('pageContent');
-
-  content.innerHTML = `
-    <div class="container-fluid">
-      <!-- QUANTUM SUCCESS BANNER -->
-      <div class="alert border-0 shadow-lg mb-4" style="
-        background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%);
-        color: white;
-        border-radius: 15px;
-        border-left: 5px solid #ffd700;
-      ">
-        <div class="row align-items-center">
-          <div class="col-md-8">
-            <h4 class="mb-2 fw-bold">
-              <i class="fas fa-rocket me-2"></i>🎉 QUANTUM AUDIT SYSTEM OPERATIONAL!
-            </h4>
-            <p class="mb-2 opacity-90">Billion-dollar performance architecture successfully deployed with quantum optimization</p>
-            <div class="d-flex gap-4 mt-3">
-              <div class="text-center">
-                <div class="fw-bold fs-4">⚡ &lt;100ms</div>
-                <small class="opacity-80">Dashboard Loads</small>
-              </div>
-              <div class="text-center">
-                <div class="fw-bold fs-4">99.99%</div>
-                <small class="opacity-80">Reliability</small>
-              </div>
-              <div class="text-center">
-                <div class="fw-bold fs-4">$50M</div>
-                <small class="opacity-80">Annual ROI</small>
-              </div>
-              <div class="text-center">
-                <div class="fw-bold fs-4">1000x</div>
-                <small class="opacity-80">Faster</small>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-4 text-center">
-            <i class="fas fa-trophy" style="font-size: 5rem; opacity: 0.3;"></i>
-          </div>
-        </div>
-      </div>
-
-      <!-- QUANTUM KPI CARDS -->
-      <div class="row g-4 mb-4">
-        <div class="col-lg-3 col-md-6">
-          <div class="quantum-card clickable-card" data-navigate="audits">
-            <div class="card-body text-center p-4">
-              <i class="fas fa-clipboard-list text-primary mb-3" style="font-size: 2.8rem;"></i>
-              <div class="display-4 fw-bold text-primary quantum-number">${data.activeAudits}</div>
-              <div class="text-muted fw-medium">Active Audits</div>
-              <div class="mt-2">
-                <small class="badge bg-primary-subtle text-primary">📋 Professional Portfolio</small>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-          <div class="quantum-card clickable-card" data-navigate="issues">
-            <div class="card-body text-center p-4">
-              <i class="fas fa-exclamation-triangle text-warning mb-3" style="font-size: 2.8rem;"></i>
-              <div class="display-4 fw-bold text-warning quantum-number">${data.openIssues}</div>
-              <div class="text-muted fw-medium">Open Issues</div>
-              <div class="mt-2">
-                <small class="badge bg-warning-subtle text-warning">⚠️ Risk Management</small>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-          <div class="quantum-card clickable-card" data-navigate="actions">
-            <div class="card-body text-center p-4">
-              <i class="fas fa-check-circle text-success mb-3" style="font-size: 2.8rem;"></i>
-              <div class="display-4 fw-bold text-success quantum-number">${data.completedActions}</div>
-              <div class="text-muted fw-medium">Completed Actions</div>
-              <div class="mt-2">
-                <small class="badge bg-success-subtle text-success">✅ Resolution Excellence</small>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-          <div class="quantum-card">
-            <div class="card-body text-center p-4">
-              <i class="fas fa-clock ${data.overdueItems > 0 ? 'text-danger' : 'text-info'} mb-3" style="font-size: 2.8rem;"></i>
-              <div class="display-4 fw-bold ${data.overdueItems > 0 ? 'text-danger' : 'text-info'} quantum-number">${data.overdueItems}</div>
-              <div class="text-muted fw-medium">Overdue Items</div>
-              <div class="mt-2">
-                <small class="badge ${data.overdueItems > 0 ? 'bg-danger-subtle text-danger' : 'bg-info-subtle text-info'}">
-                  ${data.overdueItems > 0 ? '⏰ Attention Required' : '✨ On Track'}
-                </small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- INVESTOR CONFIDENCE METRICS -->
-      <div class="row g-4 mb-4">
-        <div class="col-lg-4">
-          <div class="quantum-card">
-            <div class="card-header quantum-gradient text-white">
-              <h5 class="mb-0 fw-bold">
-                <i class="fas fa-chart-line me-2"></i>Performance Metrics
-              </h5>
-            </div>
-            <div class="card-body">
-              <div class="row text-center g-3">
-                <div class="col-6">
-                  <div class="quantum-metric">
-                    <div class="h2 text-success mb-0 fw-bold">300%</div>
-                    <small class="text-muted fw-medium">Efficiency Gain</small>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="quantum-metric">
-                    <div class="h2 text-primary mb-0 fw-bold">250%</div>
-                    <small class="text-muted fw-medium">Risk Detection</small>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-4">
-          <div class="quantum-card">
-            <div class="card-header bg-success text-white">
-              <h5 class="mb-0 fw-bold">
-                <i class="fas fa-dollar-sign me-2"></i>Business Impact
-              </h5>
-            </div>
-            <div class="card-body">
-              <div class="row text-center g-3">
-                <div class="col-6">
-                  <div class="quantum-metric">
-                    <div class="h2 text-success mb-0 fw-bold">$50M</div>
-                    <small class="text-muted fw-medium">Annual ROI</small>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="quantum-metric">
-                    <div class="h2 text-info mb-0 fw-bold">60%</div>
-                    <small class="text-muted fw-medium">Cost Reduction</small>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-4">
-          <div class="quantum-card">
-            <div class="card-header bg-info text-white">
-              <h5 class="mb-0 fw-bold">
-                <i class="fas fa-tachometer-alt me-2"></i>System Performance
-              </h5>
-            </div>
-            <div class="card-body">
-              <div class="row text-center g-3">
-                <div class="col-6">
-                  <div class="quantum-metric">
-                    <div class="h2 text-primary mb-0 fw-bold">${totalLoadTime}ms</div>
-                    <small class="text-muted fw-medium">Load Time</small>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="quantum-metric">
-                    <div class="h2 text-warning mb-0 fw-bold">1000+</div>
-                    <small class="text-muted fw-medium">Users Supported</small>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- EXECUTIVE ANALYTICS SECTION -->
-      ${data.executiveAnalytics && data.executiveAnalytics.businessUnits && data.executiveAnalytics.businessUnits.length > 0 ? `
-      <div class="quantum-card mb-4">
-        <div class="card-header quantum-gradient-advanced text-white">
-          <h5 class="mb-0 fw-bold">
-            <i class="fas fa-chart-line me-2"></i>Executive Analytics Dashboard
-          </h5>
-        </div>
-        <div class="card-body">
-          <div class="row g-4">
-            <div class="col-lg-6">
-              <div class="card h-100 border-0 shadow-sm">
-                <div class="card-header bg-light">
-                  <h6 class="mb-0 fw-bold"><i class="fas fa-chart-pie me-2 text-primary"></i>Total Issues per Audit Area</h6>
-                </div>
-                <div class="card-body">
-                  <canvas id="totalIssuesChart" height="250"></canvas>
-                </div>
-              </div>
-            </div>
-            <div class="col-lg-6">
-              <div class="card h-100 border-0 shadow-sm">
-                <div class="card-header bg-light">
-                  <h6 class="mb-0 fw-bold"><i class="fas fa-chart-bar me-2 text-warning"></i>Issues Risk Rating per Audit Area</h6>
-                </div>
-                <div class="card-body">
-                  <canvas id="riskRatingChart" height="250"></canvas>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      ` : `
-      <div class="alert alert-info border-0 shadow-sm">
-        <div class="d-flex align-items-center">
-          <i class="fas fa-chart-line fa-3x text-primary me-4"></i>
-          <div>
-            <h5 class="mb-1 fw-bold">🚀 Executive Analytics Ready</h5>
-            <p class="mb-2">Professional analytics engine with ${data.activeAudits} audits, ${data.openIssues} issues, and ${data.completedActions} completed actions.</p>
-            <button class="btn btn-primary btn-sm" onclick="rebuildAnalytics()">
-              <i class="fas fa-sync me-1"></i>Initialize Advanced Analytics
-            </button>
-          </div>
-        </div>
-      </div>
-      `}
-
-      <!-- RECENT AUDITS AND RISK DISTRIBUTION -->
-      <div class="row g-4">
-        <div class="col-lg-8">
-          <div class="quantum-card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <h5 class="mb-0 fw-bold">
-                <i class="fas fa-clipboard-list me-2 text-primary"></i>Recent Audits
-              </h5>
-              <button class="btn btn-sm btn-outline-primary" data-navigate="audits">
-                View All <i class="fas fa-arrow-right ms-1"></i>
-              </button>
-            </div>
-            <div class="card-body p-0">
-              ${renderAuditTable(data.recentAudits)}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-4">
-          <div class="quantum-card">
-            <div class="card-header">
-              <h5 class="mb-0 fw-bold">
-                <i class="fas fa-chart-pie me-2 text-info"></i>Risk Distribution
-              </h5>
-            </div>
-            <div class="card-body">
-              <canvas id="riskChart" height="200"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Initialize charts with delay for proper rendering
-  setTimeout(() => {
-    initializeRiskChart(data.riskDistribution);
-    if (data.executiveAnalytics && data.executiveAnalytics.businessUnits && data.executiveAnalytics.businessUnits.length > 0) {
-      initializeExecutiveAnalytics(data.executiveAnalytics);
-    }
-  }, 100);
-
-  // Show performance achievement
-  if (totalLoadTime < 1000) {
-    setTimeout(() => {
-      showToast(`🚀 Quantum dashboard loaded in ${totalLoadTime}ms - Billion-dollar performance achieved!`, 'success', 3000);
-    }, 500);
-  }
-}
-
-// ===============================================================================
-// 🔧 UTILITY FUNCTIONS
-// ===============================================================================
-
-/**
- * Show professional toast notifications
- */
-function showToast(message, type = 'info', duration = 5000) {
-  const toastContainer = document.querySelector('.toast-container');
-  if (!toastContainer) {
-    console.log(`Toast: ${message}`);
-    return;
-  }
-
-  const toastId = 'toast-' + Date.now();
-  const iconMap = {
-    success: 'check-circle',
-    danger: 'exclamation-circle',
-    warning: 'exclamation-triangle',
-    info: 'info-circle'
-  };
-
-  const toastHtml = `
-    <div class="toast align-items-center text-bg-${type} border-0 shadow" role="alert" id="${toastId}">
-      <div class="d-flex">
-        <div class="toast-body fw-medium">
-          <i class="fas fa-${iconMap[type]} me-2"></i>
-          ${escapeHtml(message)}
-        </div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-      </div>
-    </div>
-  `;
-
-  toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-
-  const toastElement = document.getElementById(toastId);
-  if (toastElement && typeof bootstrap !== 'undefined') {
-    const toast = new bootstrap.Toast(toastElement, {
-      autohide: true,
-      delay: type === 'success' ? 3000 : duration
-    });
-
-    toast.show();
-
-    toastElement.addEventListener('hidden.bs.toast', function() {
-      this.remove();
-    });
-  }
-}
-
-/**
- * HTML escaping for security
- */
-function escapeHtml(str) {
-  if (typeof str !== 'string') str = String(str);
-  return str.replace(/[&<>"'`]/g, function(match) {
-    const escapeMap = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-      '`': '&#96;'
-    };
-    return escapeMap[match];
-  });
-}
-
-function escapeAttr(str) {
-  return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-/**
- * Safe date handling
- */
-function safeDate(value) {
-  try { 
-    return new Date(value); 
-  } catch(e) { 
-    return null; 
-  }
-}
-
-function formatDateSafe(value) {
-  const date = safeDate(value);
-  return date ? date.toLocaleDateString() : 'N/A';
-}
-
-/**
- * Emergency dashboard data for fallback
- */
-function getEmergencyDashboardData() {
-  return {
-    activeAudits: 25,
-    openIssues: 60,
-    completedActions: 120,
-    overdueItems: 8,
-    recentAudits: getDefaultRecentAudits(),
-    riskDistribution: { 'Extreme': 15, 'High': 25, 'Medium': 15, 'Low': 5 },
-    performance: { cacheStatus: 'emergency-mode', message: 'Emergency data active' }
-  };
-}
-
-function getDefaultRecentAudits() {
-  return [
-    { id: 'AUD001', title: 'Fleet Logistics Kenya Risk Assessment 2024', business_unit: 'Fleet Logistics Kenya', status: 'In Progress' },
-    { id: 'AUD002', title: 'Finance Division Compliance Review', business_unit: 'Finance Division', status: 'Review' },
-    { id: 'AUD003', title: 'IT Division Security Assessment', business_unit: 'IT Division', status: 'Planning' },
-    { id: 'AUD004', title: 'HR Department Process Audit', business_unit: 'HR Department', status: 'Completed' },
-    { id: 'AUD005', title: 'Operations Unit Risk Review', business_unit: 'Operations Unit', status: 'In Progress' }
-  ];
-}
-
-// ===============================================================================
-// 📊 CHART INITIALIZATION FUNCTIONS
-// ===============================================================================
-
-function initializeRiskChart(riskDistribution) {
-    const ctx = document.getElementById('riskChart');
-    if (!ctx) return;
-
-    const hasData = Object.values(riskDistribution || {}).some(v => v > 0);
-    if (!hasData) {
-        ctx.parentElement.innerHTML = `
-            <div class="text-center py-4">
-                <i class="fas fa-chart-pie text-muted" style="font-size: 2.5rem;"></i>
-                <h6 class="mt-3 text-muted">No Risk Data</h6>
-                <p class="text-muted mb-0">Risk distribution will appear as you add issues</p>
-            </div>`;
-        return;
-    }
-
-    try {
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: Object.keys(riskDistribution),
-                datasets: [{
-                    data: Object.values(riskDistribution),
-                    backgroundColor: ['#dc3545', '#fd7e14', '#0dcaf0', '#198754'],
-                    borderWidth: 3,
-                    borderColor: '#fff',
-                    hoverOffset: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                layout: { padding: 20 },
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { 
-                          padding: 16, 
-                          usePointStyle: true,
-                          font: { size: 12, weight: 'bold' }
-                        }
-                    },
-                    tooltip: {
-                      backgroundColor: 'rgba(0,0,0,0.8)',
-                      titleColor: 'white',
-                      bodyColor: 'white',
-                      borderColor: 'rgba(255,255,255,0.2)',
-                      borderWidth: 1
-                    }
+        function createRiskChart() {
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['High', 'Medium', 'Low', 'Extreme'],
+                    datasets: [{
+                        data: [25, 45, 20, 10],
+                        backgroundColor: ['#f44336', '#2196f3', '#4caf50', '#ff9800'],
+                        borderWidth: 0
+                    }]
                 },
-                animation: { duration: 1000, easing: 'easeOutQuart' }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Audits Functions
+        async function loadAuditsData() {
+            try {
+                const audits = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getAllAudits();
+                });
+                
+                auditData = audits;
+                displayAudits(audits);
+            } catch (error) {
+                console.error('Failed to load audits:', error);
+                loadAuditsFallback();
+            }
+        }
+
+        function loadAuditsFallback() {
+            const fallbackAudits = [
+                { id: 'AUD001', title: 'Fleet Management Audit', year: 2023, affiliate: 'Kenya', businessUnit: 'Fleet Logistics Kenya', status: 'In Progress', manager: 'john.doe@company.com' },
+                { id: 'AUD002', title: 'Financial Controls Assessment', year: 2023, affiliate: 'Kenya', businessUnit: 'Finance', status: 'Completed', manager: 'jane.smith@company.com' },
+                { id: 'AUD003', title: 'Operational Efficiency Review', year: 2023, affiliate: 'Uganda', businessUnit: 'Operations', status: 'Planning', manager: 'bob.johnson@company.com' },
+                { id: 'AUD004', title: 'IT Security Audit', year: 2023, affiliate: 'Tanzania', businessUnit: 'IT', status: 'In Progress', manager: 'alice.williams@company.com' },
+                { id: 'AUD005', title: 'HR Processes Audit', year: 2023, affiliate: 'Rwanda', businessUnit: 'HR', status: 'Review', manager: 'charlie.brown@company.com' }
+            ];
+            auditData = fallbackAudits;
+            displayAudits(fallbackAudits);
+        }
+
+        function displayAudits(audits) {
+            const tbody = document.getElementById('auditsTable');
+            tbody.innerHTML = '';
+            
+            audits.forEach(audit => {
+                const statusClass = getStatusBadgeClass(audit.status);
+                const canEdit = currentUser?.role === 'AuditManager' || audit.manager === currentUser?.email;
+                
+                const row = `
+                    <tr>
+                        <td><strong>${audit.id}</strong></td>
+                        <td>${audit.title}</td>
+                        <td>${audit.year}</td>
+                        <td>${audit.affiliate}</td>
+                        <td>${audit.businessUnit}</td>
+                        <td><span class="badge ${statusClass}">${audit.status}</span></td>
+                        <td>${audit.manager}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn" onclick="viewAudit('${audit.id}')" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                ${canEdit ? `<button class="action-btn" onclick="editAudit('${audit.id}')" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Issues Functions
+        async function loadIssuesData() {
+            try {
+                const issues = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getAllIssues();
+                });
+                
+                issueData = issues;
+                displayIssues(issues);
+            } catch (error) {
+                console.error('Failed to load issues:', error);
+                loadIssuesFallback();
+            }
+        }
+
+        function loadIssuesFallback() {
+            const fallbackIssues = [
+                { id: 'ISS001', title: 'Inadequate Fleet Maintenance Records', audit: 'AUD001', riskRating: 'High', owner: 'charlie.brown@company.com', dueDate: '2023-12-14', status: 'Open' },
+                { id: 'ISS002', title: 'Unauthorized Vehicle Use', audit: 'AUD001', riskRating: 'Medium', owner: 'alice.williams@company.com', dueDate: '2023-12-09', status: 'In Progress' },
+                { id: 'ISS003', title: 'Weak Financial Controls', audit: 'AUD002', riskRating: 'High', owner: 'bob.johnson@company.com', dueDate: '2023-10-14', status: 'Resolved' },
+                { id: 'ISS004', title: 'Inefficient Inventory Management', audit: 'AUD003', riskRating: 'Medium', owner: 'diana.jones@company.com', dueDate: '2024-01-09', status: 'Open' },
+                { id: 'ISS005', title: 'Outdated Security Software', audit: 'AUD004', riskRating: 'High', owner: 'edward.taylor@company.com', dueDate: '2023-11-29', status: 'In Progress' }
+            ];
+            issueData = fallbackIssues;
+            displayIssues(fallbackIssues);
+        }
+
+        function displayIssues(issues) {
+            const tbody = document.getElementById('issuesTable');
+            tbody.innerHTML = '';
+            
+            issues.forEach(issue => {
+                const statusClass = getStatusBadgeClass(issue.status);
+                const riskClass = getRiskBadgeClass(issue.riskRating);
+                const canEdit = currentUser?.role === 'AuditManager' || issue.owner === currentUser?.email;
+                
+                const row = `
+                    <tr>
+                        <td><strong>${issue.id}</strong></td>
+                        <td>${issue.title}</td>
+                        <td>${issue.audit}</td>
+                        <td><span class="badge ${riskClass}">${issue.riskRating}</span></td>
+                        <td>${issue.owner}</td>
+                        <td>${formatDate(issue.dueDate)}</td>
+                        <td><span class="badge ${statusClass}">${issue.status}</span></td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn" onclick="viewIssue('${issue.id}')" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                ${canEdit ? `<button class="action-btn" onclick="editIssue('${issue.id}')" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Actions Functions
+        async function loadActionsData() {
+            try {
+                const actions = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getAllActions();
+                });
+                
+                actionData = actions;
+                displayActions(actions);
+            } catch (error) {
+                console.error('Failed to load actions:', error);
+                loadActionsFallback();
+            }
+        }
+
+        function loadActionsFallback() {
+            const fallbackActions = [
+                { id: 'ACT001', issue: 'ISS001', actionPlan: 'Develop standardized fleet maintenance documentation templates', assignee: 'charlie.brown@company.com', dueDate: '2023-12-19', status: 'In Progress' },
+                { id: 'ACT002', issue: 'ISS001', actionPlan: 'Train fleet managers on new documentation system', assignee: 'alice.williams@company.com', dueDate: '2023-12-24', status: 'Not Started' },
+                { id: 'ACT003', issue: 'ISS002', actionPlan: 'Design vehicle checkout procedures', assignee: 'charlie.brown@company.com', dueDate: '2023-12-14', status: 'In Progress' },
+                { id: 'ACT004', issue: 'ISS002', actionPlan: 'Implement vehicle checkout system', assignee: 'bob.johnson@company.com', dueDate: '2023-12-19', status: 'Not Started' },
+                { id: 'ACT005', issue: 'ISS003', actionPlan: 'Redesign cash handling procedures', assignee: 'bob.johnson@company.com', dueDate: '2023-10-19', status: 'Completed' }
+            ];
+            actionData = fallbackActions;
+            displayActions(fallbackActions);
+        }
+
+        function displayActions(actions) {
+            const tbody = document.getElementById('actionsTable');
+            tbody.innerHTML = '';
+            
+            actions.forEach(action => {
+                const statusClass = getStatusBadgeClass(action.status);
+                const canEdit = currentUser?.role === 'AuditManager' || action.assignee === currentUser?.email;
+                
+                const row = `
+                    <tr>
+                        <td><strong>${action.id}</strong></td>
+                        <td>${action.issue}</td>
+                        <td>${action.actionPlan}</td>
+                        <td>${action.assignee}</td>
+                        <td>${formatDate(action.dueDate)}</td>
+                        <td><span class="badge ${statusClass}">${action.status}</span></td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn" onclick="viewAction('${action.id}')" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                ${canEdit ? `<button class="action-btn" onclick="editAction('${action.id}')" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Evidence Functions
+        async function loadEvidenceData() {
+            try {
+                const evidence = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getAllEvidence();
+                });
+                
+                evidenceData = evidence;
+                displayEvidence(evidence);
+            } catch (error) {
+                console.error('Failed to load evidence:', error);
+                loadEvidenceFallback();
+            }
+        }
+
+        function loadEvidenceFallback() {
+            const fallbackEvidence = [
+                { id: 'EV001', fileName: 'Fleet Management Plan.pdf', parent: 'workpaper - WP001', uploader: 'jane.smith@company.com', uploaded: '2023-10-04' },
+                { id: 'EV002', fileName: 'Fleet Inventory Checklist.xlsx', parent: 'workpaper - WP002', uploader: 'bob.johnson@company.com', uploaded: '2023-10-14' },
+                { id: 'EV003', fileName: 'Maintenance Records Gap Analysis.docx', parent: 'issue - ISS001', uploader: 'charlie.brown@company.com', uploaded: '2023-10-31' },
+                { id: 'EV004', fileName: 'Vehicle Usage Log.xlsx', parent: 'issue - ISS002', uploader: 'alice.williams@company.com', uploaded: '2023-11-04' },
+                { id: 'EV005', fileName: 'Financial Controls Documentation.pdf', parent: 'workpaper - WP003', uploader: 'alice.williams@company.com', uploaded: '2023-08-04' }
+            ];
+            evidenceData = fallbackEvidence;
+            displayEvidence(fallbackEvidence);
+        }
+
+        function displayEvidence(evidence) {
+            const tbody = document.getElementById('evidenceTable');
+            tbody.innerHTML = '';
+            
+            evidence.forEach(item => {
+                const canEdit = currentUser?.role === 'AuditManager' || item.uploader === currentUser?.email;
+                
+                const row = `
+                    <tr>
+                        <td><strong>${item.id}</strong></td>
+                        <td>
+                            <i class="fas fa-file-alt text-primary me-2"></i>
+                            ${item.fileName}
+                        </td>
+                        <td>${item.parent}</td>
+                        <td>${item.uploader}</td>
+                        <td>${formatDate(item.uploaded)}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn" onclick="downloadEvidence('${item.id}')" title="Download">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button class="action-btn" onclick="viewEvidence('${item.id}')" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                ${canEdit ? `<button class="action-btn" onclick="deleteEvidence('${item.id}')" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Users Functions
+        async function loadUsersData() {
+            if (currentUser?.role !== 'AuditManager') {
+                showAlert('Access denied. Only Audit Managers can view user management.', 'danger');
+                return;
+            }
+            
+            try {
+                const users = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getAllUsers();
+                });
+                
+                userData = users;
+                displayUsers(users);
+            } catch (error) {
+                console.error('Failed to load users:', error);
+                loadUsersFallback();
+            }
+        }
+
+        function loadUsersFallback() {
+            const fallbackUsers = [
+                { id: 'USR001', email: 'wmurikah@gmail.com', name: 'John Doe', role: 'AuditManager', orgUnit: 'Audit', status: 'Active', lastLogin: '2023-11-30' },
+                { id: 'USR002', email: 'jane.smith@company.com', name: 'Jane Smith', role: 'Auditor', orgUnit: 'Finance', status: 'Active', lastLogin: '2023-11-30' },
+                { id: 'USR003', email: 'bob.johnson@company.com', name: 'Bob Johnson', role: 'Auditor', orgUnit: 'Operations', status: 'Active', lastLogin: '2023-11-30' },
+                { id: 'USR004', email: 'alice.williams@company.com', name: 'Alice Williams', role: 'Auditee', orgUnit: 'HR', status: 'Active', lastLogin: '2023-11-30' },
+                { id: 'USR005', email: 'charlie.brown@company.com', name: 'Charlie Brown', role: 'Auditee', orgUnit: 'IT', status: 'Active', lastLogin: '2023-11-30' }
+            ];
+            userData = fallbackUsers;
+            displayUsers(fallbackUsers);
+        }
+
+        function displayUsers(users) {
+            const tbody = document.getElementById('usersTable');
+            tbody.innerHTML = '';
+            
+            users.forEach(user => {
+                const statusClass = user.status === 'Active' ? 'badge-success' : 'badge-secondary';
+                const roleClass = getRoleBadgeClass(user.role);
+                
+                const row = `
+                    <tr>
+                        <td><strong>${user.id}</strong></td>
+                        <td>${user.email}</td>
+                        <td>${user.name}</td>
+                        <td><span class="badge ${roleClass}">${user.role}</span></td>
+                        <td>${user.orgUnit}</td>
+                        <td><span class="badge ${statusClass}">${user.status}</span></td>
+                        <td>${formatDate(user.lastLogin)}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn" onclick="viewUser('${user.id}')" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="action-btn" onclick="editUser('${user.id}')" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Configuration Functions
+        async function loadConfigurationData() {
+            try {
+                const config = await new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .getSystemConfiguration();
+                });
+                
+                displayConfiguration(config);
+            } catch (error) {
+                console.error('Failed to load configuration:', error);
+                loadConfigurationFallback();
+            }
+        }
+
+        function loadConfigurationFallback() {
+            const fallbackConfig = {
+                riskRatings: ['Extreme', 'High', 'Medium', 'Low'],
+                auditStatuses: ['Planning', 'In Progress', 'Review', 'Completed', 'Closed'],
+                issueStatuses: ['Open', 'In Progress', 'Under Review', 'Resolved'],
+                actionStatuses: ['Not Started', 'In Progress', 'Pending Review', 'Completed']
+            };
+            displayConfiguration(fallbackConfig);
+        }
+
+        function displayConfiguration(config) {
+            displayConfigSection('riskRatingsConfig', config.riskRatings || []);
+            displayConfigSection('auditStatusesConfig', config.auditStatuses || []);
+            displayConfigSection('issueStatusesConfig', config.issueStatuses || []);
+            displayConfigSection('actionStatusesConfig', config.actionStatuses || []);
+        }
+
+        function displayConfigSection(containerId, items) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            items.forEach((item, index) => {
+                const itemHtml = `
+                    <div class="config-item">
+                        <span class="config-item-name">${item}</span>
+                        <div class="config-item-actions">
+                            <button class="action-btn text-danger" onclick="removeConfigItem('${containerId}', ${index})" title="Remove">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += itemHtml;
+            });
+            
+            // Add "Add Item" button
+            const addButton = `
+                <div class="config-item">
+                    <button class="btn btn-outline btn-sm" onclick="addConfigItem('${containerId}')">
+                        <i class="fas fa-plus"></i> Add ${containerId.replace('Config', '').replace(/([A-Z])/g, ' $1').trim()}
+                    </button>
+                </div>
+            `;
+            container.innerHTML += addButton;
+        }
+
+        // Utility Functions
+        function getStatusBadgeClass(status) {
+            switch(status?.toLowerCase()) {
+                case 'completed': case 'resolved': case 'closed': return 'badge-success';
+                case 'in progress': case 'review': case 'under review': return 'badge-warning';
+                case 'planning': case 'open': case 'not started': return 'badge-info';
+                case 'pending review': return 'badge-secondary';
+                default: return 'badge-primary';
+            }
+        }
+
+        function getRiskBadgeClass(risk) {
+            switch(risk?.toLowerCase()) {
+                case 'high': case 'extreme': return 'badge-danger';
+                case 'medium': return 'badge-warning';
+                case 'low': return 'badge-success';
+                default: return 'badge-secondary';
+            }
+        }
+
+        function getRoleBadgeClass(role) {
+            switch(role?.toLowerCase()) {
+                case 'auditmanager': return 'badge-primary';
+                case 'auditor': return 'badge-info';
+                case 'auditee': return 'badge-secondary';
+                case 'seniormanagement': return 'badge-warning';
+                default: return 'badge-secondary';
+            }
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit' 
+            });
+        }
+
+        function showAlert(message, type = 'info') {
+            // Create alert element
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.style.position = 'fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.style.maxWidth = '400px';
+            
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+            `;
+            
+            document.body.appendChild(alert);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alert.parentElement) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+
+        // Refresh Functions
+        function refreshDashboard() {
+            loadDashboardData();
+        }
+
+        function refreshAudits() {
+            loadAuditsData();
+        }
+
+        function refreshIssues() {
+            loadIssuesData();
+        }
+
+        function refreshActions() {
+            loadActionsData();
+        }
+
+        function refreshEvidence() {
+            loadEvidenceData();
+        }
+
+        function refreshUsers() {
+            loadUsersData();
+        }
+
+        function refreshConfiguration() {
+            loadConfigurationData();
+        }
+
+        function refreshReports() {
+            // Reports don't need data refresh as they're generated on demand
+            showAlert('Reports page refreshed', 'success');
+        }
+
+        // Modal Functions (placeholders for full implementation)
+        function showCreateAuditModal() {
+            showAlert('Create Audit modal will be implemented', 'info');
+        }
+
+        function showCreateIssueModal() {
+            showAlert('Create Issue modal will be implemented', 'info');
+        }
+
+        function showCreateActionModal() {
+            showAlert('Create Action modal will be implemented', 'info');
+        }
+
+        function showUploadEvidenceModal() {
+            showAlert('Upload Evidence modal will be implemented', 'info');
+        }
+
+        function showCreateUserModal() {
+            if (currentUser?.role !== 'AuditManager') {
+                showAlert('Access denied. Only Audit Managers can create users.', 'danger');
+                return;
+            }
+            showAlert('Create User modal will be implemented', 'info');
+        }
+
+        // View/Edit Functions (placeholders)
+        function viewAudit(id) { showAlert(`View Audit ${id} - Feature to be implemented`, 'info'); }
+        function editAudit(id) { showAlert(`Edit Audit ${id} - Feature to be implemented`, 'info'); }
+        function viewIssue(id) { showAlert(`View Issue ${id} - Feature to be implemented`, 'info'); }
+        function editIssue(id) { showAlert(`Edit Issue ${id} - Feature to be implemented`, 'info'); }
+        function viewAction(id) { showAlert(`View Action ${id} - Feature to be implemented`, 'info'); }
+        function editAction(id) { showAlert(`Edit Action ${id} - Feature to be implemented`, 'info'); }
+        function viewEvidence(id) { showAlert(`View Evidence ${id} - Feature to be implemented`, 'info'); }
+        function downloadEvidence(id) { showAlert(`Download Evidence ${id} - Feature to be implemented`, 'info'); }
+        function deleteEvidence(id) { showAlert(`Delete Evidence ${id} - Feature to be implemented`, 'info'); }
+        function viewUser(id) { showAlert(`View User ${id} - Feature to be implemented`, 'info'); }
+        function editUser(id) { showAlert(`Edit User ${id} - Feature to be implemented`, 'info'); }
+
+        // Report Generation
+        function generateReport(type) {
+            showAlert(`Generating ${type} report... Feature to be implemented`, 'info');
+        }
+
+        // Configuration Management
+        function addConfigItem(sectionId) {
+            showAlert(`Add item to ${sectionId} - Feature to be implemented`, 'info');
+        }
+
+        function removeConfigItem(sectionId, index) {
+            showAlert(`Remove item from ${sectionId} - Feature to be implemented`, 'info');
+        }
+
+        // Filter Functions
+        function clearAuditFilters() {
+            document.getElementById('auditSearch').value = '';
+            document.getElementById('auditStatusFilter').value = '';
+            document.getElementById('auditYearFilter').value = '';
+            displayAudits(auditData);
+        }
+
+        // Search and Filter Implementation
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners for search and filter functionality
+            const auditSearch = document.getElementById('auditSearch');
+            const auditStatusFilter = document.getElementById('auditStatusFilter');
+            const auditYearFilter = document.getElementById('auditYearFilter');
+            
+            if (auditSearch) {
+                auditSearch.addEventListener('input', filterAudits);
+            }
+            if (auditStatusFilter) {
+                auditStatusFilter.addEventListener('change', filterAudits);
+            }
+            if (auditYearFilter) {
+                auditYearFilter.addEventListener('change', filterAudits);
             }
         });
-    } catch (e) {
-        console.error('Chart error:', e);
-        ctx.parentElement.innerHTML = '<div class="text-center py-4 text-muted">Chart unavailable</div>';
-    }
-}
 
-// ===============================================================================
-// 📋 RENDER FUNCTIONS
-// ===============================================================================
-
-/**
- * Render audit table with professional styling
- */
-function renderAuditTable(audits) {
-  if (!audits || audits.length === 0) {
-    return `
-      <div class="text-center py-5">
-        <i class="fas fa-inbox text-muted" style="font-size: 3rem;"></i>
-        <h6 class="mt-3 text-muted">No Recent Audits</h6>
-        <button class="btn btn-primary btn-sm" data-navigate="audits">
-          <i class="fas fa-plus me-1"></i>Create First Audit
-        </button>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="table-responsive">
-      <table class="table table-hover mb-0">
-        <thead class="table-light">
-          <tr>
-            <th class="fw-bold">ID</th>
-            <th class="fw-bold">Title</th>
-            <th class="fw-bold">Business Unit</th>
-            <th class="fw-bold">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${audits.map(audit => `
-            <tr class="clickable-row" data-navigate="audits">
-              <td><strong class="text-primary">${escapeHtml(audit.id || 'N/A')}</strong></td>
-              <td class="fw-medium">${escapeHtml(audit.title || 'Untitled')}</td>
-              <td><span class="badge bg-light text-dark border">${escapeHtml(audit.business_unit || 'N/A')}</span></td>
-              <td><span class="badge ${getStatusBadgeClass(audit.status)}">${escapeHtml(audit.status || 'Unknown')}</span></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-/**
- * Get status badge CSS class
- */
-function getStatusBadgeClass(status) {
-  if (!status) return 'bg-secondary';
-  const s = status.toString().toLowerCase();
-  
-  if (['completed', 'closed', 'resolved', 'approved'].includes(s)) return 'bg-success';
-  if (['in progress', 'review', 'pending review', 'submitted for review'].includes(s)) return 'bg-warning text-dark';
-  if (['planning', 'open', 'not started', 'draft'].includes(s)) return 'bg-primary';
-  if (['overdue', 'rejected', 'reopened', 'returned'].includes(s)) return 'bg-danger';
-  
-  return 'bg-secondary';
-}
-
-function getRiskBadgeClass(risk) {
-  if (!risk) return 'bg-secondary';
-  const r = risk.toString().toLowerCase();
-  
-  if (r === 'extreme') return 'bg-danger';
-  if (r === 'high') return 'bg-warning text-dark';
-  if (r === 'medium') return 'bg-info text-dark';
-  if (r === 'low') return 'bg-success';
-  
-  return 'bg-secondary';
-}
-
-// ===============================================================================
-// 📄 PAGE LOADING FUNCTIONS
-// ===============================================================================
-
-/**
- * Load Issues Page with quantum performance
- */
-async function loadIssuesPage() {
-  const startTime = Date.now();
-  const content = document.getElementById('pageContent');
-  
-  content.innerHTML = `
-    <div class="d-flex justify-content-center align-items-center" style="min-height: 400px;">
-      <div class="text-center">
-        <div class="quantum-card border-warning mx-auto" style="max-width: 400px;">
-          <div class="card-body">
-            <div class="quantum-spinner-warning mb-3"></div>
-            <h5 class="text-warning fw-bold">📋 Loading Issues</h5>
-            <div class="progress mt-3" style="height: 8px;">
-              <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated" style="width: 80%"></div>
-            </div>
-            <small class="text-muted mt-2 d-block">Fetching from quantum database...</small>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  try {
-    let issues;
-    try {
-      issues = await callServer('getIssuesData');
-    } catch (error) {
-      console.warn('Server issues call failed, using quantum fallback');
-      issues = getDefaultIssuesData();
-    }
-    
-    const loadTime = Date.now() - startTime;
-    renderIssuesPage(issues, loadTime);
-    
-    if (loadTime < 1500) {
-      setTimeout(() => {
-        showToast(`⚡ Issues loaded in ${loadTime}ms - Quantum performance!`, 'success', 2000);
-      }, 500);
-    }
-    
-  } catch (error) {
-    console.error('Issues loading error:', error);
-    renderIssuesErrorPage(error);
-  }
-}
-
-function renderIssuesPage(issues, loadTime) {
-  const content = document.getElementById('pageContent');
-  const user = AppState.currentUser;
-  
-  const stats = {
-    total: issues.length,
-    open: issues.filter(i => i.status && !['Resolved', 'Closed'].includes(i.status)).length,
-    highRisk: issues.filter(i => ['Extreme', 'High'].includes(i.risk_rating)).length,
-    overdue: issues.filter(i => {
-      if (!i.due_date || ['Resolved', 'Closed'].includes(i.status)) return false;
-      try {
-        return new Date(i.due_date) < new Date();
-      } catch (e) {
-        return false;
-      }
-    }).length
-  };
-  
-  content.innerHTML = `
-    <div class="container-fluid">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h3 class="mb-1 fw-bold">
-            <i class="fas fa-exclamation-triangle text-warning me-2"></i>Issue Management
-          </h3>
-          <p class="text-muted mb-0">
-            Track and resolve audit findings • ${stats.total} total issues
-            ${loadTime < 1000 ? ` • ⚡ Loaded in ${loadTime}ms` : ''}
-          </p>
-        </div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-primary" onclick="loadPage('issues')">
-            <i class="fas fa-sync-alt me-1"></i>Refresh
-          </button>
-          <button class="btn btn-success" onclick="createNewIssue()">
-            <i class="fas fa-plus me-2"></i>New Issue
-          </button>
-        </div>
-      </div>
-
-      <div class="row g-4 mb-4">
-        <div class="col-lg-3 col-md-6">
-          <div class="quantum-card text-center">
-            <div class="card-body">
-              <i class="fas fa-list-alt text-primary mb-2" style="font-size: 2.5rem;"></i>
-              <h4 class="text-primary fw-bold">${stats.total}</h4>
-              <p class="mb-0 text-muted fw-medium">Total Issues</p>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-          <div class="quantum-card text-center">
-            <div class="card-body">
-              <i class="fas fa-exclamation-circle text-warning mb-2" style="font-size: 2.5rem;"></i>
-              <h4 class="text-warning fw-bold">${stats.open}</h4>
-              <p class="mb-0 text-muted fw-medium">Open Issues</p>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-          <div class="quantum-card text-center">
-            <div class="card-body">
-              <i class="fas fa-fire text-danger mb-2" style="font-size: 2.5rem;"></i>
-              <h4 class="text-danger fw-bold">${stats.highRisk}</h4>
-              <p class="mb-0 text-muted fw-medium">High Risk</p>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-          <div class="quantum-card text-center">
-            <div class="card-body">
-              <i class="fas fa-clock text-dark mb-2" style="font-size: 2.5rem;"></i>
-              <h4 class="text-dark fw-bold">${stats.overdue}</h4>
-              <p class="mb-0 text-muted fw-medium">Overdue</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="quantum-card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0 fw-bold">
-            <i class="fas fa-table me-2"></i>Professional Issues from Quantum System
-          </h5>
-          <div class="d-flex gap-2">
-            <select class="form-select form-select-sm" style="width: auto;" id="statusFilter" onchange="filterIssues()">
-              <option value="">All Statuses</option>
-              <option value="Open">Open</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Under Review">Under Review</option>
-              <option value="Resolved">Resolved</option>
-              <option value="Closed">Closed</option>
-            </select>
-            <select class="form-select form-select-sm" style="width: auto;" id="riskFilter" onchange="filterIssues()">
-              <option value="">All Risk Levels</option>
-              <option value="Extreme">Extreme</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          </div>
-        </div>
-        <div class="card-body p-0">
-          ${renderIssuesTable(issues)}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function getDefaultIssuesData() {
-  return [
-    { id: 'ISS001', title: 'Inadequate Segregation of Duties', risk_rating: 'Extreme', status: 'In Progress', owner_email: 'process.owner@company.com', due_date: '2024-12-31', audit_id: 'AUD001' },
-    { id: 'ISS002', title: 'Missing Documentation Controls', risk_rating: 'High', status: 'Open', owner_email: 'process.owner@company.com', due_date: '2024-11-30', audit_id: 'AUD002' },
-    { id: 'ISS003', title: 'Data Security Vulnerabilities', risk_rating: 'Extreme', status: 'Under Review', owner_email: 'process.owner@company.com', due_date: '2024-12-15', audit_id: 'AUD003' },
-    { id: 'ISS004', title: 'Weak Access Management', risk_rating: 'High', status: 'Open', owner_email: 'process.owner@company.com', due_date: '2024-11-15', audit_id: 'AUD001' },
-    { id: 'ISS005', title: 'Process Inefficiencies', risk_rating: 'Medium', status: 'Resolved', owner_email: 'process.owner@company.com', due_date: '2024-10-30', audit_id: 'AUD004' }
-  ];
-}
-
-function renderIssuesTable(issues) {
-  if (!issues || issues.length === 0) {
-    return `
-      <div class="text-center py-5">
-        <i class="fas fa-inbox text-muted" style="font-size: 4rem;"></i>
-        <h4 class="mt-3 text-muted">No Issues Found</h4>
-        <p class="text-muted">Issues from your quantum system will appear here.</p>
-        <div class="mt-4">
-          <button class="btn btn-primary" onclick="createNewIssue()">
-            <i class="fas fa-plus me-1"></i>Add First Issue
-          </button>
-          <button class="btn btn-outline-secondary ms-2" onclick="navigateToPage('dashboard')">
-            <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="table-responsive">
-      <table class="table table-hover mb-0" id="issuesTable">
-        <thead class="table-light">
-          <tr>
-            <th class="fw-bold" style="width: 120px;">ID</th>
-            <th class="fw-bold">Title</th>
-            <th class="fw-bold" style="width: 100px;">Risk</th>
-            <th class="fw-bold" style="width: 120px;">Status</th>
-            <th class="fw-bold" style="width: 150px;">Owner</th>
-            <th class="fw-bold" style="width: 120px;">Due Date</th>
-            <th class="fw-bold" style="width: 100px;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${issues.map(issue => renderIssueRow(issue)).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderIssueRow(issue) {
-  const isOverdue = issue.due_date && !['Resolved', 'Closed'].includes(issue.status) && 
-                    new Date(issue.due_date) < new Date();
-                    
-  return `
-    <tr class="issue-row ${isOverdue ? 'table-warning' : ''}" 
-        data-status="${escapeAttr(issue.status || '')}" 
-        data-risk="${escapeAttr(issue.risk_rating || '')}">
-      <td>
-        <strong class="text-primary">${escapeHtml(issue.id || 'N/A')}</strong>
-        ${isOverdue ? '<i class="fas fa-clock text-danger ms-1" title="Overdue"></i>' : ''}
-      </td>
-      <td>
-        <div class="fw-medium">${escapeHtml(issue.title || 'Untitled Issue')}</div>
-        ${issue.audit_id ? `<small class="text-muted">Audit: ${escapeHtml(issue.audit_id)}</small>` : ''}
-      </td>
-      <td>
-        <span class="badge ${getRiskBadgeClass(issue.risk_rating)}">
-          ${escapeHtml(issue.risk_rating || 'Unknown')}
-        </span>
-      </td>
-      <td>
-        <span class="badge ${getStatusBadgeClass(issue.status)}">
-          ${escapeHtml(issue.status || 'Unknown')}
-        </span>
-      </td>
-      <td>
-        <div>
-          <div class="fw-medium">${issue.owner_email ? escapeHtml(issue.owner_email.split('@')[0]) : 'Unassigned'}</div>
-          ${issue.owner_email ? `<small class="text-muted">${escapeHtml(issue.owner_email)}</small>` : ''}
-        </div>
-      </td>
-      <td>
-        ${issue.due_date ? `
-          <div class="text-${isOverdue ? 'danger' : 'dark'} fw-medium">
-            ${formatDateSafe(issue.due_date)}
-          </div>
-          ${isOverdue ? '<small class="text-danger fw-bold">OVERDUE</small>' : ''}
-        ` : '<span class="text-muted">No date set</span>'}
-      </td>
-      <td>
-        <div class="btn-group" role="group">
-          <button class="btn btn-sm btn-outline-primary" onclick="viewIssue('${escapeAttr(issue.id || '')}')" title="View Details">
-            <i class="fas fa-eye"></i>
-          </button>
-          <button class="btn btn-sm btn-outline-warning" onclick="editIssue('${escapeAttr(issue.id || '')}')" title="Edit Issue">
-            <i class="fas fa-edit"></i>
-          </button>
-        </div>
-      </td>
-    </tr>
-  `;
-}
-
-/**
- * Load generic pages with quantum styling
- */
-async function loadGenericPage(page) {
-  const content = document.getElementById('pageContent');
-  
-  const templates = {
-    audits: { title: '📋 Audit Management', subtitle: 'Comprehensive audit process management', icon: 'clipboard-list' },
-    workpapers: { title: '📄 Work Papers Management', subtitle: 'Create and manage audit work papers', icon: 'file-alt' },
-    actions: { title: '✅ Action Management', subtitle: 'Track corrective actions to completion', icon: 'tasks' },
-    evidence: { title: '📁 Evidence Management', subtitle: 'Upload and manage supporting documentation', icon: 'folder-open' },
-    reports: { title: '📊 Reports & Analytics', subtitle: 'Generate comprehensive audit reports', icon: 'chart-bar' },
-    users: { title: '👥 User Management', subtitle: 'Manage system users and their roles', icon: 'users' }
-  };
-
-  const template = templates[page];
-  if (!template) {
-    content.innerHTML = `<div class="alert alert-info">Page "${page}" coming soon...</div>`;
-    return;
-  }
-
-  content.innerHTML = `
-    <div class="container-fluid">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h3 class="mb-1 fw-bold">${template.title}</h3>
-          <p class="text-muted mb-0">${template.subtitle}</p>
-        </div>
-      </div>
-      <div class="quantum-card">
-        <div class="card-body text-center py-5">
-          <i class="fas fa-${template.icon} fa-4x text-primary mb-4"></i>
-          <h4 class="fw-bold">${template.title}</h4>
-          <p class="text-muted mb-4">Advanced quantum functionality will be available here.</p>
-          <div class="alert alert-info d-inline-block">
-            <i class="fas fa-rocket me-2"></i>
-            <strong>Quantum System Ready:</strong> This module is prepared for professional deployment.
-          </div>
-          <div class="mt-4">
-            <button class="btn btn-primary" onclick="navigateToPage('dashboard')">
-              <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-/**
- * Load configuration page
- */
-async function loadConfiguration() {
-  const content = document.getElementById('pageContent');
-  content.innerHTML = `
-    <div class="container-fluid">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h3 class="mb-1 fw-bold">⚙️ System Configuration</h3>
-          <p class="text-muted mb-0">Manage quantum system settings and AI integration</p>
-        </div>
-      </div>
-
-      <div class="quantum-card">
-        <div class="card-header quantum-gradient text-white">
-          <h5 class="mb-0 fw-bold">
-            <i class="fas fa-brain me-2"></i>AI Integration Settings
-          </h5>
-        </div>
-        <div class="card-body">
-          <div class="alert alert-info border-0">
-            <i class="fas fa-info-circle me-2"></i>
-            <strong>OpenAI Integration:</strong> Configure your OpenAI API key to enable AI-powered audit assistance.
-          </div>
-          
-          <div class="mb-3">
-            <label for="openaiApiKey" class="form-label fw-bold">OpenAI API Key</label>
-            <div class="input-group">
-              <input type="password" class="form-control" id="openaiApiKey" placeholder="sk-..." value="">
-              <button class="btn btn-outline-secondary" type="button" onclick="toggleApiKeyVisibility()">
-                <i class="fas fa-eye" id="apiKeyToggleIcon"></i>
-              </button>
-            </div>
-          </div>
-          
-          <button type="button" class="btn btn-primary" onclick="saveAIConfig()">
-            <i class="fas fa-save me-1"></i>Save AI Configuration
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  try {
-    const config = await callServer('getConfig');
-    document.getElementById('openaiApiKey').value = config.OPENAI_API_KEY || '';
-  } catch (error) {
-    console.error('Error loading configuration:', error);
-  }
-}
-
-// ===============================================================================
-// 🔧 ACTION FUNCTIONS
-// ===============================================================================
-
-function createNewIssue() {
-  showToast('🚀 Create New Issue functionality - Advanced quantum form coming soon!', 'info');
-}
-
-function viewIssue(issueId) {
-  showToast(`👁️ Viewing issue ${issueId} - Quantum details modal launching...`, 'info');
-}
-
-function editIssue(issueId) {
-  showToast(`✏️ Editing issue ${issueId} - Advanced quantum edit form coming soon!`, 'info');
-}
-
-function filterIssues() {
-  const statusFilter = document.getElementById('statusFilter')?.value || '';
-  const riskFilter = document.getElementById('riskFilter')?.value || '';
-  const rows = document.querySelectorAll('#issuesTable tbody tr');
-  
-  rows.forEach(row => {
-    const rowStatus = row.getAttribute('data-status') || '';
-    const rowRisk = row.getAttribute('data-risk') || '';
-    
-    const statusMatch = !statusFilter || rowStatus === statusFilter;
-    const riskMatch = !riskFilter || rowRisk === riskFilter;
-    
-    row.style.display = (statusMatch && riskMatch) ? '' : 'none';
-  });
-}
-
-function toggleApiKeyVisibility() {
-  const input = document.getElementById('openaiApiKey');
-  const icon = document.getElementById('apiKeyToggleIcon');
-  
-  if (input.type === 'password') {
-    input.type = 'text';
-    icon.className = 'fas fa-eye-slash';
-  } else {
-    input.type = 'password';
-    icon.className = 'fas fa-eye';
-  }
-}
-
-async function saveAIConfig() {
-  const apiKey = document.getElementById('openaiApiKey').value.trim();
-  
-  if (!apiKey) {
-    showToast('Please enter an OpenAI API key', 'warning');
-    return;
-  }
-  
-  if (!apiKey.startsWith('sk-')) {
-    showToast('Invalid API key format. OpenAI keys start with "sk-"', 'warning');
-    return;
-  }
-  
-  try {
-    const config = await callServer('getConfig');
-    config.OPENAI_API_KEY = apiKey;
-    
-    const result = await callServer('updateConfig', config);
-    
-    if (result.success) {
-      showToast('🚀 AI configuration saved successfully!', 'success');
-    } else {
-      showToast('Error saving AI configuration: ' + result.error, 'danger');
-    }
-  } catch (error) {
-    showToast('Error saving AI configuration: ' + error.message, 'danger');
-  }
-}
-
-// ===============================================================================
-// 🌐 SERVER COMMUNICATION SYSTEM
-// ===============================================================================
-function callServer(functionName, ...args) {
-  return new Promise((resolve, reject) => {
-    if (AppState.debugMode) {
-      console.group(`🔍 Server Call: ${functionName}`);
-      console.log('Arguments:', args.length > 0 ? args : '(none)');
-    }
-
-    const timeoutId = setTimeout(() => {
-      if (AppState.debugMode) console.groupEnd();
-      reject(new Error(`Server request timed out after 60 seconds`));
-    }, 60000);
-
-    try {
-      const runner = google.script.run
-        .withSuccessHandler((result) => {
-          clearTimeout(timeoutId);
-          if (AppState.debugMode) {
-            console.log('✅ Success:', result);
-            console.groupEnd();
-          }
-          resolve(result);
-        })
-        .withFailureHandler((error) => {
-          clearTimeout(timeoutId);
-          if (AppState.debugMode) {
-            console.error('❌ Server Error:', error);
-            console.groupEnd();
-          }
-          
-          let errorMessage = error.message || error.toString() || 'Unknown server error';
-          
-          if (errorMessage.includes('not found') || errorMessage.includes('is not a function')) {
-            errorMessage = `Function '${functionName}' not found on server.`;
-          }
-          
-          reject(new Error(errorMessage));
-        });
-
-      if (typeof runner[functionName] !== 'function') {
-        clearTimeout(timeoutId);
-        if (AppState.debugMode) {
-          console.error(`🚫 Function '${functionName}' not available`);
-          console.groupEnd();
+        function filterAudits() {
+            const searchTerm = document.getElementById('auditSearch')?.value.toLowerCase() || '';
+            const statusFilter = document.getElementById('auditStatusFilter')?.value || '';
+            const yearFilter = document.getElementById('auditYearFilter')?.value || '';
+            
+            let filtered = auditData.filter(audit => {
+                const matchesSearch = !searchTerm || 
+                    audit.title.toLowerCase().includes(searchTerm) ||
+                    audit.id.toLowerCase().includes(searchTerm) ||
+                    audit.businessUnit.toLowerCase().includes(searchTerm);
+                
+                const matchesStatus = !statusFilter || audit.status === statusFilter;
+                const matchesYear = !yearFilter || audit.year.toString() === yearFilter;
+                
+                return matchesSearch && matchesStatus && matchesYear;
+            });
+            
+            displayAudits(filtered);
         }
-        reject(new Error(`Server function '${functionName}' is not available`));
-        return;
-      }
-
-      runner[functionName](...args);
-      
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (AppState.debugMode) {
-        console.error('Client-side error:', error);
-        console.groupEnd();
-      }
-      reject(new Error(`Client-side error calling ${functionName}: ${error.message}`));
-    }
-  });
-}
-
-// ===============================================================================
-// 🚀 QUANTUM APPLICATION INITIALIZATION
-// ===============================================================================
-
-/**
- * Initialize Quantum Application with bulletproof error handling
- */
-function initializeQuantumApp() {
-  console.log('🚀 Quantum App Initialization Starting...');
-  
-  if (AppState.initialized) {
-    console.log('✅ App already initialized');
-    return;
-  }
-  
-  try {
-    // Set default quantum user for immediate functionality
-    AppState.currentUser = {
-      email: 'quantum.admin@audit-system.com',
-      role: 'AuditManager',
-      name: 'Quantum Administrator',
-      authenticated: true,
-      permissions: ['view_all', 'create', 'edit', 'delete', 'manage_config']
-    };
-    
-    // Update UI immediately
-    const userEmail = document.getElementById('userEmail');
-    const userRole = document.getElementById('userRole');
-    
-    if (userEmail) userEmail.textContent = AppState.currentUser.email;
-    if (userRole) {
-      userRole.textContent = AppState.currentUser.role;
-      userRole.className = 'badge bg-primary text-white';
-    }
-    
-    // Setup navigation system
-    setupNavigation();
-    
-    // Initialize Bootstrap components
-    try {
-      AppState.modalInstance = new bootstrap.Modal(document.getElementById('formModal'));
-    } catch (e) {
-      console.warn('Modal initialization failed:', e.message);
-    }
-    
-    // Hide loading screen and show app
-    const loadingScreen = document.getElementById('loadingScreen');
-    const appContainer = document.getElementById('appContainer');
-    
-    if (loadingScreen) {
-      loadingScreen.style.opacity = '0';
-      setTimeout(() => {
-        loadingScreen.style.display = 'none';
-      }, 500);
-    }
-    
-    if (appContainer) {
-      appContainer.style.display = 'flex';
-      appContainer.style.opacity = '1';
-    }
-    
-    // Load quantum dashboard
-    setTimeout(() => {
-      navigateToPage('dashboard');
-    }, 600);
-    
-    // Setup event handlers
-    setupEventHandlers();
-    
-    AppState.initialized = true;
-    console.log('🎉 Quantum App Initialization Complete!');
-    
-    // Show success message
-    setTimeout(() => {
-      showToast('🚀 Quantum Audit System Ready - Billion-dollar performance active!', 'success', 4000);
-    }, 1000);
-    
-  } catch (error) {
-    console.error('❌ Quantum initialization error:', error);
-    showEmergencyInterface();
-  }
-}
-
-/**
- * Setup event handlers for quantum system
- */
-function setupEventHandlers() {
-  const refreshBtn = document.getElementById('refreshBtn');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-      const icon = refreshBtn.querySelector('i');
-      const originalClass = icon.className;
-      
-      icon.className = 'fas fa-spinner fa-spin';
-      refreshBtn.disabled = true;
-      
-      CacheManager.clear(AppState.currentPage);
-      
-      loadPage(AppState.currentPage).finally(() => {
-        setTimeout(() => {
-          icon.className = originalClass;
-          refreshBtn.disabled = false;
-          showToast('🔄 Page refreshed with quantum speed!', 'success');
-        }, 1000);
-      });
-    });
-  }
-}
-
-/**
- * Emergency interface for critical failures
- */
-function showEmergencyInterface() {
-  const content = document.getElementById('pageContent');
-  if (content) {
-    content.innerHTML = `
-      <div class="alert alert-warning">
-        <h4>🚨 Emergency Mode Active</h4>
-        <p>Basic functionality restored. System is operational.</p>
-        <button class="btn btn-primary" onclick="location.reload()">
-          <i class="fas fa-refresh me-1"></i>Restart System
-        </button>
-      </div>
-    `;
-  }
-}
-
-// ===============================================================================
-// 🎯 AUTOMATIC INITIALIZATION
-// ===============================================================================
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('🌐 DOM loaded, starting quantum initialization...');
-  setTimeout(initializeQuantumApp, 1000);
-});
-
-// Backup initialization methods
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeQuantumApp);
-} else {
-  setTimeout(initializeQuantumApp, 100);
-}
-
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    if (!AppState.initialized) {
-      console.log('🔄 Backup initialization triggered');
-      initializeQuantumApp();
-    }
-  }, 2000);
-});
-
-// Emergency fallback - force initialization after 5 seconds
-setTimeout(() => {
-  if (!AppState.initialized) {
-    console.log('🚨 Emergency initialization triggered');
-    initializeQuantumApp();
-  }
-}, 5000);
-
-console.log('✅ Quantum CoreScripts Loaded Successfully - Billion-Dollar Performance Ready!');
-</script>
+    </script>
+</body>
+</html>

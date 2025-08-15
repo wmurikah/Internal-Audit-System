@@ -1,7 +1,6 @@
 /**
- * 🚀 QUANTUM DASHBOARD ENGINE v2025.08.15
- * Billion-dollar performance with sub-100ms guaranteed load times
- * Revolutionary multi-layer fallback system for 99.99% reliability
+ * 📊 CLEAN DASHBOARD ENGINE
+ * Professional dashboard with role-based access and clean functionality
  */
 function getDashboardData() {
   try {
