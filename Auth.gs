@@ -41,36 +41,6 @@ function getCurrentUser() {
     }
 
     let user = preUser || null;
-=======
-    // Try to resolve user from Users sheet first; if present and active, use it regardless of domain
-    let preUser = null;
-    try {
-      const usersQuick = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : [];
-      preUser = usersQuick.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
-    } catch(e){}
-
-    if (!preUser && (!userEmail || userEmail.split('@')[1] !== allowedDomain)) {
-      return {
-        email: userEmail || 'anonymous@system.local',
-        role: 'Guest',
-        name: 'Unauthorized',
-        permissions: [],
-        org_unit: 'Unknown',
-        authenticated: false,
-        active: false,
-        error: 'Access restricted to corporate domain'
-      };
-    }
-
-    // Fast cache layer (reaffirmed above) - already defined as cache/key
-    // If not cached, we already determined user via preUser; fall back to full search only if needed
-    if (!user) {
-      try {
-        const usersAll = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users');
-        user = usersAll.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
-      } catch(e){}
-    }
-// RESOLVED MERGE END
 
     const result = user ? {
       email: userEmail,
