@@ -504,7 +504,6 @@ function getQuantumDashboardData() {
   return getMinimalDashboard();
 }
 
-}
 
 /**
  * 📅 QUANTUM REBUILD SCHEDULER
@@ -513,6 +512,4 @@ function getQuantumDashboardData() {
 function scheduleQuantumRebuild() {
   // Keep as no-op scheduler calling snapshot rebuild to align with simplified flow
   try { scheduleSnapshotRebuild(); } catch(e) {}
-}
-
 }
