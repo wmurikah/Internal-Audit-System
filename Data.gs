@@ -253,10 +253,16 @@ function getBulkDataUltraFast() {
     const bulkData = {};
     
     // Read all sheets in parallel (conceptually)
+    const user = getCurrentUser();
     ['Audits', 'Issues', 'Actions', 'Users', 'WorkPapers', 'Evidence', 'RiskRegister'].forEach(sheetName => {
       try {
         const sheet = ss.getSheetByName(sheetName);
         if (sheet && sheet.getLastRow() > 1) {
+          // SeniorManagement visibility rules
+          if (user && user.role === 'SeniorManagement' && sheetName === 'WorkPapers') {
+            bulkData[sheetName] = [];
+            return;
+          }
           const data = sheet.getDataRange().getValues();
           const headers = data[0];
           
@@ -460,6 +466,8 @@ function sendUserInviteEmail(email){
 function listWorkPapers(){
   const user = getCurrentUser();
   const wps = getSheetData('WorkPapers');
+  // Enforcement: SeniorManagement must never see Work Papers (UI or API)
+  if (user.role === 'SeniorManagement') { return []; }
   if (user.role === 'Auditor'){ return wps; }
   if (user.role === 'Auditee'){ return wps.filter(w=> (w.created_by||'').toLowerCase() === user.email.toLowerCase()); }
   return wps;
