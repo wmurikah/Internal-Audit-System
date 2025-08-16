@@ -1196,8 +1196,8 @@
                 const btn = document.getElementById('wpExportSelectedBtn'); if (btn) btn.disabled = true;
                 google.script.run.withSuccessHandler(function(res){
                   if (btn) btn.disabled = false;
-                  if (res && res.success && Array.isArray(res.links)){
-                    const list = res.links.map((u,i)=>`<li><a href='${u}' target='_blank'>File ${i+1}</a></li>`).join('');
+                  if (res && res.success && Array.isArray(res.files)){
+                    const list = res.files.map((f,i)=>`<li><a href='${f.url}' target='_blank'>${f.id || ('File '+(i+1))}</a></li>`).join('');
                     showModal('Export Links', `<p>Bulk export completed. Download links:</p><ul>${list}</ul>`, [{label:'Close', cls:'btn btn-primary', onclick:'closeModal()'}]);
                   } else { showAlert(res && res.error ? res.error : 'Bulk export failed','danger'); }
                 }).withFailureHandler(function(err){ if (btn) btn.disabled = false; console.error(err); showAlert('Bulk export failed','danger'); }).bulkGenerateWorkPapersPDF(ids);
