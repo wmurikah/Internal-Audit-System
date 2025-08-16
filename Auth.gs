@@ -16,32 +16,61 @@ function getCurrentUser() {
     const cached = cache.get(key);
     if (cached) { try { return JSON.parse(cached); } catch(e){} }
 
-    // Load Users sheet first. If a matching active user exists, we accept regardless of domain.
-    const users = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users');
-    const existing = users.find(u => (u.email||'').toLowerCase() === (userEmail||'').toLowerCase() && u.active !== false);
-
-    // Domain enforcement from Settings only applies when the user is NOT explicitly registered
+    // Domain enforcement from Settings
     let allowedDomain = 'hasspetroleum.com';
     try { const cfg = getConfig(); if (cfg && cfg.ALLOWED_SIGNIN_DOMAIN) allowedDomain = cfg.ALLOWED_SIGNIN_DOMAIN; } catch(e){}
 
-    if (!existing) {
-      if (!userEmail || userEmail.split('@')[1] !== allowedDomain) {
-        const guestRes = {
-          email: userEmail || 'anonymous@system.local',
-          role: 'Guest',
-          name: 'Unauthorized',
-          permissions: [],
-          org_unit: 'Unknown',
-          authenticated: false,
-          active: false,
-          error: 'Access restricted to corporate domain'
-        };
-        try { cache.put(key, JSON.stringify(guestRes), 300); } catch(e){}
-        return guestRes;
-      }
+    // Prefer Users sheet record first
+    let usersQuick = [];
+    try { usersQuick = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users'); } catch(e){}
+    const preUser = usersQuick.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
+
+    if (!preUser && (!userEmail || userEmail.split('@')[1] !== allowedDomain)) {
+      const guestRes = {
+        email: userEmail || 'anonymous@system.local',
+        role: 'Guest',
+        name: 'Unauthorized',
+        permissions: [],
+        org_unit: 'Unknown',
+        authenticated: false,
+        active: false,
+        error: 'Access restricted to corporate domain'
+      };
+      try { cache.put(key, JSON.stringify(guestRes), 300); } catch(e){}
+      return guestRes;
     }
 
-    const user = existing || null;
+    const user = preUser || null;
+=======
+    // Try to resolve user from Users sheet first; if present and active, use it regardless of domain
+    let preUser = null;
+    try {
+      const usersQuick = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : [];
+      preUser = usersQuick.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
+    } catch(e){}
+
+    if (!preUser && (!userEmail || userEmail.split('@')[1] !== allowedDomain)) {
+      return {
+        email: userEmail || 'anonymous@system.local',
+        role: 'Guest',
+        name: 'Unauthorized',
+        permissions: [],
+        org_unit: 'Unknown',
+        authenticated: false,
+        active: false,
+        error: 'Access restricted to corporate domain'
+      };
+    }
+
+    // Fast cache layer (reaffirmed above) - already defined as cache/key
+    // If not cached, we already determined user via preUser; fall back to full search only if needed
+    if (!user) {
+      try {
+        const usersAll = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users');
+        user = usersAll.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
+      } catch(e){}
+    }
+// RESOLVED MERGE END
 
     const result = user ? {
       email: userEmail,

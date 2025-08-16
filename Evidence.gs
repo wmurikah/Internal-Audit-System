@@ -61,6 +61,7 @@ function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base
       uploaded_on: now,
       version: 1,
       checksum: checksum,
+      status: 'Submitted',
       created_at: now
     };
 
