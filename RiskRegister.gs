@@ -49,6 +49,49 @@ function updateRiskEntry(id, changes){
   return updateRow('RiskRegister', id, changes);
 }
 
+/** Role-aware getter: getRisks(scope) */
+function getRisks(scope){
+  scope = scope || {};
+  var user = getCurrentUser();
+  var all = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('RiskRegister') : [];
+  // SeniorManagement and Board: view all
+  if (user.role === 'SeniorManagement' || user.role === 'Board' || user.role === 'AuditManager'){
+    return { success:true, items: all };
+  }
+  // Auditee: only own or same org unit
+  if (user.role === 'Auditee'){
+    var email = String(user.email||'').toLowerCase();
+    var unit = String(user.org_unit||'');
+    var items = all.filter(function(r){
+      var ownerOk = String(r.owner_email||'').toLowerCase() === email;
+      var unitOk = String(r.unit||'') === unit;
+      return ownerOk || unitOk;
+    });
+    return { success:true, items: items };
+  }
+  // Auditor: read-only all
+  if (user.role === 'Auditor'){
+    return { success:true, items: all };
+  }
+  // Default: nothing
+  return { success:true, items: [] };
+}
+
+/** Role-enforced updateRisk: only Auditee owner or AuditManager may edit */
+function updateRisk(riskId, updates){
+  var user = getCurrentUser();
+  if (!riskId) throw new Error('riskId required');
+  updates = updates || {};
+  var record = getRowById('RiskRegister', riskId);
+  if (!record) throw new Error('Risk not found');
+  var isOwner = String((record.owner_email||'').toLowerCase()) === String((user.email||'').toLowerCase());
+  var canEdit = (user.role === 'AuditManager') || (user.role === 'Auditee' && isOwner);
+  if (!canEdit){ throw new Error('Not permitted to edit this risk'); }
+  updates.updated_by = user.email;
+  updates.updated_at = new Date();
+  return updateRow('RiskRegister', riskId, updates);
+}
+
 /** Link risk to a work paper (store WP ids in links column as CSV) */
 function linkRiskToWorkPaper(riskId, workPaperId){
   var rr = getRowById('RiskRegister', riskId);
