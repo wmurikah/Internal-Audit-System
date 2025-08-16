@@ -3,38 +3,9 @@
  * Professional dashboard with role-based access and clean functionality
  */
 function getDashboardData() {
-  try {
-    // QUANTUM LAYER: Sub-100ms performance guarantee
-    const quantumData = getQuantumDashboardData();
-    if (quantumData && typeof quantumData.activeAudits !== 'undefined') {
-      Logger.log('⚡ Quantum dashboard delivered in <100ms');
-      return quantumData;
-    }
-  } catch (e) {
-    Logger.log('Quantum method failed, using ultra-fast fallback: ' + e.message);
-  }
-  
-  try {
-    // ULTRA-FAST FALLBACK: Legacy high-performance system
-    const snapshotData = getDashboardDataUltraFast();
-    if (snapshotData && typeof snapshotData.activeAudits !== 'undefined') {
-      Logger.log('🚀 Ultra-fast dashboard delivered');
-      return snapshotData;
-    }
-  } catch (e) {
-    Logger.log('Snapshot method failed, using compute method: ' + e.message);
-  }
-  
-  try {
-    // COMPREHENSIVE FALLBACK: Real-time computation
-    Logger.log('📊 Computing comprehensive dashboard (fallback mode)');
-    return computeComprehensiveDashboard();
-  } catch (e) {
-    Logger.log('Compute method failed, using minimal dashboard: ' + e.message);
-  }
-  
-  // EMERGENCY FALLBACK: Minimal functional dashboard
-  Logger.log('🚨 Emergency dashboard activated');
+  // Simplified, reliable dashboard data resolver
+  try { return getDashboardDataUltraFast(); } catch (e) { Logger.log('Ultra-fast snapshot failed: '+e); }
+  try { return computeComprehensiveDashboard(); } catch (e) { Logger.log('Comprehensive compute failed: '+e); }
   return getMinimalDashboard();
 }
 

@@ -498,6 +498,11 @@ function buildQuantumDashboardSnapshot() {
  * Sub-100ms data serving with multiple fallback layers
  */
 function getQuantumDashboardData() {
+  // Replace hype with practical resolver: return ultra-fast snapshot if available, else compute
+  try { return getDashboardDataUltraFast(); } catch(e) {}
+  try { return computeComprehensiveDashboard(); } catch(e) {}
+  return getMinimalDashboard();
+}
   try {
     // Layer 1: Quantum cache (fastest - <10ms)
     const cache = CacheService.getScriptCache();
@@ -613,6 +618,9 @@ function getQuantumDashboardData() {
  * Intelligent background rebuilding without blocking user operations
  */
 function scheduleQuantumRebuild() {
+  // Keep as no-op scheduler calling snapshot rebuild to align with simplified flow
+  try { scheduleSnapshotRebuild(); } catch(e) {}
+}
   try {
     const props = PropertiesService.getScriptProperties();
     const lastScheduled = props.getProperty('LAST_QUANTUM_REBUILD');
