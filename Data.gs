@@ -8,7 +8,7 @@
  */
 function getConfig() {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     let settingsSheet = ss.getSheetByName('Settings');
     
     if (!settingsSheet || settingsSheet.getLastRow() <= 1) {
@@ -65,7 +65,7 @@ function updateConfig(newConfig) {
     }
     
     const validatedConfig = validateConfig(newConfig);
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     let sheet = ss.getSheetByName('Settings');
     
     if (!sheet) {
@@ -115,7 +115,7 @@ function initializeDefaults() {
   const defaultConfig = getDefaultConfig();
   
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     let sheet = ss.getSheetByName('Settings');
     
     if (!sheet) {
@@ -169,7 +169,8 @@ function getDefaultConfig() {
     AUTO_ASSIGN_ACTIONS: false,
     REQUIRE_EVIDENCE: true,
     MAX_FILE_SIZE_MB: 10,
-    EVIDENCE_FOLDER_ID: ''
+    EVIDENCE_FOLDER_ID: '',
+    ALLOWED_EVIDENCE_MIME_TYPES: ['application/pdf','image/png','image/jpeg','image/jpg','image/gif','image/webp','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv']
   };
 }
 
@@ -237,7 +238,8 @@ function getConfigDescription(key) {
     AUTO_ASSIGN_ACTIONS: 'Automatically assign actions to issue owners',
     REQUIRE_EVIDENCE: 'Require evidence upload for issue resolution',
     MAX_FILE_SIZE_MB: 'Maximum file size for evidence uploads (MB)',
-    EVIDENCE_FOLDER_ID: 'Drive folder ID where evidence files are stored'
+    EVIDENCE_FOLDER_ID: 'Drive folder ID where evidence files are stored',
+    ALLOWED_EVIDENCE_MIME_TYPES: 'Allowlist for evidence MIME types'
   };
   
   return descriptions[key] || 'System configuration parameter';
@@ -251,7 +253,7 @@ function getBulkDataUltraFast() {
   const startTime = Date.now();
   
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     const bulkData = {};
     
     // Read all sheets in parallel (conceptually)
@@ -313,7 +315,7 @@ function bulkGenerateWorkPapersCSVLinksDeprecated(ids){
   try{
     if (!Array.isArray(ids) || ids.length===0) return { success:false, error:'No ids provided' };
     // Placeholder implementation: generate CSV blob per WP and save to Drive as .csv, return file links
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     const wps = getSheetData('WorkPapers');
     const selected = wps.filter(w => ids.indexOf(String(w.id))>-1);
     const folder = DriveApp.getFolderById(EVIDENCE_FOLDER_ID);
@@ -342,7 +344,7 @@ function getRowById(sheetName, id){
 }
 
 function addRow(sheetName, obj){
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
   const sh = ss.getSheetByName(sheetName);
   if (!sh) throw new Error('Sheet '+sheetName+' not found');
   const headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
@@ -359,7 +361,7 @@ function addRow(sheetName, obj){
 }
 
 function updateRow(sheetName, id, changes){
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
   const sh = ss.getSheetByName(sheetName);
   if (!sh) throw new Error('Sheet '+sheetName+' not found');
   const data = sh.getDataRange().getValues();
@@ -384,7 +386,7 @@ function updateRow(sheetName, id, changes){
 
 function logAction(entity, entity_id, action, before_json, after_json){
   try{
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     let sh = ss.getSheetByName('Logs');
     if (!sh){ sh = ss.insertSheet('Logs'); sh.getRange(1,1,1,7).setValues([["timestamp","user_email","entity","entity_id","action","before_json","after_json"]]); }
     const user = (Session.getActiveUser() && Session.getActiveUser().getEmail()) || 'system@local';
@@ -399,7 +401,7 @@ function logAction(entity, entity_id, action, before_json, after_json){
 function applyStandardValidations(){
   try{
     const cfg = getConfig();
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     // Audits.status (G)
     const audits = ss.getSheetByName('Audits');
     if (audits){
@@ -511,7 +513,7 @@ function updateWorkPaper(id, updates){
 
 function getAuditTrail(entity, entityId, limit, offset){
   try{
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     const sh = ss.getSheetByName('Logs'); if (!sh) return {success:true, items:[], total:0};
     const data = sh.getDataRange().getValues();
     const headers = data[0];
