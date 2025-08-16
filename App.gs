@@ -12,17 +12,11 @@ const EVIDENCE_FOLDER_ID = '17r19y2uyKeBu2QcKMsOMjIBeSYKu7R4R';
 function doGet(e) {
   try {
     const template = HtmlService.createTemplateFromFile('CoreScripts');
-    
-    if (e && e.parameter && e.parameter.logout === '1') {
-      template.forceLogout = true;
-    }
-    
+    if (e && e.parameter && e.parameter.logout === '1') { template.forceLogout = true; }
     return template.evaluate()
       .setTitle('Audit Management System - Instant')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-      // Removed the problematic theme-color meta tag
-      
   } catch (error) {
     Logger.log('doGet error: ' + error.toString());
     return HtmlService.createHtmlOutput(`
@@ -40,12 +34,8 @@ function doGet(e) {
  * Include HTML files for separation of concerns
  */
 function include(filename) {
-  try {
-    return HtmlService.createHtmlOutputFromFile(filename).getContent();
-  } catch (error) {
-    Logger.log(`Include error for ${filename}: ${error.toString()}`);
-    return `<!-- Error loading ${filename} -->`;
-  }
+  try { return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
+  catch (error) { Logger.log(`Include error for ${filename}: ${error.toString()}`); return `<!-- Error loading ${filename} -->`; }
 }
 
 /**
@@ -55,12 +45,9 @@ function initializeSystem() {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const currentUserEmail = Session.getActiveUser().getEmail();
-    
-    if (!currentUserEmail) {
-      throw new Error('No authenticated user found');
-    }
-    
-    // Create all required sheets
+    if (!currentUserEmail) { throw new Error('No authenticated user found'); }
+
+    // Create required sheets with headers if missing
     const requiredSheets = {
       'Users': ['id', 'email', 'name', 'role', 'org_unit', 'active', 'created_at', 'last_login'],
       'Audits': ['id', 'year', 'affiliate', 'business_unit', 'title', 'scope', 'status', 'manager_email', 'start_date', 'end_date', 'created_by', 'created_at', 'updated_by', 'updated_at'],
@@ -72,46 +59,39 @@ function initializeSystem() {
       'Settings': ['key', 'value', 'description', 'updated_by', 'updated_at'],
       'RiskRegister': ['id', 'unit', 'process', 'risk_statement', 'inherent_rating', 'controls', 'owner_email', 'status', 'due_date', 'residual_risk', 'links', 'created_at', 'updated_at']
     };
-    
     Object.entries(requiredSheets).forEach(([sheetName, headers]) => {
       let sheet = ss.getSheetByName(sheetName);
-      if (!sheet) {
-        sheet = ss.insertSheet(sheetName);
-        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-        
-        // Format headers
-        const headerRange = sheet.getRange(1, 1, 1, headers.length);
-        headerRange.setFontWeight('bold');
-        headerRange.setBackground('#1a237e');
-        headerRange.setFontColor('white');
-        
-        Logger.log(`Created sheet: ${sheetName}`);
-      }
+      if (!sheet) { sheet = ss.insertSheet(sheetName); sheet.getRange(1, 1, 1, headers.length).setValues([headers]); try{ sheet.setFrozenRows(1);}catch(e){} }
     });
-    
-    // Initialize configuration
+
+    // Initialize configuration and validations
     getConfig();
     try { applyStandardValidations(); } catch (e) { Logger.log('applyStandardValidations on init error: '+e); }
-    
-    // Create admin user if doesn't exist
+
+    // Ensure current user exists
     const users = getSheetData('Users') || [];
     if (!users.some(u => u.email && u.email.toLowerCase() === currentUserEmail.toLowerCase())) {
-      const adminUser = {
-        email: currentUserEmail,
-        name: currentUserEmail.split('@')[0],
-        role: 'AuditManager',
-        org_unit: 'Internal Audit',
-        active: true
-      };
-      
-      addRow('Users', adminUser);
-      Logger.log(`Created admin user: ${currentUserEmail}`);
+      addRow('Users', { email: currentUserEmail, name: currentUserEmail.split('@')[0], role: 'AuditManager', org_unit: 'Internal Audit', active: true, created_at: new Date(), last_login: '' });
     }
-    
+
     return { success: true, message: 'System initialized successfully' };
-    
   } catch (error) {
     Logger.log('System initialization error: ' + error.toString());
     return { success: false, error: error.message };
+  }
+}
+
+// Provide boot info for client
+function getAppInfo(){
+  try{
+    const user = getCurrentUser();
+    const cfg = getConfig();
+    return {
+      user: { email: user.email, role: user.role, org_unit: user.org_unit, permissions: user.permissions },
+      featureFlags: { ai: !!(cfg && cfg.OPENAI_API_KEY), evidenceRequired: !!(cfg && cfg.REQUIRE_EVIDENCE) },
+      defaultLanding: (cfg && cfg.defaultLanding) || 'dashboard'
+    };
+  }catch(e){
+    return { user: { email: '', role: 'Guest', org_unit: '', permissions: [] }, featureFlags: { ai: false, evidenceRequired: true }, defaultLanding: 'dashboard' };
   }
 }
