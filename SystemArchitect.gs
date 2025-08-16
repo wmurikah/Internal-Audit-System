@@ -434,10 +434,7 @@ function normalizeBool(value) {
   return false;
 }
 
-// Override the original getCurrentUser to use the ultra-fast version
-function getCurrentUser() {
-  return getCurrentUserUltra();
-}
+// Removed override: Auth.getCurrentUser() is the canonical domain-enforced accessor.
 
 
 

@@ -9,9 +9,11 @@
 function getCurrentUser() {
   try {
     const userEmail = Session.getActiveUser().getEmail();
-    
-    // Enforce corporate domain (@hasspetroleum.com) for sign-in
-    const allowedDomain = 'hasspetroleum.com';
+
+    // Domain enforcement from Settings if available
+    let allowedDomain = 'hasspetroleum.com';
+    try { const cfg = getConfig(); if (cfg && cfg.ALLOWED_SIGNIN_DOMAIN) allowedDomain = cfg.ALLOWED_SIGNIN_DOMAIN; } catch(e){}
+
     if (!userEmail || userEmail.split('@')[1] !== allowedDomain) {
       return {
         email: userEmail || 'anonymous@system.local',
@@ -24,55 +26,44 @@ function getCurrentUser() {
         error: 'Access restricted to corporate domain'
       };
     }
-    
-    const users = getSheetData('Users') || [];
-    const user = users.find(u => u.email && u.email.toLowerCase() === userEmail.toLowerCase() && u.active !== false);
-    
-    if (!user) {
-      // For first-time setup, default to AuditManager
-      return {
-        email: userEmail,
-        role: 'AuditManager',
-        name: userEmail.split('@')[0],
-        permissions: getPermissions('AuditManager'),
-        org_unit: 'Internal Audit',
-        authenticated: true,
-        active: true
-      };
-    }
-    
-    if (!user.active) {
-      return {
-        email: userEmail,
-        role: 'Guest',
-        name: 'Inactive User',
-        permissions: [],
-        org_unit: 'Unknown',
-        authenticated: false,
-        active: false
-      };
-    }
-    
-    const permissions = getPermissions(user.role);
-    
-    // Update last login
-    try {
-      updateRow('Users', user.id, { last_login: new Date() });
-    } catch (e) {
-      Logger.log('Error updating last login: ' + e.toString());
-    }
-    
-    return {
+
+    // Fast cache layer
+    const cache = CacheService.getScriptCache();
+    const key = `auth_user_${userEmail.toLowerCase()}`;
+    const cached = cache.get(key);
+    if (cached){ try { return JSON.parse(cached); } catch(e){} }
+
+    // Lookup Users sheet directly (fast direct read)
+    const users = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users');
+    const user = users.find(u => (u.email||'').toLowerCase() === userEmail.toLowerCase() && u.active !== false);
+
+    const result = user ? {
       email: userEmail,
       role: user.role,
       name: user.name || userEmail.split('@')[0],
-      permissions: permissions,
+      permissions: getPermissions(user.role),
       org_unit: user.org_unit || 'Unknown',
       authenticated: true,
       active: true,
       id: user.id
+    } : {
+      // First time setup default to AuditManager
+      email: userEmail,
+      role: 'AuditManager',
+      name: userEmail.split('@')[0],
+      permissions: getPermissions('AuditManager'),
+      org_unit: 'Internal Audit',
+      authenticated: true,
+      active: true
     };
-    
+
+    // Update last login (best effort)
+    try { if (result.id) updateRow('Users', result.id, { last_login: new Date() }); } catch (e) { Logger.log('last_login update error: '+e); }
+
+    // Cache 5 min
+    try { cache.put(key, JSON.stringify(result), 300); } catch(e){}
+
+    return result;
   } catch (error) {
     Logger.log('getCurrentUser error: ' + error.toString());
     return {
