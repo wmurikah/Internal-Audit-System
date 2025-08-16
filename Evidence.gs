@@ -3,6 +3,7 @@
  * - Secure server-side upload from base64 to Drive (EVIDENCE_FOLDER_ID)
  * - Persist metadata to Evidence sheet
  * - Lightweight listing by parent for UI hydration
+ * - Enforce evidence on status change and review flow helpers
  */
 
 /**
@@ -142,6 +143,61 @@ function appendRecord_(sheetName, obj) {
   });
   sh.appendRow(row);
 }
+
+/** Enforce evidence exists before certain status changes at server-side */
+function requireEvidenceForStatusChange(entity, entityId, newStatus, actorEmail){
+  try{
+    const user = getCurrentUser();
+    const role = user && user.role;
+    const restricted = (role==='Auditor' || role==='Auditee');
+    if (!restricted) return { ok: true };
+    const parentType = (entity==='Issues')?'Issue':(entity==='Actions'?'Action':entity);
+    const items = (typeof getSheetDataDirect==='function')? getSheetDataDirect('Evidence'): [];
+    const acceptable = ['Submitted','AuditorAccepted','ManagerAccepted'];
+    const has = items.some(ev => String(ev.parent_type)===String(parentType) && String(ev.parent_id)===String(entityId) && (!ev.status || acceptable.indexOf(String(ev.status))>-1));
+    if (has) return { ok: true };
+    return { ok: false, error: 'Evidence is required before changing status. Please upload evidence.' };
+  }catch(e){ Logger.log('requireEvidenceForStatusChange error: '+e); return { ok:false, error:e.message }; }
+}
+
+/** Upload evidence from Blob (alternative to base64) */
+function uploadEvidence(parentType, parentId, fileBlob, uploaderEmail){
+  try{
+    if (!parentType || !parentId) throw new Error('Parent type and id are required');
+    if (!fileBlob) throw new Error('fileBlob is required');
+    const cfg = getConfig();
+    const folderId = (cfg && cfg.EVIDENCE_FOLDER_ID) ? cfg.EVIDENCE_FOLDER_ID : EVIDENCE_FOLDER_ID;
+    const folder = DriveApp.getFolderById(folderId);
+    const file = folder.createFile(fileBlob);
+    const id = generateEvidenceId_();
+    const now = new Date();
+    const rec = { id, parent_type: parentType, parent_id: parentId, file_name: file.getName(), drive_url: file.getUrl(), uploader_email: uploaderEmail || (Session.getActiveUser().getEmail()||''), uploaded_on: now, version: 1, checksum: '', status: 'Submitted', created_at: now };
+    appendRecord_('Evidence', rec);
+    return { success:true, id, url: file.getUrl(), record: rec };
+  }catch(e){ Logger.log('uploadEvidence error: '+e); return { success:false, error:e.message }; }
+}
+
+/** Generic review API determines status by reviewer role */
+function reviewEvidence(evidenceId, decision, comment, reviewerEmail){
+  try{
+    const user = getCurrentUser();
+    if (!user || !user.role) throw new Error('Not authenticated');
+    const rec = getRowById('Evidence', evidenceId); if (!rec) throw new Error('Evidence not found');
+    const isMgr = user.role==='AuditManager';
+    const isAud = user.role==='Auditor';
+    if (!isMgr && !isAud) throw new Error('Insufficient role to review');
+    const accept = String(decision).toLowerCase()==='accept';
+    if (isAud){ return reviewEvidenceByAuditor(evidenceId, accept?'Accept':'Reject', comment||''); }
+    if (isMgr){ return managerReviewEvidence(evidenceId, accept?'Accept':'Reject', comment||''); }
+    return { success:false, error:'Unsupported role' };
+  }catch(e){ Logger.log('reviewEvidence error: '+e); return { success:false, error:e.message }; }
+}
+
+/** Alias to manager final decision per spec */
+function managerFinalReview(evidenceId, decision, comment, managerEmail){
+  return managerReviewEvidence(evidenceId, decision, comment);
+}
+
 
 /** Auditor reviews evidence: decision = 'Accept' | 'Reject' */
 function reviewEvidenceByAuditor(evidenceId, decision, comment){
