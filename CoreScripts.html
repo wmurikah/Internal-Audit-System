@@ -558,6 +558,7 @@
         let currentPage = 'dashboard';
         let charts = {};
         let BULK = null; // cached bulk data for tables
+        let WP_PAGE = 1; const WP_PAGE_SIZE = 20;
         // Register Chart.js datalabels with inlined helpers
         if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') { Chart.register(ChartDataLabels); }
         Chart.register(ChartDataLabels);
@@ -905,7 +906,9 @@
         function renderWorkPapers(){
             const tb = document.getElementById('workpapersTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
             populateWpAuditFilter(); attachWpFilterEvents();
-            (BULK.WorkPapers||[]).filter(filterWpRow).slice(0,100).forEach(wp=>{
+            const all = (BULK.WorkPapers||[]).filter(filterWpRow);
+            const start = (WP_PAGE-1)*WP_PAGE_SIZE; const end = start + WP_PAGE_SIZE;
+            all.slice(start, end).forEach(wp=>{
                 const actions = [];
                 actions.push(`<button class='action-btn' title='View' data-action='view' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-eye'></i></button>`);
                 actions.push(`<button class='action-btn' title='Edit' data-action='edit' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-edit'></i></button>`);
@@ -916,6 +919,16 @@
                 tr.innerHTML = `<td><strong>${wp.id}</strong></td><td>${wp.audit_id||''}</td><td>${wp.process_area||''}</td><td><span class='badge badge-info'>${wp.status||''}</span></td><td>${wp.created_by||''}</td><td>${wp.created_at||''}</td><td><div class='action-buttons'>${actions.join('')}</div></td>`;
                 tb.appendChild(tr);
             });
+            // pagination footer
+            const footer = document.createElement('div');
+            footer.className = 'd-flex justify-content-between align-items-center mt-2';
+            const total = all.length; const pages = Math.max(1, Math.ceil(total/WP_PAGE_SIZE));
+            const info = document.createElement('div'); info.className='text-muted'; info.textContent = `Page ${WP_PAGE} of ${pages} · ${total} items`; footer.appendChild(info);
+            const ctrls = document.createElement('div');
+            const prev = document.createElement('button'); prev.className='btn btn-outline btn-sm me-2'; prev.textContent='Prev'; prev.disabled = WP_PAGE<=1; prev.onclick=()=>{ WP_PAGE=Math.max(1, WP_PAGE-1); renderWorkPapers(); };
+            const next = document.createElement('button'); next.className='btn btn-outline btn-sm'; next.textContent='Next'; next.disabled = WP_PAGE>=pages; next.onclick=()=>{ WP_PAGE=Math.min(pages, WP_PAGE+1); renderWorkPapers(); };
+            ctrls.appendChild(prev); ctrls.appendChild(next); footer.appendChild(ctrls);
+            tb.parentElement.appendChild(footer);
         }
         function renderEvidence(){
             const tb = document.getElementById('evidenceTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
