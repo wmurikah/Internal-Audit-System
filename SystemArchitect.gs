@@ -13,6 +13,9 @@
  * - World-class UX with cognitive load optimization
  */
 function executeQuantumSystemReset() {
+  // Replace destructive reset with safe reset call
+  try{ return safeResetAndSeed(); }catch(e){ Logger.log('safe reset failed: '+e); return { success:false, error:e.message }; }
+}
   console.log('🌟 INITIATING QUANTUM SYSTEM DEPLOYMENT');
   console.log('======================================');
   console.log('💎 Billion-Dollar Performance Engine Activating...');
@@ -92,6 +95,9 @@ function executeQuantumSystemReset() {
 }
 
 function createOptimizedSheetArchitecture() {
+  // Deprecated: keep for compatibility but delegate to safeResetAndSeed without destructive deletes
+  try{ return safeResetAndSeed(); }catch(e){ return { success:false, error:e.message }; }
+}
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   
   console.log('🧹 Starting bulletproof sheet cleanup...');
