@@ -52,14 +52,14 @@ function getCurrentUser() {
       active: true,
       id: user.id
     } : {
-      // First time setup default to AuditManager when domain-allowed but not yet registered
+      // Enforce roles strictly from Users sheet: unregistered users are Guests (no implicit AuditManager)
       email: userEmail,
-      role: 'AuditManager',
-      name: userEmail ? userEmail.split('@')[0] : 'AuditManager',
-      permissions: getPermissions('AuditManager'),
-      org_unit: 'Internal Audit',
-      authenticated: true,
-      active: true
+      role: 'Guest',
+      name: userEmail ? userEmail.split('@')[0] : 'Guest',
+      permissions: getPermissions('Guest'),
+      org_unit: 'Unknown',
+      authenticated: false,
+      active: false
     };
 
     // Update last login (best effort)
