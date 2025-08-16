@@ -56,7 +56,7 @@
                     <i class="fas fa-cog"></i>
                     Configuration
                 </button>
-                <button class="nav-link" onclick="showPage('users')" id="userManagementLink">
+                <button class="nav-link" onclick="showPage('users')" id="userManagementLink" style="display:none;">
                     <i class="fas fa-users"></i>
                     User Management
                 </button>
@@ -138,7 +138,7 @@
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 400px; gap: 24px;">
+                    <div class="dashboard-grid-bottom" style="display: grid; grid-template-columns: 1fr 400px; gap: 24px; align-items: stretch;">
                         <div class="card">
                             <div class="card-header">
                                 <h3 class="card-title">Recent Audits</h3>
@@ -160,9 +160,11 @@
                             </div>
                         </div>
 
-                        <div class="chart-container">
+                        <div class="chart-container" style="display:flex;flex-direction:column;">
                             <h3 class="chart-title">Risk Distribution</h3>
-                            <canvas id="chartRiskDistribution" height="160"></canvas>
+                            <div style="flex:1 1 auto; min-height: 0;">
+                              <canvas id="chartRiskDistribution"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -179,7 +181,7 @@
                         <button class="btn btn-outline" onclick="refreshData()">
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>
-                        <button class="btn btn-primary" onclick="showAlert('New Audit functionality ready', 'success')">
+                        <button class="btn btn-primary" onclick="openCreateAudit()">
                             <i class="fas fa-plus"></i> New Audit
                         </button>
                     </div>
@@ -565,7 +567,7 @@
 
         // risk bars replaced by doughnut; helper removed
 
-        function doughnutChart(id, labels, data, colors) {
+        function doughnutChart(id, labels, data, colors, mode='both') {
             const ctx = document.getElementById(id);
             if (!ctx) return;
             if (charts[id]) { charts[id].destroy(); }
@@ -580,10 +582,12 @@
                         legend: { position: 'right' },
                         datalabels: {
                             color: '#111',
-                            formatter: (value, ctx) => {
+                            formatter: (value) => {
                                 if (!value) return '';
                                 const pct = Math.round((value * 100) / total);
-                                return `${pct}%\n${value}`; // no decimals
+                                if (mode === 'percent_only') return `${pct}%`;
+                                if (mode === 'number_only') return `${value}`;
+                                return `${pct}%\n${value}`; // both
                             },
                             align: 'end',
                             anchor: 'end', // callout-like
@@ -591,7 +595,7 @@
                             clip: false,
                             textStrokeColor: 'white',
                             textStrokeWidth: 3,
-                            font: (ctx) => ({ weight: '600', size: Math.max(10, Math.min(16, 10 + Math.log10(total+1)*2)) })
+                            font: () => ({ weight: '600', size: Math.max(10, Math.min(16, 10 + Math.log10(total+1)*2)) })
                         }
                     }
                 }
@@ -623,10 +627,14 @@
         // === Configuration UX (Super Admin) ===
         function ensureSuperAdminUI(user){
             const isSuper = (user && user.role === 'AuditManager');
+            // Toggle Configuration page/nav
             const cfgPage = document.getElementById('configurationPage');
             if (cfgPage) cfgPage.style.display = isSuper ? 'block' : 'none';
-            const link = document.querySelector('button[onclick="showPage(\'configuration\')"]');
-            if (link) link.style.display = isSuper ? 'block' : 'none';
+            const cfgLink = document.querySelector('button[onclick="showPage(\'configuration\')"]');
+            if (cfgLink) cfgLink.style.display = isSuper ? 'block' : 'none';
+            // Toggle User Management nav link
+            const userMgmtLink = document.getElementById('userManagementLink');
+            if (userMgmtLink) userMgmtLink.style.display = isSuper ? 'block' : 'none';
         }
 
         function renderConfigArrays(cfg){
@@ -656,7 +664,7 @@
             }
             // default landing
             const dl = document.getElementById('defaultLandingSelect');
-            if (dl) { dl.value = (cfg.defaultLanding || 'workpapers'); }
+            if (dl) { dl.value = (cfg.defaultLanding || 'dashboard'); }
         }
 
         function addRiskRating(){ const v = document.getElementById('newRiskRating').value.trim(); if(!v) return; updateConfigOnServer({ addRiskRating:v }); }
@@ -684,13 +692,13 @@
                 // Okabe-Ito colorblind-safe palette mapping
                 const okabeIto = { High:'#E69F00', Medium:'#0072B2', Low:'#009E73', Extreme:'#D55E00' };
                 const colors = labels.map(l => okabeIto[l]);
-                doughnutChart('chartRiskDistribution', labels, data, colors);
+                doughnutChart('chartRiskDistribution', labels, data, colors, 'percent_only');
             })();
 
             const ea = snapshot.executiveAnalytics || { businessUnits: [], totalIssuesPerArea:{}, riskRatingPerArea:{}, highRiskNotImplemented:{}, actionStatusPerArea:{} };
             const units = ea.businessUnits || [];
             const totalIssuesData = units.map(u => ea.totalIssuesPerArea[u] || 0);
-            doughnutChart('chartIssuesPerArea', units, totalIssuesData, ['#1e88e5','#43a047','#fb8c00','#8e24aa','#3949ab','#00acc1','#f4511e','#7cb342','#6d4c41','#5e35b1']);
+            doughnutChart('chartIssuesPerArea', units, totalIssuesData, ['#1e88e5','#43a047','#fb8c00','#8e24aa','#3949ab','#00acc1','#f4511e','#7cb342','#6d4c41','#5e35b1'], 'number_only');
 
             const risks = ['Extreme','High','Medium','Low'];
             const riskColors = { Extreme:'#D55E00', High:'#E69F00', Medium:'#0072B2', Low:'#009E73' }; // Okabe-Ito palette
@@ -700,7 +708,7 @@
             const highRiskNI = units.map(u => ea.highRiskNotImplemented[u] || 0);
             // Use colorblind-safe categorical palette for units (Okabe-Ito)
             const unitPalette = ['#0072B2','#E69F00','#009E73','#D55E00','#CC79A7','#56B4E9','#F0E442','#000000'];
-            doughnutChart('chartHighRiskNotImpl', units, highRiskNI, unitPalette.slice(0, Math.max(1, units.length)));
+            doughnutChart('chartHighRiskNotImpl', units, highRiskNI, unitPalette.slice(0, Math.max(1, units.length)), 'number_only');
 
             const statuses = ['Not Implemented','Implemented','Not Due'];
             const statusColors = { 'Not Implemented':'#e53935', 'Implemented':'#43a047', 'Not Due':'#1e88e5' };
@@ -715,14 +723,14 @@
                     .withFailureHandler(function(err){ console.error('Dashboard load failed', err); showAlert('Failed to load dashboard data', 'danger'); })
                     .getQuantumDashboardData();
                 // fetch user and config for super admin UX
-                google.script.run.withSuccessHandler(function(user){ window.USER = user; ensureSuperAdminUI(user); }).getCurrentUser();
-                google.script.run.withSuccessHandler(function(cfg){ renderConfigArrays(cfg); }).getConfig();
+                google.script.run.withSuccessHandler(function(user){ window.USER = user; ensureSuperAdminUI(user); try{ document.getElementById('userEmail').textContent = user.email || ''; document.getElementById('userRole').textContent = user.role || ''; }catch(e){} }).getCurrentUser();
+                google.script.run.withSuccessHandler(function(cfg){ window.CONFIG = cfg; renderConfigArrays(cfg); }).getConfig();
             } catch (e) {
                 console.warn('google.script.run not available:', e);
             }
         }
 
-        function refreshData() { fetchAndRenderDashboardData(); hydrateTables(); showAlert('Refreshed', 'success'); }
+        function refreshData() { fetchAndRenderDashboardData(); BULK=null; hydrateTables(); showAlert('Refreshed', 'success'); }
 
         function fetchBulk(){
             return new Promise((resolve)=>{
@@ -787,9 +795,18 @@
             const html = `<div style='display:grid;grid-template-columns:160px 1fr;gap:8px;'>${Object.entries(rec).map(([k,v])=>`<div class='text-muted'>${k}</div><div>${String(v)}</div>`).join('')}</div>`;
             showModal(entity+' '+id, html, [{label:'Close', cls:'btn btn-outline', onclick:'closeModal()'}]);
         }
-        function openEntityEdit(entity, id){
+        function openEntityEdit(entity, id, skipEvidenceCheck){
             const rec = (BULK && BULK[entity]||[]).find(r=> String(r.id)===String(id));
             if (!rec) return showAlert('Record not found','danger');
+            // Evidence-required gating for Auditors/Auditees on Issues/Actions
+            const needsEvidence = (entity==='Issues' || entity==='Actions') && window.USER && (USER.role==='Auditor' || USER.role==='Auditee');
+            if (needsEvidence && !skipEvidenceCheck){
+                showAlert('Please attach evidence before editing.', 'warning');
+                window.__afterEvidenceUpload = ()=> openEntityEdit(entity, id, true);
+                const parentType = (entity==='Issues') ? 'Issue' : 'Action';
+                openUploadEvidence({ parentType, parentId: id, lockParent: true });
+                return;
+            }
             const editable = Object.keys(rec).filter(k=> !['id','created_at','updated_at','checksum','drive_url'].includes(k));
             const fields = editable.map(k=>{
                 const ro = (entity==='WorkPapers' && k==='audit_id') ? 'readonly disabled' : '';
@@ -799,7 +816,7 @@
             const form = `<form id='editForm'>${fields}</form>`;
             const save = ()=>{
                 const fd = new FormData(document.getElementById('editForm')); const obj={}; fd.forEach((v,k)=>obj[k]=v);
-                google.script.run.withSuccessHandler(function(res){ showAlert('Saved','success'); closeModal(); BULK=null; hydrateTables(); fetchAndRenderDashboardData(); }).withFailureHandler(function(err){ console.error(err); showAlert('Save failed','danger'); }).updateRow(entity, id, obj);
+                google.script.run.withSuccessHandler(function(res){ showAlert('Saved','success'); closeModal(); BULK=null; hydrateTables(); fetchAndRenderDashboardData(); }).withFailureHandler(function(err){ console.error(err); showAlert(err && err.message ? err.message : 'Save failed','danger'); }).updateEntityWithEvidenceGuard(entity, id, obj);
             };
             showModal('Edit '+entity+' '+id, form, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Save', cls:'btn btn-primary', onclick:'__saveEdit()'}]);
             window.__saveEdit = save;
@@ -858,10 +875,18 @@
                 tb.appendChild(tr);
             });
         }
-        function openUploadEvidence(){
+        function openUploadEvidence(options){
+            options = options || {};
+            const presetType = options.parentType || '';
+            const presetId = options.parentId || '';
+            const lock = !!options.lockParent;
             const body = `<form id='evidenceUploadForm'>
-                <div class='form-group'><label class='form-label'>Parent Type</label><select name='parentType' class='form-select' required><option>Audit</option><option>Issue</option><option>Action</option><option>WorkPaper</option></select></div>
-                <div class='form-group'><label class='form-label'>Parent ID</label><input name='parentId' class='form-control' placeholder='e.g., ISS001' required></div>
+                <div class='form-group'><label class='form-label'>Parent Type</label>
+                    <select name='parentType' class='form-select' required ${lock && presetType ? 'disabled' : ''}>
+                        ${['Audit','Issue','Action','WorkPaper'].map(t=>`<option ${presetType===t?'selected':''}>${t}</option>`).join('')}
+                    </select>
+                </div>
+                <div class='form-group'><label class='form-label'>Parent ID</label><input name='parentId' class='form-control' placeholder='e.g., ISS001' value='${presetId}' ${lock && presetId ? 'readonly' : ''} required></div>
                 <div class='form-group'><label class='form-label'>File</label><input name='file' type='file' class='form-control' required></div>
             </form>`;
             const upload = ()=>{
@@ -873,9 +898,15 @@
                 reader.onload = function(e){
                     const dataUrl = e.target.result;
                     const fileName = file.name; const mimeType = file.type || 'application/octet-stream';
-                    const parentType = fd.get('parentType'); const parentId = fd.get('parentId');
+                    const parentType = (lock && presetType) ? presetType : fd.get('parentType');
+                    const parentId = (lock && presetId) ? presetId : fd.get('parentId');
                     google.script.run.withSuccessHandler(function(res){
-                        if (res && res.success){ showAlert('Evidence uploaded','success'); closeModal(); BULK=null; hydrateTables(); }
+                        if (res && res.success){ 
+                            showAlert('Evidence uploaded','success'); 
+                            closeModal(); 
+                            BULK=null; hydrateTables(); 
+                            if (typeof window.__afterEvidenceUpload === 'function'){ try{ window.__afterEvidenceUpload(); } finally { window.__afterEvidenceUpload = null; } }
+                        }
                         else { showAlert(res.error||'Upload failed','danger'); }
                     }).withFailureHandler(function(err){ console.error(err); showAlert('Upload failed','danger'); }).uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, dataUrl);
                 };
@@ -884,6 +915,37 @@
             showModal('Upload Evidence', body, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Upload', cls:'btn btn-primary', onclick:'__uploadEvidence()'}]);
             window.__uploadEvidence = upload;
         }
+        function openCreateAudit(){
+            if (!window.USER || window.USER.role !== 'AuditManager'){
+                return showAlert('Only Audit Managers can create audits', 'danger');
+            }
+            const cfg = window.CONFIG || {};
+            const affiliates = (cfg.affiliates || []).map(a=>`<option>${a}</option>`).join('');
+            const businessUnits = (cfg.businessUnits || []).map(b=>`<option>${b}</option>`).join('');
+            const years = (()=>{ const y=new Date().getFullYear(); return [y-1,y,y+1].map(v=>`<option ${v===y?'selected':''}>${v}</option>`).join(''); })();
+            const body = `<form id='createAuditForm'>
+                <div class='form-group'><label class='form-label'>Title</label><input name='title' class='form-control' required></div>
+                <div class='form-group'><label class='form-label'>Year</label><select name='year' class='form-select'>${years}</select></div>
+                <div class='form-group'><label class='form-label'>Affiliate</label>${affiliates?`<select name='affiliate' class='form-select'>${affiliates}</select>`:`<input name='affiliate' class='form-control'>`}</div>
+                <div class='form-group'><label class='form-label'>Business Unit</label>${businessUnits?`<select name='business_unit' class='form-select'>${businessUnits}</select>`:`<input name='business_unit' class='form-control'>`}</div>
+                <div class='form-group'><label class='form-label'>Scope</label><input name='scope' class='form-control'></div>
+                <div class='form-group'><label class='form-label'>Start Date</label><input type='date' name='start_date' class='form-control'></div>
+                <div class='form-group'><label class='form-label'>End Date</label><input type='date' name='end_date' class='form-control'></div>
+            </form>`;
+            const create = ()=>{
+                const fd = new FormData(document.getElementById('createAuditForm')); const payload={}; fd.forEach((v,k)=>payload[k]=v);
+                google.script.run.withSuccessHandler(function(res){
+                    if (res && res.id){ showAlert('Audit created','success'); closeModal(); BULK=null; hydrateTables(); fetchAndRenderDashboardData(); }
+                    else { showAlert(res && res.error ? res.error : 'Create failed', 'danger'); }
+                }).withFailureHandler(function(err){ console.error(err); showAlert(err && err.message ? err.message : 'Create failed','danger'); }).createAudit(payload);
+            };
+            showModal('New Audit', body, [
+                {label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},
+                {label:'Create', cls:'btn btn-primary', onclick:'__createAudit()'}
+            ]);
+            window.__createAudit = create;
+        }
+
         function openCreateWorkPaper(){
             // Build audit options from BULK.Audits
             const audits = (BULK && BULK.Audits) || [];
@@ -917,13 +979,13 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() { 
-            // Resolve default landing from Settings (fallback to workpapers)
+            // Resolve default landing from Settings (fallback to dashboard)
             try {
                 google.script.run.withSuccessHandler(function(cfg){
-                    const page = (cfg && cfg.defaultLanding) ? String(cfg.defaultLanding) : 'workpapers';
+                    const page = (cfg && cfg.defaultLanding) ? String(cfg.defaultLanding) : 'dashboard';
                     showPage(page);
                 }).getConfig();
-            } catch(e){ try { showPage('workpapers'); } catch(err){} }
+            } catch(e){ try { showPage('dashboard'); } catch(err){} }
             fetchAndRenderDashboardData(); 
             hydrateTables(); 
         });

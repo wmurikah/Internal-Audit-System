@@ -94,6 +94,11 @@ function updateConfig(newConfig) {
       updated_by: user.email,
       config_keys: Object.keys(validatedConfig)
     });
+
+    // Re-apply standard validations across sheets after config changes
+    try { applyStandardValidations(); } catch (e) { Logger.log('applyStandardValidations after updateConfig failed: ' + e); }
+    // Optionally schedule snapshot rebuild to reflect changes without blocking UI
+    try { if (typeof scheduleQuantumRebuild === 'function') scheduleQuantumRebuild(); } catch (e) {}
     
     return { success: true, message: 'Configuration updated successfully' };
     
@@ -156,7 +161,7 @@ function getDefaultConfig() {
     businessUnits: ['Fleet Logistics Kenya', 'Finance', 'Operations', 'HR', 'IT', 'Compliance', 'Legal', 'Procurement'],
     affiliates: ['Group', 'Kenya', 'Uganda', 'Tanzania', 'Rwanda', 'South Sudan', 'DRC'],
     riskCategories: ['Operational', 'Financial', 'Compliance', 'Strategic', 'Reputational', 'Technology'],
-    defaultLanding: 'workpapers',
+    defaultLanding: 'dashboard',
     OPENAI_API_KEY: '',
     SYSTEM_EMAIL: 'audit@company.com',
     EMAIL_NOTIFICATIONS: true,
@@ -444,5 +449,55 @@ function reviewWorkPaper(id, updates){
   updates.reviewed_at = new Date();
   updates.reviewer_email = user.email;
   return updateRow('WorkPapers', id, updates);
+}
+
+/** Audits: create (role-enforced) **/
+function createAudit(payload){
+  const user = getCurrentUser();
+  // Super Admin per requirements: AuditManager only
+  if (!user || user.role !== 'AuditManager'){
+    throw new Error('Only Audit Managers can create audits');
+  }
+  if (!payload) payload = {};
+  // Basic validation
+  if (!payload.title) throw new Error('Title is required');
+  // Defaults and normalization
+  payload.year = payload.year || (new Date().getFullYear());
+  payload.status = payload.status || 'Planning';
+  payload.manager_email = payload.manager_email || user.email;
+  payload.created_by = user.email;
+  payload.created_at = new Date();
+  // Add row
+  const rec = addRow('Audits', payload);
+  // Log and return
+  logAction('Audits', rec.id, 'create', {}, rec);
+  try { if (typeof scheduleQuantumRebuild === 'function') scheduleQuantumRebuild(); } catch (e) {}
+  return { success:true, id: rec.id, record: rec };
+}
+
+/** Guarded update for Issues/Actions requiring evidence for Auditor/Auditee **/
+function updateEntityWithEvidenceGuard(entity, id, changes){
+  const user = getCurrentUser();
+  const entityName = String(entity);
+  const lowerRole = (user && user.role) ? user.role : 'Guest';
+  const requireEvidence = (function(){ try { const cfg = getConfig(); return !!cfg.REQUIRE_EVIDENCE; } catch(e){ return true; } })();
+
+  const isIssueOrAction = (entityName === 'Issues' || entityName === 'Actions');
+  const isRestrictedRole = (lowerRole === 'Auditor' || lowerRole === 'Auditee');
+
+  if (requireEvidence && isIssueOrAction && isRestrictedRole){
+    // Check Evidence sheet for at least one record matching this parent
+    const parentType = (entityName === 'Issues') ? 'Issue' : 'Action';
+    const evidence = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Evidence') : getSheetData('Evidence');
+    const hasEvidence = evidence.some(function(ev){ return String(ev.parent_type) === parentType && String(ev.parent_id) === String(id); });
+    if (!hasEvidence){
+      throw new Error('Evidence is required before editing this record. Please upload evidence and try again.');
+    }
+  }
+
+  // Proceed with update
+  const result = updateRow(entityName, id, changes);
+  try { if (typeof scheduleQuantumRebuild === 'function') scheduleQuantumRebuild(); } catch (e) {}
+  return result;
 }
 
