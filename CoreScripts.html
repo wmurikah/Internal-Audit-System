@@ -531,6 +531,12 @@
 
         function showPage(pageName) {
             const pages = ['dashboard', 'audits', 'issues', 'actions', 'workpapers', 'reports', 'configuration', 'users'];
+            // Enforce role UI restrictions: SeniorManagement and Board must not access Work Papers
+            const role = (window.USER && window.USER.role) || '';
+            if (pageName === 'workpapers' && (role === 'SeniorManagement' || role === 'Board')) {
+                pageName = 'dashboard';
+                showAlert('Work Papers are not available for your role.', 'warning');
+            }
             pages.forEach(page => {
                 const element = document.getElementById(page + 'Page');
                 if (element) element.style.display = 'none';
@@ -627,6 +633,12 @@
             if (userMgmtLink) userMgmtLink.style.display = isSuper ? 'block' : 'none';
         }
 
+        function enforceRoleUiRestrictions(user){
+            const role = (user && user.role) || '';
+            const wpLink = document.querySelector(".sidebar-nav button[onclick=\"showPage('workpapers')\"]");
+            if (wpLink && (role === 'SeniorManagement' || role === 'Board')) { wpLink.style.display = 'none'; }
+          }
+
         function renderConfigArrays(cfg){
             // riskRatings
             const rr = document.getElementById('configRiskRatings');
@@ -682,7 +694,8 @@
                 // Okabe-Ito colorblind-safe palette mapping
                 const okabeIto = { High:'#E69F00', Medium:'#0072B2', Low:'#009E73', Extreme:'#D55E00' };
                 const colors = labels.map(l => okabeIto[l]);
-                doughnutChart('chartRiskDistribution', labels, data, colors, 'percent_only');
+                // Per spec: show percentage + count
+                doughnutChart('chartRiskDistribution', labels, data, colors, 'both');
             })();
 
             const ea = snapshot.executiveAnalytics || { businessUnits: [], totalIssuesPerArea:{}, riskRatingPerArea:{}, highRiskNotImplemented:{}, actionStatusPerArea:{} };
@@ -713,7 +726,7 @@
                     .withFailureHandler(function(err){ console.error('Dashboard load failed', err); showAlert('Failed to load dashboard data', 'danger'); })
                     .getQuantumDashboardData();
                 // fetch user and config for super admin UX
-                google.script.run.withSuccessHandler(function(user){ window.USER = user; ensureSuperAdminUI(user); try{ document.getElementById('userEmail').textContent = user.email || ''; document.getElementById('userRole').textContent = user.role || ''; }catch(e){} }).getCurrentUser();
+                google.script.run.withSuccessHandler(function(user){ window.USER = user; ensureSuperAdminUI(user); enforceRoleUiRestrictions(user); try{ document.getElementById('userEmail').textContent = user.email || ''; document.getElementById('userRole').textContent = user.role || ''; }catch(e){} }).getCurrentUser();
                 google.script.run.withSuccessHandler(function(cfg){ window.CONFIG = cfg; renderConfigArrays(cfg); /* map default landing if set to removed module */ if (cfg.defaultLanding === 'evidence'){ try{ setDefaultLanding('workpapers'); }catch(e){} } }).getConfig();
             } catch (e) {
                 console.warn('google.script.run not available:', e);

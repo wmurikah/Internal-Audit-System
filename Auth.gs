@@ -87,35 +87,33 @@ function getCurrentUser() {
  * Defines comprehensive role-based permissions
  */
 function getPermissions(role) {
+  // Aligned with approved role matrix
   const rolePermissions = {
     'AuditManager': [
-      'create', 'read', 'update', 'delete', 'approve', 'reject', 
-      'final_approval', 'manage_config', 'manage_users', 'view_logs',
-      'upload_evidence', 'review_evidence', 'approve_evidence',
-      'assign_actions', 'close_issues', 'reopen_items', 'export_reports',
-      'view_confidential', 'ai_assist', 'override_workflow', 'create_workpapers',
-      'review_workpapers', 'manage_system'
+      'create','read','update','delete','approve','reject',
+      'final_approval','manage_config','manage_users','view_logs',
+      'upload_evidence','review_evidence','approve_evidence',
+      'assign_actions','close_issues','reopen_items','export_reports',
+      'view_confidential','ai_assist','override_workflow','create_workpapers',
+      'review_workpapers','manage_system'
     ],
     'Auditor': [
-      'create', 'read', 'update', 'upload_evidence', 'review_evidence',
-      'approve_evidence', 'submit_for_review', 'ai_assist', 'create_workpapers',
-      'view_own_audits'
+      'create','read','update','upload_evidence','review_evidence',
+      'submit_for_review','ai_assist','create_workpapers','view_own_audits'
     ],
     'SeniorManagement': [
-      'read', 'approve', 'reject', 'final_approval', 'export_reports',
-      'ai_assist', 'manage_users', 'approve_high_risk', 'view_executive_reports'
+      // Read-only access across Actions, Issues, Risk Register; no work papers
+      'read','view_executive_reports','export_reports'
     ],
     'Board': [
-      'read', 'final_approval', 'export_reports', 'view_governance', 
-      'ai_assist', 'view_board_reports'
+      // Read-only dashboards and finalized reports
+      'read','view_executive_reports','view_board_reports'
     ],
     'Auditee': [
-      'read', 'update_own', 'upload_evidence', 'submit_for_review',
-      'view_assigned_actions'
+      'read','update_own','upload_evidence','submit_for_review','view_assigned_actions'
     ],
     'Guest': ['read']
   };
-  
   return rolePermissions[role] || rolePermissions['Guest'];
 }
 
