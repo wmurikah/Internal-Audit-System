@@ -225,8 +225,16 @@ function managerReviewEvidence(evidenceId, decision, comment){
     var status = (String(decision).toLowerCase()==='accept')?'ManagerAccepted':'ManagerRejected';
     var changes = { manager_email: user.email, manager_decision: decision, manager_review_comment: comment||'', manager_reviewed_at: new Date(), status: status };
     updateRow('Evidence', evidenceId, changes);
-    // Notify uploader on rejection
-    try{ if (status==='ManagerRejected' && rec.uploader_email){ MailApp.sendEmail(rec.uploader_email, 'Evidence Rejected by Manager', 'Your evidence '+rec.file_name+' was rejected by Audit Manager. Reason: '+(comment||'No reason provided')); } }catch(e){}
+    // Notify uploader on rejection with deep link
+    try{ 
+      if (status==='ManagerRejected' && rec.uploader_email){ 
+        var appUrl = ScriptApp.getService().getUrl();
+        var parent = (rec.parent_type||'')+ ' ' + (rec.parent_id||'');
+        var body = 'Your evidence '+rec.file_name+' for '+parent+' was rejected by Audit Manager. Reason: '+(comment||'No reason provided')+"\n\n"+
+                  'Open the system: '+appUrl;
+        MailApp.sendEmail(rec.uploader_email, 'Evidence Rejected by Manager', body);
+      } 
+    }catch(e){}
     return { success:true };
   }catch(e){ Logger.log('managerReviewEvidence error: '+e); return { success:false, error:e.message }; }
 }
