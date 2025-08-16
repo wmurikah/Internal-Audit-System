@@ -290,3 +290,157 @@ function getBulkDataUltraFast() {
   }
 }
 
+/**
+ * === SIMPLE DATA ACCESS LAYER (Used across modules) ===
+ */
+function getSheetData(sheetName){
+  return (typeof getSheetDataDirect === 'function') ? getSheetDataDirect(sheetName) : [];
+}
+
+function getRowById(sheetName, id){
+  const rows = getSheetData(sheetName);
+  return rows.find(r => r.id === id) || null;
+}
+
+function addRow(sheetName, obj){
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) throw new Error('Sheet '+sheetName+' not found');
+  const headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+  // ID generation per sheet prefix
+  if (!obj.id){
+    const prefix = {Users:'USR', Audits:'AUD', Issues:'ISS', Actions:'ACT', WorkPapers:'WP', Evidence:'EVD'}[sheetName] || 'ID';
+    const n = Math.max(0, sh.getLastRow()-1) + 1;
+    obj.id = prefix + ('000' + n).slice(-3);
+  }
+  const row = headers.map(h => (obj[h] instanceof Date) ? obj[h] : (obj.hasOwnProperty(h) ? obj[h] : ''));
+  sh.appendRow(row);
+  logAction(sheetName, obj.id, 'create', {}, obj);
+  return obj;
+}
+
+function updateRow(sheetName, id, changes){
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) throw new Error('Sheet '+sheetName+' not found');
+  const data = sh.getDataRange().getValues();
+  const headers = data[0];
+  const idCol = headers.indexOf('id');
+  if (idCol === -1) throw new Error('No id column');
+  for (let r=1; r<data.length; r++){
+    if (String(data[r][idCol]) === String(id)){
+      const before = {};
+      headers.forEach((h,i)=> before[h] = data[r][i]);
+      Object.entries(changes||{}).forEach(([k,v])=>{
+        const c = headers.indexOf(k);
+        if (c>-1) sh.getRange(r+1, c+1).setValue(v);
+      });
+      const after = {...before, ...changes};
+      logAction(sheetName, id, 'update', before, after);
+      return {success:true, id, after};
+    }
+  }
+  throw new Error('Row not found: '+sheetName+'#'+id);
+}
+
+function logAction(entity, entity_id, action, before_json, after_json){
+  try{
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sh = ss.getSheetByName('Logs');
+    if (!sh){ sh = ss.insertSheet('Logs'); sh.getRange(1,1,1,7).setValues([["timestamp","user_email","entity","entity_id","action","before_json","after_json"]]); }
+    const user = (Session.getActiveUser() && Session.getActiveUser().getEmail()) || 'system@local';
+    sh.appendRow([new Date(), user, entity, entity_id, action, JSON.stringify(before_json||{}), JSON.stringify(after_json||{})]);
+    return true;
+  }catch(e){ Logger.log('logAction error: '+e); return false; }
+}
+
+/**
+ * Super Admin: centrally define and apply validation sets based on Settings values.
+ */
+function applyStandardValidations(){
+  try{
+    const cfg = getConfig();
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    // Audits.status (G)
+    const audits = ss.getSheetByName('Audits');
+    if (audits){
+      const rule = SpreadsheetApp.newDataValidation().requireValueInList(cfg.auditStatuses, true).setAllowInvalid(false).build();
+      audits.getRange('G2:G').setDataValidation(rule);
+    }
+    // Issues.risk_rating (F) and Issues.status (J)
+    const issues = ss.getSheetByName('Issues');
+    if (issues){
+      issues.getRange('F2:F').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(cfg.riskRatings, true).setAllowInvalid(false).build());
+      issues.getRange('J2:J').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(cfg.issueStatuses, true).setAllowInvalid(false).build());
+    }
+    // Actions.status (F)
+    const actions = ss.getSheetByName('Actions');
+    if (actions){
+      actions.getRange('F2:F').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(cfg.actionStatuses, true).setAllowInvalid(false).build());
+    }
+    // WorkPapers.status (O)
+    const wps = ss.getSheetByName('WorkPapers');
+    if (wps){
+      wps.getRange('O2:O').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(cfg.workPaperStatuses, true).setAllowInvalid(false).build());
+    }
+    return {success:true};
+  }catch(e){ Logger.log('applyStandardValidations error: '+e); return {success:false, error:e.message}; }
+}
+
+// Call validations after defaults/updates
+(function(){ try{ if (typeof ScriptApp !== 'undefined') applyStandardValidations(); }catch(e){} })();
+
+/** Users management with invite **/
+function createOrUpdateUser(user){
+  const current = getCurrentUser();
+  if (!current.permissions || !current.permissions.includes('manage_users')){
+    throw new Error('Insufficient permissions');
+  }
+  if (!user || !user.email) throw new Error('Email is required');
+  const existing = getSheetData('Users').find(u => (u.email||'').toLowerCase() === user.email.toLowerCase());
+  if (existing){
+    return updateRow('Users', existing.id, user);
+  } else {
+    const rec = addRow('Users', { id:'', email:user.email, name: user.name || user.email.split('@')[0], role: user.role || 'Auditee', org_unit: user.org_unit || 'Unknown', active: user.active!==false, created_at: new Date(), last_login: '' });
+    try{ sendUserInviteEmail(rec.email); }catch(e){ Logger.log('invite email error: '+e); }
+    return {success:true, id: rec.id, record: rec};
+  }
+}
+
+function sendUserInviteEmail(email){
+  try{
+    const appUrl = ScriptApp.getService().getUrl();
+    const subject = 'Audit System Invitation';
+    const body = 'You have been added to the Audit Management System. Click the link to sign in: '+appUrl;
+    MailApp.sendEmail(email, subject, body);
+    return {success:true};
+  }catch(e){ Logger.log('sendUserInviteEmail error: '+e); return {success:false, error:e.message}; }
+}
+
+/** WorkPapers APIs with workflow **/
+function listWorkPapers(){
+  const user = getCurrentUser();
+  const wps = getSheetData('WorkPapers');
+  if (user.role === 'Auditor'){ return wps; }
+  if (user.role === 'Auditee'){ return wps.filter(w=> (w.created_by||'').toLowerCase() === user.email.toLowerCase()); }
+  return wps;
+}
+
+function createWorkPaper(payload){
+  const user = getCurrentUser();
+  if (!user.permissions.includes('create_workpapers')) throw new Error('No permission');
+  if (!payload || !payload.audit_id) throw new Error('audit_id required');
+  payload.created_by = user.email;
+  payload.created_at = new Date();
+  payload.status = 'Draft';
+  return addRow('WorkPapers', payload);
+}
+
+function reviewWorkPaper(id, updates){
+  const user = getCurrentUser();
+  if (user.role !== 'AuditManager') throw new Error('Only AuditManager can review');
+  updates.reviewed_at = new Date();
+  updates.reviewer_email = user.email;
+  return updateRow('WorkPapers', id, updates);
+}
+
