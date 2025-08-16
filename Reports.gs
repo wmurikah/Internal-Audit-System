@@ -1,6 +1,7 @@
 /**
  * Reports and PDF Exports (Apps Script)
  * - Server-side PDF generation for Work Papers (single and bulk)
+ * - Board/Senior Management executive summaries (aggregated metrics)
  * - Uses HtmlService templating to build HTML and converts to PDF via Blob.getAs
  * - Files are saved to the Evidence folder unless a dedicated Reports folder is configured later
  */
@@ -113,4 +114,70 @@ function buildWorkPaperPdfHtml_(wp) {
     '<div class="footer">Generated on '+(new Date()).toISOString()+' by Audit Management System</div>'+
     '</body></html>';
   return html;
+}
+
+/** Executive summary for Board/SeniorManagement */
+function getExecutiveSummary(){
+  try{
+    const user = getCurrentUser();
+    if (!user || !user.authenticated) throw new Error('Not authenticated');
+    // No WorkPapers exposure here; aggregate from Audits, Issues, Actions, RiskRegister
+    const audits = (typeof getSheetDataDirect==='function')? getSheetDataDirect('Audits') : [];
+    const issues = (typeof getSheetDataDirect==='function')? getSheetDataDirect('Issues') : [];
+    const actions = (typeof getSheetDataDirect==='function')? getSheetDataDirect('Actions') : [];
+    const risks = (typeof getSheetDataDirect==='function')? getSheetDataDirect('RiskRegister') : [];
+
+    const activeAudits = audits.filter(a=> a.status && !['Completed','Closed'].includes(String(a.status))).length;
+    const riskDist = { Extreme:0, High:0, Medium:0, Low:0 };
+    issues.forEach(i=>{ if (riskDist.hasOwnProperty(i.risk_rating)) riskDist[i.risk_rating]++; });
+    const highRiskIssues = issues.filter(i=> ['Extreme','High'].includes(i.risk_rating)).length;
+    const completedActions = actions.filter(a=> a.status==='Completed').length;
+    const openIssues = issues.filter(i=> i.status && !['Resolved','Closed'].includes(String(i.status))).length;
+
+    // Trend approximation: last 3 months issue creation
+    const now = new Date(); const byMonth = {};
+    for (let k=0;k<3;k++){ const d=new Date(now.getFullYear(), now.getMonth()-k, 1); const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); byMonth[key]=0; }
+    issues.forEach(i=>{ try{ const d=new Date(i.created_at); const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); if (byMonth.hasOwnProperty(key)) byMonth[key]++; }catch(e){} });
+
+    return { success:true, summary:{ activeAudits, openIssues, completedActions, highRiskIssues, riskDistribution: riskDist, issueTrends: byMonth, totalRisks: risks.length } };
+  }catch(e){ Logger.log('getExecutiveSummary error: '+e); return { success:false, error:e.message }; }
+}
+
+/** SeniorManagement/Board friendly HTML summary */
+function buildExecutiveSummaryHtml(){
+  try{
+    const res = getExecutiveSummary(); if (!res || !res.success) throw new Error(res && res.error ? res.error : 'Failed summary');
+    const s = res.summary || {};
+    const esc = function(x){ return String(x==null?'':x).replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]); }); };
+    const rows = Object.entries(s.riskDistribution||{}).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+    const trends = Object.entries(s.issueTrends||{}).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+    const html = `<html><head><meta charset='UTF-8'><title>Executive Summary</title><style>body{font-family:Arial;margin:24px;color:#111;}h1{margin:0 0 8px}h2{margin:16px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px;color:#1a237e;}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px;text-align:left}</style></head><body>
+      <h1>Executive Summary</h1>
+      <div>Generated on ${esc((new Date()).toISOString())}</div>
+      <h2>Key Metrics</h2>
+      <table><tbody>
+        <tr><td>Active Audits</td><td>${esc(s.activeAudits)}</td></tr>
+        <tr><td>Open Issues</td><td>${esc(s.openIssues)}</td></tr>
+        <tr><td>Completed Actions</td><td>${esc(s.completedActions)}</td></tr>
+        <tr><td>High-Risk Issues</td><td>${esc(s.highRiskIssues)}</td></tr>
+        <tr><td>Total Risks (Register)</td><td>${esc(s.totalRisks)}</td></tr>
+      </tbody></table>
+      <h2>Risk Distribution</h2>
+      <table><thead><tr><th>Rating</th><th>Count</th></tr></thead><tbody>${rows}</tbody></table>
+      <h2>Issue Trends (Last 3 Months)</h2>
+      <table><thead><tr><th>Month</th><th>New Issues</th></tr></thead><tbody>${trends}</tbody></table>
+    </body></html>`;
+    return { success:true, html };
+  }catch(e){ Logger.log('buildExecutiveSummaryHtml error: '+e); return { success:false, error:e.message }; }
+}
+
+/** Export Executive Summary to PDF */
+function exportExecutiveSummaryPDF(){
+  try{
+    const r = buildExecutiveSummaryHtml(); if (!r || !r.success) throw new Error(r && r.error ? r.error : 'Failed to build summary');
+    const blob = Utilities.newBlob(r.html, 'text/html', 'ExecutiveSummary.html').getAs('application/pdf');
+    const file = DriveApp.createFile(blob).setName('Executive_Summary.pdf');
+    try{ logAction('Reports','exec_summary','export_pdf',{}, {fileId:file.getId(), url:file.getUrl()}); }catch(e){}
+    return { success:true, url: file.getUrl(), fileId: file.getId() };
+  }catch(e){ Logger.log('exportExecutiveSummaryPDF error: '+e); return { success:false, error:e.message }; }
 }
