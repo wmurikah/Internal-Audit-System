@@ -19,6 +19,16 @@ function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base
     if (!parentType || !parentId) throw new Error('Parent type and id are required');
     if (!fileName || !mimeType || !base64Data) throw new Error('File payload missing');
 
+    // Enforce safe MIME types and extensions
+    var allowed = ['application/pdf','image/png','image/jpeg','image/jpg','image/gif','image/webp','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    if (allowed.indexOf(String(mimeType).toLowerCase()) === -1) {
+      throw new Error('File type not allowed. Allowed: PDF, PNG/JPEG/GIF/WEBP, XLSX');
+    }
+    var okExt = /(\.pdf|\.png|\.jpe?g|\.gif|\.webp|\.xlsx)$/i.test(String(fileName||''));
+    if (!okExt) {
+      throw new Error('File extension not allowed. Allowed: .pdf, .png, .jpg, .jpeg, .gif, .webp, .xlsx');
+    }
+
     // Extract base64 payload if prefixed with data URL
     var payload = base64Data;
     var commaIdx = base64Data.indexOf(',');
@@ -39,7 +49,10 @@ function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base
     if (sizeMb > maxMb) throw new Error('File exceeds max size of ' + maxMb + ' MB');
 
     var blob = Utilities.newBlob(bytes, mimeType, fileName);
-    var folder = DriveApp.getFolderById(EVIDENCE_FOLDER_ID);
+    // Read evidence folder from Settings if available; fallback to constant
+    var cfg2; try { cfg2 = getConfig(); } catch (e) {}
+    var folderId = (cfg2 && cfg2.EVIDENCE_FOLDER_ID) ? cfg2.EVIDENCE_FOLDER_ID : EVIDENCE_FOLDER_ID;
+    var folder = DriveApp.getFolderById(folderId);
     var file = folder.createFile(blob);
 
     // Compute checksum (MD5)

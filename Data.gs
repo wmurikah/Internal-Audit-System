@@ -168,7 +168,8 @@ function getDefaultConfig() {
     ALLOWED_SIGNIN_DOMAIN: 'hasspetroleum.com',
     AUTO_ASSIGN_ACTIONS: false,
     REQUIRE_EVIDENCE: true,
-    MAX_FILE_SIZE_MB: 10
+    MAX_FILE_SIZE_MB: 10,
+    EVIDENCE_FOLDER_ID: ''
   };
 }
 
@@ -235,7 +236,8 @@ function getConfigDescription(key) {
     EMAIL_NOTIFICATIONS: 'Enable/disable email notifications',
     AUTO_ASSIGN_ACTIONS: 'Automatically assign actions to issue owners',
     REQUIRE_EVIDENCE: 'Require evidence upload for issue resolution',
-    MAX_FILE_SIZE_MB: 'Maximum file size for evidence uploads (MB)'
+    MAX_FILE_SIZE_MB: 'Maximum file size for evidence uploads (MB)',
+    EVIDENCE_FOLDER_ID: 'Drive folder ID where evidence files are stored'
   };
   
   return descriptions[key] || 'System configuration parameter';
@@ -259,7 +261,7 @@ function getBulkDataUltraFast() {
         const sheet = ss.getSheetByName(sheetName);
         if (sheet && sheet.getLastRow() > 1) {
           // SeniorManagement visibility rules
-          if (user && user.role === 'SeniorManagement' && sheetName === 'WorkPapers') {
+          if (user && (user.role === 'SeniorManagement' || user.role === 'Board') && sheetName === 'WorkPapers') {
             bulkData[sheetName] = [];
             return;
           }
@@ -467,7 +469,7 @@ function listWorkPapers(){
   const user = getCurrentUser();
   const wps = getSheetData('WorkPapers');
   // Enforcement: SeniorManagement must never see Work Papers (UI or API)
-  if (user.role === 'SeniorManagement') { return []; }
+  if (user.role === 'SeniorManagement' || user.role === 'Board') { return []; }
   if (user.role === 'Auditor'){ return wps; }
   if (user.role === 'Auditee'){ return wps.filter(w=> (w.created_by||'').toLowerCase() === user.email.toLowerCase()); }
   return wps;
