@@ -292,6 +292,9 @@
     overflow: hidden;
     box-shadow: var(--shadow-light);
     border: 1px solid var(--border-color);
+    /* HCI: Prevent infinite stretching, enable quick scan */
+    max-height: 360px;
+    overflow: auto;
   }
 
   .table {
@@ -564,6 +567,7 @@
     box-shadow: var(--shadow-light);
     border: 1px solid var(--border-color);
     margin-bottom: 24px;
+    align-self: start; /* Prevent excessive vertical stretching in grid */
   }
 
   .chart-title {
@@ -571,6 +575,11 @@
     font-weight: 600;
     margin-bottom: 16px;
     color: var(--text-dark);
+  }
+  /* HCI: Maintain manageable canvas height for scan-ability */
+  .card-body canvas,
+  .chart-container canvas {
+    max-height: 280px;
   }
 
   /* REPORT CARDS */
