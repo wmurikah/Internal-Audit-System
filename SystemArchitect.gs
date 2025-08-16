@@ -989,8 +989,8 @@ function getDashboardDataUltraFast() {
         const data = JSON.parse(snapshot);
         Logger.log(`⚡ Ultra-fast dashboard served from cache`);
         
-        // Apply current user context
-        const user = getCurrentUserUltra();
+        // Apply current user context (canonical)
+        const user = getCurrentUser();
         data.userRole = user.role;
         data.userPermissions = user.permissions;
         
@@ -1018,7 +1018,7 @@ function getDashboardDataUltraFast() {
         // Cache for immediate access and serve
         cache.put('DASHBOARD_ULTRA_V1', JSON.stringify(data), 300);
         
-        const user = getCurrentUserUltra();
+        const user = getCurrentUser();
         data.userRole = user.role;
         data.userPermissions = user.permissions;
         
@@ -1244,7 +1244,7 @@ function scheduleSnapshotRebuild() {
 }
 
 function getMinimalDashboard() {
-  const user = getCurrentUserUltra();
+  const user = getCurrentUser();
   return {
     activeAudits: 0,
     openIssues: 0,

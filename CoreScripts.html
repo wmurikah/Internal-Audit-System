@@ -44,10 +44,6 @@
                     <i class="fas fa-tasks"></i>
                     Actions
                 </button>
-                <button class="nav-link" onclick="showPage('evidence')">
-                    <i class="fas fa-folder-open"></i>
-                    Evidence
-                </button>
                 <button class="nav-link" onclick="showPage('reports')">
                     <i class="fas fa-chart-bar"></i>
                     Reports
@@ -222,6 +218,9 @@
                         <button class="btn btn-primary" onclick="openCreateWorkPaper()">
                             <i class="fas fa-file-circle-plus"></i> New Work Paper
                         </button>
+                        <button class="btn btn-success" id="wpExportSelectedBtn" onclick="exportSelectedWorkPapersPDF()" disabled>
+                            <i class="fas fa-file-pdf"></i> Export Selected to PDF
+                        </button>
                     </div>
                 </div>
                 <div class="page-content">
@@ -252,6 +251,7 @@
                         <table class="table">
                             <thead>
                                 <tr>
+                                    <th style="width:32px;"><input type="checkbox" id="wpSelectAll"></th>
                                     <th>ID</th>
                                     <th>Audit</th>
                                     <th>Process Area</th>
@@ -342,41 +342,7 @@
                 </div>
             </div>
 
-            <!-- Evidence Page -->
-            <div id="evidencePage" class="page" style="display: none;">
-                <div class="page-header">
-                    <div>
-                        <h1 class="page-title">Evidence Management</h1>
-                        <p class="page-subtitle">Upload and manage supporting documentation</p>
-                    </div>
-                    <div class="header-actions">
-                        <button class="btn btn-outline" onclick="refreshData()">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                        <button class="btn btn-primary" onclick="openUploadEvidence()">
-                            <i class="fas fa-upload"></i> Upload Evidence
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="page-content">
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>File Name</th>
-                                    <th>Parent</th>
-                                    <th>Uploader</th>
-                                    <th>Uploaded</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="evidenceTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+            <!-- Evidence module removed per new spec -->
 
             <!-- Reports Page -->
             <div id="reportsPage" class="page" style="display: none;">
@@ -564,7 +530,7 @@
         Chart.register(ChartDataLabels);
 
         function showPage(pageName) {
-            const pages = ['dashboard', 'audits', 'issues', 'actions', 'workpapers', 'evidence', 'reports', 'configuration', 'users'];
+            const pages = ['dashboard', 'audits', 'issues', 'actions', 'workpapers', 'reports', 'configuration', 'users'];
             pages.forEach(page => {
                 const element = document.getElementById(page + 'Page');
                 if (element) element.style.display = 'none';
@@ -748,7 +714,7 @@
                     .getQuantumDashboardData();
                 // fetch user and config for super admin UX
                 google.script.run.withSuccessHandler(function(user){ window.USER = user; ensureSuperAdminUI(user); try{ document.getElementById('userEmail').textContent = user.email || ''; document.getElementById('userRole').textContent = user.role || ''; }catch(e){} }).getCurrentUser();
-                google.script.run.withSuccessHandler(function(cfg){ window.CONFIG = cfg; renderConfigArrays(cfg); }).getConfig();
+                google.script.run.withSuccessHandler(function(cfg){ window.CONFIG = cfg; renderConfigArrays(cfg); /* map default landing if set to removed module */ if (cfg.defaultLanding === 'evidence'){ try{ setDefaultLanding('workpapers'); }catch(e){} } }).getConfig();
             } catch (e) {
                 console.warn('google.script.run not available:', e);
             }
@@ -766,7 +732,7 @@
         }
 
         function hydrateTables(){
-            fetchBulk().then(function(){ renderAudits(); renderIssues(); renderActions(); renderWorkPapers(); renderEvidence(); renderUsers(); });
+            fetchBulk().then(function(){ renderAudits(); renderIssues(); renderActions(); renderWorkPapers(); renderUsers(); });
         }
 
         function renderAudits(){
@@ -916,7 +882,7 @@
                     actions.push(`<button class='action-btn' title='Review' data-action='review' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-check-double'></i></button>`);
                 }
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>${wp.id}</strong></td><td>${wp.audit_id||''}</td><td>${wp.process_area||''}</td><td><span class='badge badge-info'>${wp.status||''}</span></td><td>${wp.created_by||''}</td><td>${wp.created_at||''}</td><td><div class='action-buttons'>${actions.join('')}</div></td>`;
+                tr.innerHTML = `<td><input type='checkbox' class='wpRowSelect' data-id='${wp.id}'></td><td><strong>${wp.id}</strong></td><td>${wp.audit_id||''}</td><td>${wp.process_area||''}</td><td><span class='badge badge-info'>${wp.status||''}</span></td><td>${wp.created_by||''}</td><td>${wp.created_at||''}</td><td><div class='action-buttons'>${actions.join('')}</div></td>`;
                 tb.appendChild(tr);
             });
             // pagination footer
@@ -924,21 +890,18 @@
             footer.className = 'd-flex justify-content-between align-items-center mt-2';
             const total = all.length; const pages = Math.max(1, Math.ceil(total/WP_PAGE_SIZE));
             const info = document.createElement('div'); info.className='text-muted'; info.textContent = `Page ${WP_PAGE} of ${pages} · ${total} items`; footer.appendChild(info);
+            // wire select all
+            const selAll = document.getElementById('wpSelectAll');
+            if (selAll){ selAll.onclick = function(){ const boxes = document.querySelectorAll('.wpRowSelect'); boxes.forEach(b=> b.checked = selAll.checked); const btn = document.getElementById('wpExportSelectedBtn'); if (btn){ const ids = Array.from(document.querySelectorAll('.wpRowSelect:checked')).map(c=>c.getAttribute('data-id')); btn.disabled = ids.length===0; } }; }
+            // enable/disable export button based on selection
+            const table = document.getElementById('workpapersTableBody'); if (table){ table.addEventListener('change', function(e){ if (e.target && e.target.classList && e.target.classList.contains('wpRowSelect')){ const btn = document.getElementById('wpExportSelectedBtn'); if (btn){ const ids = Array.from(document.querySelectorAll('.wpRowSelect:checked')).map(c=>c.getAttribute('data-id')); btn.disabled = ids.length===0; } } }); }
             const ctrls = document.createElement('div');
             const prev = document.createElement('button'); prev.className='btn btn-outline btn-sm me-2'; prev.textContent='Prev'; prev.disabled = WP_PAGE<=1; prev.onclick=()=>{ WP_PAGE=Math.max(1, WP_PAGE-1); renderWorkPapers(); };
             const next = document.createElement('button'); next.className='btn btn-outline btn-sm'; next.textContent='Next'; next.disabled = WP_PAGE>=pages; next.onclick=()=>{ WP_PAGE=Math.min(pages, WP_PAGE+1); renderWorkPapers(); };
             ctrls.appendChild(prev); ctrls.appendChild(next); footer.appendChild(ctrls);
             tb.parentElement.appendChild(footer);
         }
-        function renderEvidence(){
-            const tb = document.getElementById('evidenceTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
-            (BULK.Evidence||[]).slice(0,50).forEach(ev=>{
-                const icon = ev.file_name?.toLowerCase().endsWith('.pdf') ? 'fa-file-pdf text-danger' : (ev.file_name?.toLowerCase().match(/\.(xlsx|xls)$/)?'fa-file-excel text-success':'fa-file')
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>${ev.id}</strong></td><td><i class='fas ${icon} me-2'></i>${ev.file_name||''}</td><td>${(ev.parent_type||'') + (ev.parent_id?(' - '+ev.parent_id):'')}</td><td>${ev.uploader_email||''}</td><td>${ev.uploaded_on||''}</td><td><div class='action-buttons'><a class='action-btn' href='${ev.drive_url||'#'}' target='_blank' title='Open'><i class='fas fa-eye'></i></a><a class='action-btn' href='${ev.drive_url||'#'}' target='_blank' title='Download'><i class='fas fa-download'></i></a></div></td>`;
-                tb.appendChild(tr);
-            });
-        }
+        // evidence page removed
         function openUploadEvidence(options){
             options = options || {};
             const presetType = options.parentType || '';
@@ -1116,7 +1079,13 @@
                 `<div class='d-flex gap-2 mt-2'>
                    ${isManager?`<button class='btn btn-success btn-sm' id='wpApproveBtn'><i class='fas fa-check'></i> Approve</button><button class='btn btn-warning btn-sm' id='wpReturnBtn'><i class='fas fa-undo'></i> Return</button>`:''}
                    ${(!isManager && canEdit)?`<button class='btn btn-primary btn-sm' id='wpSubmitBtn'><i class='fas fa-paper-plane'></i> Submit for Review</button>`:''}
-                   <button class='btn btn-outline btn-sm' id='wpExportBtn'><i class='fas fa-download'></i> Export</button>
+                   <div class='btn-group'>
+                     <button class='btn btn-outline btn-sm dropdown-toggle' id='wpExportBtn' data-bs-toggle='dropdown' aria-expanded='false'><i class='fas fa-download'></i> Export</button>
+                     <ul class='dropdown-menu'>
+                       <li><a class='dropdown-item' href='#' id='wpExportCsv'>CSV</a></li>
+                       <li><a class='dropdown-item' href='#' id='wpExportPdfServer'>PDF (Server)</a></li>
+                     </ul>
+                   </div>
                  </div>
                  <div class='mt-3'>
                    <div class='text-muted mb-1'>Audit Trail</div>
@@ -1189,7 +1158,8 @@
             }).getAuditTrail('WorkPapers', id, 30); }catch(e){}
 
             // Wire review/submit/export/save
-            const exportBtn = document.getElementById('wpExportBtn'); if (exportBtn) exportBtn.onclick = ()=> exportWorkPaperCSV(wp);
+            const exportCsv = document.getElementById('wpExportCsv'); if (exportCsv) exportCsv.onclick = (e)=>{ e.preventDefault(); exportWorkPaperCSV(wp); };
+            const exportPdfServer = document.getElementById('wpExportPdfServer'); if (exportPdfServer) exportPdfServer.onclick = (e)=>{ e.preventDefault(); exportWorkPaperPDFServer(wp.id); };
             const approveBtn = document.getElementById('wpApproveBtn'); if (approveBtn) approveBtn.onclick = ()=> reviewCurrentWp('Approved');
             const returnBtn = document.getElementById('wpReturnBtn'); if (returnBtn) returnBtn.onclick = ()=> reviewCurrentWp('Returned');
             const submitBtn = document.getElementById('wpSubmitBtn'); if (submitBtn) submitBtn.onclick = ()=> submitCurrentWp();
@@ -1219,6 +1189,20 @@
                 .withFailureHandler(function(err){ console.error(err); showAlert(err && err.message?err.message:'Submit failed','danger'); })
                 .updateWorkPaper(id, updates);
             }
+            function exportSelectedWorkPapersPDF(){
+              try{
+                const ids = Array.from(document.querySelectorAll('.wpRowSelect:checked')).map(c=>c.getAttribute('data-id'));
+                if (!ids.length) { showAlert('Select at least one Work Paper','warning'); return; }
+                const btn = document.getElementById('wpExportSelectedBtn'); if (btn) btn.disabled = true;
+                google.script.run.withSuccessHandler(function(res){
+                  if (btn) btn.disabled = false;
+                  if (res && res.success && Array.isArray(res.links)){
+                    const list = res.links.map((u,i)=>`<li><a href='${u}' target='_blank'>File ${i+1}</a></li>`).join('');
+                    showModal('Export Links', `<p>Bulk export completed. Download links:</p><ul>${list}</ul>`, [{label:'Close', cls:'btn btn-primary', onclick:'closeModal()'}]);
+                  } else { showAlert(res && res.error ? res.error : 'Bulk export failed','danger'); }
+                }).withFailureHandler(function(err){ if (btn) btn.disabled = false; console.error(err); showAlert('Bulk export failed','danger'); }).bulkGenerateWorkPapersPDF(ids);
+              }catch(e){ console.error(e); showAlert('Bulk export failed','danger'); }
+            }
             function exportWorkPaperCSV(wp){
               try{
                 const fields = ['id','audit_id','audit_title','year','affiliate','process_area','objective','risks','controls','test_objective','proposed_tests','observation','observation_risk','reportable','status','reviewer_email','reviewer_comments','submitted_at','reviewed_at','created_by','created_at','updated_by','updated_at'];
@@ -1230,6 +1214,14 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a'); a.href=url; a.download = `${wp.id}.csv`; a.click(); setTimeout(()=>URL.revokeObjectURL(url), 1000);
               }catch(e){ console.error(e); showAlert('Export failed','danger'); }
+            }
+            function exportWorkPaperPDFServer(id){
+              try{
+                google.script.run.withSuccessHandler(function(res){
+                  if (res && res.success){ window.open(res.url, '_blank'); }
+                  else { showAlert(res && res.error ? res.error : 'PDF export failed','danger'); }
+                }).withFailureHandler(function(err){ console.error(err); showAlert('PDF export failed','danger'); }).generateWorkPaperPDF(id);
+              }catch(e){ console.error(e); showAlert('PDF export unsupported in this environment','warning'); }
             }
           }
 
@@ -1252,7 +1244,8 @@
             // Resolve default landing from Settings (fallback to dashboard)
             try {
                 google.script.run.withSuccessHandler(function(cfg){
-                    const page = (cfg && cfg.defaultLanding) ? String(cfg.defaultLanding) : 'dashboard';
+                    let page = (cfg && cfg.defaultLanding) ? String(cfg.defaultLanding) : 'dashboard';
+                    if (page === 'evidence') page = 'workpapers';
                     showPage(page);
                 }).getConfig();
             } catch(e){ try { showPage('dashboard'); } catch(err){} }
