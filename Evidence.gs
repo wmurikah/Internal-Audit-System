@@ -61,6 +61,7 @@ function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base
       uploaded_on: now,
       version: 1,
       checksum: checksum,
+      status: 'Submitted',
       created_at: now
     };
 
@@ -126,4 +127,36 @@ function appendRecord_(sheetName, obj) {
     return v;
   });
   sh.appendRow(row);
+}
+
+/** Auditor reviews evidence: decision = 'Accept' | 'Reject' */
+function reviewEvidenceByAuditor(evidenceId, decision, comment){
+  try{
+    if (!evidenceId) throw new Error('Evidence id required');
+    var user = getCurrentUser();
+    if (!user || (user.role!=='Auditor' && user.role!=='AuditManager')) throw new Error('Only Auditor or AuditManager can review at this step');
+    var rec = getRowById('Evidence', evidenceId); if (!rec) throw new Error('Evidence not found');
+    var status = (String(decision).toLowerCase()==='accept')?'AuditorAccepted':'AuditorRejected';
+    var changes = { status: status, reviewer_email: user.email, review_comment: comment||'', reviewed_at: new Date() };
+    updateRow('Evidence', evidenceId, changes);
+    // Notify uploader on rejection
+    try{ if (status==='AuditorRejected' && rec.uploader_email){ MailApp.sendEmail(rec.uploader_email, 'Evidence Rejected', 'Your evidence '+rec.file_name+' was rejected. Reason: '+(comment||'No reason provided')); } }catch(e){}
+    return { success:true };
+  }catch(e){ Logger.log('reviewEvidenceByAuditor error: '+e); return { success:false, error:e.message }; }
+}
+
+/** Audit Manager final review */
+function managerReviewEvidence(evidenceId, decision, comment){
+  try{
+    if (!evidenceId) throw new Error('Evidence id required');
+    var user = getCurrentUser();
+    if (!user || user.role!=='AuditManager') throw new Error('Only AuditManager can make final decision');
+    var rec = getRowById('Evidence', evidenceId); if (!rec) throw new Error('Evidence not found');
+    var status = (String(decision).toLowerCase()==='accept')?'ManagerAccepted':'ManagerRejected';
+    var changes = { manager_email: user.email, manager_decision: decision, manager_review_comment: comment||'', manager_reviewed_at: new Date(), status: status };
+    updateRow('Evidence', evidenceId, changes);
+    // Notify uploader on rejection
+    try{ if (status==='ManagerRejected' && rec.uploader_email){ MailApp.sendEmail(rec.uploader_email, 'Evidence Rejected by Manager', 'Your evidence '+rec.file_name+' was rejected by Audit Manager. Reason: '+(comment||'No reason provided')); } }catch(e){}
+    return { success:true };
+  }catch(e){ Logger.log('managerReviewEvidence error: '+e); return { success:false, error:e.message }; }
 }

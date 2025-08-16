@@ -558,6 +558,7 @@
         let currentPage = 'dashboard';
         let charts = {};
         let BULK = null; // cached bulk data for tables
+        let WP_PAGE = 1; const WP_PAGE_SIZE = 20;
         // Register Chart.js datalabels with inlined helpers
         if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') { Chart.register(ChartDataLabels); }
         Chart.register(ChartDataLabels);
@@ -905,7 +906,9 @@
         function renderWorkPapers(){
             const tb = document.getElementById('workpapersTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
             populateWpAuditFilter(); attachWpFilterEvents();
-            (BULK.WorkPapers||[]).filter(filterWpRow).slice(0,100).forEach(wp=>{
+            const all = (BULK.WorkPapers||[]).filter(filterWpRow);
+            const start = (WP_PAGE-1)*WP_PAGE_SIZE; const end = start + WP_PAGE_SIZE;
+            all.slice(start, end).forEach(wp=>{
                 const actions = [];
                 actions.push(`<button class='action-btn' title='View' data-action='view' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-eye'></i></button>`);
                 actions.push(`<button class='action-btn' title='Edit' data-action='edit' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-edit'></i></button>`);
@@ -916,6 +919,16 @@
                 tr.innerHTML = `<td><strong>${wp.id}</strong></td><td>${wp.audit_id||''}</td><td>${wp.process_area||''}</td><td><span class='badge badge-info'>${wp.status||''}</span></td><td>${wp.created_by||''}</td><td>${wp.created_at||''}</td><td><div class='action-buttons'>${actions.join('')}</div></td>`;
                 tb.appendChild(tr);
             });
+            // pagination footer
+            const footer = document.createElement('div');
+            footer.className = 'd-flex justify-content-between align-items-center mt-2';
+            const total = all.length; const pages = Math.max(1, Math.ceil(total/WP_PAGE_SIZE));
+            const info = document.createElement('div'); info.className='text-muted'; info.textContent = `Page ${WP_PAGE} of ${pages} · ${total} items`; footer.appendChild(info);
+            const ctrls = document.createElement('div');
+            const prev = document.createElement('button'); prev.className='btn btn-outline btn-sm me-2'; prev.textContent='Prev'; prev.disabled = WP_PAGE<=1; prev.onclick=()=>{ WP_PAGE=Math.max(1, WP_PAGE-1); renderWorkPapers(); };
+            const next = document.createElement('button'); next.className='btn btn-outline btn-sm'; next.textContent='Next'; next.disabled = WP_PAGE>=pages; next.onclick=()=>{ WP_PAGE=Math.min(pages, WP_PAGE+1); renderWorkPapers(); };
+            ctrls.appendChild(prev); ctrls.appendChild(next); footer.appendChild(ctrls);
+            tb.parentElement.appendChild(footer);
         }
         function renderEvidence(){
             const tb = document.getElementById('evidenceTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
@@ -965,6 +978,20 @@
             };
             showModal('Upload Evidence', body, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Upload', cls:'btn btn-primary', onclick:'__uploadEvidence()'}]);
             window.__uploadEvidence = upload;
+        }
+        function renderPreview(url, name){
+            const box = document.getElementById('wpEvidencePreview');
+            if (!box){ window.open(url || '#', '_blank'); return; }
+            const lower = String(name||'').toLowerCase();
+            let html = '';
+            if (lower.endsWith('.pdf')){
+                html = `<iframe src="${url}" style="width:100%;height:360px;border:0;"></iframe>`;
+            } else if (/(png|jpg|jpeg|gif|webp|bmp)$/.test(lower)){
+                html = `<img src="${url}" alt="${name||''}" style="max-width:100%;max-height:360px;object-fit:contain;">`;
+            } else {
+                html = `<a href="${url}" target="_blank">Open ${name||'file'}</a>`;
+            }
+            box.innerHTML = html;
         }
         function openCreateAudit(){
             if (!window.USER || window.USER.role !== 'AuditManager'){
@@ -1054,9 +1081,19 @@
             ,'secD');
 
             const E = section('E. Evidence',
-                `<div id='wpEvidenceList'>Loading evidence...</div>
-                 <div class='mt-2'>
-                   <button class='btn btn-primary btn-sm' onclick="openUploadEvidence({parentType:'WorkPaper', parentId:'${wp.id}', lockParent:true})"><i class='fas fa-upload'></i> Upload Evidence</button>
+                `<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;'>
+                   <div>
+                     <div id='wpEvidenceList'>Loading evidence...</div>
+                     <div class='mt-2'>
+                       <button class='btn btn-primary btn-sm' onclick="openUploadEvidence({parentType:'WorkPaper', parentId:'${wp.id}', lockParent:true})"><i class='fas fa-upload'></i> Upload Evidence</button>
+                     </div>
+                   </div>
+                   <div>
+                     <div class='text-muted mb-1'>Preview</div>
+                     <div id='wpEvidencePreview' style='border:1px dashed #ccc; min-height:220px; display:flex; align-items:center; justify-content:center;'>
+                       <span class='text-muted'>Select a file to preview</span>
+                     </div>
+                   </div>
                  </div>`
             ,'secE');
 
@@ -1096,9 +1133,51 @@
             try{ google.script.run.withSuccessHandler(function(res){
                 const holder = document.getElementById('wpEvidenceList'); if (!holder) return;
                 if (res && res.success){
-                  holder.innerHTML = (res.items||[]).length?(`<div class='table-container'><table class='table'><thead><tr><th>ID</th><th>File</th><th>Uploader</th><th>Date</th><th></th></tr></thead><tbody>`+
-                    res.items.map(ev=>`<tr><td>${ev.id}</td><td>${ev.file_name}</td><td>${ev.uploader_email||''}</td><td>${ev.uploaded_on||''}</td><td><a class='action-btn' href='${ev.drive_url||'#'}' target='_blank' title='Open'><i class='fas fa-eye'></i></a></td></tr>`).join('')+
-                    `</tbody></table></div>`):'<div class="text-muted">No evidence yet.</div>';
+                  if ((res.items||[]).length){
+                    holder.innerHTML = `<div class='table-container'><table class='table'><thead><tr><th>ID</th><th>File</th><th>Uploader</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody id='wpEvTbody'></tbody></table></div>`;
+                    const tbody = holder.querySelector('#wpEvTbody');
+                    const role = (window.USER && window.USER.role) || 'Guest';
+                    (res.items||[]).forEach(function(ev){
+                      const tr = document.createElement('tr');
+                      const safeName = ev.file_name || '';
+                      const fileCell = `<a href='#' data-preview='1' data-url='${ev.drive_url||''}' data-name='${safeName}'>${safeName}</a>`;
+                      const statusBadge = `<span class='badge badge-secondary ms-1'>${ev.status||''}</span>`;
+                      let reviewControls = '';
+                      if (role==='Auditor'){
+                        reviewControls = `<button class='action-btn' title='Accept' data-ev-review='auditor-accept' data-id='${ev.id}'><i class='fas fa-check text-success'></i></button>
+                                          <button class='action-btn' title='Reject' data-ev-review='auditor-reject' data-id='${ev.id}'><i class='fas fa-times text-danger'></i></button>`;
+                      } else if (role==='AuditManager'){
+                        reviewControls = `<button class='action-btn' title='Manager Accept' data-ev-review='manager-accept' data-id='${ev.id}'><i class='fas fa-check-double text-success'></i></button>
+                                          <button class='action-btn' title='Manager Reject' data-ev-review='manager-reject' data-id='${ev.id}'><i class='fas fa-ban text-danger'></i></button>`;
+                      }
+                      tr.innerHTML = `<td>${ev.id}</td><td>${fileCell}</td><td>${ev.uploader_email||''}</td><td>${ev.uploaded_on||''}</td><td>${statusBadge}</td><td><a class='action-btn' href='${ev.drive_url||'#'}' target='_blank' title='Open'><i class='fas fa-eye'></i></a>${reviewControls}</td>`;
+                      tbody.appendChild(tr);
+                    });
+                    // Event delegation for preview and review actions
+                    holder.addEventListener('click', function(evt){
+                      const a = evt.target.closest('[data-preview]');
+                      if (a){ evt.preventDefault(); renderPreview(a.getAttribute('data-url'), a.getAttribute('data-name')); return; }
+                      const btn = evt.target.closest('[data-ev-review]');
+                      if (btn){
+                        const evid = btn.getAttribute('data-id'); const kind = btn.getAttribute('data-ev-review');
+                        if (kind==='auditor-accept' || kind==='auditor-reject'){
+                          const decision = kind.endsWith('accept') ? 'Accept' : 'Reject';
+                          const comment = decision==='Reject' ? (prompt('Please provide reason for rejection')||'') : '';
+                          google.script.run.withSuccessHandler(function(r){ if(r&&r.success){ showAlert('Review saved','success'); openWorkPaperDetail('${id}', ${editable ? 'true' : 'false'}); } else { showAlert(r.error||'Review failed','danger'); } })
+                            .withFailureHandler(function(err){ console.error(err); showAlert('Review failed','danger'); })
+                            .reviewEvidenceByAuditor(evid, decision, comment);
+                        } else if (kind==='manager-accept' || kind==='manager-reject'){
+                          const decision = kind.endsWith('accept') ? 'Accept' : 'Reject';
+                          const comment = decision==='Reject' ? (prompt('Please provide reason for rejection')||'') : '';
+                          google.script.run.withSuccessHandler(function(r){ if(r&&r.success){ showAlert('Manager decision saved','success'); openWorkPaperDetail('${id}', ${editable ? 'true' : 'false'}); } else { showAlert(r.error||'Review failed','danger'); } })
+                            .withFailureHandler(function(err){ console.error(err); showAlert('Review failed','danger'); })
+                            .managerReviewEvidence(evid, decision, comment);
+                        }
+                      }
+                    }, { once: true });
+                  } else {
+                    holder.innerHTML = '<div class="text-muted">No evidence yet.</div>';
+                  }
                 } else { holder.textContent = 'Failed to load evidence'; }
             }).listEvidence('WorkPaper', id, 50); }catch(e){}
 
@@ -1128,7 +1207,14 @@
                 .reviewWorkPaper(id, updates);
             }
             function submitCurrentWp(){
-              const fd = new FormData(document.getElementById('wpDetailForm')); const updates={ status: 'Submitted for Review', submitted_at: new Date() };
+              const fd = new FormData(document.getElementById('wpDetailForm'));
+              const required = ['process_area','risks','controls','test_objective'];
+              const missing = required.filter(k => !(fd.get(k) && String(fd.get(k)).trim()));
+              if (missing.length){
+                showAlert('Please complete required fields before submitting: '+missing.join(', '), 'warning');
+                return;
+              }
+              const updates={ status: 'Submitted for Review', submitted_at: new Date() };
               google.script.run.withSuccessHandler(function(){ showAlert('Submitted for review','success'); closeModal(); BULK=null; hydrateTables(); })
                 .withFailureHandler(function(err){ console.error(err); showAlert(err && err.message?err.message:'Submit failed','danger'); })
                 .updateWorkPaper(id, updates);

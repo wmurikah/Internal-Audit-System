@@ -64,12 +64,13 @@ function initializeSystem() {
     const requiredSheets = {
       'Users': ['id', 'email', 'name', 'role', 'org_unit', 'active', 'created_at', 'last_login'],
       'Audits': ['id', 'year', 'affiliate', 'business_unit', 'title', 'scope', 'status', 'manager_email', 'start_date', 'end_date', 'created_by', 'created_at', 'updated_by', 'updated_at'],
-      'WorkPapers': ['id', 'audit_id', 'audit_title', 'year', 'affiliate', 'process_area', 'objective', 'risks', 'controls', 'test_objective', 'proposed_tests', 'observation', 'observation_risk', 'reportable', 'status', 'reviewer_email', 'reviewer_comments', 'submitted_at', 'reviewed_at', 'created_by', 'created_at', 'updated_by', 'updated_at'],
+      'WorkPapers': ['id', 'audit_id', 'audit_title', 'year', 'affiliate', 'process_area', 'objective', 'risks', 'controls', 'test_objective', 'proposed_tests', 'observation', 'observation_risk', 'reportable', 'status', 'reviewer_email', 'reviewer_comments', 'submitted_at', 'reviewed_at', 'created_by', 'created_at', 'updated_by', 'updated_at', 'process', 'risk_statement', 'audit_steps', 'sample_details', 'evidence_list', 'implications', 'management_response', 'action_plans', 'process_owner', 'due_dates', 'residual_risk', 'tags', 'links'],
       'Issues': ['id', 'audit_id', 'title', 'description', 'root_cause', 'risk_rating', 'recommendation', 'owner_email', 'due_date', 'status', 'reopened_count', 'created_by', 'created_at', 'updated_by', 'updated_at'],
       'Actions': ['id', 'issue_id', 'assignee_email', 'action_plan', 'due_date', 'status', 'closed_on', 'created_by', 'created_at', 'updated_by', 'updated_at'],
-      'Evidence': ['id', 'parent_type', 'parent_id', 'file_name', 'drive_url', 'uploader_email', 'uploaded_on', 'version', 'checksum', 'created_at'],
+      'Evidence': ['id', 'parent_type', 'parent_id', 'file_name', 'drive_url', 'uploader_email', 'uploaded_on', 'version', 'checksum', 'status', 'reviewer_email', 'review_comment', 'reviewed_at', 'manager_email', 'manager_decision', 'manager_review_comment', 'manager_reviewed_at', 'created_at'],
       'Logs': ['timestamp', 'user_email', 'entity', 'entity_id', 'action', 'before_json', 'after_json'],
-      'Settings': ['key', 'value', 'description', 'updated_by', 'updated_at']
+      'Settings': ['key', 'value', 'description', 'updated_by', 'updated_at'],
+      'RiskRegister': ['id', 'unit', 'process', 'risk_statement', 'inherent_rating', 'controls', 'owner_email', 'status', 'due_date', 'residual_risk', 'links', 'created_at', 'updated_at']
     };
     
     Object.entries(requiredSheets).forEach(([sheetName, headers]) => {
@@ -90,6 +91,7 @@ function initializeSystem() {
     
     // Initialize configuration
     getConfig();
+    try { applyStandardValidations(); } catch (e) { Logger.log('applyStandardValidations on init error: '+e); }
     
     // Create admin user if doesn't exist
     const users = getSheetData('Users') || [];

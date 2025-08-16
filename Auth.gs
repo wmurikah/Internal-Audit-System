@@ -10,11 +10,46 @@ function getCurrentUser() {
   try {
     const userEmail = Session.getActiveUser().getEmail();
 
-    // Domain enforcement from Settings if available
+    // Fast cache layer (return early if present)
+    const cache = CacheService.getScriptCache();
+    const key = `auth_user_${(userEmail || '').toLowerCase()}`;
+    const cached = cache.get(key);
+    if (cached) { try { return JSON.parse(cached); } catch(e){} }
+
+    // Domain enforcement from Settings
     let allowedDomain = 'hasspetroleum.com';
     try { const cfg = getConfig(); if (cfg && cfg.ALLOWED_SIGNIN_DOMAIN) allowedDomain = cfg.ALLOWED_SIGNIN_DOMAIN; } catch(e){}
 
-    if (!userEmail || userEmail.split('@')[1] !== allowedDomain) {
+    // Prefer Users sheet record first
+    let usersQuick = [];
+    try { usersQuick = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users'); } catch(e){}
+    const preUser = usersQuick.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
+
+    if (!preUser && (!userEmail || userEmail.split('@')[1] !== allowedDomain)) {
+      const guestRes = {
+        email: userEmail || 'anonymous@system.local',
+        role: 'Guest',
+        name: 'Unauthorized',
+        permissions: [],
+        org_unit: 'Unknown',
+        authenticated: false,
+        active: false,
+        error: 'Access restricted to corporate domain'
+      };
+      try { cache.put(key, JSON.stringify(guestRes), 300); } catch(e){}
+      return guestRes;
+    }
+
+    let user = preUser || null;
+=======
+    // Try to resolve user from Users sheet first; if present and active, use it regardless of domain
+    let preUser = null;
+    try {
+      const usersQuick = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : [];
+      preUser = usersQuick.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
+    } catch(e){}
+
+    if (!preUser && (!userEmail || userEmail.split('@')[1] !== allowedDomain)) {
       return {
         email: userEmail || 'anonymous@system.local',
         role: 'Guest',
@@ -27,30 +62,30 @@ function getCurrentUser() {
       };
     }
 
-    // Fast cache layer
-    const cache = CacheService.getScriptCache();
-    const key = `auth_user_${userEmail.toLowerCase()}`;
-    const cached = cache.get(key);
-    if (cached){ try { return JSON.parse(cached); } catch(e){} }
-
-    // Lookup Users sheet directly (fast direct read)
-    const users = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users');
-    const user = users.find(u => (u.email||'').toLowerCase() === userEmail.toLowerCase() && u.active !== false);
+    // Fast cache layer (reaffirmed above) - already defined as cache/key
+    // If not cached, we already determined user via preUser; fall back to full search only if needed
+    if (!user) {
+      try {
+        const usersAll = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users');
+        user = usersAll.find(u => (u.email||'').toLowerCase() === String(userEmail||'').toLowerCase() && u.active !== false) || null;
+      } catch(e){}
+    }
+// RESOLVED MERGE END
 
     const result = user ? {
       email: userEmail,
       role: user.role,
-      name: user.name || userEmail.split('@')[0],
+      name: user.name || (userEmail ? userEmail.split('@')[0] : 'User'),
       permissions: getPermissions(user.role),
       org_unit: user.org_unit || 'Unknown',
       authenticated: true,
       active: true,
       id: user.id
     } : {
-      // First time setup default to AuditManager
+      // First time setup default to AuditManager when domain-allowed but not yet registered
       email: userEmail,
       role: 'AuditManager',
-      name: userEmail.split('@')[0],
+      name: userEmail ? userEmail.split('@')[0] : 'AuditManager',
       permissions: getPermissions('AuditManager'),
       org_unit: 'Internal Audit',
       authenticated: true,

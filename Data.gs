@@ -253,7 +253,7 @@ function getBulkDataUltraFast() {
     const bulkData = {};
     
     // Read all sheets in parallel (conceptually)
-    ['Audits', 'Issues', 'Actions', 'Users', 'WorkPapers', 'Evidence'].forEach(sheetName => {
+    ['Audits', 'Issues', 'Actions', 'Users', 'WorkPapers', 'Evidence', 'RiskRegister'].forEach(sheetName => {
       try {
         const sheet = ss.getSheetByName(sheetName);
         if (sheet && sheet.getLastRow() > 1) {
@@ -389,6 +389,14 @@ function applyStandardValidations(){
     const wps = ss.getSheetByName('WorkPapers');
     if (wps){
       wps.getRange('O2:O').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(cfg.workPaperStatuses, true).setAllowInvalid(false).build());
+    }
+    // RiskRegister validations
+    const rr = ss.getSheetByName('RiskRegister');
+    if (rr){
+      const list = cfg.riskRatings || ['Extreme','High','Medium','Low'];
+      rr.getRange('E2:E').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(list, true).setAllowInvalid(false).build());
+      rr.getRange('J2:J').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(list, true).setAllowInvalid(false).build());
+      rr.getRange('H2:H').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['Open','In Progress','Mitigated','Closed'], true).setAllowInvalid(false).build());
     }
     return {success:true};
   }catch(e){ Logger.log('applyStandardValidations error: '+e); return {success:false, error:e.message}; }
