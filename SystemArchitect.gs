@@ -16,12 +16,10 @@ function executeQuantumSystemReset() {
   // Replace destructive reset with safe reset call
   try{ return safeResetAndSeed(); }catch(e){ Logger.log('safe reset failed: '+e); return { success:false, error:e.message }; }
 }
-}
 
 function createOptimizedSheetArchitecture() {
   // Deprecated: keep for compatibility but delegate to safeResetAndSeed without destructive deletes
   try{ return safeResetAndSeed(); }catch(e){ return { success:false, error:e.message }; }
-}
 }
 
 /**
