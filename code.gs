@@ -9,11 +9,11 @@
 /** Safe reset: verify sheets/headers exist; add missing columns; seed minimum data */
 function safeResetAndSeed() {
   const started = new Date();
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
   const required = {
     'Users': ['id','email','name','role','org_unit','active','created_at','last_login'],
     'Audits': ['id','year','affiliate','business_unit','title','scope','status','manager_email','start_date','end_date','created_by','created_at','updated_by','updated_at'],
-    'WorkPapers': ['id','audit_id','audit_title','year','affiliate','process_area','objective','risks','controls','test_objective','proposed_tests','observation','observation_risk','reportable','status','reviewer_email','reviewer_comments','submitted_at','reviewed_at','created_by','created_at','updated_by','updated_at'],
+    'WorkPapers': ['id','audit_id','audit_title','year','affiliate','process_area','objective','risks','controls','test_objective','proposed_tests','observation','observation_risk','reportable','status','reviewer_email','reviewer_comments','submitted_at','reviewed_at','created_by','created_at','updated_by','updated_at','process','risk_statement','audit_steps','sample_details','evidence_list','implications','management_response','action_plans','process_owner','due_dates','residual_risk','tags','links'],
     'Issues': ['id','audit_id','title','description','root_cause','risk_rating','recommendation','owner_email','due_date','status','reopened_count','created_by','created_at','updated_by','updated_at'],
     'Actions': ['id','issue_id','assignee_email','action_plan','due_date','status','closed_on','created_by','created_at','updated_by','updated_at'],
     'Evidence': ['id','parent_type','parent_id','file_name','drive_url','uploader_email','uploaded_on','version','checksum','status','reviewer_email','review_comment','reviewed_at','manager_email','manager_decision','manager_review_comment','manager_reviewed_at','created_at'],
@@ -77,6 +77,26 @@ function safeResetAndSeed() {
 
   // Apply validations where available and set up monthly trigger
   try { applyStandardValidations(); } catch(e){ Logger.log('applyStandardValidations (safe) error: '+e); }
+  // Normalize Issues stray 'Open' column into status if present
+  try{
+    const shIssues = ss.getSheetByName('Issues');
+    if (shIssues){
+      const headers = shIssues.getRange(1,1,1,shIssues.getLastColumn()).getValues()[0];
+      const openIdx = headers.indexOf('Open');
+      const statusIdx = headers.indexOf('status');
+      if (openIdx>-1 && statusIdx>-1){
+        const rng = shIssues.getRange(2,1,Math.max(0,shIssues.getLastRow()-1), shIssues.getLastColumn());
+        const vals = rng.getValues();
+        for (var i=0;i<vals.length;i++){
+          var openVal = vals[i][openIdx];
+          if (openVal && !vals[i][statusIdx]){ vals[i][statusIdx] = openVal; }
+        }
+        rng.setValues(vals);
+        // Clear the stray header (non-destructive)
+        shIssues.getRange(1, openIdx+1).setValue('');
+      }
+    }
+  }catch(normErr){ Logger.log('Issues normalization error: '+normErr); }
   try { ensureMonthlyReminderTrigger(); } catch(e){ Logger.log('ensureMonthlyReminderTrigger error: '+e); }
 
   summary.completed = new Date();
@@ -103,7 +123,44 @@ function genActionRow_(n){
 }
 function genWorkPaperRow_(n){
   const aid = 'AUD'+('000'+((n%10)+1)).slice(-3);
-  return { id:'WP'+('000'+n).slice(-3), audit_id:aid, audit_title:'Audit '+aid, year:new Date().getFullYear(), affiliate:'Group', process_area:'Process '+n, objective:'Objective '+n, risks:'Risks...', controls:'Controls...', test_objective:'Test obj', proposed_tests:'Proposed tests', observation:'Observation', observation_risk:['Low','Medium','High'][n%3], reportable: (n%3===0?'Yes':'No'), status:['Draft','Submitted for Review','Approved','Returned'][n%4], reviewer_email:'audit.manager@company.com', reviewer_comments:'', submitted_at:'', reviewed_at:'', created_by:'auditor@company.com', created_at:new Date(), updated_by:'', updated_at:'' };
+  return {
+    id:'WP'+('000'+n).slice(-3),
+    audit_id:aid,
+    audit_title:'Audit '+aid,
+    year:new Date().getFullYear(),
+    affiliate:'Group',
+    process_area:'Process '+n,
+    objective:'Objective '+n,
+    risks:'Risk summary '+n,
+    controls:'Control summary '+n,
+    test_objective:'Test objective '+n,
+    proposed_tests:'Proposed tests for '+n,
+    observation:'Observation '+n,
+    observation_risk:['Low','Medium','High'][n%3],
+    reportable: (n%3===0?'Yes':'No'),
+    status:['Draft','Submitted for Review','Approved','Returned'][n%4],
+    reviewer_email:'audit.manager@company.com',
+    reviewer_comments:'',
+    submitted_at:'',
+    reviewed_at:'',
+    created_by:'auditor@company.com',
+    created_at:new Date(),
+    updated_by:'',
+    updated_at:'',
+    process:'Process '+n,
+    risk_statement:'Risk statement '+n,
+    audit_steps:'Audit steps for process '+n,
+    sample_details:'Sample details '+n,
+    evidence_list:'EVD list placeholder',
+    implications:'Implications '+n,
+    management_response:'Management response '+n,
+    action_plans:'Action plans '+n,
+    process_owner:'owner'+((n%5)+1)+'@company.com',
+    due_dates:new Date(),
+    residual_risk:['High','Medium','Low'][n%3],
+    tags:'tag1, tag2',
+    links:''
+  };
 }
 function genEvidenceRow_(n){
   const types = ['Audit','Issue','Action','WorkPaper'];
@@ -117,7 +174,7 @@ function genRiskRow_(n){
 
 /** Ensure monthly trigger exists for reminders */
 function ensureMonthlyReminderTrigger(){
-  const func = 'sendMonthlyOpenIssuesReminders';
+  const func = 'sendMonthlyProcessOwnerReminders';
   const triggers = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === func);
   if (triggers.length) return { success:true, message:'Trigger exists' };
   ScriptApp.newTrigger(func).timeBased().onMonthDay(1).atHour(8).create();
@@ -125,11 +182,11 @@ function ensureMonthlyReminderTrigger(){
 }
 
 /** Send monthly reminders: group open issues by Auditee (owner_email) */
-function sendMonthlyOpenIssuesReminders(){
+function sendMonthlyProcessOwnerReminders(){
   try{
     const appUrl = ScriptApp.getService().getUrl();
     const cfg = getConfig();
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(getSpreadsheetId());
     const issues = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Issues') : [];
     const actions = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Actions') : [];
     const workpapers = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('WorkPapers') : [];
