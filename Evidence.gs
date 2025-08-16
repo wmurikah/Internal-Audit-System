@@ -20,7 +20,7 @@ function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base
     if (!fileName || !mimeType || !base64Data) throw new Error('File payload missing');
 
     // Enforce safe MIME types and extensions
-// Allow override from Settings.ALLOWED_EVIDENCE_MIME_TYPES if present
+    // Allow override from Settings.ALLOWED_EVIDENCE_MIME_TYPES if present
     var allowed = (function(){ try { var cfg = getConfig(); if (cfg && Array.isArray(cfg.ALLOWED_EVIDENCE_MIME_TYPES) && cfg.ALLOWED_EVIDENCE_MIME_TYPES.length){ return cfg.ALLOWED_EVIDENCE_MIME_TYPES.map(function(s){return String(s).toLowerCase();}); } } catch(e){} return ['application/pdf','image/png','image/jpeg','image/jpg','image/gif','image/webp','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv']; })();
     if (allowed.indexOf(String(mimeType).toLowerCase()) === -1) {
       throw new Error('File type not allowed. Allowed: PDF, PNG/JPEG/GIF/WEBP, XLSX, CSV');
@@ -52,7 +52,7 @@ function uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, base
     var blob = Utilities.newBlob(bytes, mimeType, fileName);
     // Read evidence folder from Settings if available; fallback to constant
     var cfg2; try { cfg2 = getConfig(); } catch (e) {}
-    var folderId = (cfg2 && cfg2.EVIDENCE_FOLDER_ID) ? cfg2.EVIDENCE_FOLDER_ID : getEvidenceFolderId();
+    var folderId = (cfg2 && cfg2.EVIDENCE_FOLDER_ID) ? cfg2.EVIDENCE_FOLDER_ID : EVIDENCE_FOLDER_ID;
     var folder = DriveApp.getFolderById(folderId);
     var file = folder.createFile(blob);
 
@@ -112,7 +112,7 @@ function listEvidence(parentType, parentId, limit) {
 }
 
 function generateEvidenceId_() {
-  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sh = ss.getSheetByName('Evidence');
   if (!sh) throw new Error('Evidence sheet missing');
   var lastRow = sh.getLastRow();
@@ -131,7 +131,7 @@ function generateEvidenceId_() {
 }
 
 function appendRecord_(sheetName, obj) {
-  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sh = ss.getSheetByName(sheetName);
   if (!sh) throw new Error('Sheet ' + sheetName + ' not found');
   var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
