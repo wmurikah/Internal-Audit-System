@@ -225,6 +225,29 @@
                     </div>
                 </div>
                 <div class="page-content">
+                    <div class="search-filters mb-3">
+                      <div class="search-row">
+                        <div class="search-group">
+                          <label class="form-label">Search</label>
+                          <input id="wpSearchText" class="form-control" placeholder="Search by process area, objective or ID">
+                        </div>
+                        <div class="search-group">
+                          <label class="form-label">Audit</label>
+                          <select id="wpFilterAudit" class="form-select"><option value="">All</option></select>
+                        </div>
+                        <div class="search-group">
+                          <label class="form-label">Status</label>
+                          <select id="wpFilterStatus" class="form-select"><option value="">All</option><option>Draft</option><option>Submitted for Review</option><option>Approved</option><option>Returned</option></select>
+                        </div>
+                        <div class="search-group">
+                          <label class="form-label">Created By</label>
+                          <input id="wpFilterCreator" class="form-control" placeholder="email">
+                        </div>
+                        <div>
+                          <button class="btn btn-outline" id="wpClearFilters" style="margin-top: 26px;">Clear</button>
+                        </div>
+                      </div>
+                    </div>
                     <div class="table-container">
                         <table class="table">
                             <thead>
@@ -783,6 +806,8 @@
             const btn = e.target.closest('button[data-action]');
             if (!btn) return;
             const action = btn.dataset.action; const entity = btn.dataset.entity; const id = btn.dataset.id;
+            if (entity==='WorkPapers' && action==='view') return openWorkPaperDetail(id, false);
+            if (entity==='WorkPapers' && action==='edit') return openWorkPaperDetail(id, true);
             if (action==='view') openEntityView(entity, id);
             else if (action==='edit') openEntityEdit(entity, id);
             else if (action==='review' && entity==='WorkPapers') openReviewWorkPaper(id);
@@ -852,9 +877,35 @@
         }
 
         // Render helpers for WorkPapers and Evidence, plus creation/review flows
+        const WORKPAPER_FILTERS = { text:'', audit:'', status:'', creator:'' };
+        function populateWpAuditFilter(){
+            const sel = document.getElementById('wpFilterAudit'); if (!sel || !BULK) return;
+            const audits = (BULK.Audits||[]).map(a=>a.id);
+            const unique = Array.from(new Set(audits)).sort();
+            sel.innerHTML = ['<option value="">All</option>'].concat(unique.map(id=>`<option ${WORKPAPER_FILTERS.audit===id?'selected':''}>${id}</option>`)).join('');
+        }
+        function attachWpFilterEvents(){
+            const q = document.getElementById('wpSearchText'); if (q) q.oninput = (e)=>{ WORKPAPER_FILTERS.text = e.target.value.toLowerCase(); renderWorkPapers(); };
+            const a = document.getElementById('wpFilterAudit'); if (a) a.onchange = (e)=>{ WORKPAPER_FILTERS.audit = e.target.value; renderWorkPapers(); };
+            const s = document.getElementById('wpFilterStatus'); if (s) s.onchange = (e)=>{ WORKPAPER_FILTERS.status = e.target.value; renderWorkPapers(); };
+            const c = document.getElementById('wpFilterCreator'); if (c) c.oninput = (e)=>{ WORKPAPER_FILTERS.creator = e.target.value.toLowerCase(); renderWorkPapers(); };
+            const clr = document.getElementById('wpClearFilters'); if (clr) clr.onclick = ()=>{ WORKPAPER_FILTERS.text=''; WORKPAPER_FILTERS.audit=''; WORKPAPER_FILTERS.status=''; WORKPAPER_FILTERS.creator='';
+                if(q) q.value=''; if(a) a.value=''; if(s) s.value=''; if(c) c.value=''; renderWorkPapers(); };
+        }
+        function filterWpRow(wp){
+            if (WORKPAPER_FILTERS.audit && String(wp.audit_id)!==WORKPAPER_FILTERS.audit) return false;
+            if (WORKPAPER_FILTERS.status && String(wp.status)!==WORKPAPER_FILTERS.status) return false;
+            if (WORKPAPER_FILTERS.creator && String(wp.created_by||'').toLowerCase().indexOf(WORKPAPER_FILTERS.creator)===-1) return false;
+            if (WORKPAPER_FILTERS.text){
+                const blob = `${wp.id||''} ${wp.process_area||''} ${wp.objective||''} ${wp.test_objective||''}`.toLowerCase();
+                if (blob.indexOf(WORKPAPER_FILTERS.text)===-1) return false;
+            }
+            return true;
+        }
         function renderWorkPapers(){
             const tb = document.getElementById('workpapersTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
-            (BULK.WorkPapers||[]).slice(0,50).forEach(wp=>{
+            populateWpAuditFilter(); attachWpFilterEvents();
+            (BULK.WorkPapers||[]).filter(filterWpRow).slice(0,100).forEach(wp=>{
                 const actions = [];
                 actions.push(`<button class='action-btn' title='View' data-action='view' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-eye'></i></button>`);
                 actions.push(`<button class='action-btn' title='Edit' data-action='edit' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-edit'></i></button>`);
@@ -963,6 +1014,139 @@
             showModal('New Work Paper', body, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Create', cls:'btn btn-primary', onclick:'__createWp()'}]);
             window.__createWp = create;
         }
+        function openWorkPaperDetail(id, editable){
+            const wp = (BULK && BULK.WorkPapers||[]).find(r=> String(r.id)===String(id));
+            if (!wp) return showAlert('Record not found','danger');
+            const canEdit = !!editable && window.USER && (USER.role==='Auditor' || USER.role==='AuditManager');
+            const isManager = window.USER && USER.role==='AuditManager';
+            const audits = (BULK && BULK.Audits)||[];
+            const issues = (BULK && BULK.Issues)||[];
+            const relatedIssues = issues.filter(i=> String(i.audit_id)===String(wp.audit_id)).slice(0,20);
+            const section = (title, content, key)=>`<div class='card mb-2'>
+                <div class='card-header d-flex justify-content-between align-items-center'>
+                  <span class='card-title'>${title}</span>
+                  <button class='btn btn-outline btn-sm' onclick="document.getElementById('${key}').classList.toggle('d-none')"><i class='fas fa-chevron-down'></i></button>
+                </div>
+                <div class='card-body' id='${key}'>${content}</div>
+              </div>`;
+            const input = (name, label, val, ro=false)=>`<div class='form-group'><label class='form-label'>${label}</label><input class='form-control' name='${name}' value='${String(val||'').replace(/"/g,'&quot;')}' ${ro||!canEdit?'readonly':''}></div>`;
+            const textarea = (name, label, val)=>`<div class='form-group'><label class='form-label'>${label}</label><textarea class='form-control' rows='3' name='${name}' ${!canEdit?'readonly':''}>${String(val||'')}</textarea></div>`;
+
+            const A = section('A. Context',
+                input('audit_id','Audit ID', wp.audit_id, true)+
+                input('audit_title','Audit Title', wp.audit_title, true)+
+                input('year','Year', wp.year, true)+
+                input('affiliate','Affiliate', wp.affiliate, true)+
+                input('process_area','Process Area', wp.process_area)
+            ,'secA');
+
+            const B = section('B. Risks',
+                textarea('risks','Identified Risks', wp.risks)
+            ,'secB');
+
+            const C = section('C. Controls',
+                textarea('controls','Key Controls', wp.controls)
+            ,'secC');
+
+            const D = section('D. Testing Objectives & Procedures',
+                textarea('test_objective','Test Objective', wp.test_objective)+
+                textarea('proposed_tests','Proposed Tests', wp.proposed_tests)
+            ,'secD');
+
+            const E = section('E. Evidence',
+                `<div id='wpEvidenceList'>Loading evidence...</div>
+                 <div class='mt-2'>
+                   <button class='btn btn-primary btn-sm' onclick="openUploadEvidence({parentType:'WorkPaper', parentId:'${wp.id}', lockParent:true})"><i class='fas fa-upload'></i> Upload Evidence</button>
+                 </div>`
+            ,'secE');
+
+            const F = section('F. Observations & Related Issues',
+                textarea('observation','Observation', wp.observation)+
+                input('observation_risk','Observation Risk', wp.observation_risk)+
+                input('reportable','Reportable (Yes/No)', wp.reportable)+
+                `<div class='mt-2'>
+                  <div class='text-muted mb-1'>Related Issues for this Audit</div>
+                  <div class='table-container'><table class='table'><thead><tr><th>ID</th><th>Title</th><th>Risk</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+                  ${relatedIssues.map(i=>`<tr><td>${i.id}</td><td>${i.title||''}</td><td>${i.risk_rating||''}</td><td>${i.status||''}</td><td><div class='action-buttons'><button class='action-btn' data-action='view' data-entity='Issues' data-id='${i.id}' title='View'><i class='fas fa-eye'></i></button><button class='action-btn' data-action='edit' data-entity='Issues' data-id='${i.id}' title='Edit'><i class='fas fa-edit'></i></button></div></td></tr>`).join('')}
+                  </tbody></table></div>
+                 </div>`
+            ,'secF');
+
+            const G = section('G. Review & Audit Trail',
+                input('status','Status', wp.status)+
+                input('reviewer_email','Reviewer', wp.reviewer_email, true)+
+                textarea('reviewer_comments','Reviewer Comments', wp.reviewer_comments)+
+                `<div class='d-flex gap-2 mt-2'>
+                   ${isManager?`<button class='btn btn-success btn-sm' id='wpApproveBtn'><i class='fas fa-check'></i> Approve</button><button class='btn btn-warning btn-sm' id='wpReturnBtn'><i class='fas fa-undo'></i> Return</button>`:''}
+                   ${(!isManager && canEdit)?`<button class='btn btn-primary btn-sm' id='wpSubmitBtn'><i class='fas fa-paper-plane'></i> Submit for Review</button>`:''}
+                   <button class='btn btn-outline btn-sm' id='wpExportBtn'><i class='fas fa-download'></i> Export</button>
+                 </div>
+                 <div class='mt-3'>
+                   <div class='text-muted mb-1'>Audit Trail</div>
+                   <div id='wpAuditTrail'>Loading trail...</div>
+                 </div>`
+            ,'secG');
+
+            const body = `<form id='wpDetailForm'>${A}${B}${C}${D}${E}${F}${G}</form>`;
+            const actions = [{label:'Close', cls:'btn btn-outline', onclick:'closeModal()'}];
+            if (canEdit){ actions.push({label:'Save', cls:'btn btn-primary', onclick:'__saveWpDetail()'}); }
+            showModal('Work Paper '+id, body, actions);
+
+            // Load Evidence and Audit Trail asynchronously
+            try{ google.script.run.withSuccessHandler(function(res){
+                const holder = document.getElementById('wpEvidenceList'); if (!holder) return;
+                if (res && res.success){
+                  holder.innerHTML = (res.items||[]).length?(`<div class='table-container'><table class='table'><thead><tr><th>ID</th><th>File</th><th>Uploader</th><th>Date</th><th></th></tr></thead><tbody>`+
+                    res.items.map(ev=>`<tr><td>${ev.id}</td><td>${ev.file_name}</td><td>${ev.uploader_email||''}</td><td>${ev.uploaded_on||''}</td><td><a class='action-btn' href='${ev.drive_url||'#'}' target='_blank' title='Open'><i class='fas fa-eye'></i></a></td></tr>`).join('')+
+                    `</tbody></table></div>`):'<div class="text-muted">No evidence yet.</div>';
+                } else { holder.textContent = 'Failed to load evidence'; }
+            }).listEvidence('WorkPaper', id, 50); }catch(e){}
+
+            try{ google.script.run.withSuccessHandler(function(res){
+                const trail = document.getElementById('wpAuditTrail'); if (!trail) return;
+                if (res && res.success){
+                  trail.innerHTML = (res.items||[]).length?('<ul style="padding-left:16px;">'+res.items.map(l=>`<li><strong>${l.timestamp}</strong> - ${l.user_email||''} - ${l.action} ${l.entity||''} ${l.entity_id||''}</li>`).join('')+'</ul>'):'<div class="text-muted">No activity.</div>';
+                } else { trail.textContent = 'Failed to load audit trail'; }
+            }).getAuditTrail('WorkPapers', id, 30); }catch(e){}
+
+            // Wire review/submit/export/save
+            const exportBtn = document.getElementById('wpExportBtn'); if (exportBtn) exportBtn.onclick = ()=> exportWorkPaperCSV(wp);
+            const approveBtn = document.getElementById('wpApproveBtn'); if (approveBtn) approveBtn.onclick = ()=> reviewCurrentWp('Approved');
+            const returnBtn = document.getElementById('wpReturnBtn'); if (returnBtn) returnBtn.onclick = ()=> reviewCurrentWp('Returned');
+            const submitBtn = document.getElementById('wpSubmitBtn'); if (submitBtn) submitBtn.onclick = ()=> submitCurrentWp();
+
+            window.__saveWpDetail = function(){
+              const form = document.getElementById('wpDetailForm'); const fd = new FormData(form); const updates={}; fd.forEach((v,k)=>{ if(['audit_id','audit_title','year','affiliate'].includes(k)) return; updates[k]=v; });
+              google.script.run.withSuccessHandler(function(){ showAlert('Saved','success'); closeModal(); BULK=null; hydrateTables(); })
+                .withFailureHandler(function(err){ console.error(err); showAlert(err && err.message?err.message:'Save failed','danger'); })
+                .updateWorkPaper(id, updates);
+            };
+            function reviewCurrentWp(status){
+              const fd = new FormData(document.getElementById('wpDetailForm')); const updates={ status, reviewer_comments: fd.get('reviewer_comments')||'' };
+              google.script.run.withSuccessHandler(function(){ showAlert('Review saved','success'); closeModal(); BULK=null; hydrateTables(); })
+                .withFailureHandler(function(err){ console.error(err); showAlert(err && err.message?err.message:'Save failed','danger'); })
+                .reviewWorkPaper(id, updates);
+            }
+            function submitCurrentWp(){
+              const fd = new FormData(document.getElementById('wpDetailForm')); const updates={ status: 'Submitted for Review', submitted_at: new Date() };
+              google.script.run.withSuccessHandler(function(){ showAlert('Submitted for review','success'); closeModal(); BULK=null; hydrateTables(); })
+                .withFailureHandler(function(err){ console.error(err); showAlert(err && err.message?err.message:'Submit failed','danger'); })
+                .updateWorkPaper(id, updates);
+            }
+            function exportWorkPaperCSV(wp){
+              try{
+                const fields = ['id','audit_id','audit_title','year','affiliate','process_area','objective','risks','controls','test_objective','proposed_tests','observation','observation_risk','reportable','status','reviewer_email','reviewer_comments','submitted_at','reviewed_at','created_by','created_at','updated_by','updated_at'];
+                const headers = fields.join(',');
+                const form = document.getElementById('wpDetailForm'); const fd = new FormData(form); const merged={...wp}; fd.forEach((v,k)=> merged[k]=v);
+                const row = fields.map(k=> '"'+String(merged[k]||'').replace(/"/g,'""')+'"').join(',');
+                const csv = headers + '\n' + row;
+                const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href=url; a.download = `${wp.id}.csv`; a.click(); setTimeout(()=>URL.revokeObjectURL(url), 1000);
+              }catch(e){ console.error(e); showAlert('Export failed','danger'); }
+            }
+          }
+
         function openReviewWorkPaper(id){
             const rec = (BULK && BULK.WorkPapers||[]).find(r=> String(r.id)===String(id));
             if (!rec) return showAlert('Record not found','danger');

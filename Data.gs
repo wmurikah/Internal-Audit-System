@@ -451,6 +451,39 @@ function reviewWorkPaper(id, updates){
   return updateRow('WorkPapers', id, updates);
 }
 
+function updateWorkPaper(id, updates){
+  const user = getCurrentUser();
+  // Allow Auditors to edit, Auditees only their own, Managers full control
+  if (user.role === 'Auditee'){
+    const wp = getRowById('WorkPapers', id);
+    if (!wp || String((wp.created_by||'').toLowerCase()) !== String(user.email).toLowerCase()){
+      throw new Error('Auditees may only edit their own work papers');
+    }
+  } else if (!(user.role==='Auditor' || user.role==='AuditManager')){
+    throw new Error('No permission to update Work Papers');
+  }
+  updates.updated_by = user.email;
+  updates.updated_at = new Date();
+  return updateRow('WorkPapers', id, updates);
+}
+
+function getAuditTrail(entity, entityId, limit){
+  try{
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sh = ss.getSheetByName('Logs'); if (!sh) return {success:true, items:[]};
+    const data = sh.getDataRange().getValues();
+    const headers = data[0];
+    const idx = {
+      timestamp: headers.indexOf('timestamp'), user_email: headers.indexOf('user_email'),
+      entity: headers.indexOf('entity'), entity_id: headers.indexOf('entity_id'), action: headers.indexOf('action'), before: headers.indexOf('before_json'), after: headers.indexOf('after_json')
+    };
+    const items = data.slice(1).map(r=>({
+      timestamp: r[idx.timestamp], user_email: r[idx.user_email], entity: r[idx.entity], entity_id: r[idx.entity_id], action: r[idx.action]
+    })).filter(x=> String(x.entity)===String(entity) && String(x.entity_id)===String(entityId)).reverse();
+    return {success:true, items: (limit?items.slice(0, limit):items)};
+  }catch(e){ Logger.log('getAuditTrail error: '+e); return {success:false, error:e.message, items:[]}; }
+}
+
 /** Audits: create (role-enforced) **/
 function createAudit(payload){
   const user = getCurrentUser();
