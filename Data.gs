@@ -338,6 +338,11 @@ function getSheetData(sheetName){
   return (typeof getSheetDataDirect === 'function') ? getSheetDataDirect(sheetName) : [];
 }
 
+/** Batch-friendly appendEvidenceRecord */
+function appendEvidenceRecord(obj){
+  return addRow('Evidence', obj);
+}
+
 function getRowById(sheetName, id){
   const rows = getSheetData(sheetName);
   return rows.find(r => r.id === id) || null;
@@ -364,7 +369,10 @@ function updateRow(sheetName, id, changes){
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
   const sh = ss.getSheetByName(sheetName);
   if (!sh) throw new Error('Sheet '+sheetName+' not found');
-  const data = sh.getDataRange().getValues();
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
+  if (lastRow < 2) throw new Error('No data rows in '+sheetName);
+  const data = sh.getRange(1,1,lastRow,lastCol).getValues();
   const headers = data[0];
   const idCol = headers.indexOf('id');
   if (idCol === -1) throw new Error('No id column');
