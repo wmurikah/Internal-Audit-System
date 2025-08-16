@@ -187,7 +187,7 @@ function getDashboardDataWithAnalytics() {
     const data = getDashboardDataUltraFast();
     
     // Apply user context
-    const user = getCurrentUserUltra();
+    const user = getCurrentUser();
     data.userRole = user.role;
     data.userPermissions = user.permissions;
     

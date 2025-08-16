@@ -509,7 +509,7 @@ function getQuantumDashboardData() {
         console.log(`⚡ Quantum dashboard served in <10ms`);
         
         // Apply current user context
-        const user = getCurrentUserUltra();
+        const user = getCurrentUser();
         data.userRole = user.role;
         data.userPermissions = user.permissions;
         
@@ -538,7 +538,7 @@ function getQuantumDashboardData() {
         const data = JSON.parse(legacySnapshot);
         console.log(`🚀 Legacy ultra-fast dashboard served`);
         
-        const user = getCurrentUserUltra();
+        const user = getCurrentUser();
         data.userRole = user.role;
         data.userPermissions = user.permissions;
         
@@ -576,7 +576,7 @@ function getQuantumDashboardData() {
         // Cache for immediate access and serve
         cache.put('QUANTUM_DASHBOARD_V2', JSON.stringify(data), 300);
         
-        const user = getCurrentUserUltra();
+        const user = getCurrentUser();
         data.userRole = user.role;
         data.userPermissions = user.permissions;
         
