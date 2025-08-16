@@ -105,7 +105,7 @@ function genActionRow_(n){
 }
 function genWorkPaperRow_(n){
   const aid = 'AUD'+('000'+((n%10)+1)).slice(-3);
-  return { id:'WP'+('000'+n).slice(-3), audit_id:aid, audit_title:'Audit '+aid, year:new Date().getFullYear(), affiliate:'Group', process_area:'Process '+n, objective:'Objective '+n, risks:'Risks...', controls:'Controls...', test_objective:'Test obj', proposed_tests:'Proposed tests', observation:'Observation', observation_risk:['Low','Medium','High'][n%3], reportable: (n%3===0?'Yes':'No'), status:['Draft','Submitted for Review','Approved','Returned'][n%4], reviewer_email:'audit.manager@company.com', reviewer_comments:'', submitted_at:'', reviewed_at:'', created_by:'auditor@company.com', created_at:new Date(), updated_by:'', updated_at:'' };
+  return { id:'WP'+('000'+n).slice(-3), audit_id:aid, audit_title:'Audit '+aid, year:new Date().getFullYear(), affiliate:'Group', process_area:'Process '+n, objective:'Objective '+n, risks:'Risks '+n, controls:'Controls '+n, test_objective:'Test obj '+n, proposed_tests:'Proposed tests '+n, observation:'Observation '+n, observation_risk:['Low','Medium','High'][n%3], reportable: (n%3===0?'Yes':'No'), status:['Draft','Submitted for Review','Approved','Returned'][n%4], reviewer_email:'audit.manager@company.com', reviewer_comments:'', submitted_at:'', reviewed_at:'', created_by:'auditor@company.com', created_at:new Date(), updated_by:'', updated_at:'' };
 }
 function genEvidenceRow_(n){
   const types = ['Audit','Issue','Action','WorkPaper'];
