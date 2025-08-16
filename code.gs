@@ -13,7 +13,7 @@ function safeResetAndSeed() {
   const required = {
     'Users': ['id','email','name','role','org_unit','active','created_at','last_login'],
     'Audits': ['id','year','affiliate','business_unit','title','scope','status','manager_email','start_date','end_date','created_by','created_at','updated_by','updated_at'],
-    'WorkPapers': ['id','audit_id','audit_title','year','affiliate','process_area','objective','risks','controls','test_objective','proposed_tests','observation','observation_risk','reportable','status','reviewer_email','reviewer_comments','submitted_at','reviewed_at','created_by','created_at','updated_by','updated_at'],
+    'WorkPapers': ['id','audit_id','audit_title','year','affiliate','process_area','objective','risks','controls','test_objective','proposed_tests','observation','observation_risk','reportable','status','reviewer_email','reviewer_comments','submitted_at','reviewed_at','created_by','created_at','updated_by','updated_at','process','risk_statement','audit_steps','sample_details','evidence_list','implications','management_response','action_plans','process_owner','due_dates','residual_risk','tags','links'],
     'Issues': ['id','audit_id','title','description','root_cause','risk_rating','recommendation','owner_email','due_date','status','reopened_count','created_by','created_at','updated_by','updated_at'],
     'Actions': ['id','issue_id','assignee_email','action_plan','due_date','status','closed_on','created_by','created_at','updated_by','updated_at'],
     'Evidence': ['id','parent_type','parent_id','file_name','drive_url','uploader_email','uploaded_on','version','checksum','status','reviewer_email','review_comment','reviewed_at','manager_email','manager_decision','manager_review_comment','manager_reviewed_at','created_at'],
@@ -75,7 +75,9 @@ function safeResetAndSeed() {
     }
   });
 
-  // Apply validations where available and set up monthly trigger
+  // Normalize and validate, then set up monthly trigger
+  try { normalizeIssuesSheet_(ss); } catch(e){ Logger.log('normalizeIssuesSheet_ error: '+e); }
+  try { fixUsersEmails_(ss); } catch(e){ Logger.log('fixUsersEmails_ error: '+e); }
   try { applyStandardValidations(); } catch(e){ Logger.log('applyStandardValidations (safe) error: '+e); }
   try { ensureMonthlyReminderTrigger(); } catch(e){ Logger.log('ensureMonthlyReminderTrigger error: '+e); }
 
@@ -117,7 +119,7 @@ function genRiskRow_(n){
 
 /** Ensure monthly trigger exists for reminders */
 function ensureMonthlyReminderTrigger(){
-  const func = 'sendMonthlyOpenIssuesReminders';
+  const func = 'sendMonthlyProcessOwnerReminders';
   const triggers = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === func);
   if (triggers.length) return { success:true, message:'Trigger exists' };
   ScriptApp.newTrigger(func).timeBased().onMonthDay(1).atHour(8).create();
@@ -125,7 +127,9 @@ function ensureMonthlyReminderTrigger(){
 }
 
 /** Send monthly reminders: group open issues by Auditee (owner_email) */
-function sendMonthlyOpenIssuesReminders(){
+function sendMonthlyProcessOwnerReminders(){
+  // Compatibility alias for any older references
+}
   try{
     const appUrl = ScriptApp.getService().getUrl();
     const cfg = getConfig();
@@ -183,5 +187,5 @@ function buildOwnerReminderHtml_(rows, appUrl){
   });
   table.push('</tbody></table>');
   const link = '<p><a href="'+appUrl+'" style="color:#1a237e;text-decoration:none">Open Audit Management System</a></p>';
-  return '<div><p>Dear Process Owner,</p><p>This is a friendly reminder of your open audit issues. Please review and take action.</p><p><strong>Attach evidence before proceeding.</strong></p>'+table.join('')+link+'<p>Regards,<br>Audit Team</p></div>';
+  return '<div><p>Dear Process Owner,</p><p>This is a friendly reminder of your open audit issues. Please review and take action.</p><p><strong>Attach evidence before proceeding.</strong></p>'+table.join('')+link+'<p>Regards,<br>Audit Team</p><p style="font-size:12px;color:#555;">CC: Auditors and Audit Managers</p></div>';
 }
