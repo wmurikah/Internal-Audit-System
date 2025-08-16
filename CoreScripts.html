@@ -196,65 +196,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>AUD001</strong></td>
-                                    <td>Fleet Management Audit</td>
-                                    <td>2023</td>
-                                    <td>Kenya</td>
-                                    <td>Fleet Logistics Kenya</td>
-                                    <td><span class="badge badge-warning">In Progress</span></td>
-                                    <td>john.doe@company.com</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View Audit AUD001', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit Audit AUD001', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>AUD002</strong></td>
-                                    <td>Financial Controls Assessment</td>
-                                    <td>2023</td>
-                                    <td>Kenya</td>
-                                    <td>Finance</td>
-                                    <td><span class="badge badge-success">Completed</span></td>
-                                    <td>jane.smith@company.com</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View Audit AUD002', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit Audit AUD002', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>AUD003</strong></td>
-                                    <td>Operational Efficiency Review</td>
-                                    <td>2023</td>
-                                    <td>Uganda</td>
-                                    <td>Operations</td>
-                                    <td><span class="badge badge-info">Planning</span></td>
-                                    <td>bob.johnson@company.com</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View Audit AUD003', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit Audit AUD003', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
+                            <tbody id="auditsTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -292,46 +234,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>ISS001</strong></td>
-                                    <td>Inadequate Fleet Maintenance Records</td>
-                                    <td>AUD001</td>
-                                    <td><span class="badge badge-danger">High</span></td>
-                                    <td>charlie.brown@company.com</td>
-                                    <td>2023-12-14</td>
-                                    <td><span class="badge badge-info">Open</span></td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View Issue ISS001', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit Issue ISS001', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>ISS002</strong></td>
-                                    <td>Unauthorized Vehicle Use</td>
-                                    <td>AUD001</td>
-                                    <td><span class="badge badge-warning">Medium</span></td>
-                                    <td>alice.williams@company.com</td>
-                                    <td>2023-12-09</td>
-                                    <td><span class="badge badge-warning">In Progress</span></td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View Issue ISS002', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit Issue ISS002', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
+                            <tbody id="issuesTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -368,44 +271,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>ACT001</strong></td>
-                                    <td>ISS001</td>
-                                    <td>Develop standardized fleet maintenance documentation templates</td>
-                                    <td>charlie.brown@company.com</td>
-                                    <td>2023-12-19</td>
-                                    <td><span class="badge badge-warning">In Progress</span></td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View Action ACT001', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit Action ACT001', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>ACT005</strong></td>
-                                    <td>ISS003</td>
-                                    <td>Redesign cash handling procedures</td>
-                                    <td>bob.johnson@company.com</td>
-                                    <td>2023-10-19</td>
-                                    <td><span class="badge badge-success">Completed</span></td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View Action ACT005', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit Action ACT005', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
+                            <tbody id="actionsTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -624,46 +490,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>USR001</strong></td>
-                                    <td>wmurikah@gmail.com</td>
-                                    <td>John Doe</td>
-                                    <td><span class="badge badge-primary">AuditManager</span></td>
-                                    <td>Audit</td>
-                                    <td><span class="badge badge-success">Active</span></td>
-                                    <td>2023-11-30</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View User USR001', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit User USR001', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>USR002</strong></td>
-                                    <td>jane.smith@company.com</td>
-                                    <td>Jane Smith</td>
-                                    <td><span class="badge badge-info">Auditor</span></td>
-                                    <td>Finance</td>
-                                    <td><span class="badge badge-success">Active</span></td>
-                                    <td>2023-11-30</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('View User USR002', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('Edit User USR002', 'info')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
+                            <tbody id="usersTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -671,10 +498,23 @@
         </div>
     </div>
 
+    <!-- Root modal container -->
+    <div id="modalRoot" class="modal d-none" onclick="if(event.target.id==='modalRoot'){closeModal();}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">Details</h5>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-footer" id="modalFooter"></div>
+      </div>
+    </div>
+
     <!-- Progressive hydration JavaScript -->
     <script>
         let currentPage = 'dashboard';
         let charts = {};
+        let BULK = null; // cached bulk data for tables
         // Register Chart.js datalabels with inlined helpers
         if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') { Chart.register(ChartDataLabels); }
         Chart.register(ChartDataLabels);
@@ -854,9 +694,112 @@
             }
         }
 
-        function refreshData() { fetchAndRenderDashboardData(); showAlert('Refreshed', 'success'); }
+        function refreshData() { fetchAndRenderDashboardData(); hydrateTables(); showAlert('Refreshed', 'success'); }
 
-        document.addEventListener('DOMContentLoaded', function() { fetchAndRenderDashboardData(); });
+        function fetchBulk(){
+            return new Promise((resolve)=>{
+                if (BULK){ return resolve(BULK); }
+                try{
+                    google.script.run.withSuccessHandler(function(data){ BULK = data; resolve(BULK); }).getBulkDataUltraFast();
+                }catch(e){ console.warn('bulk fetch failed', e); resolve(null); }
+            });
+        }
+
+        function hydrateTables(){
+            fetchBulk().then(function(){ renderAudits(); renderIssues(); renderActions(); renderUsers(); });
+        }
+
+        function renderAudits(){
+            const tb = document.getElementById('auditsTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
+            (BULK.Audits||[]).slice(0,50).forEach(a=>{
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${a.id}</strong></td><td>${a.title||''}</td><td>${a.year||''}</td><td>${a.affiliate||''}</td><td>${a.business_unit||''}</td><td><span class="badge ${a.status==='Completed'?'badge-success':(a.status==='In Progress'?'badge-warning':'badge-info')}">${a.status||''}</span></td><td>${a.manager_email||''}</td><td><div class='action-buttons'><button class='action-btn' title='View' data-action='view' data-entity='Audits' data-id='${a.id}'><i class='fas fa-eye'></i></button><button class='action-btn' title='Edit' data-action='edit' data-entity='Audits' data-id='${a.id}'><i class='fas fa-edit'></i></button></div></td>`;
+                tb.appendChild(tr);
+            });
+        }
+        function renderIssues(){
+            const tb = document.getElementById('issuesTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
+            (BULK.Issues||[]).slice(0,50).forEach(i=>{
+                const badge = i.risk_rating==='High'||i.risk_rating==='Extreme'?'badge-danger':(i.risk_rating==='Medium'?'badge-warning':'badge-success');
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${i.id}</strong></td><td>${i.title||''}</td><td>${i.audit_id||''}</td><td><span class='badge ${badge}'>${i.risk_rating||''}</span></td><td>${i.owner_email||''}</td><td>${i.due_date||''}</td><td><span class='badge badge-info'>${i.status||''}</span></td><td><div class='action-buttons'><button class='action-btn' title='View' data-action='view' data-entity='Issues' data-id='${i.id}'><i class='fas fa-eye'></i></button><button class='action-btn' title='Edit' data-action='edit' data-entity='Issues' data-id='${i.id}'><i class='fas fa-edit'></i></button></div></td>`;
+                tb.appendChild(tr);
+            });
+        }
+        function renderActions(){
+            const tb = document.getElementById('actionsTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
+            (BULK.Actions||[]).slice(0,50).forEach(a=>{
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${a.id}</strong></td><td>${a.issue_id||''}</td><td>${a.action_plan||''}</td><td>${a.assignee_email||''}</td><td>${a.due_date||''}</td><td><span class='badge ${a.status==='Completed'?'badge-success':(a.status==='In Progress'?'badge-warning':'badge-secondary')}'>${a.status||''}</span></td><td><div class='action-buttons'><button class='action-btn' title='View' data-action='view' data-entity='Actions' data-id='${a.id}'><i class='fas fa-eye'></i></button><button class='action-btn' title='Edit' data-action='edit' data-entity='Actions' data-id='${a.id}'><i class='fas fa-edit'></i></button></div></td>`;
+                tb.appendChild(tr);
+            });
+        }
+        function renderUsers(){
+            const tb = document.getElementById('usersTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
+            (BULK.Users||[]).slice(0,50).forEach(u=>{
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${u.id}</strong></td><td>${u.email||''}</td><td>${u.name||''}</td><td><span class='badge ${u.role==='AuditManager'?'badge-primary':'badge-info'}'>${u.role||''}</span></td><td>${u.org_unit||''}</td><td><span class='badge ${u.active?"badge-success":"badge-secondary"}'>${u.active?"Active":"Inactive"}</span></td><td>${u.last_login||''}</td><td><div class='action-buttons'><button class='action-btn' title='View' data-action='view' data-entity='Users' data-id='${u.id}'><i class='fas fa-eye'></i></button><button class='action-btn' title='Edit' data-action='edit' data-entity='Users' data-id='${u.id}'><i class='fas fa-edit'></i></button></div></td>`;
+                tb.appendChild(tr);
+            });
+        }
+
+        function tableActionHandler(e){
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const action = btn.dataset.action; const entity = btn.dataset.entity; const id = btn.dataset.id;
+            if (action==='view') openEntityView(entity, id); else if (action==='edit') openEntityEdit(entity, id);
+        }
+        document.addEventListener('click', tableActionHandler);
+
+        function openEntityView(entity, id){
+            const rec = (BULK && BULK[entity]||[]).find(r=> String(r.id)===String(id));
+            if (!rec) return showAlert('Record not found','danger');
+            const html = `<div style='display:grid;grid-template-columns:160px 1fr;gap:8px;'>${Object.entries(rec).map(([k,v])=>`<div class='text-muted'>${k}</div><div>${String(v)}</div>`).join('')}</div>`;
+            showModal(entity+' '+id, html, [{label:'Close', cls:'btn btn-outline', onclick:'closeModal()'}]);
+        }
+        function openEntityEdit(entity, id){
+            const rec = (BULK && BULK[entity]||[]).find(r=> String(r.id)===String(id));
+            if (!rec) return showAlert('Record not found','danger');
+            const editable = Object.keys(rec).filter(k=> !['id','created_at','updated_at','checksum','drive_url'].includes(k));
+            const form = `<form id='editForm'>${editable.map(k=>`<div class='form-group'><label class='form-label'>${k}</label><input class='form-control' name='${k}' value='${String(rec[k]||'').replace(/"/g,'&quot;')}'></div>`).join('')}</form>`;
+            const save = ()=>{
+                const fd = new FormData(document.getElementById('editForm')); const obj={}; fd.forEach((v,k)=>obj[k]=v);
+                google.script.run.withSuccessHandler(function(res){ showAlert('Saved','success'); closeModal(); BULK=null; hydrateTables(); fetchAndRenderDashboardData(); }).withFailureHandler(function(err){ console.error(err); showAlert('Save failed','danger'); }).updateRow(entity, id, obj);
+            };
+            showModal('Edit '+entity+' '+id, form, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Save', cls:'btn btn-primary', onclick:'__saveEdit()'}]);
+            window.__saveEdit = save;
+        }
+
+        function showModal(title, bodyHTML, actions){
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').innerHTML = bodyHTML;
+            const footer = document.getElementById('modalFooter'); footer.innerHTML='';
+            (actions||[]).forEach(a=>{ const b=document.createElement('button'); b.className=a.cls||'btn'; b.textContent=a.label||'OK'; b.setAttribute('onclick', a.onclick||'closeModal()'); footer.appendChild(b); });
+            document.getElementById('modalRoot').classList.remove('d-none');
+        }
+        function closeModal(){ document.getElementById('modalRoot').classList.add('d-none'); }
+
+        // Users: Create user button
+        document.addEventListener('click', function(e){
+            if (e.target.closest('button.btn.btn-primary i.fa-user-plus')){ e.preventDefault(); openCreateUser(); }
+        });
+        function openCreateUser(){
+            const body = `<form id='createUserForm'>
+                <div class='form-group'><label class='form-label'>Email</label><input name='email' type='email' class='form-control' required></div>
+                <div class='form-group'><label class='form-label'>Name</label><input name='name' class='form-control'></div>
+                <div class='form-group'><label class='form-label'>Role</label><select name='role' class='form-select'><option>Auditee</option><option>Auditor</option><option>AuditManager</option><option>SeniorManagement</option><option>Board</option></select></div>
+                <div class='form-group'><label class='form-label'>Org Unit</label><input name='org_unit' class='form-control'></div>
+                <div class='form-group'><label class='form-label'>Active</label><select name='active' class='form-select'><option value='true' selected>Active</option><option value='false'>Inactive</option></select></div>
+            </form>`;
+            const create = ()=>{
+                const fd = new FormData(document.getElementById('createUserForm')); const u={}; fd.forEach((v,k)=>u[k]=v); u.active = (u.active==='true');
+                google.script.run.withSuccessHandler(function(){ showAlert('User invited','success'); closeModal(); BULK=null; hydrateTables(); }).withFailureHandler(function(err){ console.error(err); showAlert('Create failed','danger'); }).createOrUpdateUser(u);
+            };
+            showModal('Create User', body, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Create & Invite', cls:'btn btn-primary', onclick:'__createUser()'}]);
+            window.__createUser = create;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() { fetchAndRenderDashboardData(); hydrateTables(); });
         // charts.js removed; using inline chart helpers only
 
         const style = document.createElement('style');
