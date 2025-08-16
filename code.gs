@@ -183,5 +183,5 @@ function buildOwnerReminderHtml_(rows, appUrl){
   });
   table.push('</tbody></table>');
   const link = '<p><a href="'+appUrl+'" style="color:#1a237e;text-decoration:none">Open Audit Management System</a></p>';
-  return '<div><p>Dear Process Owner,</p><p>This is a friendly reminder of your open audit issues. Please review and take action.</p>'+table.join('')+link+'<p>Regards,<br>Audit Team</p></div>';
+  return '<div><p>Dear Process Owner,</p><p>This is a friendly reminder of your open audit issues. Please review and take action.</p><p><strong>Attach evidence before proceeding.</strong></p>'+table.join('')+link+'<p>Regards,<br>Audit Team</p></div>';
 }
