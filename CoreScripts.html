@@ -32,6 +32,10 @@
                     <i class="fas fa-clipboard-list"></i>
                     Audits
                 </button>
+                <button class="nav-link" onclick="showPage('workpapers')">
+                    <i class="fas fa-file-alt"></i>
+                    Work Papers
+                </button>
                 <button class="nav-link" onclick="showPage('issues')">
                     <i class="fas fa-exclamation-triangle"></i>
                     Issues
@@ -202,6 +206,42 @@
                 </div>
             </div>
 
+            <!-- Work Papers Page -->
+            <div id="workpapersPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Work Papers</h1>
+                        <p class="page-subtitle">Upload, collaborate, and review audit work papers</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" onclick="refreshData()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="openCreateWorkPaper()">
+                            <i class="fas fa-file-circle-plus"></i> New Work Paper
+                        </button>
+                    </div>
+                </div>
+                <div class="page-content">
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Audit</th>
+                                    <th>Process Area</th>
+                                    <th>Status</th>
+                                    <th>Created By</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="workpapersTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Issues Page -->
             <div id="issuesPage" class="page" style="display: none;">
                 <div class="page-header">
@@ -288,7 +328,7 @@
                         <button class="btn btn-outline" onclick="refreshData()">
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>
-                        <button class="btn btn-primary" onclick="showAlert('Upload Evidence functionality ready', 'success')">
+                        <button class="btn btn-primary" onclick="openUploadEvidence()">
                             <i class="fas fa-upload"></i> Upload Evidence
                         </button>
                     </div>
@@ -307,48 +347,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>EV001</strong></td>
-                                    <td>
-                                        <i class="fas fa-file-pdf text-danger me-2"></i>
-                                        Fleet Management Plan.pdf
-                                    </td>
-                                    <td>workpaper - WP001</td>
-                                    <td>jane.smith@company.com</td>
-                                    <td>2023-10-04</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('Download EV001', 'info')" title="Download">
-                                                <i class="fas fa-download"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('View EV001', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>EV002</strong></td>
-                                    <td>
-                                        <i class="fas fa-file-excel text-success me-2"></i>
-                                        Fleet Inventory Checklist.xlsx
-                                    </td>
-                                    <td>workpaper - WP002</td>
-                                    <td>bob.johnson@company.com</td>
-                                    <td>2023-10-14</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="action-btn" onclick="showAlert('Download EV002', 'info')" title="Download">
-                                                <i class="fas fa-download"></i>
-                                            </button>
-                                            <button class="action-btn" onclick="showAlert('View EV002', 'info')" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
+                            <tbody id="evidenceTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -469,7 +468,7 @@
                         <button class="btn btn-outline" onclick="refreshData()">
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>
-                        <button class="btn btn-primary" onclick="showAlert('Create User functionality ready', 'success')">
+                        <button class="btn btn-primary" onclick="openCreateUser()">
                             <i class="fas fa-user-plus"></i> Create User
                         </button>
                     </div>
@@ -687,7 +686,7 @@
                     .withFailureHandler(function(err){ console.error('Dashboard load failed', err); showAlert('Failed to load dashboard data', 'danger'); })
                     .getQuantumDashboardData();
                 // fetch user and config for super admin UX
-                google.script.run.withSuccessHandler(function(user){ ensureSuperAdminUI(user); }).getCurrentUser();
+                google.script.run.withSuccessHandler(function(user){ window.USER = user; ensureSuperAdminUI(user); }).getCurrentUser();
                 google.script.run.withSuccessHandler(function(cfg){ renderConfigArrays(cfg); }).getConfig();
             } catch (e) {
                 console.warn('google.script.run not available:', e);
@@ -706,7 +705,7 @@
         }
 
         function hydrateTables(){
-            fetchBulk().then(function(){ renderAudits(); renderIssues(); renderActions(); renderUsers(); });
+            fetchBulk().then(function(){ renderAudits(); renderIssues(); renderActions(); renderWorkPapers(); renderEvidence(); renderUsers(); });
         }
 
         function renderAudits(){
@@ -747,7 +746,9 @@
             const btn = e.target.closest('button[data-action]');
             if (!btn) return;
             const action = btn.dataset.action; const entity = btn.dataset.entity; const id = btn.dataset.id;
-            if (action==='view') openEntityView(entity, id); else if (action==='edit') openEntityEdit(entity, id);
+            if (action==='view') openEntityView(entity, id);
+            else if (action==='edit') openEntityEdit(entity, id);
+            else if (action==='review' && entity==='WorkPapers') openReviewWorkPaper(id);
         }
         document.addEventListener('click', tableActionHandler);
 
@@ -761,7 +762,12 @@
             const rec = (BULK && BULK[entity]||[]).find(r=> String(r.id)===String(id));
             if (!rec) return showAlert('Record not found','danger');
             const editable = Object.keys(rec).filter(k=> !['id','created_at','updated_at','checksum','drive_url'].includes(k));
-            const form = `<form id='editForm'>${editable.map(k=>`<div class='form-group'><label class='form-label'>${k}</label><input class='form-control' name='${k}' value='${String(rec[k]||'').replace(/"/g,'&quot;')}'></div>`).join('')}</form>`;
+            const fields = editable.map(k=>{
+                const ro = (entity==='WorkPapers' && k==='audit_id') ? 'readonly disabled' : '';
+                const safeVal = String(rec[k]||'').replace(/\"/g,'&quot;');
+                return `<div class='form-group'><label class='form-label'>${k}</label><input class='form-control' name='${k}' ${ro} value='${safeVal}'></div>`;
+            }).join('');
+            const form = `<form id='editForm'>${fields}</form>`;
             const save = ()=>{
                 const fd = new FormData(document.getElementById('editForm')); const obj={}; fd.forEach((v,k)=>obj[k]=v);
                 google.script.run.withSuccessHandler(function(res){ showAlert('Saved','success'); closeModal(); BULK=null; hydrateTables(); fetchAndRenderDashboardData(); }).withFailureHandler(function(err){ console.error(err); showAlert('Save failed','danger'); }).updateRow(entity, id, obj);
@@ -797,6 +803,88 @@
             };
             showModal('Create User', body, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Create & Invite', cls:'btn btn-primary', onclick:'__createUser()'}]);
             window.__createUser = create;
+        }
+
+        // Render helpers for WorkPapers and Evidence, plus creation/review flows
+        function renderWorkPapers(){
+            const tb = document.getElementById('workpapersTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
+            (BULK.WorkPapers||[]).slice(0,50).forEach(wp=>{
+                const actions = [];
+                actions.push(`<button class='action-btn' title='View' data-action='view' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-eye'></i></button>`);
+                actions.push(`<button class='action-btn' title='Edit' data-action='edit' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-edit'></i></button>`);
+                if ((window.USER && window.USER.role === 'AuditManager')){
+                    actions.push(`<button class='action-btn' title='Review' data-action='review' data-entity='WorkPapers' data-id='${wp.id}'><i class='fas fa-check-double'></i></button>`);
+                }
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${wp.id}</strong></td><td>${wp.audit_id||''}</td><td>${wp.process_area||''}</td><td><span class='badge badge-info'>${wp.status||''}</span></td><td>${wp.created_by||''}</td><td>${wp.created_at||''}</td><td><div class='action-buttons'>${actions.join('')}</div></td>`;
+                tb.appendChild(tr);
+            });
+        }
+        function renderEvidence(){
+            const tb = document.getElementById('evidenceTableBody'); if (!tb || !BULK) return; tb.innerHTML='';
+            (BULK.Evidence||[]).slice(0,50).forEach(ev=>{
+                const icon = ev.file_name?.toLowerCase().endsWith('.pdf') ? 'fa-file-pdf text-danger' : (ev.file_name?.toLowerCase().match(/\.(xlsx|xls)$/)?'fa-file-excel text-success':'fa-file')
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${ev.id}</strong></td><td><i class='fas ${icon} me-2'></i>${ev.file_name||''}</td><td>${(ev.parent_type||'') + (ev.parent_id?(' - '+ev.parent_id):'')}</td><td>${ev.uploader_email||''}</td><td>${ev.uploaded_on||''}</td><td><div class='action-buttons'><a class='action-btn' href='${ev.drive_url||'#'}' target='_blank' title='Open'><i class='fas fa-eye'></i></a><a class='action-btn' href='${ev.drive_url||'#'}' target='_blank' title='Download'><i class='fas fa-download'></i></a></div></td>`;
+                tb.appendChild(tr);
+            });
+        }
+        function openUploadEvidence(){
+            const body = `<form id='evidenceUploadForm'>
+                <div class='form-group'><label class='form-label'>Parent Type</label><select name='parentType' class='form-select' required><option>Audit</option><option>Issue</option><option>Action</option><option>WorkPaper</option></select></div>
+                <div class='form-group'><label class='form-label'>Parent ID</label><input name='parentId' class='form-control' placeholder='e.g., ISS001' required></div>
+                <div class='form-group'><label class='form-label'>File</label><input name='file' type='file' class='form-control' required></div>
+            </form>`;
+            const upload = ()=>{
+                const form = document.getElementById('evidenceUploadForm');
+                const fd = new FormData(form);
+                const file = form.querySelector("input[name='file']").files[0];
+                if (!file) return showAlert('Please choose a file','warning');
+                const reader = new FileReader();
+                reader.onload = function(e){
+                    const dataUrl = e.target.result;
+                    const fileName = file.name; const mimeType = file.type || 'application/octet-stream';
+                    const parentType = fd.get('parentType'); const parentId = fd.get('parentId');
+                    google.script.run.withSuccessHandler(function(res){
+                        if (res && res.success){ showAlert('Evidence uploaded','success'); closeModal(); BULK=null; hydrateTables(); }
+                        else { showAlert(res.error||'Upload failed','danger'); }
+                    }).withFailureHandler(function(err){ console.error(err); showAlert('Upload failed','danger'); }).uploadEvidenceFromBase64(parentType, parentId, fileName, mimeType, dataUrl);
+                };
+                reader.readAsDataURL(file);
+            };
+            showModal('Upload Evidence', body, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Upload', cls:'btn btn-primary', onclick:'__uploadEvidence()'}]);
+            window.__uploadEvidence = upload;
+        }
+        function openCreateWorkPaper(){
+            // Build audit options from BULK.Audits
+            const audits = (BULK && BULK.Audits) || [];
+            const opts = audits.map(a=>`<option value='${a.id}'>${a.id} - ${a.title||''}</option>`).join('');
+            const body = `<form id='createWpForm'>
+                <div class='form-group'><label class='form-label'>Audit</label><select name='audit_id' class='form-select' required>${opts}</select></div>
+                <div class='form-group'><label class='form-label'>Process Area</label><input name='process_area' class='form-control' required></div>
+                <div class='form-group'><label class='form-label'>Objective</label><input name='objective' class='form-control'></div>
+                <div class='form-group'><label class='form-label'>Test Objective</label><input name='test_objective' class='form-control'></div>
+            </form>`;
+            const create = ()=>{
+                const fd = new FormData(document.getElementById('createWpForm')); const payload={}; fd.forEach((v,k)=>payload[k]=v);
+                google.script.run.withSuccessHandler(function(res){ if(res && res.id){ showAlert('Work paper created','success'); closeModal(); BULK=null; hydrateTables(); } else { showAlert(res.error||'Create failed','danger'); } }).withFailureHandler(function(err){ console.error(err); showAlert('Create failed','danger'); }).createWorkPaper(payload);
+            };
+            showModal('New Work Paper', body, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Create', cls:'btn btn-primary', onclick:'__createWp()'}]);
+            window.__createWp = create;
+        }
+        function openReviewWorkPaper(id){
+            const rec = (BULK && BULK.WorkPapers||[]).find(r=> String(r.id)===String(id));
+            if (!rec) return showAlert('Record not found','danger');
+            const body = `<form id='reviewWpForm'>
+                <div class='form-group'><label class='form-label'>Status</label><select name='status' class='form-select'><option>Approved</option><option>Returned</option></select></div>
+                <div class='form-group'><label class='form-label'>Reviewer Comments</label><input name='reviewer_comments' class='form-control' value='${(rec.reviewer_comments||'').replace(/\"/g,'&quot;')}'></div>
+            </form>`;
+            const save = ()=>{
+                const fd = new FormData(document.getElementById('reviewWpForm')); const updates={}; fd.forEach((v,k)=>updates[k]=v);
+                google.script.run.withSuccessHandler(function(res){ showAlert('Review saved','success'); closeModal(); BULK=null; hydrateTables(); }).withFailureHandler(function(err){ console.error(err); showAlert('Save failed','danger'); }).reviewWorkPaper(id, updates);
+            };
+            showModal('Review Work Paper '+id, body, [{label:'Cancel', cls:'btn btn-outline', onclick:'closeModal()'},{label:'Save Review', cls:'btn btn-primary', onclick:'__saveWpReview()'}]);
+            window.__saveWpReview = save;
         }
 
         document.addEventListener('DOMContentLoaded', function() { fetchAndRenderDashboardData(); hydrateTables(); });
