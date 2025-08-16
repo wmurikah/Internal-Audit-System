@@ -10,47 +10,53 @@ function getCurrentUser() {
   try {
     const userEmail = Session.getActiveUser().getEmail();
 
-    // Domain enforcement from Settings if available
+    // Fast cache layer (return early if present)
+    const cache = CacheService.getScriptCache();
+    const key = `auth_user_${(userEmail || '').toLowerCase()}`;
+    const cached = cache.get(key);
+    if (cached) { try { return JSON.parse(cached); } catch(e){} }
+
+    // Load Users sheet first. If a matching active user exists, we accept regardless of domain.
+    const users = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users');
+    const existing = users.find(u => (u.email||'').toLowerCase() === (userEmail||'').toLowerCase() && u.active !== false);
+
+    // Domain enforcement from Settings only applies when the user is NOT explicitly registered
     let allowedDomain = 'hasspetroleum.com';
     try { const cfg = getConfig(); if (cfg && cfg.ALLOWED_SIGNIN_DOMAIN) allowedDomain = cfg.ALLOWED_SIGNIN_DOMAIN; } catch(e){}
 
-    if (!userEmail || userEmail.split('@')[1] !== allowedDomain) {
-      return {
-        email: userEmail || 'anonymous@system.local',
-        role: 'Guest',
-        name: 'Unauthorized',
-        permissions: [],
-        org_unit: 'Unknown',
-        authenticated: false,
-        active: false,
-        error: 'Access restricted to corporate domain'
-      };
+    if (!existing) {
+      if (!userEmail || userEmail.split('@')[1] !== allowedDomain) {
+        const guestRes = {
+          email: userEmail || 'anonymous@system.local',
+          role: 'Guest',
+          name: 'Unauthorized',
+          permissions: [],
+          org_unit: 'Unknown',
+          authenticated: false,
+          active: false,
+          error: 'Access restricted to corporate domain'
+        };
+        try { cache.put(key, JSON.stringify(guestRes), 300); } catch(e){}
+        return guestRes;
+      }
     }
 
-    // Fast cache layer
-    const cache = CacheService.getScriptCache();
-    const key = `auth_user_${userEmail.toLowerCase()}`;
-    const cached = cache.get(key);
-    if (cached){ try { return JSON.parse(cached); } catch(e){} }
-
-    // Lookup Users sheet directly (fast direct read)
-    const users = (typeof getSheetDataDirect === 'function') ? getSheetDataDirect('Users') : getSheetData('Users');
-    const user = users.find(u => (u.email||'').toLowerCase() === userEmail.toLowerCase() && u.active !== false);
+    const user = existing || null;
 
     const result = user ? {
       email: userEmail,
       role: user.role,
-      name: user.name || userEmail.split('@')[0],
+      name: user.name || (userEmail ? userEmail.split('@')[0] : 'User'),
       permissions: getPermissions(user.role),
       org_unit: user.org_unit || 'Unknown',
       authenticated: true,
       active: true,
       id: user.id
     } : {
-      // First time setup default to AuditManager
+      // First time setup default to AuditManager when domain-allowed but not yet registered
       email: userEmail,
       role: 'AuditManager',
-      name: userEmail.split('@')[0],
+      name: userEmail ? userEmail.split('@')[0] : 'AuditManager',
       permissions: getPermissions('AuditManager'),
       org_unit: 'Internal Audit',
       authenticated: true,
