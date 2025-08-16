@@ -40,7 +40,7 @@ function getCurrentUser() {
       return guestRes;
     }
 
-    const user = preUser || null;
+    let user = preUser || null;
 =======
     // Try to resolve user from Users sheet first; if present and active, use it regardless of domain
     let preUser = null;
