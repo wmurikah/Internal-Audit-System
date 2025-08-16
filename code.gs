@@ -128,8 +128,6 @@ function ensureMonthlyReminderTrigger(){
 
 /** Send monthly reminders: group open issues by Auditee (owner_email) */
 function sendMonthlyProcessOwnerReminders(){
-  // Compatibility alias for any older references
-}
   try{
     const appUrl = ScriptApp.getService().getUrl();
     const cfg = getConfig();
@@ -171,7 +169,57 @@ function sendMonthlyProcessOwnerReminders(){
 
     logAction('Reminders', 'monthly', 'issues_open_by_owner', {}, { recipients: Object.keys(byOwner).length, totalOpen: openIssues.length });
     return { success:true, recipients: Object.keys(byOwner).length, totalOpen: openIssues.length };
-  }catch(e){ Logger.log('sendMonthlyOpenIssuesReminders error: '+e); return { success:false, error:e.message }; }
+  }catch(e){ Logger.log('sendMonthlyProcessOwnerReminders error: '+e); return { success:false, error:e.message }; }
+}
+
+/** Normalize Issues sheet: collapse stray 'Open' column into 'status' and remove it */
+function normalizeIssuesSheet_(ss){
+  try{
+    const sh = ss.getSheetByName('Issues'); if (!sh) return;
+    const lastRow = sh.getLastRow(); const lastCol = sh.getLastColumn(); if (lastRow < 2 || lastCol < 1) return;
+    const headers = sh.getRange(1,1,1,lastCol).getValues()[0];
+    const openIdx = headers.indexOf('Open');
+    const statusIdx = headers.indexOf('status');
+    if (openIdx === -1 || statusIdx === -1) return;
+    const rng = sh.getRange(2, 1, lastRow-1, lastCol).getValues();
+    let changed = 0;
+    for (let r=0; r<rng.length; r++){
+      const openVal = String(rng[r][openIdx]||'').trim().toLowerCase();
+      const statusVal = String(rng[r][statusIdx]||'').trim();
+      const isOpen = ['open','yes','true','1','y'].includes(openVal);
+      if (!statusVal && isOpen){ rng[r][statusIdx] = 'Open'; changed++; }
+    }
+    if (changed){ sh.getRange(2,1,rng.length,lastCol).setValues(rng); }
+    // Remove the stray 'Open' column (append-only header verification already ensures 'status' exists)
+    sh.deleteColumn(openIdx+1);
+  }catch(e){ Logger.log('normalizeIssuesSheet_ inner error: '+e); }
+}
+
+/** Fix malformed emails in Users sheet and activate test accounts */
+function fixUsersEmails_(ss){
+  try{
+    const sh = ss.getSheetByName('Users'); if (!sh) return;
+    const lastRow = sh.getLastRow(); const lastCol = sh.getLastColumn(); if (lastRow < 2) return;
+    const headers = sh.getRange(1,1,1,lastCol).getValues()[0];
+    const idx = { email: headers.indexOf('email'), active: headers.indexOf('active') };
+    if (idx.email === -1) return;
+    const cfg = (function(){ try{ return getConfig(); }catch(e){ return getDefaultConfig ? getDefaultConfig() : {}; } })();
+    const domain = (cfg && cfg.ALLOWED_SIGNIN_DOMAIN) ? String(cfg.ALLOWED_SIGNIN_DOMAIN) : 'hasspetroleum.com';
+    const data = sh.getRange(2,1,lastRow-1,lastCol).getValues();
+    let any = false;
+    for (let r=0; r<data.length; r++){
+      let em = String(data[r][idx.email]||'').trim();
+      if (em && em.indexOf('@') === -1){
+        // Heuristic fixes
+        if (em.endsWith('gmail.com')) em = em.replace('gmail.com','@gmail.com');
+        else if (em.endsWith(domain)) em = em.replace(domain, '@'+domain);
+        else if (/^[^@]+$/.test(em)) em = em + '@' + domain;
+        data[r][idx.email] = em; any = true;
+      }
+      if (String(em).toLowerCase() === 'wmurikah@gmail.com' && idx.active !== -1){ data[r][idx.active] = true; any = true; }
+    }
+    if (any){ sh.getRange(2,1,lastRow-1,lastCol).setValues(data); }
+  }catch(e){ Logger.log('fixUsersEmails_ error: '+e); }
 }
 
 function buildOwnerReminderHtml_(rows, appUrl){
