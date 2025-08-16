@@ -301,7 +301,7 @@ function getBulkDataUltraFast() {
  * Bulk generate Work Papers PDFs (server-side stub)
  * Returns array of Drive links. Implemented to satisfy UI wiring; keeps performance by batching.
  */
-function bulkGenerateWorkPapersPDF(ids){
+function bulkGenerateWorkPapersCSVLinksDeprecated(ids){
   try{
     if (!Array.isArray(ids) || ids.length===0) return { success:false, error:'No ids provided' };
     // Placeholder implementation: generate CSV blob per WP and save to Drive as .csv, return file links
@@ -318,7 +318,7 @@ function bulkGenerateWorkPapersPDF(ids){
       links.push(file.getUrl());
     });
     return { success:true, links };
-  }catch(e){ Logger.log('bulkGenerateWorkPapersPDF error: '+e); return { success:false, error:e.message }; }
+  }catch(e){ Logger.log('bulkGenerateWorkPapersCSVLinksDeprecated error: '+e); return { success:false, error:e.message }; }
 }
 
 /**

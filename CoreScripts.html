@@ -24,35 +24,35 @@
             </div>
             
             <nav class="sidebar-nav">
-                <button class="nav-link active" onclick="showPage('dashboard')">
+                <button class="nav-link active" data-page="dashboard" onclick="showPage('dashboard')">
                     <i class="fas fa-tachometer-alt"></i>
                     Dashboard
                 </button>
-                <button class="nav-link" onclick="showPage('audits')">
+                <button class="nav-link" data-page="audits" onclick="showPage('audits')">
                     <i class="fas fa-clipboard-list"></i>
                     Audits
                 </button>
-                <button class="nav-link" onclick="showPage('workpapers')">
+                <button class="nav-link" data-page="workpapers" onclick="showPage('workpapers')">
                     <i class="fas fa-file-alt"></i>
                     Work Papers
                 </button>
-                <button class="nav-link" onclick="showPage('issues')">
+                <button class="nav-link" data-page="issues" onclick="showPage('issues')">
                     <i class="fas fa-exclamation-triangle"></i>
                     Issues
                 </button>
-                <button class="nav-link" onclick="showPage('actions')">
+                <button class="nav-link" data-page="actions" onclick="showPage('actions')">
                     <i class="fas fa-tasks"></i>
                     Actions
                 </button>
-                <button class="nav-link" onclick="showPage('reports')">
+                <button class="nav-link" data-page="reports" onclick="showPage('reports')">
                     <i class="fas fa-chart-bar"></i>
                     Reports
                 </button>
-                <button class="nav-link" onclick="showPage('configuration')">
+                <button class="nav-link" data-page="configuration" onclick="showPage('configuration')">
                     <i class="fas fa-cog"></i>
                     Configuration
                 </button>
-                <button class="nav-link" onclick="showPage('users')" id="userManagementLink" style="display:none;">
+                <button class="nav-link" data-page="users" onclick="showPage('users')" id="userManagementLink" style="display:none;">
                     <i class="fas fa-users"></i>
                     User Management
                 </button>
@@ -526,8 +526,8 @@
         let BULK = null; // cached bulk data for tables
         let WP_PAGE = 1; const WP_PAGE_SIZE = 20;
         // Register Chart.js datalabels with inlined helpers
-        if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') { Chart.register(ChartDataLabels); }
-        Chart.register(ChartDataLabels);
+        if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') { try{ Chart.register(ChartDataLabels); }catch(e){} }
+        try{ Chart.register(ChartDataLabels); }catch(e){}
 
         function showPage(pageName) {
             const pages = ['dashboard', 'audits', 'issues', 'actions', 'workpapers', 'reports', 'configuration', 'users'];
