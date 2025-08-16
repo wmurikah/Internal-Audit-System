@@ -453,6 +453,25 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="config-section">
+                            <div class="config-header">
+                                <h3 class="config-title">Default Landing Page</h3>
+                            </div>
+                            <div class="config-body">
+                                <label class="form-label">Choose module to open first</label>
+                                <select id="defaultLandingSelect" class="form-select" onchange="setDefaultLanding(this.value)">
+                                    <option value="workpapers">Work Papers</option>
+                                    <option value="dashboard">Dashboard</option>
+                                    <option value="audits">Audits</option>
+                                    <option value="issues">Issues</option>
+                                    <option value="actions">Actions</option>
+                                    <option value="evidence">Evidence</option>
+                                    <option value="reports">Reports</option>
+                                    <option value="users">User Management</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -519,7 +538,7 @@
         Chart.register(ChartDataLabels);
 
         function showPage(pageName) {
-            const pages = ['dashboard', 'audits', 'issues', 'actions', 'evidence', 'reports', 'configuration', 'users'];
+            const pages = ['dashboard', 'audits', 'issues', 'actions', 'workpapers', 'evidence', 'reports', 'configuration', 'users'];
             pages.forEach(page => {
                 const element = document.getElementById(page + 'Page');
                 if (element) element.style.display = 'none';
@@ -527,7 +546,9 @@
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
             const targetPage = document.getElementById(pageName + 'Page');
             if (targetPage) targetPage.style.display = 'block';
-            if (event && event.target) event.target.classList.add('active');
+            // Programmatically set active state for the corresponding nav button
+            const btn = document.querySelector(`.sidebar-nav button[onclick="showPage('${pageName}')"]`);
+            if (btn) btn.classList.add('active');
             currentPage = pageName;
         }
 
@@ -633,6 +654,9 @@
                     as.appendChild(row);
                 });
             }
+            // default landing
+            const dl = document.getElementById('defaultLandingSelect');
+            if (dl) { dl.value = (cfg.defaultLanding || 'workpapers'); }
         }
 
         function addRiskRating(){ const v = document.getElementById('newRiskRating').value.trim(); if(!v) return; updateConfigOnServer({ addRiskRating:v }); }
@@ -643,6 +667,7 @@
         function updateConfigOnServer(delta){
             google.script.run.withSuccessHandler(res=>{ if(res.success){ showAlert('Configuration saved','success'); fetchAndRenderDashboardData(); } else { showAlert(res.error||'Config save failed','danger'); } }).withFailureHandler(err=>{ showAlert('Config error','danger'); console.error(err); }).updateConfigurationDelta(delta);
         }
+        function setDefaultLanding(value){ updateConfigOnServer({ setDefaultLanding: value }); }
 
         function hydrateDashboard(snapshot) {
             document.getElementById('metricActiveAudits').textContent = snapshot.activeAudits ?? 0;
@@ -656,7 +681,9 @@
                 const rd = snapshot.riskDistribution || { Extreme:0, High:0, Medium:0, Low:0 };
                 const labels = ['High','Medium','Low','Extreme'];
                 const data = labels.map(k => rd[k]||0);
-                const colors = ['#f44336','#2196f3','#4caf50','#ff9800'];
+                // Okabe-Ito colorblind-safe palette mapping
+                const okabeIto = { High:'#E69F00', Medium:'#0072B2', Low:'#009E73', Extreme:'#D55E00' };
+                const colors = labels.map(l => okabeIto[l]);
                 doughnutChart('chartRiskDistribution', labels, data, colors);
             })();
 
@@ -666,12 +693,14 @@
             doughnutChart('chartIssuesPerArea', units, totalIssuesData, ['#1e88e5','#43a047','#fb8c00','#8e24aa','#3949ab','#00acc1','#f4511e','#7cb342','#6d4c41','#5e35b1']);
 
             const risks = ['Extreme','High','Medium','Low'];
-            const riskColors = { Extreme:'#ff6d00', High:'#e53935', Medium:'#1e88e5', Low:'#43a047' };
+            const riskColors = { Extreme:'#D55E00', High:'#E69F00', Medium:'#0072B2', Low:'#009E73' }; // Okabe-Ito palette
             const riskDatasets = risks.map(r => ({ label: r, data: units.map(u => (ea.riskRatingPerArea[u] && ea.riskRatingPerArea[u][r]) || 0), backgroundColor: riskColors[r] }));
             stackedBarChart('chartRiskPerArea', units, riskDatasets);
 
             const highRiskNI = units.map(u => ea.highRiskNotImplemented[u] || 0);
-            doughnutChart('chartHighRiskNotImpl', units, highRiskNI, ['#e53935','#8e24aa','#1e88e5','#43a047','#fb8c00','#00acc1','#6d4c41','#3949ab']);
+            // Use colorblind-safe categorical palette for units (Okabe-Ito)
+            const unitPalette = ['#0072B2','#E69F00','#009E73','#D55E00','#CC79A7','#56B4E9','#F0E442','#000000'];
+            doughnutChart('chartHighRiskNotImpl', units, highRiskNI, unitPalette.slice(0, Math.max(1, units.length)));
 
             const statuses = ['Not Implemented','Implemented','Not Due'];
             const statusColors = { 'Not Implemented':'#e53935', 'Implemented':'#43a047', 'Not Due':'#1e88e5' };
@@ -887,7 +916,17 @@
             window.__saveWpReview = save;
         }
 
-        document.addEventListener('DOMContentLoaded', function() { fetchAndRenderDashboardData(); hydrateTables(); });
+        document.addEventListener('DOMContentLoaded', function() { 
+            // Resolve default landing from Settings (fallback to workpapers)
+            try {
+                google.script.run.withSuccessHandler(function(cfg){
+                    const page = (cfg && cfg.defaultLanding) ? String(cfg.defaultLanding) : 'workpapers';
+                    showPage(page);
+                }).getConfig();
+            } catch(e){ try { showPage('workpapers'); } catch(err){} }
+            fetchAndRenderDashboardData(); 
+            hydrateTables(); 
+        });
         // charts.js removed; using inline chart helpers only
 
         const style = document.createElement('style');

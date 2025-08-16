@@ -49,6 +49,7 @@ function updateConfigurationDelta(delta){
     if (delta.removeRiskRating){ cfg.riskRatings = cfg.riskRatings.filter(x=> x !== delta.removeRiskRating); }
     if (delta.addAuditStatus){ if (!cfg.auditStatuses.includes(delta.addAuditStatus)) cfg.auditStatuses.push(delta.addAuditStatus); }
     if (delta.removeAuditStatus){ cfg.auditStatuses = cfg.auditStatuses.filter(x=> x !== delta.removeAuditStatus); }
+    if (delta.setDefaultLanding){ cfg.defaultLanding = String(delta.setDefaultLanding); }
     return updateConfig(cfg);
   }catch(e){
     Logger.log('updateConfigurationDelta error: '+e);
@@ -155,6 +156,7 @@ function getDefaultConfig() {
     businessUnits: ['Fleet Logistics Kenya', 'Finance', 'Operations', 'HR', 'IT', 'Compliance', 'Legal', 'Procurement'],
     affiliates: ['Group', 'Kenya', 'Uganda', 'Tanzania', 'Rwanda', 'South Sudan', 'DRC'],
     riskCategories: ['Operational', 'Financial', 'Compliance', 'Strategic', 'Reputational', 'Technology'],
+    defaultLanding: 'workpapers',
     OPENAI_API_KEY: '',
     SYSTEM_EMAIL: 'audit@company.com',
     EMAIL_NOTIFICATIONS: true,
