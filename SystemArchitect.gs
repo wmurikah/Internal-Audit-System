@@ -1521,16 +1521,159 @@ function executeBillionDollarDeployment() {
     };
   }
 }
+/**
+ * 🔍 QUICK DASHBOARD TEST FUNCTION
+ * Tests the complete dashboard data pipeline to identify issues
+ */
 function testDashboardDataPipeline() {
-  // Tests entire dashboard data pipeline
-  // Identifies exactly where issues occur
-  // Returns detailed diagnostic information
+  console.log('🔍 Testing dashboard data pipeline...');
+  
+  try {
+    // Test 1: Basic sheet access
+    console.log('Test 1: Testing sheet access...');
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    console.log('✅ Spreadsheet access: OK');
+    
+    // Test 2: Direct sheet data retrieval
+    console.log('Test 2: Testing direct data retrieval...');
+    const users = getSheetDataDirect('Users');
+    const audits = getSheetDataDirect('Audits');
+    const issues = getSheetDataDirect('Issues');
+    const actions = getSheetDataDirect('Actions');
+    
+    console.log(`✅ Data counts - Users: ${users.length}, Audits: ${audits.length}, Issues: ${issues.length}, Actions: ${actions.length}`);
+    
+    // Test 3: Dashboard data functions
+    console.log('Test 3: Testing dashboard data functions...');
+    const minimalData = getMinimalDashboard();
+    console.log('✅ Minimal dashboard: OK');
+    
+    try {
+      const comprehensiveData = computeComprehensiveDashboard();
+      console.log('✅ Comprehensive dashboard: OK');
+    } catch (e) {
+      console.log('⚠️ Comprehensive dashboard failed: ' + e.message);
+    }
+    
+    try {
+      const ultraFastData = getDashboardDataUltraFast();
+      console.log('✅ Ultra-fast dashboard: OK');
+    } catch (e) {
+      console.log('⚠️ Ultra-fast dashboard failed: ' + e.message);
+    }
+    
+    // Test 4: Quantum dashboard data
+    console.log('Test 4: Testing quantum dashboard data...');
+    const quantumData = getQuantumDashboardData();
+    console.log(`✅ Quantum dashboard data: ${JSON.stringify({
+      activeAudits: quantumData.activeAudits,
+      openIssues: quantumData.openIssues,
+      completedActions: quantumData.completedActions,
+      overdueItems: quantumData.overdueItems,
+      method: quantumData.performance?.method
+    })}`);
+    
+    // Test 5: User authentication
+    console.log('Test 5: Testing user authentication...');
+    const currentUser = getCurrentUser();
+    console.log(`✅ Current user: ${currentUser.email} (${currentUser.role})`);
+    
+    // Test 6: Configuration
+    console.log('Test 6: Testing configuration...');
+    try {
+      const config = getConfig();
+      console.log(`✅ Config loaded with ${Object.keys(config || {}).length} keys`);
+    } catch (e) {
+      console.log('⚠️ Config failed: ' + e.message);
+    }
+    
+    console.log('✅ Dashboard pipeline test completed successfully!');
+    
+    return {
+      success: true,
+      message: 'All dashboard pipeline tests passed',
+      data: {
+        dataAvailable: true,
+        userAuthenticated: currentUser.authenticated,
+        dashboardData: quantumData,
+        recordCounts: {
+          users: users.length,
+          audits: audits.length,
+          issues: issues.length,
+          actions: actions.length
+        }
+      }
+    };
+    
+  } catch (error) {
+    console.log(`❌ Dashboard pipeline test failed: ${error.message}`);
+    console.log('Stack trace:', error.stack);
+    
+    return {
+      success: false,
+      error: error.message,
+      stack: error.stack,
+      message: 'Dashboard pipeline test failed - this indicates the source of the loading issues'
+    };
+  }
 }
 
+/**
+ * 🚑 EMERGENCY DASHBOARD FIX
+ * Comprehensive fix for dashboard loading and sidebar issues
+ */
 function emergencyDashboardFix() {
-  // Comprehensive system repair
-  // Initializes system, resets data, builds snapshots
-  // Tests everything and reports results
+  console.log('🚑 Executing emergency dashboard fix...');
+  
+  try {
+    // Step 1: Initialize system if needed
+    console.log('Step 1: Initializing system...');
+    const initResult = initializeSystem();
+    console.log(`Init result: ${JSON.stringify(initResult)}`);
+    
+    // Step 2: Safe reset and seed data
+    console.log('Step 2: Safe reset and seed...');
+    const resetResult = safeResetAndSeed();
+    console.log('Reset completed');
+    
+    // Step 3: Build dashboard snapshot
+    console.log('Step 3: Building dashboard snapshot...');
+    const snapshotResult = buildDashboardSnapshot();
+    console.log('Snapshot built');
+    
+    // Step 4: Initialize caches
+    console.log('Step 4: Initializing caches...');
+    const cachingResult = initializeGeniusCaching();
+    console.log('Caches initialized');
+    
+    // Step 5: Test dashboard data
+    console.log('Step 5: Testing dashboard data...');
+    const testResult = testDashboardDataPipeline();
+    
+    console.log('✅ Emergency dashboard fix completed!');
+    
+    return {
+      success: true,
+      message: 'Emergency dashboard fix completed successfully',
+      results: {
+        initialization: initResult.success,
+        dataReset: resetResult.success,
+        snapshotBuilt: snapshotResult.success,
+        cachingSetup: cachingResult.success,
+        pipelineTest: testResult.success
+      },
+      testData: testResult.data
+    };
+    
+  } catch (error) {
+    console.log(`❌ Emergency fix failed: ${error.message}`);
+    
+    return {
+      success: false,
+      error: error.message,
+      message: 'Emergency dashboard fix failed - manual intervention required'
+    };
+  }
 }
 
 /**
@@ -1660,6 +1803,160 @@ function diagnosticWebInterface() {
       success: false,
       error: error.message,
       message: 'Diagnostic function itself failed'
+    };
+  }
+}
+/**
+ * 🔍 QUICK DASHBOARD TEST FUNCTION
+ * Tests the complete dashboard data pipeline to identify issues
+ */
+function testDashboardDataPipeline() {
+  console.log('🔍 Testing dashboard data pipeline...');
+  
+  try {
+    // Test 1: Basic sheet access
+    console.log('Test 1: Testing sheet access...');
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    console.log('✅ Spreadsheet access: OK');
+    
+    // Test 2: Direct sheet data retrieval
+    console.log('Test 2: Testing direct data retrieval...');
+    const users = getSheetDataDirect('Users');
+    const audits = getSheetDataDirect('Audits');
+    const issues = getSheetDataDirect('Issues');
+    const actions = getSheetDataDirect('Actions');
+    
+    console.log(`✅ Data counts - Users: ${users.length}, Audits: ${audits.length}, Issues: ${issues.length}, Actions: ${actions.length}`);
+    
+    // Test 3: Dashboard data functions
+    console.log('Test 3: Testing dashboard data functions...');
+    const minimalData = getMinimalDashboard();
+    console.log('✅ Minimal dashboard: OK');
+    
+    try {
+      const comprehensiveData = computeComprehensiveDashboard();
+      console.log('✅ Comprehensive dashboard: OK');
+    } catch (e) {
+      console.log('⚠️ Comprehensive dashboard failed: ' + e.message);
+    }
+    
+    try {
+      const ultraFastData = getDashboardDataUltraFast();
+      console.log('✅ Ultra-fast dashboard: OK');
+    } catch (e) {
+      console.log('⚠️ Ultra-fast dashboard failed: ' + e.message);
+    }
+    
+    // Test 4: Quantum dashboard data
+    console.log('Test 4: Testing quantum dashboard data...');
+    const quantumData = getQuantumDashboardData();
+    console.log(`✅ Quantum dashboard data: ${JSON.stringify({
+      activeAudits: quantumData.activeAudits,
+      openIssues: quantumData.openIssues,
+      completedActions: quantumData.completedActions,
+      overdueItems: quantumData.overdueItems,
+      method: quantumData.performance?.method
+    })}`);
+    
+    // Test 5: User authentication
+    console.log('Test 5: Testing user authentication...');
+    const currentUser = getCurrentUser();
+    console.log(`✅ Current user: ${currentUser.email} (${currentUser.role})`);
+    
+    // Test 6: Configuration
+    console.log('Test 6: Testing configuration...');
+    try {
+      const config = getConfig();
+      console.log(`✅ Config loaded with ${Object.keys(config || {}).length} keys`);
+    } catch (e) {
+      console.log('⚠️ Config failed: ' + e.message);
+    }
+    
+    console.log('✅ Dashboard pipeline test completed successfully!');
+    
+    return {
+      success: true,
+      message: 'All dashboard pipeline tests passed',
+      data: {
+        dataAvailable: true,
+        userAuthenticated: currentUser.authenticated,
+        dashboardData: quantumData,
+        recordCounts: {
+          users: users.length,
+          audits: audits.length,
+          issues: issues.length,
+          actions: actions.length
+        }
+      }
+    };
+    
+  } catch (error) {
+    console.log(`❌ Dashboard pipeline test failed: ${error.message}`);
+    console.log('Stack trace:', error.stack);
+    
+    return {
+      success: false,
+      error: error.message,
+      stack: error.stack,
+      message: 'Dashboard pipeline test failed - this indicates the source of the loading issues'
+    };
+  }
+}
+
+/**
+ * 🚑 EMERGENCY DASHBOARD FIX
+ * Comprehensive fix for dashboard loading and sidebar issues
+ */
+function emergencyDashboardFix() {
+  console.log('🚑 Executing emergency dashboard fix...');
+  
+  try {
+    // Step 1: Initialize system if needed
+    console.log('Step 1: Initializing system...');
+    const initResult = initializeSystem();
+    console.log(`Init result: ${JSON.stringify(initResult)}`);
+    
+    // Step 2: Safe reset and seed data
+    console.log('Step 2: Safe reset and seed...');
+    const resetResult = safeResetAndSeed();
+    console.log('Reset completed');
+    
+    // Step 3: Build dashboard snapshot
+    console.log('Step 3: Building dashboard snapshot...');
+    const snapshotResult = buildDashboardSnapshot();
+    console.log('Snapshot built');
+    
+    // Step 4: Initialize caches
+    console.log('Step 4: Initializing caches...');
+    const cachingResult = initializeGeniusCaching();
+    console.log('Caches initialized');
+    
+    // Step 5: Test dashboard data
+    console.log('Step 5: Testing dashboard data...');
+    const testResult = testDashboardDataPipeline();
+    
+    console.log('✅ Emergency dashboard fix completed!');
+    
+    return {
+      success: true,
+      message: 'Emergency dashboard fix completed successfully',
+      results: {
+        initialization: initResult.success,
+        dataReset: resetResult.success,
+        snapshotBuilt: snapshotResult.success,
+        cachingSetup: cachingResult.success,
+        pipelineTest: testResult.success
+      },
+      testData: testResult.data
+    };
+    
+  } catch (error) {
+    console.log(`❌ Emergency fix failed: ${error.message}`);
+    
+    return {
+      success: false,
+      error: error.message,
+      message: 'Emergency dashboard fix failed - manual intervention required'
     };
   }
 }

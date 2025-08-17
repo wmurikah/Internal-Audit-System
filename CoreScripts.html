@@ -605,7 +605,7 @@
             charts[id] = new Chart(ctx, {
                 type: 'bar',
                 data: { labels, datasets },
-                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' }, datalabels: { color:'#fff', formatter:(v)=> v||'', clamp:true, clip:false, textStrokeColor:'rgba(0,0,0,0.35)', textStrokeWidth:3, font:(ctx)=>({ weight:'700', size: Math.max(9, Math.min(14, 9 + Math.log10(((ctx.chart?.data?.datasets||[]).reduce((s,d)=> s + (Array.isArray(d.data)?d.data.reduce((a,b)=>a+b,0):0),0)) + 1))) }) } } }
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' }, datalabels: { color:'#fff', formatter:(v)=> v||'', clamp:true, clip:false, textStrokeColor:'rgba(0,0,0,0.35)', textStrokeWidth:3, font:(ctx)=>({ weight:'700', size: Math.max(9, Math.min(14, 9 + Math.log10(((ctx.chart?.data?.datasets||[]).reduce((s,d)=> s + (Array.isArray(d.data)?d.data.reduce((a,b)=>a+b,0):0),0)) + 1))) }) } } })
             });
         }
 
