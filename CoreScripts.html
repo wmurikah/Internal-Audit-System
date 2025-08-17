@@ -545,7 +545,7 @@
             const targetPage = document.getElementById(pageName + 'Page');
             if (targetPage) targetPage.style.display = 'block';
             // Programmatically set active state for the corresponding nav button
-            const btn = document.querySelector(`.sidebar-nav button[onclick="showPage('${pageName}')"]`);
+            const btn = document.querySelector(`.sidebar-nav button[onclick="showPage(\\'${pageName}\\')"]`);
             if (btn) btn.classList.add('active');
             currentPage = pageName;
         }
@@ -605,7 +605,7 @@
             charts[id] = new Chart(ctx, {
                 type: 'bar',
                 data: { labels, datasets },
-                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' }, datalabels: { color:'#fff', formatter:(v)=> v||'', clamp:true, clip:false, textStrokeColor:'rgba(0,0,0,0.35)', textStrokeWidth:3, font:(ctx)=>({ weight:'700', size: Math.max(9, Math.min(14, 9 + Math.log10(((ctx.chart?.data?.datasets||[]).reduce((s,d)=> s + (Array.isArray(d.data)?d.data.reduce((a,b)=>a+b,0):0),0)) + 1))) }) } } })
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' }, datalabels: { color:'#fff', formatter:(v)=> v||'', clamp:true, clip:false, textStrokeColor:'rgba(0,0,0,0.35)', textStrokeWidth:3, font:(ctx)=>({ weight:'700', size: Math.max(9, Math.min(14, 9 + Math.log10(((ctx.chart?.data?.datasets||[]).reduce((s,d)=> s + (Array.isArray(d.data)?d.data.reduce((a,b)=>a+b,0):0),0)) + 1))) }) } } }))
             });
         }
 
@@ -648,7 +648,7 @@
                     const row = document.createElement('div');
                     row.className='config-item';
                     row.innerHTML = `<span class="config-item-name">${val}</span>
-                        <div class="config-item-actions"><button class="action-btn text-danger" onclick="removeRiskRating('${val}')"><i class='fas fa-times'></i></button></div>`;
+                        <div class="config-item-actions"><button class="action-btn text-danger" onclick="removeRiskRating(\\'${val}\\')"><i class='fas fa-times'></i></button></div>`;
                     rr.appendChild(row);
                 });
             }
@@ -660,7 +660,7 @@
                     const row = document.createElement('div');
                     row.className='config-item';
                     row.innerHTML = `<span class="config-item-name">${val}</span>
-                        <div class="config-item-actions"><button class="action-btn text-danger" onclick="removeAuditStatus('${val}')"><i class='fas fa-times'></i></button></div>`;
+                        <div class="config-item-actions"><button class="action-btn text-danger" onclick="removeAuditStatus(\\'${val}\\')"><i class='fas fa-times'></i></button></div>`;
                     as.appendChild(row);
                 });
             }
@@ -1028,7 +1028,7 @@
             const section = (title, content, key)=>`<div class='card mb-2'>
                 <div class='card-header d-flex justify-content-between align-items-center'>
                   <span class='card-title'>${title}</span>
-                  <button class='btn btn-outline btn-sm' onclick="document.getElementById('${key}').classList.toggle('d-none')"><i class='fas fa-chevron-down'></i></button>
+                  <button class='btn btn-outline btn-sm' onclick="document.getElementById(\\'${key}\\').classList.toggle(\\'d-none\\')"><i class='fas fa-chevron-down'></i></button>
                 </div>
                 <div class='card-body' id='${key}'>${content}</div>
               </div>`;
@@ -1061,7 +1061,7 @@
                    <div>
                      <div id='wpEvidenceList'>Loading evidence...</div>
                      <div class='mt-2'>
-                       <button class='btn btn-primary btn-sm' onclick="openUploadEvidence({parentType:'WorkPaper', parentId:'${wp.id}', lockParent:true})"><i class='fas fa-upload'></i> Upload Evidence</button>
+                       <button class='btn btn-primary btn-sm' onclick="openUploadEvidence({parentType:\\'WorkPaper\\', parentId:\\'${wp.id}\\', lockParent:true})"><i class='fas fa-upload'></i> Upload Evidence</button>
                      </div>
                    </div>
                    <div>
