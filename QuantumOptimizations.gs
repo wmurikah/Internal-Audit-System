@@ -496,12 +496,83 @@ function buildQuantumDashboardSnapshot() {
 /**
  * 🌟 ULTRA-FAST QUANTUM DASHBOARD DATA RETRIEVAL
  * Sub-100ms data serving with multiple fallback layers
+ * Main entry point for dashboard data called from the UI
  */
 function getQuantumDashboardData() {
-  // Replace hype with practical resolver: return ultra-fast snapshot if available, else compute
-  try { return getDashboardDataUltraFast(); } catch(e) {}
-  try { return computeComprehensiveDashboard(); } catch(e) {}
-  return getMinimalDashboard();
+  const startTime = Date.now();
+  
+  try {
+    // Layer 1: Try quantum snapshot (fastest)
+    try {
+      const data = getDashboardDataUltraFast();
+      const loadTime = Date.now() - startTime;
+      
+      if (data && data.activeAudits !== undefined) {
+        data.performance = data.performance || {};
+        data.performance.loadTime = loadTime;
+        data.performance.method = 'quantum-snapshot';
+        
+        console.log(`⚡ Quantum dashboard served in ${loadTime}ms`);
+        return data;
+      }
+    } catch (e) {
+      console.log('Quantum snapshot failed: ' + e.message);
+    }
+    
+    // Layer 2: Try comprehensive computation
+    try {
+      const data = computeComprehensiveDashboard();
+      const loadTime = Date.now() - startTime;
+      
+      if (data && data.activeAudits !== undefined) {
+        data.performance = data.performance || {};
+        data.performance.loadTime = loadTime;
+        data.performance.method = 'comprehensive-compute';
+        
+        console.log(`🧮 Comprehensive dashboard computed in ${loadTime}ms`);
+        return data;
+      }
+    } catch (e) {
+      console.log('Comprehensive computation failed: ' + e.message);
+    }
+    
+    // Layer 3: Minimal fallback
+    const data = getMinimalDashboard();
+    const loadTime = Date.now() - startTime;
+    
+    data.performance = data.performance || {};
+    data.performance.loadTime = loadTime;
+    data.performance.method = 'minimal-fallback';
+    
+    console.log(`📊 Minimal dashboard served in ${loadTime}ms`);
+    return data;
+    
+  } catch (error) {
+    console.log(`❌ All dashboard methods failed: ${error.message}`);
+    
+    // Emergency fallback
+    return {
+      activeAudits: 0,
+      openIssues: 0,
+      completedActions: 0,
+      overdueItems: 0,
+      recentAudits: [],
+      riskDistribution: { Extreme: 0, High: 0, Medium: 0, Low: 0 },
+      userRole: 'Guest',
+      userPermissions: [],
+      alerts: [{
+        type: 'danger',
+        title: 'System Error',
+        message: 'Dashboard data temporarily unavailable. Please refresh or contact support.',
+        icon: 'fas fa-exclamation-triangle'
+      }],
+      performance: {
+        loadTime: Date.now() - startTime,
+        method: 'emergency-fallback',
+        error: error.message
+      }
+    };
+  }
 }
 
 
