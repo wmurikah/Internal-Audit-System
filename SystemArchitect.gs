@@ -1532,3 +1532,134 @@ function emergencyDashboardFix() {
   // Initializes system, resets data, builds snapshots
   // Tests everything and reports results
 }
+
+/**
+ * 🔍 COMPREHENSIVE WEB INTERFACE DIAGNOSTIC
+ * Tests every aspect of the web interface to identify the exact issue
+ */
+function diagnosticWebInterface() {
+  console.log('🔍 Running comprehensive web interface diagnostic...');
+  
+  const results = {
+    timestamp: new Date().toISOString(),
+    tests: {},
+    recommendations: []
+  };
+  
+  try {
+    // Test 1: Basic system access
+    console.log('Test 1: Basic system access');
+    try {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const sheets = ss.getSheets().map(s => s.getName());
+      results.tests.systemAccess = { success: true, sheets: sheets };
+      console.log('✅ System access: OK - Sheets:', sheets.join(', '));
+    } catch (e) {
+      results.tests.systemAccess = { success: false, error: e.message };
+      console.log('❌ System access failed:', e.message);
+    }
+    
+    // Test 2: User authentication
+    console.log('Test 2: User authentication');
+    try {
+      const user = getCurrentUser();
+      results.tests.authentication = { 
+        success: true, 
+        user: {
+          email: user.email,
+          role: user.role,
+          authenticated: user.authenticated,
+          permissions: user.permissions?.length || 0
+        }
+      };
+      console.log(`✅ Authentication: OK - ${user.email} (${user.role})`);
+    } catch (e) {
+      results.tests.authentication = { success: false, error: e.message };
+      console.log('❌ Authentication failed:', e.message);
+    }
+    
+    // Test 3: Configuration loading
+    console.log('Test 3: Configuration loading');
+    try {
+      const config = getConfig();
+      const configKeys = Object.keys(config || {});
+      results.tests.configuration = { 
+        success: true, 
+        keys: configKeys,
+        hasRequiredKeys: {
+          riskRatings: !!config.riskRatings,
+          auditStatuses: !!config.auditStatuses,
+          businessUnits: !!config.businessUnits
+        }
+      };
+      console.log(`✅ Configuration: OK - ${configKeys.length} keys loaded`);
+    } catch (e) {
+      results.tests.configuration = { success: false, error: e.message };
+      console.log('❌ Configuration failed:', e.message);
+    }
+    
+    // Test 4: Dashboard data functions
+    console.log('Test 4: Dashboard data functions');
+    try {
+      const quantumData = getQuantumDashboardData();
+      results.tests.dashboardData = {
+        success: true,
+        data: {
+          activeAudits: quantumData.activeAudits,
+          openIssues: quantumData.openIssues,
+          completedActions: quantumData.completedActions,
+          overdueItems: quantumData.overdueItems,
+          method: quantumData.performance?.method
+        }
+      };
+      console.log(`✅ Dashboard data: OK - Active:${quantumData.activeAudits}, Issues:${quantumData.openIssues}`);
+    } catch (e) {
+      results.tests.dashboardData = { success: false, error: e.message };
+      console.log('❌ Dashboard data failed:', e.message);
+    }
+    
+    // Test 5: App info function
+    console.log('Test 5: App info function');
+    try {
+      const appInfo = getAppInfo();
+      results.tests.appInfo = {
+        success: true,
+        user: appInfo.user,
+        featureFlags: appInfo.featureFlags,
+        defaultLanding: appInfo.defaultLanding
+      };
+      console.log(`✅ App info: OK - Landing: ${appInfo.defaultLanding}`);
+    } catch (e) {
+      results.tests.appInfo = { success: false, error: e.message };
+      console.log('❌ App info failed:', e.message);
+    }
+    
+    // Analyze results and provide recommendations
+    const failedTests = Object.keys(results.tests).filter(test => !results.tests[test].success);
+    
+    if (failedTests.length === 0) {
+      results.recommendations.push('All backend tests passed - issue likely in frontend JavaScript or HTML rendering');
+      results.recommendations.push('Check browser console for JavaScript errors');
+      results.recommendations.push('Verify that doGet() function is properly deployed as web app');
+      results.recommendations.push('Try redeploying the web app with a new version');
+    } else {
+      results.recommendations.push(`Backend issues found in: ${failedTests.join(', ')}`);
+      failedTests.forEach(test => {
+        const error = results.tests[test].error;
+        results.recommendations.push(`Fix ${test}: ${error}`);
+      });
+    }
+    
+    console.log('🎯 Diagnostic complete!');
+    
+    return results;
+    
+  } catch (error) {
+    console.log(`❌ Diagnostic failed: ${error.message}`);
+    return {
+      success: false,
+      error: error.message,
+      message: 'Diagnostic function itself failed'
+    };
+  }
+}
