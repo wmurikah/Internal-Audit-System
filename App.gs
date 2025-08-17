@@ -95,3 +95,140 @@ function getAppInfo(){
     return { user: { email: '', role: 'Guest', org_unit: '', permissions: [] }, featureFlags: { ai: false, evidenceRequired: true }, defaultLanding: 'dashboard' };
   }
 }
+
+/**
+ * getSystemHealth
+ * One-click comprehensive system health report for admins.
+ * Safe, read-mostly checks with lightweight calls and timings.
+ */
+function getSystemHealth() {
+  var started = Date.now();
+  var health = { timestamps: { started: new Date().toISOString() } };
+
+  // Current user
+  var user = {};
+  try { user = getCurrentUser(); } catch(e) { user = { email:'', role:'', authenticated:false, error:e.message }; }
+  health.user = { email: user.email || '', role: user.role || '', authenticated: !!user.authenticated };
+
+  // Config and validations
+  var cfg = {};
+  try { cfg = getConfig(); } catch(e) { cfg = {}; }
+  var requiredKeys = ['riskRatings','auditStatuses','issueStatuses','actionStatuses','businessUnits','affiliates','ALLOWED_SIGNIN_DOMAIN','REQUIRE_EVIDENCE'];
+  var keysPresent = [];
+  requiredKeys.forEach(function(k){ if (cfg && Object.prototype.hasOwnProperty.call(cfg, k)) keysPresent.push(k); });
+  var validationsOK = false;
+  try { validationsOK = !!(applyStandardValidations() && true); } catch(e) { validationsOK = false; }
+  health.config = { domain: (cfg && cfg.ALLOWED_SIGNIN_DOMAIN) || '', keysPresent: keysPresent.sort(), validationsOK: validationsOK };
+
+  // Dashboard resolution path and field sanity
+  var snapshot = null; var pathUsed = 'unknown';
+  try { snapshot = getDashboardDataUltraFast(); pathUsed = (snapshot && snapshot.performance && snapshot.performance.cacheStatus) ? String(snapshot.performance.cacheStatus) : 'ultraFast'; } catch(e) {}
+  if (!snapshot) { try { snapshot = computeComprehensiveDashboard(); pathUsed = 'compute'; } catch(e) {} }
+  if (!snapshot) { try { snapshot = getMinimalDashboard(); pathUsed = 'minimal'; } catch(e) {} }
+  var fieldsOK = !!snapshot && ['activeAudits','openIssues','completedActions','overdueItems','riskDistribution','recentAudits'].every(function(k){ return Object.prototype.hasOwnProperty.call(snapshot, k); });
+  health.dashboard = { pathUsed: pathUsed, fieldsOK: fieldsOK };
+
+  // Bulk data timing and counts
+  var bulk = null; var bulkMs = 0;
+  try { var t0 = Date.now(); bulk = getBulkDataUltraFast(); bulkMs = Date.now() - t0; } catch(e) {}
+  var bulkCounts = {};
+  ['Audits','Issues','Actions','Users','WorkPapers','Evidence','RiskRegister'].forEach(function(name){
+    bulkCounts[name] = Array.isArray(bulk && bulk[name]) ? bulk[name].length : 0;
+  });
+  health.bulk = { counts: bulkCounts, loadTimeMs: bulkMs };
+
+  // Endpoint presence audit (as referenced by CoreScripts.html)
+  var endpoints = {
+    getQuantumDashboardData: (typeof getQuantumDashboardData === 'function'),
+    getCurrentUser: (typeof getCurrentUser === 'function'),
+    getConfig: (typeof getConfig === 'function'),
+    getBulkDataUltraFast: (typeof getBulkDataUltraFast === 'function'),
+    updateConfigurationDelta: (typeof updateConfigurationDelta === 'function'),
+    createOrUpdateUser: (typeof createOrUpdateUser === 'function'),
+    createAudit: (typeof createAudit === 'function'),
+    createWorkPaper: (typeof createWorkPaper === 'function'),
+    uploadEvidenceFromBase64: (typeof uploadEvidenceFromBase64 === 'function'),
+    listEvidence: (typeof listEvidence === 'function'),
+    reviewEvidenceByAuditor: (typeof reviewEvidenceByAuditor === 'function'),
+    managerReviewEvidence: (typeof managerReviewEvidence === 'function'),
+    getAuditTrail: (typeof getAuditTrail === 'function'),
+    bulkGenerateWorkPapersPDF: (typeof bulkGenerateWorkPapersPDF === 'function'),
+    updateWorkPaper: (typeof updateWorkPaper === 'function'),
+    reviewWorkPaper: (typeof reviewWorkPaper === 'function'),
+    generateWorkPaperPDF: (typeof generateWorkPaperPDF === 'function'),
+    updateEntityWithEvidenceGuard: (typeof updateEntityWithEvidenceGuard === 'function'),
+    requireEvidenceForStatusChange: (typeof requireEvidenceForStatusChange === 'function')
+  };
+  health.endpoints = endpoints;
+
+  // Triggers: monthly reminders
+  var hasMonthly = false;
+  try { hasMonthly = ScriptApp.getProjectTriggers().some(function(t){ return t.getHandlerFunction() === 'sendMonthlyProcessOwnerReminders'; }); } catch(e) { hasMonthly = false; }
+  health.triggers = { monthlyReminders: hasMonthly };
+
+  // Cache/persistence markers
+  var cacheOk = false, persistentOk = false, cacheAgeMs = null;
+  try {
+    var cache = CacheService.getScriptCache();
+    var snap = cache.get('DASHBOARD_ULTRA_V1');
+    cacheOk = !!snap;
+  } catch(e) {}
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var persistent = props.getProperty('DASHBOARD_ULTRA_V1') || props.getProperty('QUANTUM_DASHBOARD_V2');
+    persistentOk = !!persistent;
+    if (persistent) {
+      try {
+        var wrapper = JSON.parse(persistent);
+        if (wrapper && typeof wrapper.timestamp === 'number') cacheAgeMs = Date.now() - Number(wrapper.timestamp);
+      } catch(e) {}
+    }
+  } catch(e) {}
+  health.cache = { dashboardSnapshot: cacheOk, persistentSnapshot: persistentOk, ageMs: cacheAgeMs };
+
+  // Evidence gating sanity (read-only check using helper)
+  var evidenceGate = { ok: true, note: 'no sample tested' };
+  try {
+    var sampleIssueId = null;
+    if (bulk && Array.isArray(bulk.Issues) && bulk.Issues.length) sampleIssueId = bulk.Issues[0].id;
+    if (sampleIssueId && typeof requireEvidenceForStatusChange === 'function') {
+      var gateRes = requireEvidenceForStatusChange('Issues', sampleIssueId, 'In Progress', user.email || '');
+      evidenceGate = gateRes || { ok: true };
+    }
+  } catch(e) { evidenceGate = { ok:false, error: e.message }; }
+  health.evidenceGating = evidenceGate;
+
+  // Reports: HTML build check (no Drive writes)
+  var reports = {};
+  try { var r = buildExecutiveSummaryHtml(); reports.executiveSummaryHtmlOK = !!(r && r.success); } catch(e) { reports.executiveSummaryHtmlOK = false; reports.error = e.message; }
+  health.reports = reports;
+
+  health.timestamps.completed = new Date().toISOString();
+  health.durationMs = Date.now() - started;
+  return health;
+}
+
+/** Quick endpoint audit only */
+function getEndpointsAudit(){
+  return {
+    getQuantumDashboardData: (typeof getQuantumDashboardData === 'function'),
+    getCurrentUser: (typeof getCurrentUser === 'function'),
+    getConfig: (typeof getConfig === 'function'),
+    getBulkDataUltraFast: (typeof getBulkDataUltraFast === 'function'),
+    updateConfigurationDelta: (typeof updateConfigurationDelta === 'function'),
+    createOrUpdateUser: (typeof createOrUpdateUser === 'function'),
+    createAudit: (typeof createAudit === 'function'),
+    createWorkPaper: (typeof createWorkPaper === 'function'),
+    uploadEvidenceFromBase64: (typeof uploadEvidenceFromBase64 === 'function'),
+    listEvidence: (typeof listEvidence === 'function'),
+    reviewEvidenceByAuditor: (typeof reviewEvidenceByAuditor === 'function'),
+    managerReviewEvidence: (typeof managerReviewEvidence === 'function'),
+    getAuditTrail: (typeof getAuditTrail === 'function'),
+    bulkGenerateWorkPapersPDF: (typeof bulkGenerateWorkPapersPDF === 'function'),
+    updateWorkPaper: (typeof updateWorkPaper === 'function'),
+    reviewWorkPaper: (typeof reviewWorkPaper === 'function'),
+    generateWorkPaperPDF: (typeof generateWorkPaperPDF === 'function'),
+    updateEntityWithEvidenceGuard: (typeof updateEntityWithEvidenceGuard === 'function'),
+    requireEvidenceForStatusChange: (typeof requireEvidenceForStatusChange === 'function')
+  };
+}
