@@ -8,7 +8,7 @@
  */
 function getConfig() {
   try {
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let settingsSheet = ss.getSheetByName('Settings');
     
     if (!settingsSheet || settingsSheet.getLastRow() <= 1) {
@@ -65,7 +65,7 @@ function updateConfig(newConfig) {
     }
     
     const validatedConfig = validateConfig(newConfig);
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName('Settings');
     
     if (!sheet) {
@@ -115,7 +115,7 @@ function initializeDefaults() {
   const defaultConfig = getDefaultConfig();
   
   try {
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName('Settings');
     
     if (!sheet) {
@@ -253,7 +253,7 @@ function getBulkDataUltraFast() {
   const startTime = Date.now();
   
   try {
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const bulkData = {};
     
     // Read all sheets in parallel (conceptually)
@@ -315,7 +315,7 @@ function bulkGenerateWorkPapersCSVLinksDeprecated(ids){
   try{
     if (!Array.isArray(ids) || ids.length===0) return { success:false, error:'No ids provided' };
     // Placeholder implementation: generate CSV blob per WP and save to Drive as .csv, return file links
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const wps = getSheetData('WorkPapers');
     const selected = wps.filter(w => ids.indexOf(String(w.id))>-1);
     const folder = DriveApp.getFolderById(EVIDENCE_FOLDER_ID);
@@ -349,7 +349,7 @@ function getRowById(sheetName, id){
 }
 
 function addRow(sheetName, obj){
-  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sh = ss.getSheetByName(sheetName);
   if (!sh) throw new Error('Sheet '+sheetName+' not found');
   const headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
@@ -366,7 +366,7 @@ function addRow(sheetName, obj){
 }
 
 function updateRow(sheetName, id, changes){
-  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sh = ss.getSheetByName(sheetName);
   if (!sh) throw new Error('Sheet '+sheetName+' not found');
   const lastRow = sh.getLastRow();
@@ -394,7 +394,7 @@ function updateRow(sheetName, id, changes){
 
 function logAction(entity, entity_id, action, before_json, after_json){
   try{
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sh = ss.getSheetByName('Logs');
     if (!sh){ sh = ss.insertSheet('Logs'); sh.getRange(1,1,1,7).setValues([["timestamp","user_email","entity","entity_id","action","before_json","after_json"]]); }
     const user = (Session.getActiveUser() && Session.getActiveUser().getEmail()) || 'system@local';
@@ -409,7 +409,7 @@ function logAction(entity, entity_id, action, before_json, after_json){
 function applyStandardValidations(){
   try{
     const cfg = getConfig();
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     // Audits.status (G)
     const audits = ss.getSheetByName('Audits');
     if (audits){
@@ -521,7 +521,7 @@ function updateWorkPaper(id, updates){
 
 function getAuditTrail(entity, entityId, limit, offset){
   try{
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sh = ss.getSheetByName('Logs'); if (!sh) return {success:true, items:[], total:0};
     const data = sh.getDataRange().getValues();
     const headers = data[0];
@@ -589,4 +589,3 @@ function updateEntityWithEvidenceGuard(entity, id, changes){
   try { if (typeof scheduleQuantumRebuild === 'function') scheduleQuantumRebuild(); } catch (e) {}
   return result;
 }
-
