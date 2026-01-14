@@ -233,6 +233,9 @@
         <div class="nav-item" data-page="actionplans" onclick="showPage('actionplans')"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Action Plans<span class="nav-badge" id="apCount">0</span></div>
         <div class="nav-label">Review</div>
         <div class="nav-item" data-page="pending" onclick="showPage('pending')"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Pending Review<span class="nav-badge" id="pendingCount">0</span></div>
+        <div class="nav-label admin-only hidden" id="adminNavLabel">Administration</div>
+        <div class="nav-item admin-only hidden" data-page="users" onclick="showPage('users')"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>User Management</div>
+        <div class="nav-item admin-only hidden" data-page="settings" onclick="showPage('settings')"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
       </nav>
       <div class="sidebar-footer">
         <div class="user-menu">
@@ -287,6 +290,54 @@
       <div class="page hidden" id="pagePending">
         <div class="card"><div class="card-header"><span class="card-title">Work Papers Pending Review</span></div><table class="data-table"><thead><tr><th>ID</th><th>Observation</th><th>Risk</th><th>Submitted By</th><th>Date</th><th>Actions</th></tr></thead><tbody id="pendingTableBody"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody></table></div>
       </div>
+
+      <!-- User Management (Admin Only) -->
+      <div class="page hidden" id="pageUsers">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="display:flex;gap:10px;">
+            <select class="form-select" id="userFilterRole" style="width:150px;" onchange="loadUsers()">
+              <option value="">All Roles</option>
+              <option value="SUPER_ADMIN">Head of Audit</option>
+              <option value="AUDITOR">Auditor</option>
+              <option value="UNIT_MANAGER">Unit Manager</option>
+              <option value="JUNIOR_STAFF">Junior Staff</option>
+              <option value="SENIOR_MGMT">Senior Management</option>
+              <option value="BOARD">Board Member</option>
+              <option value="EXTERNAL_AUDITOR">External Auditor</option>
+            </select>
+            <select class="form-select" id="userFilterStatus" style="width:120px;" onchange="loadUsers()">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="openNewUserModal()">+ New User</button>
+        </div>
+        <div class="card">
+          <table class="data-table">
+            <thead>
+              <tr><th>User ID</th><th>Name</th><th>Email</th><th>Role</th><th>Affiliate</th><th>Status</th><th>Last Login</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="usersTableBody"><tr><td colspan="8" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Settings (Admin Only) -->
+      <div class="page hidden" id="pageSettings">
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header"><span class="card-title">System Configuration</span></div>
+          <div style="padding:16px;">
+            <div id="settingsContent"><div class="empty-state">Loading settings...</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Master Data Summary</span></div>
+          <div style="padding:16px;">
+            <div class="kpi-grid" id="masterDataSummary"></div>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -325,6 +376,94 @@
     </div>
   </div>
 
+  <!-- User Modal (Admin) -->
+  <div class="modal-overlay" id="userModal">
+    <div class="modal" style="max-width:550px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="userModalTitle">New User</h2>
+        <button class="modal-close" onclick="closeModal('userModal')">&times;</button>
+      </div>
+      <div class="modal-body" id="userModalBody">
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label class="form-label">First Name <span class="required">*</span></label>
+            <input type="text" class="form-input" id="userFirstName" placeholder="John">
+          </div>
+          <div class="form-group col-6">
+            <label class="form-label">Last Name <span class="required">*</span></label>
+            <input type="text" class="form-input" id="userLastName" placeholder="Doe">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email <span class="required">*</span></label>
+          <input type="email" class="form-input" id="userEmail" placeholder="john.doe@hasspetroleum.com">
+        </div>
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label class="form-label">Role <span class="required">*</span></label>
+            <select class="form-select" id="userRole">
+              <option value="">Select Role...</option>
+              <option value="SUPER_ADMIN">Head of Audit</option>
+              <option value="AUDITOR">Auditor</option>
+              <option value="UNIT_MANAGER">Unit Manager</option>
+              <option value="JUNIOR_STAFF">Junior Staff</option>
+              <option value="SENIOR_MGMT">Senior Management</option>
+              <option value="BOARD">Board Member</option>
+              <option value="EXTERNAL_AUDITOR">External Auditor</option>
+            </select>
+          </div>
+          <div class="form-group col-6">
+            <label class="form-label">Affiliate</label>
+            <select class="form-select" id="userAffiliate">
+              <option value="">Select Affiliate...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label class="form-label">Department</label>
+            <input type="text" class="form-input" id="userDepartment" placeholder="Finance, IT, Operations...">
+          </div>
+          <div class="form-group col-6">
+            <label class="form-label">Phone</label>
+            <input type="text" class="form-input" id="userPhone" placeholder="+254 700 000 000">
+          </div>
+        </div>
+        <div id="tempPasswordDisplay" class="hidden" style="margin-top:16px;padding:12px;background:var(--risk-low-bg);border:1px solid var(--risk-low);border-radius:8px;">
+          <div style="font-weight:600;color:var(--risk-low);margin-bottom:4px;">User Created Successfully!</div>
+          <div style="font-size:0.85rem;">Temporary Password: <strong id="tempPasswordValue"></strong></div>
+          <div style="font-size:0.75rem;color:var(--gray-600);margin-top:4px;">Share this password securely. User must change it on first login.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-footer-left"><button class="btn btn-ghost" onclick="closeModal('userModal')">Cancel</button></div>
+        <button class="btn btn-primary" id="userModalSaveBtn" onclick="saveUser()">Create User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset Password Confirmation Modal -->
+  <div class="modal-overlay" id="resetPwModal">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Reset Password</h2>
+        <button class="modal-close" onclick="closeModal('resetPwModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:16px;">Are you sure you want to reset the password for <strong id="resetPwUserName"></strong>?</p>
+        <p style="font-size:0.85rem;color:var(--gray-600);">A new temporary password will be generated. The user will be required to change it on their next login.</p>
+        <div id="newTempPasswordDisplay" class="hidden" style="margin-top:16px;padding:12px;background:var(--risk-low-bg);border:1px solid var(--risk-low);border-radius:8px;">
+          <div style="font-weight:600;color:var(--risk-low);margin-bottom:4px;">Password Reset Successful!</div>
+          <div style="font-size:0.85rem;">New Temporary Password: <strong id="newTempPasswordValue"></strong></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('resetPwModal')">Cancel</button>
+        <button class="btn btn-primary" id="confirmResetPwBtn" onclick="confirmResetPassword()">Reset Password</button>
+      </div>
+    </div>
+  </div>
+
   <script>
   (function(window) {
     'use strict';
@@ -347,6 +486,11 @@
     var selectedResponsible = [];
     var selectedCC = [];
     var apOwners = {}; // keyed by row number;
+    
+    // Admin state
+    var editingUserId = null;
+    var resetPwUserId = null;
+    var allUsersCache = [];
     
     // Drive folder for supporting documents
     var SUPPORTING_DOCS_FOLDER = '1YtHce1w3oioYxFhjUXwY1KIHm3aywQvV';
@@ -435,6 +579,13 @@
       document.getElementById('userRole').textContent = currUser.role_name || currUser.role_code;
       var initials = (currUser.full_name || '--').split(' ').map(function(n) { return n[0]; }).join('').substring(0, 2).toUpperCase();
       document.getElementById('userAvatar').textContent = initials;
+      
+      // Show admin navigation for SUPER_ADMIN
+      if (currUser.role_code === 'SUPER_ADMIN') {
+        document.querySelectorAll('.admin-only').forEach(function(el) {
+          el.classList.remove('hidden');
+        });
+      }
     }
     
     // ============================================================
@@ -471,10 +622,19 @@
       document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
       var nav = document.querySelector('.nav-item[data-page="' + page + '"]');
       if (nav) nav.classList.add('active');
-      document.getElementById('pageTitle').textContent = { dashboard: 'Dashboard', workpapers: 'Work Papers', actionplans: 'Action Plans', pending: 'Pending Review' }[page];
+      document.getElementById('pageTitle').textContent = { 
+        dashboard: 'Dashboard', 
+        workpapers: 'Work Papers', 
+        actionplans: 'Action Plans', 
+        pending: 'Pending Review',
+        users: 'User Management',
+        settings: 'System Settings'
+      }[page] || page;
       if (page === 'workpapers') window.loadWorkPapers();
       else if (page === 'actionplans') window.loadActionPlans();
       else if (page === 'pending') loadPendingReview();
+      else if (page === 'users') loadUsers();
+      else if (page === 'settings') loadSettings();
     };
     
     // ============================================================
@@ -575,7 +735,7 @@
           hideLoading();
           if (r.success) {
             editingWpId = wpId;
-            uploadedFiles = r.data.supporting_files || [];
+            uploadedFiles = r.data.files || [];
             document.getElementById('wpModalTitle').textContent = 'Edit Work Paper';
             renderWpForm(r.data);
             openModal('wpModal');
@@ -734,8 +894,8 @@
       // Initialize requirements table
       initReqTable(wp.requirements || []);
       
-      // Initialize action plans table
-      initActionPlansTable(wp.action_plans || []);
+      // Initialize action plans table (backend returns actionPlans or action_plans)
+      initActionPlansTable(wp.actionPlans || wp.action_plans || []);
       
       // Render existing uploaded files
       renderFileList();
@@ -1193,9 +1353,10 @@
       html += '<div class="form-group"><strong>Recommendation:</strong><div style="margin-top:4px;padding:8px;background:var(--gray-50);border-radius:4px;white-space:pre-wrap;">' + escHtml(wp.recommendation || '-') + '</div></div>';
       
       // Supporting files
-      if (wp.supporting_files && wp.supporting_files.length > 0) {
+      var filesArr = wp.files || wp.supporting_files || [];
+      if (filesArr.length > 0) {
         html += '<div class="form-group"><strong>Supporting Documents:</strong><div style="margin-top:8px;">';
-        wp.supporting_files.forEach(function(f) {
+        filesArr.forEach(function(f) {
           html += '<div style="padding:6px 10px;background:var(--gray-50);border-radius:4px;margin-bottom:4px;display:flex;align-items:center;gap:8px;">';
           html += '<span>📄</span><span>' + escHtml(f.name || f.file_name || 'File') + '</span>';
           if (f.drive_url) html += '<a href="' + f.drive_url + '" target="_blank" style="margin-left:auto;color:var(--hass-orange);">View</a>';
@@ -1214,10 +1375,11 @@
       html += '</div>';
       
       // Action Plans (if any)
-      if (wp.action_plans && wp.action_plans.length > 0) {
+      var actionPlansArr = wp.actionPlans || wp.action_plans || [];
+      if (actionPlansArr.length > 0) {
         html += '<div class="form-group" style="margin-top:12px;"><strong>Action Plans:</strong>';
         html += '<table class="data-table" style="margin-top:8px;"><thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Due Date</th></tr></thead><tbody>';
-        wp.action_plans.forEach(function(ap, idx) {
+        actionPlansArr.forEach(function(ap, idx) {
           var ownerNames = ap.owner_names ? (Array.isArray(ap.owner_names) ? ap.owner_names.join(', ') : ap.owner_names) : (ap.action_owner_name || '-');
           html += '<tr><td>' + (idx + 1) + '</td><td>' + escHtml(ap.action_description || '') + '</td><td>' + ownerNames + '</td><td>' + (ap.due_date || '-') + '</td></tr>';
         });
@@ -1329,6 +1491,8 @@
       else if (currPage === 'workpapers') window.loadWorkPapers();
       else if (currPage === 'actionplans') window.loadActionPlans();
       else if (currPage === 'pending') loadPendingReview();
+      else if (currPage === 'users') loadUsers();
+      else if (currPage === 'settings') loadSettings();
       toast('info', 'Refreshed', 'Data updated');
     };
     
@@ -1537,6 +1701,274 @@
         });
       }
     });
+    
+    // ============================================================
+    // ADMIN: USER MANAGEMENT
+    // ============================================================
+    function loadUsers() {
+      var roleFilter = document.getElementById('userFilterRole').value;
+      var statusFilter = document.getElementById('userFilterStatus').value;
+      
+      document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="8" class="empty-state">Loading users...</td></tr>';
+      
+      google.script.run
+        .withSuccessHandler(function(r) {
+          console.log('loadUsers result:', r);
+          if (r.success) {
+            allUsersCache = r.data || [];
+            renderUsersTable(allUsersCache, roleFilter, statusFilter);
+          } else {
+            document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="8" class="empty-state">Error: ' + (r.error || 'Failed to load users') + '</td></tr>';
+          }
+        })
+        .withFailureHandler(function(e) {
+          console.error('loadUsers error:', e);
+          document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="8" class="empty-state">Error loading users</td></tr>';
+        })
+        .adminGetUsers(sessToken);
+    }
+    
+    function renderUsersTable(users, roleFilter, statusFilter) {
+      var filtered = users;
+      
+      if (roleFilter) {
+        filtered = filtered.filter(function(u) { return u.role_code === roleFilter; });
+      }
+      
+      if (statusFilter === 'active') {
+        filtered = filtered.filter(function(u) { return u.is_active === true || u.is_active === 'TRUE'; });
+      } else if (statusFilter === 'inactive') {
+        filtered = filtered.filter(function(u) { return u.is_active === false || u.is_active === 'FALSE' || !u.is_active; });
+      }
+      
+      if (filtered.length === 0) {
+        document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="8" class="empty-state">No users found</td></tr>';
+        return;
+      }
+      
+      document.getElementById('usersTableBody').innerHTML = filtered.map(function(u) {
+        var isActive = u.is_active === true || u.is_active === 'TRUE';
+        var statusBadge = isActive 
+          ? '<span class="badge badge-low">Active</span>' 
+          : '<span class="badge badge-extreme">Inactive</span>';
+        var lastLogin = u.last_login ? formatDateDisplay(u.last_login) : 'Never';
+        
+        return '<tr>' +
+          '<td>' + u.user_id + '</td>' +
+          '<td>' + escHtml(u.full_name || '') + '</td>' +
+          '<td>' + escHtml(u.email || '') + '</td>' +
+          '<td>' + escHtml(u.role_name || u.role_code) + '</td>' +
+          '<td>' + (u.affiliate_code || '-') + '</td>' +
+          '<td>' + statusBadge + '</td>' +
+          '<td>' + lastLogin + '</td>' +
+          '<td style="white-space:nowrap;">' +
+            '<button class="btn btn-sm btn-secondary" onclick="openResetPwModal(\'' + u.user_id + '\', \'' + escAttr(u.full_name) + '\')" title="Reset Password">🔑</button> ' +
+            (isActive 
+              ? '<button class="btn btn-sm btn-danger" onclick="toggleUserStatus(\'' + u.user_id + '\', false)" title="Deactivate">✕</button>'
+              : '<button class="btn btn-sm btn-success" onclick="toggleUserStatus(\'' + u.user_id + '\', true)" title="Activate">✓</button>') +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+    
+    function formatDateDisplay(dateVal) {
+      if (!dateVal) return '-';
+      try {
+        var d = new Date(dateVal);
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      } catch (e) {
+        return '-';
+      }
+    }
+    
+    window.openNewUserModal = function() {
+      editingUserId = null;
+      document.getElementById('userModalTitle').textContent = 'New User';
+      document.getElementById('userFirstName').value = '';
+      document.getElementById('userLastName').value = '';
+      document.getElementById('userEmail').value = '';
+      document.getElementById('userRole').value = '';
+      document.getElementById('userDepartment').value = '';
+      document.getElementById('userPhone').value = '';
+      document.getElementById('tempPasswordDisplay').classList.add('hidden');
+      document.getElementById('userModalSaveBtn').textContent = 'Create User';
+      document.getElementById('userModalSaveBtn').disabled = false;
+      
+      // Populate affiliate dropdown
+      var affSelect = document.getElementById('userAffiliate');
+      affSelect.innerHTML = '<option value="">Select Affiliate...</option>' + 
+        dropdowns.affiliates.map(function(a) {
+          return '<option value="' + a.affiliate_code + '">' + a.affiliate_name + '</option>';
+        }).join('');
+      
+      openModal('userModal');
+    };
+    
+    window.saveUser = function() {
+      var firstName = document.getElementById('userFirstName').value.trim();
+      var lastName = document.getElementById('userLastName').value.trim();
+      var email = document.getElementById('userEmail').value.trim();
+      var roleCode = document.getElementById('userRole').value;
+      var affiliateCode = document.getElementById('userAffiliate').value;
+      var department = document.getElementById('userDepartment').value.trim();
+      var phone = document.getElementById('userPhone').value.trim();
+      
+      if (!firstName || !lastName || !email || !roleCode) {
+        toast('error', 'Validation Error', 'First name, last name, email and role are required');
+        return;
+      }
+      
+      var userData = {
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        role_code: roleCode,
+        affiliate_code: affiliateCode,
+        department: department,
+        phone: phone
+      };
+      
+      var btn = document.getElementById('userModalSaveBtn');
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+      
+      google.script.run
+        .withSuccessHandler(function(r) {
+          if (r.success) {
+            toast('success', 'User Created', 'User account created successfully');
+            document.getElementById('tempPasswordDisplay').classList.remove('hidden');
+            document.getElementById('tempPasswordValue').textContent = r.temp_password;
+            btn.textContent = 'Done';
+            loadUsers();
+          } else {
+            toast('error', 'Error', r.error || 'Failed to create user');
+            btn.disabled = false;
+            btn.textContent = 'Create User';
+          }
+        })
+        .withFailureHandler(function(e) {
+          toast('error', 'Error', 'Failed to create user');
+          btn.disabled = false;
+          btn.textContent = 'Create User';
+        })
+        .adminCreateUser(sessToken, userData);
+    };
+    
+    window.openResetPwModal = function(userId, userName) {
+      resetPwUserId = userId;
+      document.getElementById('resetPwUserName').textContent = userName;
+      document.getElementById('newTempPasswordDisplay').classList.add('hidden');
+      document.getElementById('confirmResetPwBtn').disabled = false;
+      document.getElementById('confirmResetPwBtn').textContent = 'Reset Password';
+      openModal('resetPwModal');
+    };
+    
+    window.confirmResetPassword = function() {
+      var btn = document.getElementById('confirmResetPwBtn');
+      btn.disabled = true;
+      btn.textContent = 'Resetting...';
+      
+      google.script.run
+        .withSuccessHandler(function(r) {
+          if (r.success) {
+            document.getElementById('newTempPasswordDisplay').classList.remove('hidden');
+            document.getElementById('newTempPasswordValue').textContent = r.temp_password;
+            btn.textContent = 'Done';
+            toast('success', 'Password Reset', 'Password has been reset successfully');
+          } else {
+            toast('error', 'Error', r.error || 'Failed to reset password');
+            btn.disabled = false;
+            btn.textContent = 'Reset Password';
+          }
+        })
+        .withFailureHandler(function(e) {
+          toast('error', 'Error', 'Failed to reset password');
+          btn.disabled = false;
+          btn.textContent = 'Reset Password';
+        })
+        .adminResetPassword(sessToken, resetPwUserId);
+    };
+    
+    window.toggleUserStatus = function(userId, makeActive) {
+      if (userId === currUser.user_id && !makeActive) {
+        toast('error', 'Error', 'You cannot deactivate your own account');
+        return;
+      }
+      
+      showLoading();
+      
+      google.script.run
+        .withSuccessHandler(function(r) {
+          hideLoading();
+          if (r.success) {
+            toast('success', 'Success', makeActive ? 'User activated' : 'User deactivated');
+            loadUsers();
+          } else {
+            toast('error', 'Error', r.error || 'Failed to update user status');
+          }
+        })
+        .withFailureHandler(function(e) {
+          hideLoading();
+          toast('error', 'Error', 'Failed to update user status');
+        })
+        .adminToggleUserStatus(sessToken, userId, makeActive);
+    };
+    
+    // ============================================================
+    // ADMIN: SETTINGS
+    // ============================================================
+    function loadSettings() {
+      document.getElementById('settingsContent').innerHTML = '<div class="empty-state">Loading settings...</div>';
+      
+      google.script.run
+        .withSuccessHandler(function(r) {
+          if (r.success) {
+            renderSettings(r.data);
+          } else {
+            document.getElementById('settingsContent').innerHTML = '<div class="empty-state">Error loading settings</div>';
+          }
+        })
+        .withFailureHandler(function(e) {
+          document.getElementById('settingsContent').innerHTML = '<div class="empty-state">Error loading settings</div>';
+        })
+        .getAllConfig();
+      
+      // Load master data summary
+      renderMasterDataSummary();
+    }
+    
+    function renderSettings(config) {
+      var html = '<table class="data-table"><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody>';
+      
+      var displayKeys = [
+        { key: 'SYSTEM_NAME', label: 'System Name' },
+        { key: 'MAX_ACTION_PLANS_PER_WP', label: 'Max Action Plans per Work Paper' },
+        { key: 'REMINDER_DAYS_BEFORE_DUE', label: 'Reminder Days Before Due' },
+        { key: 'OVERDUE_REMINDER_INTERVAL_DAYS', label: 'Overdue Reminder Interval' },
+        { key: 'DATE_FORMAT', label: 'Date Format' }
+      ];
+      
+      displayKeys.forEach(function(item) {
+        var val = config[item.key] || '-';
+        html += '<tr><td><strong>' + item.label + '</strong></td><td>' + escHtml(String(val)) + '</td></tr>';
+      });
+      
+      html += '</tbody></table>';
+      html += '<div style="margin-top:12px;font-size:0.75rem;color:var(--gray-500);">To modify settings, please update the 00_Config sheet directly in the database.</div>';
+      
+      document.getElementById('settingsContent').innerHTML = html;
+    }
+    
+    function renderMasterDataSummary() {
+      var html = '<div class="kpi-card"><div class="kpi-label">Affiliates</div><div class="kpi-value">' + dropdowns.affiliates.length + '</div></div>' +
+        '<div class="kpi-card"><div class="kpi-label">Audit Areas</div><div class="kpi-value">' + dropdowns.auditAreas.length + '</div></div>' +
+        '<div class="kpi-card"><div class="kpi-label">Sub-Areas</div><div class="kpi-value">' + dropdowns.subAreas.length + '</div></div>' +
+        '<div class="kpi-card"><div class="kpi-label">Unit Managers</div><div class="kpi-value">' + dropdowns.unitManagers.length + '</div></div>' +
+        '<div class="kpi-card"><div class="kpi-label">All Users</div><div class="kpi-value">' + dropdowns.allUsers.length + '</div></div>';
+      
+      document.getElementById('masterDataSummary').innerHTML = html;
+    }
     
   })(window);
   </script>
