@@ -59,6 +59,73 @@ function getSheetData(sheetName) {
 }
 
 // ============================================================
+// CACHE HELPERS
+// ============================================================
+function getCached(key) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const data = cache.get(key);
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function setCached(key, value, ttlSeconds) {
+  try {
+    const cache = CacheService.getScriptCache();
+    cache.put(key, JSON.stringify(value), ttlSeconds || 300);
+  } catch (e) {}
+}
+
+function clearCacheKey(key) {
+  try {
+    CacheService.getScriptCache().remove(key);
+  } catch (e) {}
+}
+
+function invalidateDropdownCache() {
+  clearCacheKey('dropdowns');
+}
+
+// ============================================================
+// ROLE NAME HELPER
+// ============================================================
+function getRoleName(roleCode) {
+  if (!roleCode) return '';
+  try {
+    const roles = getSheetData('01_Roles');
+    const role = roles.find(r => r.role_code === roleCode);
+    return role ? role.role_name : roleCode;
+  } catch (e) {
+    return roleCode;
+  }
+}
+
+// ============================================================
+// PERMISSIONS CACHED
+// ============================================================
+function getPermissionsCached(roleCode) {
+  const cacheKey = 'perms_' + roleCode;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+  
+  const perms = getUserPermissions(roleCode);
+  setCached(cacheKey, perms, 600);
+  return perms;
+}
+
+// ============================================================
+// GET CURRENT USER FROM SESSION
+// ============================================================
+function getCurrentUser(sessionToken) {
+  if (!sessionToken) return null;
+  const result = validateSession(sessionToken);
+  if (!result.valid) return null;
+  return result.user;
+}
+
+// ============================================================
 // WEB APP ENTRY POINTS
 // ============================================================
 function doGet(e) {
@@ -300,7 +367,7 @@ function getNextId(prefix) {
 // ============================================================
 function checkPermission(roleCode, module, action) {
   try {
-    const permissions = getSheetData('02_RolePermissions');
+    const permissions = getSheetData('02_Permissions');
     const perm = permissions.find(p => 
       p.role_code === roleCode && 
       p.module === module
@@ -324,7 +391,7 @@ function checkPermission(roleCode, module, action) {
 
 function getUserPermissions(roleCode) {
   try {
-    const permissions = getSheetData('02_RolePermissions')
+    const permissions = getSheetData('02_Permissions')
       .filter(p => p.role_code === roleCode);
     
     const result = {};
