@@ -1,12 +1,13 @@
 /**
  * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Work Paper Service v1.0
+ * Work Paper Service v2.0 - Performance Optimized
  * 
  * CRUD operations for Work Papers
+ * Implements: Batch reads, reduced sheet access, optimized queries
  */
 
 // ============================================================
-// LIST WORK PAPERS
+// LIST WORK PAPERS (Optimized)
 // ============================================================
 function listWorkPapers(sessionToken, filters = {}) {
   try {
@@ -19,11 +20,13 @@ function listWorkPapers(sessionToken, filters = {}) {
       return { success: false, error: 'Permission denied' };
     }
     
+    // Single read for work papers
     let workPapers = getSheetData('09_WorkPapers');
     
-    // Apply filters
+    // Apply filters efficiently
     if (filters.year) {
-      workPapers = workPapers.filter(wp => wp.year == filters.year);
+      const yearVal = parseInt(filters.year);
+      workPapers = workPapers.filter(wp => wp.year == yearVal);
     }
     
     if (filters.status) {
@@ -43,32 +46,33 @@ function listWorkPapers(sessionToken, filters = {}) {
     }
     
     // Role-based filtering
-    if (user.role_code === 'UNIT_MANAGER') {
-      // Unit managers see only work papers sent to them or where they are CC'd
+    const roleCode = user.role_code;
+    const userId = user.user_id;
+    
+    if (roleCode === 'UNIT_MANAGER') {
       workPapers = workPapers.filter(wp => 
         wp.status === 'Sent to Auditee' && 
-        (wp.unit_head_id === user.user_id || 
-         (wp.cc_recipients && wp.cc_recipients.includes(user.user_id)))
+        (wp.unit_head_id === userId || 
+         (wp.responsible_ids && wp.responsible_ids.includes(userId)) ||
+         (wp.cc_recipients && wp.cc_recipients.includes(userId)))
       );
-    } else if (user.role_code === 'JUNIOR_STAFF') {
-      // Junior staff see only their unit's work papers
+    } else if (roleCode === 'JUNIOR_STAFF') {
       workPapers = workPapers.filter(wp => 
         wp.status === 'Sent to Auditee' && 
         wp.affiliate_code === user.affiliate_code
       );
-    } else if (user.role_code === 'EXTERNAL_AUDITOR') {
-      // External auditors see only approved/sent work papers
+    } else if (roleCode === 'EXTERNAL_AUDITOR') {
       workPapers = workPapers.filter(wp => 
         ['Approved', 'Sent to Auditee'].includes(wp.status)
       );
     }
     
-    // Get audit area names
+    // Get audit area names - single read, build lookup map
     const auditAreas = getSheetData('07_AuditAreas');
     const areaMap = {};
     auditAreas.forEach(a => areaMap[a.area_id] = a.area_name);
     
-    // Enrich with area names
+    // Enrich with area names and format dates
     workPapers = workPapers.map(wp => ({
       ...wp,
       audit_area_name: areaMap[wp.audit_area_id] || '',
@@ -76,7 +80,7 @@ function listWorkPapers(sessionToken, filters = {}) {
     }));
     
     // Sort by date descending
-    workPapers.sort((a, b) => new Date(b.work_paper_date) - new Date(a.work_paper_date));
+    workPapers.sort((a, b) => new Date(b.work_paper_date || 0) - new Date(a.work_paper_date || 0));
     
     return { success: true, data: workPapers };
   } catch (error) {
@@ -86,7 +90,7 @@ function listWorkPapers(sessionToken, filters = {}) {
 }
 
 // ============================================================
-// GET SINGLE WORK PAPER
+// GET SINGLE WORK PAPER (Optimized - batch related data)
 // ============================================================
 function getWorkPaper(sessionToken, workPaperId) {
   try {
@@ -99,19 +103,30 @@ function getWorkPaper(sessionToken, workPaperId) {
       return { success: false, error: 'Permission denied' };
     }
     
-    const workPapers = getSheetData('09_WorkPapers');
+    // Batch read all needed data in parallel conceptually
+    const [workPapers, requirements, files, actionPlans, revisions, auditAreas, subAreas, apEvidence] = [
+      getSheetData('09_WorkPapers'),
+      getSheetData('10_WorkPaperRequirements'),
+      getSheetData('11_WorkPaperFiles'),
+      getSheetData('13_ActionPlans'),
+      getSheetData('12_WorkPaperRevisions'),
+      getSheetData('07_AuditAreas'),
+      getSheetData('08_ProcessSubAreas'),
+      getSheetData('14_ActionPlanEvidence')
+    ];
+    
     const wp = workPapers.find(w => w.work_paper_id === workPaperId);
     
     if (!wp) {
       return { success: false, error: 'Work paper not found' };
     }
     
-    // Get related data
-    const requirements = getSheetData('10_WorkPaperRequirements')
+    // Filter related data
+    const wpRequirements = requirements
       .filter(r => r.work_paper_id === workPaperId)
       .sort((a, b) => a.requirement_number - b.requirement_number);
     
-    const files = getSheetData('11_WorkPaperFiles')
+    const wpFiles = files
       .filter(f => f.work_paper_id === workPaperId)
       .map(f => ({
         id: f.file_id,
@@ -122,25 +137,20 @@ function getWorkPaper(sessionToken, workPaperId) {
         status: 'done'
       }));
     
-    const actionPlans = getSheetData('13_ActionPlans')
+    const wpActionPlans = actionPlans
       .filter(ap => ap.work_paper_id === workPaperId)
       .sort((a, b) => a.action_number - b.action_number);
     
-    // Get action plan evidence
-    const apEvidence = getSheetData('14_ActionPlanEvidence');
-    actionPlans.forEach(ap => {
+    // Attach evidence to action plans
+    wpActionPlans.forEach(ap => {
       ap.evidence = apEvidence.filter(e => e.action_plan_id === ap.action_plan_id);
     });
     
-    // Get revision history
-    const revisions = getSheetData('12_WorkPaperRevisions')
+    const wpRevisions = revisions
       .filter(r => r.work_paper_id === workPaperId)
-      .sort((a, b) => new Date(b.action_date) - new Date(a.action_date));
+      .sort((a, b) => new Date(b.action_date || 0) - new Date(a.action_date || 0));
     
-    // Get audit area and sub-area names
-    const auditAreas = getSheetData('07_AuditAreas');
-    const subAreas = getSheetData('08_ProcessSubAreas');
-    
+    // Lookup names
     const area = auditAreas.find(a => a.area_id === wp.audit_area_id);
     const subArea = subAreas.find(s => s.sub_area_id === wp.sub_area_id);
     
@@ -150,10 +160,10 @@ function getWorkPaper(sessionToken, workPaperId) {
         ...wp,
         audit_area_name: area ? area.area_name : '',
         sub_area_name: subArea ? subArea.sub_area_name : '',
-        requirements,
-        files,
-        actionPlans,
-        revisions
+        requirements: wpRequirements,
+        files: wpFiles,
+        actionPlans: wpActionPlans,
+        revisions: wpRevisions
       }
     };
   } catch (error) {
@@ -163,7 +173,7 @@ function getWorkPaper(sessionToken, workPaperId) {
 }
 
 // ============================================================
-// CREATE WORK PAPER
+// CREATE WORK PAPER (Optimized - batch writes)
 // ============================================================
 function createWorkPaper(sessionToken, data) {
   try {
@@ -184,6 +194,15 @@ function createWorkPaper(sessionToken, data) {
     const now = new Date();
     const currentYear = now.getFullYear();
     
+    // Process responsible_ids and cc_recipients
+    const responsibleIds = Array.isArray(data.responsible_ids) 
+      ? data.responsible_ids.join(',') 
+      : (data.responsible_ids || data.unit_head_id || '');
+    
+    const ccRecipients = Array.isArray(data.cc_recipients) 
+      ? data.cc_recipients.join(',') 
+      : (data.cc_recipients || '');
+    
     // Build row
     const row = headers.map(header => {
       switch (header) {
@@ -198,8 +217,9 @@ function createWorkPaper(sessionToken, data) {
         case 'revision_count': return 0;
         case 'created_at': return now;
         case 'updated_at': return now;
-        case 'cc_recipients': 
-          return Array.isArray(data.cc_recipients) ? data.cc_recipients.join(',') : (data.cc_recipients || '');
+        case 'responsible_ids': return responsibleIds;
+        case 'unit_head_id': return responsibleIds.split(',')[0] || '';
+        case 'cc_recipients': return ccRecipients;
         default:
           return data[header] !== undefined ? data[header] : '';
       }
@@ -217,8 +237,13 @@ function createWorkPaper(sessionToken, data) {
       saveActionPlansForWorkPaper(workPaperId, data.action_plans, user);
     }
     
+    // Handle file uploads if provided
+    if (data.supporting_files && data.supporting_files.length > 0) {
+      saveWorkPaperFiles(workPaperId, data.supporting_files, data.supporting_folder_id, user);
+    }
+    
     // Log audit
-    logAudit('CREATE', 'WORK_PAPER', workPaperId, null, data);
+    logAudit('CREATE', 'WORK_PAPER', workPaperId, null, data, user.user_id);
     
     // Send notification if submitted
     if (data.status === 'Submitted') {
@@ -233,7 +258,7 @@ function createWorkPaper(sessionToken, data) {
 }
 
 // ============================================================
-// UPDATE WORK PAPER
+// UPDATE WORK PAPER (Optimized - batch updates)
 // ============================================================
 function updateWorkPaper(sessionToken, workPaperId, data) {
   try {
@@ -256,7 +281,7 @@ function updateWorkPaper(sessionToken, workPaperId, data) {
     let oldData = {};
     for (let i = 1; i < allData.length; i++) {
       if (allData[i][idIdx] === workPaperId) {
-        rowIndex = i + 1; // 1-indexed for sheet
+        rowIndex = i + 1;
         headers.forEach((h, idx) => oldData[h] = allData[i][idx]);
         break;
       }
@@ -271,37 +296,39 @@ function updateWorkPaper(sessionToken, workPaperId, data) {
     const wpPerm = permissions['WORK_PAPER'];
     const restrictedFields = wpPerm ? wpPerm.field_restrictions : [];
     
-    // Check if user can edit this work paper based on status
-    const currentStatus = oldData.status;
+    // Check if user can edit based on status
     if (!canEditWorkPaper(user, oldData)) {
       return { success: false, error: 'Cannot edit work paper in current status' };
     }
     
+    const currentStatus = oldData.status;
     const now = new Date();
     
-    // Update fields
+    // Build update values array for batch update
+    const updateRow = [...allData[rowIndex - 1]];
+    
     headers.forEach((header, idx) => {
-      // Skip restricted fields
-      if (restrictedFields.includes(header)) {
-        return;
-      }
-      
-      // Skip system fields
-      if (['work_paper_id', 'year', 'prepared_by_id', 'prepared_by_name', 'prepared_date', 'created_at'].includes(header)) {
-        return;
-      }
+      if (restrictedFields.includes(header)) return;
+      if (['work_paper_id', 'year', 'prepared_by_id', 'prepared_by_name', 'prepared_date', 'created_at'].includes(header)) return;
       
       if (header === 'updated_at') {
-        sheet.getRange(rowIndex, idx + 1).setValue(now);
+        updateRow[idx] = now;
+      } else if (header === 'responsible_ids' && data.responsible_ids) {
+        updateRow[idx] = Array.isArray(data.responsible_ids) ? data.responsible_ids.join(',') : data.responsible_ids;
+      } else if (header === 'unit_head_id' && data.responsible_ids) {
+        const ids = Array.isArray(data.responsible_ids) ? data.responsible_ids : data.responsible_ids.split(',');
+        updateRow[idx] = ids[0] || '';
       } else if (header === 'cc_recipients' && data.cc_recipients) {
-        const value = Array.isArray(data.cc_recipients) ? data.cc_recipients.join(',') : data.cc_recipients;
-        sheet.getRange(rowIndex, idx + 1).setValue(value);
+        updateRow[idx] = Array.isArray(data.cc_recipients) ? data.cc_recipients.join(',') : data.cc_recipients;
       } else if (header === 'submitted_date' && data.status === 'Submitted' && !oldData.submitted_date) {
-        sheet.getRange(rowIndex, idx + 1).setValue(now);
+        updateRow[idx] = now;
       } else if (data[header] !== undefined) {
-        sheet.getRange(rowIndex, idx + 1).setValue(data[header]);
+        updateRow[idx] = data[header];
       }
     });
+    
+    // Single batch write
+    sheet.getRange(rowIndex, 1, 1, headers.length).setValues([updateRow]);
     
     // Update requirements if provided
     if (data.requirements) {
@@ -313,8 +340,16 @@ function updateWorkPaper(sessionToken, workPaperId, data) {
       saveActionPlansForWorkPaper(workPaperId, data.action_plans, user);
     }
     
+    // Handle new file uploads
+    if (data.supporting_files && data.supporting_files.length > 0) {
+      const newFiles = data.supporting_files.filter(f => f.isNew);
+      if (newFiles.length > 0) {
+        saveWorkPaperFiles(workPaperId, newFiles, data.supporting_folder_id, user);
+      }
+    }
+    
     // Log audit
-    logAudit('UPDATE', 'WORK_PAPER', workPaperId, oldData, data);
+    logAudit('UPDATE', 'WORK_PAPER', workPaperId, oldData, data, user.user_id);
     
     // Handle status changes
     if (data.status && data.status !== currentStatus) {
@@ -335,10 +370,8 @@ function canEditWorkPaper(user, workPaper) {
   const status = workPaper.status;
   const roleCode = user.role_code;
   
-  // Super admin can always edit
   if (roleCode === 'SUPER_ADMIN') return true;
   
-  // Auditor can edit Draft, Submitted (own), Revision Requested (own)
   if (roleCode === 'AUDITOR') {
     if (['Draft', 'Revision Requested'].includes(status)) {
       return workPaper.prepared_by_id === user.user_id;
@@ -346,11 +379,11 @@ function canEditWorkPaper(user, workPaper) {
     return false;
   }
   
-  // Unit Manager can edit only Sent to Auditee (management response & action plans)
   if (roleCode === 'UNIT_MANAGER') {
+    const responsibleIds = (workPaper.responsible_ids || workPaper.unit_head_id || '').split(',');
+    const ccIds = (workPaper.cc_recipients || '').split(',');
     return status === 'Sent to Auditee' && 
-           (workPaper.unit_head_id === user.user_id || 
-            (workPaper.cc_recipients && workPaper.cc_recipients.includes(user.user_id)));
+           (responsibleIds.includes(user.user_id) || ccIds.includes(user.user_id));
   }
   
   return false;
@@ -377,48 +410,51 @@ function handleWorkPaperStatusChange(workPaperId, oldStatus, newStatus, user) {
   // Record revision
   recordRevision(workPaperId, newStatus, '', user);
   
-  // Update status-specific fields
+  // Batch status-specific updates
+  const updates = {};
+  
   if (newStatus === 'Submitted') {
-    const submittedIdx = headers.indexOf('submitted_date');
-    sheet.getRange(rowIndex, submittedIdx + 1).setValue(now);
+    updates['submitted_date'] = now;
     queueNotification('WP_SUBMITTED', workPaperId, user);
   }
   
   if (newStatus === 'Under Review') {
-    const reviewedByIdx = headers.indexOf('reviewed_by_id');
-    const reviewedByNameIdx = headers.indexOf('reviewed_by_name');
-    sheet.getRange(rowIndex, reviewedByIdx + 1).setValue(user.user_id);
-    sheet.getRange(rowIndex, reviewedByNameIdx + 1).setValue(user.full_name);
+    updates['reviewed_by_id'] = user.user_id;
+    updates['reviewed_by_name'] = user.full_name;
   }
   
   if (newStatus === 'Approved') {
-    const approvedByIdx = headers.indexOf('approved_by_id');
-    const approvedByNameIdx = headers.indexOf('approved_by_name');
-    const approvedDateIdx = headers.indexOf('approved_date');
-    sheet.getRange(rowIndex, approvedByIdx + 1).setValue(user.user_id);
-    sheet.getRange(rowIndex, approvedByNameIdx + 1).setValue(user.full_name);
-    sheet.getRange(rowIndex, approvedDateIdx + 1).setValue(now);
+    updates['approved_by_id'] = user.user_id;
+    updates['approved_by_name'] = user.full_name;
+    updates['approved_date'] = now;
   }
   
   if (newStatus === 'Sent to Auditee') {
-    const sentDateIdx = headers.indexOf('sent_to_auditee_date');
-    sheet.getRange(rowIndex, sentDateIdx + 1).setValue(now);
+    updates['sent_to_auditee_date'] = now;
     queueNotification('WP_APPROVED', workPaperId, user);
   }
   
   if (newStatus === 'Revision Requested') {
     const revCountIdx = headers.indexOf('revision_count');
     const currentCount = allData.find(row => row[idIdx] === workPaperId)[revCountIdx] || 0;
-    sheet.getRange(rowIndex, revCountIdx + 1).setValue(currentCount + 1);
+    updates['revision_count'] = currentCount + 1;
     queueNotification('WP_REVISION_REQUESTED', workPaperId, user);
   }
+  
+  // Apply updates
+  Object.entries(updates).forEach(([field, value]) => {
+    const colIdx = headers.indexOf(field);
+    if (colIdx !== -1) {
+      sheet.getRange(rowIndex, colIdx + 1).setValue(value);
+    }
+  });
 }
 
 function recordRevision(workPaperId, action, comments, user) {
   const sheet = getSheet('12_WorkPaperRevisions');
-  const revisionId = getNextId('LOG'); // Reuse LOG sequence
+  const revisionId = getNextId('LOG');
   
-  // Get current revision count
+  // Get revision count
   const wpSheet = getSheet('09_WorkPapers');
   const wpData = wpSheet.getDataRange().getValues();
   const wpHeaders = wpData[0];
@@ -439,7 +475,7 @@ function recordRevision(workPaperId, action, comments, user) {
     revisionNumber,
     action,
     comments,
-    '', // changed_fields
+    '',
     user.user_id,
     user.full_name,
     new Date()
@@ -456,27 +492,21 @@ function submitWorkPaper(sessionToken, workPaperId) {
       return { success: false, error: 'Not authenticated' };
     }
     
-    // Get current work paper
     const result = getWorkPaper(sessionToken, workPaperId);
-    if (!result.success) {
-      return result;
-    }
+    if (!result.success) return result;
     
     const wp = result.data;
     
-    // Validate status
     if (!['Draft', 'Revision Requested'].includes(wp.status)) {
       return { success: false, error: 'Can only submit Draft or Revision Requested work papers' };
     }
     
-    // Validate required fields
     const validation = validateWorkPaperForSubmission(wp);
     if (!validation.valid) {
       return { success: false, error: validation.errors.join(', ') };
     }
     
-    // Update status
-    return updateWorkPaper(workPaperId, { status: 'Submitted' });
+    return updateWorkPaper(sessionToken, workPaperId, { status: 'Submitted' });
   } catch (error) {
     console.error('submitWorkPaper error:', error);
     return { success: false, error: error.message };
@@ -495,7 +525,6 @@ function validateWorkPaperForSubmission(wp) {
     }
   });
   
-  // Check requirements
   if (!wp.requirements || wp.requirements.length === 0) {
     errors.push('At least one requirement is needed');
   }
@@ -517,7 +546,6 @@ function approveWorkPaper(sessionToken, workPaperId, comments) {
       return { success: false, error: 'Permission denied' };
     }
     
-    // Get current work paper
     const result = getWorkPaper(sessionToken, workPaperId);
     if (!result.success) return result;
     
@@ -527,17 +555,17 @@ function approveWorkPaper(sessionToken, workPaperId, comments) {
       return { success: false, error: 'Can only approve Submitted or Under Review work papers' };
     }
     
-    // Update to Approved, then auto-send to auditee
+    const now = new Date();
     const updateResult = updateWorkPaper(sessionToken, workPaperId, {
       status: 'Sent to Auditee',
       review_comments: comments,
       reviewed_by_id: user.user_id,
       reviewed_by_name: user.full_name,
-      review_date: new Date(),
+      review_date: now,
       approved_by_id: user.user_id,
       approved_by_name: user.full_name,
-      approved_date: new Date(),
-      sent_to_auditee_date: new Date()
+      approved_date: now,
+      sent_to_auditee_date: now
     });
     
     if (updateResult.success) {
@@ -562,7 +590,6 @@ function requestRevision(sessionToken, workPaperId, comments) {
       return { success: false, error: 'Permission denied' };
     }
     
-    // Get current work paper
     const result = getWorkPaper(sessionToken, workPaperId);
     if (!result.success) return result;
     
@@ -592,35 +619,36 @@ function requestRevision(sessionToken, workPaperId, comments) {
 }
 
 // ============================================================
-// REQUIREMENTS MANAGEMENT
+// REQUIREMENTS MANAGEMENT (Optimized - batch operations)
 // ============================================================
 function saveRequirements(workPaperId, requirements, user) {
   const sheet = getSheet('10_WorkPaperRequirements');
   const now = new Date();
   
-  // Get existing requirements
-  const existing = getSheetData('10_WorkPaperRequirements')
-    .filter(r => r.work_paper_id === workPaperId);
+  // Get all data once
+  const allData = sheet.getDataRange().getValues();
+  const headers = allData[0];
+  const wpIdIdx = headers.indexOf('work_paper_id');
   
-  // Delete existing (simple approach - could be optimized)
-  if (existing.length > 0) {
-    const allData = sheet.getDataRange().getValues();
-    const headers = allData[0];
-    const wpIdIdx = headers.indexOf('work_paper_id');
-    
-    // Find and delete rows (from bottom to top to maintain indices)
-    for (let i = allData.length - 1; i >= 1; i--) {
-      if (allData[i][wpIdIdx] === workPaperId) {
-        sheet.deleteRow(i + 1);
-      }
+  // Find and delete existing rows (from bottom to top)
+  const rowsToDelete = [];
+  for (let i = 1; i < allData.length; i++) {
+    if (allData[i][wpIdIdx] === workPaperId) {
+      rowsToDelete.push(i + 1);
     }
   }
   
-  // Add new requirements
+  // Delete from bottom to top to preserve indices
+  for (let i = rowsToDelete.length - 1; i >= 0; i--) {
+    sheet.deleteRow(rowsToDelete[i]);
+  }
+  
+  // Batch add new requirements
+  const newRows = [];
   requirements.forEach((req, index) => {
     if (req.requirement_description) {
       const reqId = getNextId('REQUIREMENT');
-      sheet.appendRow([
+      newRows.push([
         reqId,
         workPaperId,
         index + 1,
@@ -633,6 +661,10 @@ function saveRequirements(workPaperId, requirements, user) {
       ]);
     }
   });
+  
+  if (newRows.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+  }
 }
 
 function getRequirements(workPaperId) {
@@ -649,66 +681,142 @@ function getRequirements(workPaperId) {
 }
 
 // ============================================================
-// SAVE ACTION PLANS FOR WORK PAPER
+// SAVE ACTION PLANS FOR WORK PAPER (Optimized)
 // ============================================================
 function saveActionPlansForWorkPaper(workPaperId, actionPlans, user) {
   const sheet = getSheet('13_ActionPlans');
   const now = new Date();
   
-  // Get existing action plans for this work paper
-  const existing = getSheetData('13_ActionPlans')
-    .filter(ap => ap.work_paper_id === workPaperId);
+  // Get all data once
+  const allData = sheet.getDataRange().getValues();
+  const headers = allData[0];
+  const wpIdIdx = headers.indexOf('work_paper_id');
   
-  // Delete existing (simple approach)
-  if (existing.length > 0) {
-    const allData = sheet.getDataRange().getValues();
-    const headers = allData[0];
-    const wpIdIdx = headers.indexOf('work_paper_id');
-    
-    for (let i = allData.length - 1; i >= 1; i--) {
-      if (allData[i][wpIdIdx] === workPaperId) {
-        sheet.deleteRow(i + 1);
-      }
+  // Find and delete existing rows
+  const rowsToDelete = [];
+  for (let i = 1; i < allData.length; i++) {
+    if (allData[i][wpIdIdx] === workPaperId) {
+      rowsToDelete.push(i + 1);
     }
   }
   
-  // Add new action plans
+  // Delete from bottom to top
+  for (let i = rowsToDelete.length - 1; i >= 0; i--) {
+    sheet.deleteRow(rowsToDelete[i]);
+  }
+  
+  // Batch add new action plans
+  const newRows = [];
   actionPlans.forEach((ap, index) => {
     if (ap.action_description) {
       const apId = getNextId('ACTION_PLAN');
-      sheet.appendRow([
-        apId,                                    // action_plan_id
-        workPaperId,                             // work_paper_id
-        index + 1,                               // action_number
-        ap.action_description,                   // action_description
-        ap.action_owner_id || '',                // action_owner_id
-        ap.action_owner_name || '',              // action_owner_name
-        ap.due_date || '',                       // due_date
-        'Not Due',                               // status
-        'Open',                                  // final_status
-        '',                                      // implementation_notes
-        '',                                      // implemented_date
-        '',                                      // auditor_review_status
-        '',                                      // auditor_review_by
-        '',                                      // auditor_review_date
-        '',                                      // auditor_review_comments
-        '',                                      // hoa_review_status
-        '',                                      // hoa_review_by
-        '',                                      // hoa_review_date
-        '',                                      // hoa_review_comments
-        0,                                       // days_overdue
-        now,                                     // created_at
-        user.user_id,                            // created_by
-        now,                                     // updated_at
-        user.user_id                             // updated_by
+      
+      // Handle owner_ids
+      let ownerIdsStr = '';
+      if (ap.owner_ids && Array.isArray(ap.owner_ids)) {
+        ownerIdsStr = ap.owner_ids.join(',');
+      } else if (ap.owner_ids) {
+        ownerIdsStr = String(ap.owner_ids);
+      } else if (ap.action_owner_id) {
+        ownerIdsStr = String(ap.action_owner_id);
+      }
+      
+      newRows.push([
+        apId,
+        workPaperId,
+        index + 1,
+        ap.action_description,
+        ownerIdsStr.split(',')[0] || '',
+        ap.action_owner_name || '',
+        ap.due_date || '',
+        'Not Due',
+        'Open',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        0,
+        now,
+        user.user_id,
+        now,
+        user.user_id,
+        ownerIdsStr
       ]);
     }
   });
+  
+  if (newRows.length > 0) {
+    // Ensure we have the right number of columns
+    const lastRow = sheet.getLastRow();
+    const numCols = sheet.getLastColumn();
+    
+    // Pad rows if needed
+    newRows.forEach(row => {
+      while (row.length < numCols) row.push('');
+    });
+    
+    sheet.getRange(lastRow + 1, 1, newRows.length, numCols).setValues(newRows);
+  }
 }
 
 // ============================================================
-// FILE MANAGEMENT
+// FILE MANAGEMENT (Optimized)
 // ============================================================
+function saveWorkPaperFiles(workPaperId, files, parentFolderId, user) {
+  const sheet = getSheet('11_WorkPaperFiles');
+  const now = new Date();
+  
+  // Get or create folder for this work paper
+  let folder;
+  try {
+    const parentFolder = DriveApp.getFolderById(parentFolderId);
+    const wpFolderName = workPaperId;
+    const existing = parentFolder.getFoldersByName(wpFolderName);
+    folder = existing.hasNext() ? existing.next() : parentFolder.createFolder(wpFolderName);
+  } catch (e) {
+    console.error('Folder access error:', e);
+    folder = DriveApp.getRootFolder();
+  }
+  
+  // Process each file
+  const newRows = [];
+  files.forEach(f => {
+    if (f.data) {
+      try {
+        const blob = Utilities.newBlob(Utilities.base64Decode(f.data), f.type, f.name);
+        const file = folder.createFile(blob);
+        const fileId = getNextId('FILE');
+        
+        newRows.push([
+          fileId,
+          workPaperId,
+          'Supporting',
+          f.name,
+          '',
+          file.getId(),
+          file.getUrl(),
+          f.size || blob.getBytes().length,
+          f.type,
+          user.user_id,
+          now
+        ]);
+      } catch (e) {
+        console.error('File upload error:', e);
+      }
+    }
+  });
+  
+  if (newRows.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+  }
+}
+
 function saveWorkPaperFile(workPaperId, fileCategory, fileName, fileDescription, driveFileId, fileSize, mimeType) {
   try {
     const user = getCurrentUser();
@@ -746,7 +854,15 @@ function saveWorkPaperFile(workPaperId, fileCategory, fileName, fileDescription,
 function getWorkPaperFiles(workPaperId) {
   try {
     const files = getSheetData('11_WorkPaperFiles')
-      .filter(f => f.work_paper_id === workPaperId);
+      .filter(f => f.work_paper_id === workPaperId)
+      .map(f => ({
+        id: f.file_id,
+        name: f.file_name,
+        size: f.file_size,
+        drive_url: f.drive_url,
+        drive_file_id: f.drive_file_id,
+        status: 'done'
+      }));
     
     return { success: true, data: files };
   } catch (error) {
@@ -769,11 +885,9 @@ function deleteWorkPaperFile(fileId) {
     
     for (let i = 1; i < data.length; i++) {
       if (data[i][idIdx] === fileId) {
-        // Get file info before deleting
         const fileInfo = {};
         headers.forEach((h, idx) => fileInfo[h] = data[i][idx]);
         
-        // Delete from Drive (optional - could keep file)
         try {
           DriveApp.getFileById(fileInfo.drive_file_id).setTrashed(true);
         } catch (e) {
@@ -804,24 +918,18 @@ function uploadFileToDrive(base64Data, fileName, mimeType, workPaperId, fileCate
       return { success: false, error: 'Not authenticated' };
     }
     
-    // Get folder ID from config
     const folderId = getConfig('WORK_PAPERS_FOLDER_ID');
     if (!folderId) {
       return { success: false, error: 'Work papers folder not configured' };
     }
     
-    // Create year subfolder if needed
     const year = new Date().getFullYear().toString();
     const yearFolder = getOrCreateSubfolder(folderId, year);
-    
-    // Create work paper subfolder if needed
     const wpFolder = getOrCreateSubfolder(yearFolder.getId(), workPaperId);
     
-    // Decode and save file
     const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
     const file = wpFolder.createFile(blob);
     
-    // Save to database
     const result = saveWorkPaperFile(
       workPaperId,
       fileCategory,
@@ -860,11 +968,9 @@ function uploadWorkPaperFile(sessionToken, workPaperId, fileName, base64Data, mi
       return { success: false, error: 'Not authenticated' };
     }
     
-    // Decode base64 and create blob
     const decodedData = Utilities.base64Decode(base64Data);
     const blob = Utilities.newBlob(decodedData, mimeType, fileName);
     
-    // Get or create folder for this work paper
     let folder;
     try {
       const parentFolder = DriveApp.getFolderById(parentFolderId);
@@ -872,17 +978,14 @@ function uploadWorkPaperFile(sessionToken, workPaperId, fileName, base64Data, mi
       const existing = parentFolder.getFoldersByName(wpFolderName);
       folder = existing.hasNext() ? existing.next() : parentFolder.createFolder(wpFolderName);
     } catch (e) {
-      // If parent folder access fails, use root
       console.error('Folder access error:', e);
       folder = DriveApp.getRootFolder();
     }
     
-    // Create file in Drive
     const file = folder.createFile(blob);
     const driveFileId = file.getId();
     const driveUrl = file.getUrl();
     
-    // Record in database if work paper exists
     const fileId = getNextId('FILE');
     
     if (workPaperId !== 'NEW') {
@@ -890,9 +993,9 @@ function uploadWorkPaperFile(sessionToken, workPaperId, fileName, base64Data, mi
       sheet.appendRow([
         fileId,
         workPaperId,
-        'Supporting', // file_category
+        'Supporting',
         fileName,
-        '', // file_description
+        '',
         driveFileId,
         driveUrl,
         decodedData.length,
@@ -913,29 +1016,6 @@ function uploadWorkPaperFile(sessionToken, workPaperId, fileName, base64Data, mi
     };
   } catch (error) {
     console.error('uploadWorkPaperFile error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-// ============================================================
-// GET WORK PAPER FILES
-// ============================================================
-function getWorkPaperFiles(workPaperId) {
-  try {
-    const files = getSheetData('11_WorkPaperFiles')
-      .filter(f => f.work_paper_id === workPaperId)
-      .map(f => ({
-        id: f.file_id,
-        name: f.file_name,
-        size: f.file_size,
-        drive_url: f.drive_url,
-        drive_file_id: f.drive_file_id,
-        status: 'done'
-      }));
-    
-    return { success: true, data: files };
-  } catch (error) {
-    console.error('getWorkPaperFiles error:', error);
     return { success: false, error: error.message };
   }
 }
