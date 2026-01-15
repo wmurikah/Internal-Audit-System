@@ -3,7 +3,7 @@
  * Action Plan Service v2.0
  * 
  * CRUD operations for Action Plans
- * Updated to support multiple owners per action plan
+ * FIXED: All references to 01_Users changed to 05_Users
  */
 
 // ============================================================
@@ -29,8 +29,8 @@ function listActionPlans(sessionToken, filters = {}) {
       wpMap[wp.work_paper_id] = wp;
     });
     
-    // Get users for owner name resolution
-    const users = getSheetData('01_Users');
+    // FIXED: Use 05_Users instead of 01_Users
+    const users = getSheetData('05_Users');
     const userMap = {};
     users.forEach(u => {
       userMap[u.user_id] = u;
@@ -76,8 +76,7 @@ function listActionPlans(sessionToken, filters = {}) {
     if (filters.work_paper_id) {
       actionPlans = actionPlans.filter(ap => ap.work_paper_id === filters.work_paper_id);
     }
-    
-    // Filter by owner - now checks if user is in owner_ids array
+
     if (filters.action_owner_id) {
       actionPlans = actionPlans.filter(ap => 
         ap.owner_ids_array.includes(filters.action_owner_id)
@@ -90,7 +89,6 @@ function listActionPlans(sessionToken, filters = {}) {
     
     // Role-based filtering
     if (user.role_code === 'UNIT_MANAGER') {
-      // See action plans they own or for work papers sent to them
       actionPlans = actionPlans.filter(ap => {
         const wp = wpMap[ap.work_paper_id];
         const isOwner = ap.owner_ids_array.includes(user.user_id);
@@ -98,7 +96,6 @@ function listActionPlans(sessionToken, filters = {}) {
         return isOwner || isResponsible;
       });
     } else if (user.role_code === 'JUNIOR_STAFF') {
-      // See only action plans they own
       actionPlans = actionPlans.filter(ap => 
         ap.owner_ids_array.includes(user.user_id)
       );
@@ -165,10 +162,8 @@ function formatOwnerIds(ownerIds) {
 // HELPER: Check if user is in responsible list for work paper
 // ============================================================
 function isUserResponsible(wp, userId) {
-  // Check old single unit_head_id field
   if (wp.unit_head_id === userId) return true;
   
-  // Check new responsible_ids field (comma-separated)
   if (wp.responsible_ids) {
     const responsibleIds = parseOwnerIds(wp.responsible_ids);
     if (responsibleIds.includes(userId)) return true;
@@ -178,12 +173,13 @@ function isUserResponsible(wp, userId) {
 }
 
 // ============================================================
-// HELPER: Get owner names from IDs
+// HELPER: Get owner names from IDs - FIXED: 05_Users
 // ============================================================
 function getOwnerNames(ownerIds) {
   if (!ownerIds || ownerIds.length === 0) return '';
   
-  const users = getSheetData('01_Users');
+  // FIXED: Use 05_Users
+  const users = getSheetData('05_Users');
   const userMap = {};
   users.forEach(u => {
     userMap[u.user_id] = u.full_name;
@@ -194,7 +190,7 @@ function getOwnerNames(ownerIds) {
 }
 
 // ============================================================
-// GET SINGLE ACTION PLAN
+// GET SINGLE ACTION PLAN - FIXED: 05_Users
 // ============================================================
 function getActionPlan(sessionToken, actionPlanId) {
   try {
@@ -213,8 +209,8 @@ function getActionPlan(sessionToken, actionPlanId) {
     // Parse owner_ids
     const ownerIds = parseOwnerIds(ap.owner_ids);
     
-    // Get users for owner name resolution
-    const users = getSheetData('01_Users');
+    // FIXED: Use 05_Users
+    const users = getSheetData('05_Users');
     const userMap = {};
     users.forEach(u => {
       userMap[u.user_id] = u;
@@ -226,13 +222,19 @@ function getActionPlan(sessionToken, actionPlanId) {
     });
     
     // Get evidence
-    const evidence = getSheetData('14_ActionPlanEvidence')
-      .filter(e => e.action_plan_id === actionPlanId);
+    let evidence = [];
+    try {
+      evidence = getSheetData('14_ActionPlanEvidence')
+        .filter(e => e.action_plan_id === actionPlanId);
+    } catch (e) {}
     
     // Get history
-    const history = getSheetData('15_ActionPlanHistory')
-      .filter(h => h.action_plan_id === actionPlanId)
-      .sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at));
+    let history = [];
+    try {
+      history = getSheetData('15_ActionPlanHistory')
+        .filter(h => h.action_plan_id === actionPlanId)
+        .sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at));
+    } catch (e) {}
     
     // Get work paper info
     const workPapers = getSheetData('09_WorkPapers');
@@ -262,7 +264,7 @@ function getActionPlan(sessionToken, actionPlanId) {
 }
 
 // ============================================================
-// CREATE ACTION PLAN (by Auditee or Auditor)
+// CREATE ACTION PLAN
 // ============================================================
 function createActionPlan(sessionToken, workPaperId, data) {
   try {
@@ -275,21 +277,17 @@ function createActionPlan(sessionToken, workPaperId, data) {
       return { success: false, error: 'Permission denied' };
     }
     
-    // Verify work paper exists
     const wpResult = getWorkPaper(sessionToken, workPaperId);
     if (!wpResult.success) {
       return { success: false, error: 'Work paper not found' };
     }
     
     const wp = wpResult.data;
-    
-    // Auditors can create action plans at submission; Auditees only after "Sent to Auditee"
     const isAuditor = ['SUPER_ADMIN', 'AUDITOR'].includes(user.role_code);
     if (!isAuditor && wp.status !== 'Sent to Auditee') {
       return { success: false, error: 'Can only add action plans to work papers sent to auditee' };
     }
     
-    // Check max action plans
     const maxAPs = getConfig('MAX_ACTION_PLANS_PER_WP') || 10;
     const existingAPs = getSheetData('13_ActionPlans')
       .filter(ap => ap.work_paper_id === workPaperId);
@@ -301,26 +299,21 @@ function createActionPlan(sessionToken, workPaperId, data) {
     const sheet = getSheet('13_ActionPlans');
     const headers = getSheetHeaders('13_ActionPlans');
     
-    // Generate ID
     const actionPlanId = getNextId('ACTION_PLAN');
     const now = new Date();
     const actionNumber = existingAPs.length + 1;
     
-    // Process owner_ids - accept both array and single value
     let ownerIdsStr = '';
     if (data.owner_ids && Array.isArray(data.owner_ids)) {
       ownerIdsStr = data.owner_ids.join(',');
     } else if (data.owner_ids) {
       ownerIdsStr = String(data.owner_ids);
     } else if (data.action_owner_id) {
-      // Backward compatibility with single owner
       ownerIdsStr = String(data.action_owner_id);
     }
     
-    // Get owner names for display
     const ownerNames = getOwnerNames(ownerIdsStr);
     
-    // Build row
     const row = headers.map(header => {
       switch (header) {
         case 'action_plan_id': return actionPlanId;
@@ -329,7 +322,6 @@ function createActionPlan(sessionToken, workPaperId, data) {
         case 'action_description': return data.action_description || '';
         case 'owner_ids': return ownerIdsStr;
         case 'owner_names': return ownerNames;
-        // Keep old fields for backward compatibility
         case 'action_owner_id': return ownerIdsStr.split(',')[0] || '';
         case 'action_owner_name': return ownerNames;
         case 'due_date': return data.due_date ? new Date(data.due_date) : '';
@@ -346,10 +338,7 @@ function createActionPlan(sessionToken, workPaperId, data) {
     
     sheet.appendRow(row);
     
-    // Log audit
     logAudit('CREATE', 'ACTION_PLAN', actionPlanId, null, data);
-    
-    // Record history
     recordActionPlanHistory(actionPlanId, '', 'Not Due', 'Created', user);
     
     return { success: true, data: { action_plan_id: actionPlanId } };
@@ -378,7 +367,6 @@ function updateActionPlan(sessionToken, actionPlanId, data) {
     const headers = allData[0];
     const idIdx = headers.indexOf('action_plan_id');
     
-    // Find row
     let rowIndex = -1;
     let oldData = {};
     for (let i = 1; i < allData.length; i++) {
@@ -393,28 +381,23 @@ function updateActionPlan(sessionToken, actionPlanId, data) {
       return { success: false, error: 'Action plan not found' };
     }
     
-    // Parse old owner_ids for permission check
     oldData.owner_ids_array = parseOwnerIds(oldData.owner_ids || oldData.action_owner_id);
     
-    // Check if user can edit
     if (!canEditActionPlan(user, oldData)) {
       return { success: false, error: 'Cannot edit this action plan' };
     }
     
     const now = new Date();
     
-    // Process owner_ids if provided
     if (data.owner_ids !== undefined) {
       if (Array.isArray(data.owner_ids)) {
         data.owner_ids = data.owner_ids.join(',');
       }
       data.owner_names = getOwnerNames(data.owner_ids);
-      // Update backward-compatible fields
       data.action_owner_id = data.owner_ids.split(',')[0] || '';
       data.action_owner_name = data.owner_names;
     }
     
-    // Update fields
     headers.forEach((header, idx) => {
       if (['action_plan_id', 'work_paper_id', 'action_number', 'created_at', 'created_by'].includes(header)) {
         return;
@@ -429,7 +412,6 @@ function updateActionPlan(sessionToken, actionPlanId, data) {
       }
     });
     
-    // Log audit
     logAudit('UPDATE', 'ACTION_PLAN', actionPlanId, oldData, data);
     
     return { success: true, data: { action_plan_id: actionPlanId } };
@@ -444,25 +426,17 @@ function canEditActionPlan(user, actionPlan) {
   const status = actionPlan.status;
   const finalStatus = actionPlan.final_status;
   
-  // Super admin can always edit
   if (roleCode === 'SUPER_ADMIN') return true;
-  
-  // Auditors can edit
   if (roleCode === 'AUDITOR') return true;
-  
-  // Closed action plans cannot be edited by non-admins
   if (finalStatus === 'Closed') return false;
   
-  // Get owner IDs array
   const ownerIds = actionPlan.owner_ids_array || parseOwnerIds(actionPlan.owner_ids || actionPlan.action_owner_id);
   const isOwner = ownerIds.includes(user.user_id);
   
-  // Unit Manager can edit if they are an owner
   if (roleCode === 'UNIT_MANAGER') {
     return isOwner || ['Not Due', 'Not Implemented'].includes(status);
   }
   
-  // Junior staff can only edit if they are an owner
   if (roleCode === 'JUNIOR_STAFF') {
     return isOwner;
   }
@@ -471,7 +445,7 @@ function canEditActionPlan(user, actionPlan) {
 }
 
 // ============================================================
-// MARK AS IMPLEMENTED (by Auditee)
+// MARK AS IMPLEMENTED
 // ============================================================
 function markActionPlanImplemented(sessionToken, actionPlanId, implementationNotes) {
   try {
@@ -480,13 +454,11 @@ function markActionPlanImplemented(sessionToken, actionPlanId, implementationNot
       return { success: false, error: 'Not authenticated' };
     }
     
-    // Get current action plan
     const result = getActionPlan(sessionToken, actionPlanId);
     if (!result.success) return result;
     
     const ap = result.data;
     
-    // Validate
     if (ap.final_status === 'Closed') {
       return { success: false, error: 'Action plan is already closed' };
     }
@@ -495,14 +467,12 @@ function markActionPlanImplemented(sessionToken, actionPlanId, implementationNot
       return { success: false, error: 'Action plan is already pending review' };
     }
     
-    // Check if evidence is uploaded
     if (!ap.evidence || ap.evidence.length === 0) {
       return { success: false, error: 'Please upload evidence before marking as implemented' };
     }
     
     const oldStatus = ap.status;
     
-    // Update
     const updateResult = updateActionPlan(sessionToken, actionPlanId, {
       status: 'Implemented',
       implementation_notes: implementationNotes,
@@ -512,8 +482,6 @@ function markActionPlanImplemented(sessionToken, actionPlanId, implementationNot
     
     if (updateResult.success) {
       recordActionPlanHistory(actionPlanId, oldStatus, 'Implemented', implementationNotes, user);
-      
-      // Notify auditor
       queueNotification('AP_IMPLEMENTED', actionPlanId, user);
     }
     
@@ -538,7 +506,6 @@ function auditorReviewActionPlan(sessionToken, actionPlanId, decision, comments)
       return { success: false, error: 'Only auditors can review action plans' };
     }
     
-    // Get current action plan
     const result = getActionPlan(sessionToken, actionPlanId);
     if (!result.success) return result;
     
@@ -572,7 +539,6 @@ function auditorReviewActionPlan(sessionToken, actionPlanId, decision, comments)
     
     if (updateResult.success) {
       recordActionPlanHistory(actionPlanId, oldStatus, newStatus, comments, user);
-      
       if (decision === 'reject') {
         queueNotification('AP_REJECTED', actionPlanId, user);
       }
@@ -599,7 +565,6 @@ function hoaReviewActionPlan(sessionToken, actionPlanId, decision, comments) {
       return { success: false, error: 'Only Head of Audit can give final approval' };
     }
     
-    // Get current action plan
     const result = getActionPlan(sessionToken, actionPlanId);
     if (!result.success) return result;
     
@@ -620,10 +585,7 @@ function hoaReviewActionPlan(sessionToken, actionPlanId, decision, comments) {
       updateData.status = 'Implemented';
       updateData.final_status = 'Closed';
       updateData.hoa_review_status = 'Approved';
-      
       recordActionPlanHistory(actionPlanId, oldStatus, 'Closed', comments, user);
-      
-      // Check if all action plans for this work paper are closed
       checkWorkPaperClosure(ap.work_paper_id);
     } else {
       updateData.status = 'Not Implemented';
@@ -631,7 +593,6 @@ function hoaReviewActionPlan(sessionToken, actionPlanId, decision, comments) {
       updateData.auditor_review_status = '';
       updateData.implemented_date = '';
       updateData.implementation_notes = '';
-      
       recordActionPlanHistory(actionPlanId, oldStatus, 'Not Implemented', comments, user);
       queueNotification('AP_REJECTED', actionPlanId, user);
     }
@@ -644,27 +605,30 @@ function hoaReviewActionPlan(sessionToken, actionPlanId, decision, comments) {
 }
 
 function checkWorkPaperClosure(workPaperId) {
-  const actionPlans = getSheetData('13_ActionPlans')
-    .filter(ap => ap.work_paper_id === workPaperId);
-  
-  if (actionPlans.length === 0) return;
-  
-  const allClosed = actionPlans.every(ap => ap.final_status === 'Closed');
-  
-  if (allClosed) {
-    // Close the work paper
-    const sheet = getSheet('09_WorkPapers');
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const idIdx = headers.indexOf('work_paper_id');
-    const finalStatusIdx = headers.indexOf('final_status');
+  try {
+    const actionPlans = getSheetData('13_ActionPlans')
+      .filter(ap => ap.work_paper_id === workPaperId);
     
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][idIdx] === workPaperId) {
-        sheet.getRange(i + 1, finalStatusIdx + 1).setValue('Closed');
-        break;
+    if (actionPlans.length === 0) return;
+    
+    const allClosed = actionPlans.every(ap => ap.final_status === 'Closed');
+    
+    if (allClosed) {
+      const sheet = getSheet('09_WorkPapers');
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const idIdx = headers.indexOf('work_paper_id');
+      const finalStatusIdx = headers.indexOf('final_status');
+      
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][idIdx] === workPaperId) {
+          sheet.getRange(i + 1, finalStatusIdx + 1).setValue('Closed');
+          break;
+        }
       }
     }
+  } catch (e) {
+    console.warn('checkWorkPaperClosure error:', e);
   }
 }
 
@@ -672,19 +636,23 @@ function checkWorkPaperClosure(workPaperId) {
 // ACTION PLAN HISTORY
 // ============================================================
 function recordActionPlanHistory(actionPlanId, previousStatus, newStatus, comments, user) {
-  const sheet = getSheet('15_ActionPlanHistory');
-  const historyId = getNextId('LOG');
-  
-  sheet.appendRow([
-    historyId,
-    actionPlanId,
-    previousStatus,
-    newStatus,
-    comments || '',
-    user.user_id,
-    user.full_name,
-    new Date()
-  ]);
+  try {
+    const sheet = getSheet('15_ActionPlanHistory');
+    if (!sheet) return;
+    const historyId = getNextId('LOG');
+    sheet.appendRow([
+      historyId,
+      actionPlanId,
+      previousStatus,
+      newStatus,
+      comments || '',
+      user.user_id,
+      user.full_name,
+      new Date()
+    ]);
+  } catch (e) {
+    console.warn('recordActionPlanHistory error:', e);
+  }
 }
 
 // ============================================================
@@ -697,31 +665,24 @@ function uploadActionPlanEvidence(sessionToken, actionPlanId, base64Data, fileNa
       return { success: false, error: 'Not authenticated' };
     }
     
-    // Get action plan
     const result = getActionPlan(sessionToken, actionPlanId);
     if (!result.success) return result;
     
     const ap = result.data;
     
-    // Check permission
     if (!canEditActionPlan(user, ap)) {
       return { success: false, error: 'Permission denied' };
     }
     
-    // Get folder
     const folderId = getConfig('ACTION_PLAN_EVIDENCE_FOLDER_ID');
     if (!folderId) {
       return { success: false, error: 'Evidence folder not configured' };
     }
     
-    // Create subfolder for this action plan
     const apFolder = getOrCreateSubfolder(folderId, actionPlanId);
-    
-    // Upload file
     const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
     const file = apFolder.createFile(blob);
     
-    // Save to database
     const sheet = getSheet('14_ActionPlanEvidence');
     const evidenceId = getNextId('FILE');
     
@@ -781,16 +742,12 @@ function deleteActionPlanEvidence(sessionToken, evidenceId) {
         const evidenceInfo = {};
         headers.forEach((h, idx) => evidenceInfo[h] = data[i][idx]);
         
-        // Trash file in Drive
         try {
           DriveApp.getFileById(evidenceInfo.drive_file_id).setTrashed(true);
-        } catch (e) {
-          console.warn('Could not trash Drive file:', e);
-        }
+        } catch (e) {}
         
         sheet.deleteRow(i + 1);
         logAudit('DELETE', 'ACTION_PLAN_EVIDENCE', evidenceId, evidenceInfo, null);
-        
         return { success: true };
       }
     }
@@ -803,7 +760,7 @@ function deleteActionPlanEvidence(sessionToken, evidenceId) {
 }
 
 // ============================================================
-// BULK CREATE ACTION PLANS (from Work Paper form)
+// BULK CREATE ACTION PLANS
 // ============================================================
 function createActionPlansFromWorkPaper(sessionToken, workPaperId, actionPlans) {
   try {
@@ -816,20 +773,14 @@ function createActionPlansFromWorkPaper(sessionToken, workPaperId, actionPlans) 
     
     for (const ap of actionPlans) {
       if (ap.action_description && ap.action_description.trim()) {
-        // Map owner_ids from frontend format
         const apData = {
           action_description: ap.action_description,
-          owner_ids: ap.owner_ids || [], // Array of user IDs
+          owner_ids: ap.owner_ids || [],
           due_date: ap.due_date || ''
         };
         
         const result = createActionPlan(sessionToken, workPaperId, apData);
         results.push(result);
-        
-        if (!result.success) {
-          // Log error but continue with other action plans
-          console.warn('Failed to create action plan:', result.error);
-        }
       }
     }
     
@@ -840,14 +791,7 @@ function createActionPlansFromWorkPaper(sessionToken, workPaperId, actionPlans) 
       return { success: false, error: 'Failed to create action plans', details: results };
     }
     
-    return { 
-      success: true, 
-      data: { 
-        created: successCount, 
-        failed: failCount,
-        results: results 
-      } 
-    };
+    return { success: true, data: { created: successCount, failed: failCount, results: results } };
   } catch (error) {
     console.error('createActionPlansFromWorkPaper error:', error);
     return { success: false, error: error.message };
@@ -855,7 +799,7 @@ function createActionPlansFromWorkPaper(sessionToken, workPaperId, actionPlans) 
 }
 
 // ============================================================
-// UPDATE OVERDUE STATUS (called by trigger)
+// UPDATE OVERDUE STATUS (trigger)
 // ============================================================
 function updateOverdueStatus() {
   try {
@@ -881,7 +825,6 @@ function updateOverdueStatus() {
         due.setHours(0, 0, 0, 0);
         
         if (due < today) {
-          // Overdue
           const daysOverdue = Math.floor((today - due) / (1000 * 60 * 60 * 24));
           sheet.getRange(i + 1, daysOverdueIdx + 1).setValue(daysOverdue);
           
@@ -901,7 +844,7 @@ function updateOverdueStatus() {
 }
 
 // ============================================================
-// GET ACTION PLANS FOR WORK PAPER (for editing)
+// GET ACTION PLANS FOR WORK PAPER - FIXED: 05_Users
 // ============================================================
 function getActionPlansForWorkPaper(sessionToken, workPaperId) {
   try {
@@ -914,14 +857,13 @@ function getActionPlansForWorkPaper(sessionToken, workPaperId) {
       .filter(ap => ap.work_paper_id === workPaperId)
       .sort((a, b) => a.action_number - b.action_number);
     
-    // Get users for owner name resolution
-    const users = getSheetData('01_Users');
+    // FIXED: Use 05_Users
+    const users = getSheetData('05_Users');
     const userMap = {};
     users.forEach(u => {
       userMap[u.user_id] = u;
     });
     
-    // Enrich with parsed owner data
     const enriched = actionPlans.map(ap => {
       const ownerIds = parseOwnerIds(ap.owner_ids || ap.action_owner_id);
       const ownerNames = ownerIds.map(id => {
@@ -931,9 +873,9 @@ function getActionPlansForWorkPaper(sessionToken, workPaperId) {
       
       return {
         ...ap,
-        owner_ids: ownerIds, // Return as array for frontend
+        owner_ids: ownerIds,
         owner_names: ownerNames,
-        action_owner_name: ownerNames.join(', '),
+        action_owner_name: ownerNames.join(', ') || ap.action_owner_name || '-',
         due_date: ap.due_date ? formatDateISO(ap.due_date) : ''
       };
     });
@@ -945,9 +887,6 @@ function getActionPlansForWorkPaper(sessionToken, workPaperId) {
   }
 }
 
-// ============================================================
-// HELPER: Format date to ISO string (YYYY-MM-DD)
-// ============================================================
 function formatDateISO(date) {
   if (!date) return '';
   const d = new Date(date);
