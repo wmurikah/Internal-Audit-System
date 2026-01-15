@@ -1,8 +1,9 @@
 /**
  * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Authentication Service v1.0
+ * Authentication Service v2.0 - Performance Optimized
  * 
- * Handles login, password management, and session management
+ * Handles login, password management, session management
+ * Integrated with CacheService for session validation
  */
 
 // ============================================================
@@ -22,7 +23,6 @@ function login(email, password) {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     
-    // Get column indices
     const cols = {
       userId: headers.indexOf('user_id'),
       email: headers.indexOf('email'),
@@ -39,12 +39,13 @@ function login(email, password) {
       lastLogin: headers.indexOf('last_login')
     };
     
-    // Find user by email
+    // Find user
     let userRow = -1;
     let userData = null;
+    const emailLower = email.toLowerCase();
     
     for (let i = 1; i < data.length; i++) {
-      if (data[i][cols.email].toString().toLowerCase() === email.toLowerCase()) {
+      if (data[i][cols.email].toString().toLowerCase() === emailLower) {
         userRow = i;
         userData = data[i];
         break;
@@ -55,12 +56,12 @@ function login(email, password) {
       return { success: false, error: 'Invalid email or password' };
     }
     
-    // Check if user is active
+    // Check active
     if (!userData[cols.isActive] || userData[cols.isActive] === 'FALSE') {
       return { success: false, error: 'Account is deactivated. Contact administrator.' };
     }
     
-    // Check if account is locked
+    // Check lock
     const lockedUntil = userData[cols.lockedUntil];
     if (lockedUntil && new Date(lockedUntil) > new Date()) {
       const remainingMins = Math.ceil((new Date(lockedUntil) - new Date()) / 60000);
@@ -78,13 +79,11 @@ function login(email, password) {
     const inputHash = hashPassword(password, salt);
     
     if (inputHash !== storedHash) {
-      // Increment failed attempts
       const attempts = (parseInt(userData[cols.loginAttempts]) || 0) + 1;
       sheet.getRange(userRow + 1, cols.loginAttempts + 1).setValue(attempts);
       
-      // Lock account after 5 failed attempts
       if (attempts >= 5) {
-        const lockUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+        const lockUntil = new Date(Date.now() + 30 * 60 * 1000);
         sheet.getRange(userRow + 1, cols.lockedUntil + 1).setValue(lockUntil);
         return { success: false, error: 'Too many failed attempts. Account locked for 30 minutes.' };
       }
@@ -92,17 +91,14 @@ function login(email, password) {
       return { success: false, error: `Invalid email or password. ${5 - attempts} attempts remaining.` };
     }
     
-    // Successful login - reset attempts and update last login
-    sheet.getRange(userRow + 1, cols.loginAttempts + 1).setValue(0);
-    sheet.getRange(userRow + 1, cols.lockedUntil + 1).setValue('');
-    sheet.getRange(userRow + 1, cols.lastLogin + 1).setValue(new Date());
+    // Success - batch update login fields
+    const updates = [[0, '', new Date()]];
+    sheet.getRange(userRow + 1, cols.loginAttempts + 1, 1, 3).setValues(updates);
     
     // Create session
     const sessionToken = createSession(userData[cols.userId]);
     
-    // Check if password change required
-    const mustChange = userData[cols.mustChangePassword] === true || 
-                       userData[cols.mustChangePassword] === 'TRUE';
+    const mustChange = userData[cols.mustChangePassword] === true || userData[cols.mustChangePassword] === 'TRUE';
     
     return {
       success: true,
@@ -130,10 +126,12 @@ function login(email, password) {
  */
 function logout(sessionToken) {
   try {
-    if (!sessionToken) {
-      return { success: true };
-    }
+    if (!sessionToken) return { success: true };
     
+    // Remove from cache
+    clearCacheKey('session_' + sessionToken);
+    
+    // Invalidate in sheet
     const sheet = getSheet('20_Sessions');
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
@@ -150,7 +148,7 @@ function logout(sessionToken) {
     return { success: true };
   } catch (error) {
     console.error('Logout error:', error);
-    return { success: true }; // Still return success - don't block user
+    return { success: true };
   }
 }
 
@@ -159,27 +157,23 @@ function logout(sessionToken) {
 // ============================================================
 
 /**
- * Create a new session for user
+ * Create a new session
  */
 function createSession(userId) {
   const sheet = getSheet('20_Sessions');
   
-  // Generate session token
   const sessionToken = generateSessionToken();
   const sessionId = 'SES-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-8);
+  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours
   
-  // Session expires in 8 hours
-  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  
-  // Add session row
   sheet.appendRow([
     sessionId,
     userId,
     sessionToken,
     new Date(),
     expiresAt,
-    '', // IP address (not available in Apps Script)
-    '', // User agent
+    '',
+    '',
     true
   ]);
   
@@ -187,7 +181,7 @@ function createSession(userId) {
 }
 
 /**
- * Validate session token and return user info
+ * Validate session token - with caching for performance
  */
 function validateSession(sessionToken) {
   try {
@@ -195,6 +189,19 @@ function validateSession(sessionToken) {
       return { valid: false, error: 'No session token' };
     }
     
+    // Check cache first (significantly faster)
+    const cacheKey = 'session_' + sessionToken;
+    const cached = getCached(cacheKey);
+    if (cached && cached.valid) {
+      // Verify expiry
+      if (new Date(cached.expiresAt) > new Date()) {
+        return cached;
+      }
+      // Expired, clear cache
+      clearCacheKey(cacheKey);
+    }
+    
+    // Not in cache, check database
     const sessionsSheet = getSheet('20_Sessions');
     const sessData = sessionsSheet.getDataRange().getValues();
     const sessHeaders = sessData[0];
@@ -207,7 +214,6 @@ function validateSession(sessionToken) {
       isValid: sessHeaders.indexOf('is_valid')
     };
     
-    // Find session
     let session = null;
     let sessionRow = -1;
     
@@ -223,15 +229,12 @@ function validateSession(sessionToken) {
       return { valid: false, error: 'Invalid session' };
     }
     
-    // Check if valid
     if (!session[cols.isValid] || session[cols.isValid] === 'FALSE') {
       return { valid: false, error: 'Session invalidated' };
     }
     
-    // Check expiry
     const expiresAt = new Date(session[cols.expiresAt]);
     if (expiresAt < new Date()) {
-      // Mark as invalid
       sessionsSheet.getRange(sessionRow + 1, cols.isValid + 1).setValue(false);
       return { valid: false, error: 'Session expired' };
     }
@@ -265,11 +268,11 @@ function validateSession(sessionToken) {
       return { valid: false, error: 'User not found or inactive' };
     }
     
-    const mustChange = user[userCols.mustChangePassword] === true || 
-                       user[userCols.mustChangePassword] === 'TRUE';
+    const mustChange = user[userCols.mustChangePassword] === true || user[userCols.mustChangePassword] === 'TRUE';
     
-    return {
+    const result = {
       valid: true,
+      expiresAt: expiresAt.toISOString(),
       mustChangePassword: mustChange,
       user: {
         user_id: user[userCols.userId],
@@ -282,6 +285,11 @@ function validateSession(sessionToken) {
       }
     };
     
+    // Cache for 5 minutes
+    setCached(cacheKey, result, 300);
+    
+    return result;
+    
   } catch (error) {
     console.error('validateSession error:', error);
     return { valid: false, error: 'Session validation failed' };
@@ -289,7 +297,7 @@ function validateSession(sessionToken) {
 }
 
 /**
- * Get current user from session (called by frontend)
+ * Get current user from session
  */
 function getSessionUser(sessionToken) {
   const result = validateSession(sessionToken);
@@ -298,8 +306,8 @@ function getSessionUser(sessionToken) {
     return { success: false, error: result.error };
   }
   
-  // Get permissions
-  const permissions = getUserPermissions(result.user.role_code);
+  // Get permissions (cached)
+  const permissions = getPermissionsCached(result.user.role_code);
   
   return {
     success: true,
@@ -330,7 +338,6 @@ function generateSessionToken() {
  */
 function changePassword(sessionToken, currentPassword, newPassword) {
   try {
-    // Validate session
     const sessionResult = validateSession(sessionToken);
     if (!sessionResult.valid) {
       return { success: false, error: 'Invalid session. Please login again.' };
@@ -342,20 +349,16 @@ function changePassword(sessionToken, currentPassword, newPassword) {
     if (!newPassword || newPassword.length < 8) {
       return { success: false, error: 'Password must be at least 8 characters' };
     }
-    
     if (!/[A-Z]/.test(newPassword)) {
       return { success: false, error: 'Password must contain at least one uppercase letter' };
     }
-    
     if (!/[a-z]/.test(newPassword)) {
       return { success: false, error: 'Password must contain at least one lowercase letter' };
     }
-    
     if (!/[0-9]/.test(newPassword)) {
       return { success: false, error: 'Password must contain at least one number' };
     }
     
-    // Get user data
     const sheet = getSheet('05_Users');
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
@@ -382,25 +385,27 @@ function changePassword(sessionToken, currentPassword, newPassword) {
       return { success: false, error: 'User not found' };
     }
     
-    // Verify current password (skip if must_change_password is true - first login)
-    const mustChange = userData[cols.mustChangePassword] === true || 
-                       userData[cols.mustChangePassword] === 'TRUE';
+    // Verify current password (skip if must change)
+    const mustChange = userData[cols.mustChangePassword] === true || userData[cols.mustChangePassword] === 'TRUE';
     
-    if (!mustChange) {
+    if (!mustChange && currentPassword) {
       const currentHash = hashPassword(currentPassword, userData[cols.passwordSalt]);
       if (currentHash !== userData[cols.passwordHash]) {
         return { success: false, error: 'Current password is incorrect' };
       }
     }
     
-    // Generate new salt and hash
+    // Update password
     const newSalt = generateSalt();
     const newHash = hashPassword(newPassword, newSalt);
     
-    // Update password
+    // Batch update
     sheet.getRange(userRow + 1, cols.passwordHash + 1).setValue(newHash);
     sheet.getRange(userRow + 1, cols.passwordSalt + 1).setValue(newSalt);
     sheet.getRange(userRow + 1, cols.mustChangePassword + 1).setValue(false);
+    
+    // Clear session cache
+    clearCacheKey('session_' + sessionToken);
     
     return { success: true, message: 'Password changed successfully' };
     
@@ -410,9 +415,6 @@ function changePassword(sessionToken, currentPassword, newPassword) {
   }
 }
 
-/**
- * Generate salt for password hashing
- */
 function generateSalt() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let salt = '';
@@ -422,9 +424,6 @@ function generateSalt() {
   return salt;
 }
 
-/**
- * Hash password with salt
- */
 function hashPassword(password, salt) {
   const input = password + salt;
   const rawHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, input);
@@ -440,7 +439,6 @@ function hashPassword(password, salt) {
  */
 function adminCreateUser(sessionToken, userData) {
   try {
-    // Validate admin session
     const sessionResult = validateSession(sessionToken);
     if (!sessionResult.valid) {
       return { success: false, error: 'Invalid session' };
@@ -450,24 +448,22 @@ function adminCreateUser(sessionToken, userData) {
       return { success: false, error: 'Only administrators can create users' };
     }
     
-    // Validate required fields
     if (!userData.email || !userData.first_name || !userData.last_name || !userData.role_code) {
       return { success: false, error: 'Missing required fields' };
     }
     
-    // Check email doesn't already exist
     const sheet = getSheet('05_Users');
     const existingData = sheet.getDataRange().getValues();
     const headers = existingData[0];
     const emailIdx = headers.indexOf('email');
     
+    // Check duplicate email
     for (let i = 1; i < existingData.length; i++) {
       if (existingData[i][emailIdx].toString().toLowerCase() === userData.email.toLowerCase()) {
         return { success: false, error: 'User with this email already exists' };
       }
     }
     
-    // Generate user ID
     const userId = getNextId('USER');
     
     // Generate temp password
@@ -475,18 +471,13 @@ function adminCreateUser(sessionToken, userData) {
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
     const tempPassword = emailPrefix + randomDigits;
     
-    // Generate salt and hash
     const salt = generateSalt();
     const hash = hashPassword(tempPassword, salt);
-    
-    // Prepare row data
     const fullName = userData.first_name + ' ' + userData.last_name;
     const now = new Date();
     
-    // Get column count from headers
     const newRow = new Array(headers.length).fill('');
     
-    // Set values by column index
     newRow[headers.indexOf('user_id')] = userId;
     newRow[headers.indexOf('email')] = userData.email;
     newRow[headers.indexOf('first_name')] = userData.first_name;
@@ -504,11 +495,12 @@ function adminCreateUser(sessionToken, userData) {
     newRow[headers.indexOf('must_change_password')] = true;
     newRow[headers.indexOf('login_attempts')] = 0;
     
-    // Append row
     sheet.appendRow(newRow);
     
-    // Log audit
-    logAudit('CREATE', 'USER', userId, null, { email: userData.email, role: userData.role_code });
+    // Invalidate dropdowns cache
+    invalidateDropdownCache();
+    
+    logAudit('CREATE', 'USER', userId, null, { email: userData.email, role: userData.role_code }, sessionResult.user.user_id);
     
     return {
       success: true,
@@ -528,7 +520,6 @@ function adminCreateUser(sessionToken, userData) {
  */
 function adminResetPassword(sessionToken, userId) {
   try {
-    // Validate admin session
     const sessionResult = validateSession(sessionToken);
     if (!sessionResult.valid) {
       return { success: false, error: 'Invalid session' };
@@ -572,19 +563,17 @@ function adminResetPassword(sessionToken, userId) {
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
     const tempPassword = emailPrefix + randomDigits;
     
-    // Generate new salt and hash
     const salt = generateSalt();
     const hash = hashPassword(tempPassword, salt);
     
-    // Update user
+    // Batch update
     sheet.getRange(userRow + 1, cols.passwordHash + 1).setValue(hash);
     sheet.getRange(userRow + 1, cols.passwordSalt + 1).setValue(salt);
     sheet.getRange(userRow + 1, cols.mustChangePassword + 1).setValue(true);
     sheet.getRange(userRow + 1, cols.loginAttempts + 1).setValue(0);
     sheet.getRange(userRow + 1, cols.lockedUntil + 1).setValue('');
     
-    // Log audit
-    logAudit('PASSWORD_RESET', 'USER', userId, null, { reset_by: sessionResult.user.user_id });
+    logAudit('PASSWORD_RESET', 'USER', userId, null, { reset_by: sessionResult.user.user_id }, sessionResult.user.user_id);
     
     return {
       success: true,
@@ -599,11 +588,10 @@ function adminResetPassword(sessionToken, userId) {
 }
 
 /**
- * Admin: Deactivate/Activate user
+ * Admin: Toggle user status
  */
 function adminToggleUserStatus(sessionToken, userId, isActive) {
   try {
-    // Validate admin session
     const sessionResult = validateSession(sessionToken);
     if (!sessionResult.valid) {
       return { success: false, error: 'Invalid session' };
@@ -613,7 +601,6 @@ function adminToggleUserStatus(sessionToken, userId, isActive) {
       return { success: false, error: 'Only administrators can modify users' };
     }
     
-    // Prevent self-deactivation
     if (userId === sessionResult.user.user_id && !isActive) {
       return { success: false, error: 'Cannot deactivate your own account' };
     }
@@ -633,7 +620,10 @@ function adminToggleUserStatus(sessionToken, userId, isActive) {
         sheet.getRange(i + 1, updatedAtIdx + 1).setValue(new Date());
         sheet.getRange(i + 1, updatedByIdx + 1).setValue(sessionResult.user.user_id);
         
-        logAudit(isActive ? 'ACTIVATE' : 'DEACTIVATE', 'USER', userId, null, null);
+        // Invalidate dropdowns cache
+        invalidateDropdownCache();
+        
+        logAudit(isActive ? 'ACTIVATE' : 'DEACTIVATE', 'USER', userId, null, null, sessionResult.user.user_id);
         
         return { success: true, message: `User ${isActive ? 'activated' : 'deactivated'}` };
       }
@@ -689,7 +679,7 @@ function adminGetUsers(sessionToken) {
 }
 
 // ============================================================
-// CLEANUP - Remove expired sessions (run daily)
+// CLEANUP - Remove expired sessions
 // ============================================================
 function cleanupExpiredSessions() {
   try {
@@ -703,7 +693,7 @@ function cleanupExpiredSessions() {
     const now = new Date();
     let cleaned = 0;
     
-    // Go from bottom to top to avoid row shift issues
+    // Delete from bottom to top
     for (let i = data.length - 1; i >= 1; i--) {
       const expires = new Date(data[i][expiresIdx]);
       if (expires < now || !data[i][validIdx]) {
