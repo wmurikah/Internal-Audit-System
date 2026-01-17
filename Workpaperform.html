@@ -1,0 +1,262 @@
+<!-- Work Paper Form Page -->
+<div class="work-paper-form">
+  <form id="workPaperForm" onsubmit="saveWorkPaper(event)">
+    <input type="hidden" id="wpFormId" value="">
+    
+    <!-- Basic Info Card -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-info-circle me-2"></i>Basic Information</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">Year <span class="text-danger">*</span></label>
+            <select class="form-select" id="wpYear" required></select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Affiliate <span class="text-danger">*</span></label>
+            <select class="form-select" id="wpAffiliate" required></select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Audit Area <span class="text-danger">*</span></label>
+            <select class="form-select" id="wpAuditArea" required onchange="loadSubAreas()"></select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Sub Area</label>
+            <select class="form-select" id="wpSubArea" onchange="autoFillFromSubArea()"></select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Work Paper Date</label>
+            <input type="date" class="form-control" id="wpDate">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Audit Period From</label>
+            <input type="date" class="form-control" id="wpPeriodFrom">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Audit Period To</label>
+            <input type="date" class="form-control" id="wpPeriodTo">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Observation Card -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-eye me-2"></i>Observation & Findings</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Observation Title <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="wpObsTitle" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Observation Description <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="wpObsDesc" rows="4" required></textarea>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Risk Rating <span class="text-danger">*</span></label>
+            <select class="form-select" id="wpRiskRating" required>
+              <option value="">Select...</option>
+              <option value="Extreme">Extreme</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Risk Summary</label>
+            <input type="text" class="form-control" id="wpRiskSummary">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Recommendation <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="wpRecommendation" rows="4" required></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Testing Card -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-clipboard-check me-2"></i>Testing Information</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Control Objectives</label>
+            <textarea class="form-control" id="wpControlObjectives" rows="2"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Risk Description</label>
+            <textarea class="form-control" id="wpRiskDesc" rows="2"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Test Objective</label>
+            <textarea class="form-control" id="wpTestObj" rows="2"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Testing Steps</label>
+            <textarea class="form-control" id="wpTestSteps" rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Responsible Parties -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-people me-2"></i>Responsible Parties</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Responsible (Auditees)</label>
+            <select class="form-select" id="wpResponsible" multiple size="4"></select>
+            <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">CC Recipients (Emails)</label>
+            <textarea class="form-control" id="wpCCRecipients" rows="3" placeholder="Enter emails, one per line"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form Actions -->
+    <div class="d-flex gap-2 justify-content-end mb-4">
+      <button type="button" class="btn btn-outline-secondary" onclick="navigateTo('work-papers')">Cancel</button>
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle me-2"></i>Save Draft</button>
+      <button type="button" class="btn btn-success" onclick="saveAndSubmit()"><i class="bi bi-send me-2"></i>Save & Submit</button>
+    </div>
+  </form>
+</div>
+
+<script>
+let editingWorkPaper = null;
+
+function initWorkPaperForm(params) {
+  const yearSelect = document.getElementById('wpYear');
+  yearSelect.innerHTML = '<option value="">Select Year</option>';
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear + 1; y >= currentYear - 3; y--) {
+    yearSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
+  }
+  
+  populateDropdown('wpAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
+  populateDropdown('wpAuditArea', window.appDropdowns?.auditAreas || [], 'id', 'display', 'Select Audit Area');
+  populateDropdown('wpResponsible', window.appDropdowns?.auditees || [], 'id', 'display');
+  
+  document.getElementById('wpDate').value = new Date().toISOString().split('T')[0];
+  
+  if (params && params.id) {
+    loadWorkPaperForEdit(params.id);
+  } else {
+    editingWorkPaper = null;
+    document.getElementById('wpFormId').value = '';
+  }
+}
+
+function loadSubAreas() {
+  const areaId = document.getElementById('wpAuditArea').value;
+  const subAreaSelect = document.getElementById('wpSubArea');
+  subAreaSelect.innerHTML = '<option value="">Select Sub Area</option>';
+  if (!areaId || !window.appDropdowns?.subAreas) return;
+  window.appDropdowns.subAreas.filter(s => s.areaId === areaId).forEach(s => {
+    subAreaSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+  });
+}
+
+function autoFillFromSubArea() {
+  const subAreaId = document.getElementById('wpSubArea').value;
+  if (!subAreaId) return;
+  const subArea = window.appDropdowns?.subAreas?.find(s => s.id === subAreaId);
+  if (!subArea) return;
+  ['wpControlObjectives', 'wpRiskDesc', 'wpTestObj', 'wpTestSteps'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    const val = [subArea.controlObjectives, subArea.riskDescription, subArea.testObjective, subArea.testingSteps][i];
+    if (el && !el.value && val) el.value = val;
+  });
+}
+
+function loadWorkPaperForEdit(id) {
+  showLoading('Loading...');
+  apiCall('getWorkPaper', { workPaperId: id, includeRelated: false }).then(result => {
+    hideLoading();
+    if (result.workPaper) { editingWorkPaper = result.workPaper; populateForm(result.workPaper); }
+    else { showToast('Not found', 'danger'); navigateTo('work-papers'); }
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function populateForm(wp) {
+  document.getElementById('wpFormId').value = wp.work_paper_id || '';
+  document.getElementById('wpYear').value = wp.year || '';
+  document.getElementById('wpAffiliate').value = wp.affiliate_code || '';
+  document.getElementById('wpAuditArea').value = wp.audit_area_id || '';
+  loadSubAreas();
+  setTimeout(() => document.getElementById('wpSubArea').value = wp.sub_area_id || '', 100);
+  document.getElementById('wpDate').value = formatDateInput(wp.work_paper_date);
+  document.getElementById('wpPeriodFrom').value = formatDateInput(wp.audit_period_from);
+  document.getElementById('wpPeriodTo').value = formatDateInput(wp.audit_period_to);
+  document.getElementById('wpControlObjectives').value = wp.control_objectives || '';
+  document.getElementById('wpRiskDesc').value = wp.risk_description || '';
+  document.getElementById('wpTestObj').value = wp.test_objective || '';
+  document.getElementById('wpTestSteps').value = wp.testing_steps || '';
+  document.getElementById('wpObsTitle').value = wp.observation_title || '';
+  document.getElementById('wpObsDesc').value = wp.observation_description || '';
+  document.getElementById('wpRiskRating').value = wp.risk_rating || '';
+  document.getElementById('wpRiskSummary').value = wp.risk_summary || '';
+  document.getElementById('wpRecommendation').value = wp.recommendation || '';
+  const ids = (wp.responsible_ids || '').split(',').map(s => s.trim());
+  Array.from(document.getElementById('wpResponsible').options).forEach(o => o.selected = ids.includes(o.value));
+  document.getElementById('wpCCRecipients').value = wp.cc_recipients || '';
+}
+
+function formatDateInput(d) { if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? '' : dt.toISOString().split('T')[0]; }
+
+function getFormData() {
+  const sel = document.getElementById('wpResponsible');
+  return {
+    work_paper_id: document.getElementById('wpFormId').value || undefined,
+    year: document.getElementById('wpYear').value,
+    affiliate_code: document.getElementById('wpAffiliate').value,
+    audit_area_id: document.getElementById('wpAuditArea').value,
+    sub_area_id: document.getElementById('wpSubArea').value,
+    work_paper_date: document.getElementById('wpDate').value,
+    audit_period_from: document.getElementById('wpPeriodFrom').value,
+    audit_period_to: document.getElementById('wpPeriodTo').value,
+    control_objectives: document.getElementById('wpControlObjectives').value,
+    risk_description: document.getElementById('wpRiskDesc').value,
+    test_objective: document.getElementById('wpTestObj').value,
+    testing_steps: document.getElementById('wpTestSteps').value,
+    observation_title: document.getElementById('wpObsTitle').value,
+    observation_description: document.getElementById('wpObsDesc').value,
+    risk_rating: document.getElementById('wpRiskRating').value,
+    risk_summary: document.getElementById('wpRiskSummary').value,
+    recommendation: document.getElementById('wpRecommendation').value,
+    responsible_ids: Array.from(sel.selectedOptions).map(o => o.value).join(','),
+    cc_recipients: document.getElementById('wpCCRecipients').value
+  };
+}
+
+function saveWorkPaper(event) {
+  event.preventDefault();
+  const data = getFormData();
+  const isEdit = !!data.work_paper_id;
+  showLoading(isEdit ? 'Updating...' : 'Creating...');
+  apiCall(isEdit ? 'updateWorkPaper' : 'createWorkPaper', isEdit ? { workPaperId: data.work_paper_id, ...data } : data)
+    .then(r => { hideLoading(); if (r.success) { showToast('Saved', 'success'); navigateTo('work-paper-view', { id: r.workPaperId || r.workPaper?.work_paper_id || data.work_paper_id }); } else showToast(r.error || 'Error', 'danger'); })
+    .catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function saveAndSubmit() {
+  if (!document.getElementById('workPaperForm').checkValidity()) { document.getElementById('workPaperForm').reportValidity(); return; }
+  const data = getFormData();
+  showLoading('Saving...');
+  apiCall(data.work_paper_id ? 'updateWorkPaper' : 'createWorkPaper', data.work_paper_id ? { workPaperId: data.work_paper_id, ...data } : data)
+    .then(r => { if (r.success) return apiCall('submitWorkPaper', { workPaperId: r.workPaperId || r.workPaper?.work_paper_id || data.work_paper_id }); throw new Error(r.error); })
+    .then(r => { hideLoading(); if (r.success) { showToast('Submitted', 'success'); navigateTo('work-papers'); } else showToast(r.error, 'danger'); })
+    .catch(e => { hideLoading(); showToast(e.message || 'Error', 'danger'); });
+}
+
+function populateDropdown(id, items, val, txt, ph) {
+  const el = document.getElementById(id); if (!el) return;
+  el.innerHTML = ph ? `<option value="">${ph}</option>` : '';
+  items.forEach(i => el.innerHTML += `<option value="${i[val]}">${i[txt]}</option>`);
+}
+</script>
