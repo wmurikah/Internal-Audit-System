@@ -1,0 +1,126 @@
+<!-- Action Plans List Page -->
+<div class="action-plans-list">
+  <div class="filters-bar">
+    <div class="input-group" style="max-width: 300px;">
+      <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+      <input type="text" class="form-control" id="apSearchInput" placeholder="Search..." onkeyup="filterActionPlans()">
+    </div>
+    <select class="form-select" id="apFilterStatus" onchange="filterActionPlans()">
+      <option value="">All Status</option>
+      <option value="Not Due">Not Due</option>
+      <option value="Pending">Pending</option>
+      <option value="In Progress">In Progress</option>
+      <option value="Implemented">Implemented</option>
+      <option value="Verified">Verified</option>
+      <option value="Overdue">Overdue</option>
+    </select>
+    <div class="form-check form-switch ms-3">
+      <input class="form-check-input" type="checkbox" id="apFilterOverdue" onchange="filterActionPlans()">
+      <label class="form-check-label" for="apFilterOverdue">Overdue Only</label>
+    </div>
+    <button class="btn btn-outline-secondary" onclick="clearAPFilters()"><i class="bi bi-x-circle me-1"></i>Clear</button>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <span class="text-muted" id="apResultsInfo">Loading...</span>
+  </div>
+
+  <div class="table-container">
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Description</th>
+            <th>Work Paper</th>
+            <th>Owner</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th>Overdue</th>
+          </tr>
+        </thead>
+        <tbody id="apTableBody">
+          <tr><td colspan="7" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <nav class="mt-4" id="apPagination"><ul class="pagination justify-content-center"></ul></nav>
+</div>
+
+<script>
+let actionPlansData = [];
+let apCurrentPage = 1;
+let apPageSize = 20;
+
+function loadActionPlans(filters) {
+  filters = filters || {};
+  const search = document.getElementById('apSearchInput')?.value || '';
+  const status = document.getElementById('apFilterStatus')?.value || '';
+  const overdueOnly = document.getElementById('apFilterOverdue')?.checked || false;
+
+  showLoading('Loading...');
+  apiCall('getActionPlans', { filters: { ...filters, search, status, overdue_only: overdueOnly } }).then(r => {
+    hideLoading();
+    if (r.actionPlans) { actionPlansData = r.actionPlans; renderActionPlans(); }
+    else showToast('Error loading', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function loadActionPlansOverdue() {
+  document.getElementById('apFilterOverdue').checked = true;
+  loadActionPlans({ overdue_only: true });
+}
+
+function renderActionPlans() {
+  const start = (apCurrentPage - 1) * apPageSize;
+  const pageData = actionPlansData.slice(start, start + apPageSize);
+  document.getElementById('apResultsInfo').textContent = `Showing ${start + 1}-${Math.min(start + apPageSize, actionPlansData.length)} of ${actionPlansData.length}`;
+
+  const tbody = document.getElementById('apTableBody');
+  if (!pageData.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5"><div class="empty-state"><i class="bi bi-list-check"></i><h5>No action plans found</h5></div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = pageData.map(ap => `
+    <tr onclick="navigateTo('action-plan-view', {id:'${ap.action_plan_id}'})" style="cursor:pointer;">
+      <td><code>${ap.action_plan_id}</code></td>
+      <td>${escapeHtml((ap.action_description || '').substring(0, 60))}${(ap.action_description || '').length > 60 ? '...' : ''}</td>
+      <td><code>${ap.work_paper_id}</code></td>
+      <td>${escapeHtml(ap.owner_names || '-')}</td>
+      <td>${ap.due_date ? formatDate(ap.due_date) : '-'}</td>
+      <td><span class="badge badge-status ${getStatusClass(ap.status)}">${ap.status || '-'}</span></td>
+      <td>${ap.days_overdue > 0 ? `<span class="badge bg-danger">${ap.days_overdue} days</span>` : '-'}</td>
+    </tr>
+  `).join('');
+
+  renderAPPagination();
+}
+
+function renderAPPagination() {
+  const totalPages = Math.ceil(actionPlansData.length / apPageSize);
+  const ul = document.getElementById('apPagination').querySelector('ul');
+  if (totalPages <= 1) { ul.innerHTML = ''; return; }
+  let html = `<li class="page-item ${apCurrentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goToAPPage(${apCurrentPage - 1})"><i class="bi bi-chevron-left"></i></a></li>`;
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - apCurrentPage) <= 2)
+      html += `<li class="page-item ${i === apCurrentPage ? 'active' : ''}"><a class="page-link" href="#" onclick="goToAPPage(${i})">${i}</a></li>`;
+    else if (Math.abs(i - apCurrentPage) === 3)
+      html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+  }
+  html += `<li class="page-item ${apCurrentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goToAPPage(${apCurrentPage + 1})"><i class="bi bi-chevron-right"></i></a></li>`;
+  ul.innerHTML = html;
+}
+
+function goToAPPage(p) { apCurrentPage = p; renderActionPlans(); window.scrollTo(0, 0); }
+function filterActionPlans() { apCurrentPage = 1; loadActionPlans(); }
+function clearAPFilters() {
+  document.getElementById('apSearchInput').value = '';
+  document.getElementById('apFilterStatus').value = '';
+  document.getElementById('apFilterOverdue').checked = false;
+  apCurrentPage = 1;
+  loadActionPlans();
+}
+</script>
