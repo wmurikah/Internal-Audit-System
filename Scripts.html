@@ -8,6 +8,89 @@ let currentPage = 'dashboard';
 let pageParams = {};
 
 // ============================================================
+// PERFORMANCE: CLIENT-SIDE CACHE
+// ============================================================
+const ClientCache = {
+  _cache: new Map(),
+  _ttls: new Map(),
+
+  set(key, value, ttlMs = 300000) {
+    this._cache.set(key, value);
+    this._ttls.set(key, Date.now() + ttlMs);
+  },
+
+  get(key) {
+    const ttl = this._ttls.get(key);
+    if (ttl && Date.now() > ttl) {
+      this._cache.delete(key);
+      this._ttls.delete(key);
+      return null;
+    }
+    return this._cache.get(key);
+  },
+
+  has(key) {
+    return this.get(key) !== undefined;
+  },
+
+  invalidate(pattern) {
+    if (pattern === '*') {
+      this._cache.clear();
+      this._ttls.clear();
+    } else {
+      for (const key of this._cache.keys()) {
+        if (key.startsWith(pattern)) {
+          this._cache.delete(key);
+          this._ttls.delete(key);
+        }
+      }
+    }
+  }
+};
+
+// ============================================================
+// PERFORMANCE: PARALLEL DATA LOADER
+// ============================================================
+async function loadParallel(requests) {
+  const results = {};
+  const promises = requests.map(async req => {
+    const cacheKey = req.cacheKey || `${req.action}_${JSON.stringify(req.data)}`;
+    const cached = ClientCache.get(cacheKey);
+    if (cached) {
+      results[req.action] = cached;
+      return;
+    }
+    const result = await apiCall(req.action, req.data || {});
+    if (result) ClientCache.set(cacheKey, result, req.ttl || 300000);
+    results[req.action] = result;
+  });
+  await Promise.all(promises);
+  return results;
+}
+
+// ============================================================
+// PERFORMANCE: DEBOUNCE & THROTTLE
+// ============================================================
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
+function throttle(func, limit) {
+  let inThrottle;
+  return function(...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
+
+// ============================================================
 // INITIALIZATION
 // ============================================================
 document.addEventListener('DOMContentLoaded', initApp);
@@ -35,7 +118,17 @@ function initApp() {
 function setupNavigation(p) {
   if (!p.canCreateWorkPaper) document.getElementById('navNewWorkPaper')?.classList.add('d-none');
   if (!p.canViewReports) { document.getElementById('navReportsSection')?.classList.add('d-none'); document.getElementById('navReports')?.classList.add('d-none'); }
-  if (!p.canManageUsers) { document.getElementById('navAdminSection')?.classList.add('d-none'); document.getElementById('navUsers')?.classList.add('d-none'); }
+  if (!p.canManageUsers) {
+    document.getElementById('navAdminSection')?.classList.add('d-none');
+    document.getElementById('navUsers')?.classList.add('d-none');
+    document.getElementById('navSettings')?.classList.add('d-none');
+  }
+  // Show analytics for auditors and management
+  const auditorRoles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'MANAGEMENT'];
+  if (!auditorRoles.includes(window.currentUser?.role_code)) {
+    document.getElementById('navAnalyticsSection')?.classList.add('d-none');
+    document.getElementById('navAnalytics')?.classList.add('d-none');
+  }
 }
 
 // ============================================================
@@ -66,7 +159,9 @@ function navigateTo(page, params, updateHash = true) {
     'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: loadActionPlansOverdue },
     'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => loadActionPlanView(params) },
     'reports': { el: 'page-reports', title: 'Reports', init: loadReports },
-    'users': { el: 'page-users', title: 'User Management', init: loadUsers }
+    'users': { el: 'page-users', title: 'User Management', init: loadUsers },
+    'settings': { el: 'page-settings', title: 'Settings', init: loadSettings },
+    'analytics': { el: 'page-analytics', title: 'Analytics & Insights', init: initAnalyticsPage }
   };
   const config = pageMap[page] || pageMap['dashboard'];
   const pageEl = document.getElementById(config.el);

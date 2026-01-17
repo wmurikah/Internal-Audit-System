@@ -89,11 +89,24 @@
             <span>Reports</span>
           </a>
         </li>
+        <li class="nav-item nav-section" id="navAnalyticsSection">Analytics</li>
+        <li class="nav-item" id="navAnalytics">
+          <a href="#analytics" class="nav-link" data-page="analytics">
+            <i class="bi bi-graph-up"></i>
+            <span>Analytics</span>
+          </a>
+        </li>
         <li class="nav-item nav-section" id="navAdminSection">Administration</li>
         <li class="nav-item" id="navUsers">
           <a href="#users" class="nav-link" data-page="users">
             <i class="bi bi-people"></i>
             <span>Users</span>
+          </a>
+        </li>
+        <li class="nav-item" id="navSettings">
+          <a href="#settings" class="nav-link" data-page="settings">
+            <i class="bi bi-gear"></i>
+            <span>Settings</span>
           </a>
         </li>
       </ul>
@@ -174,6 +187,16 @@
         <!-- Users Page -->
         <div class="page" id="page-users" style="display:none;">
           <?!= include('Users'); ?>
+        </div>
+
+        <!-- Settings Page -->
+        <div class="page" id="page-settings" style="display:none;">
+          <?!= include('Settings'); ?>
+        </div>
+
+        <!-- Analytics Page -->
+        <div class="page" id="page-analytics" style="display:none;">
+          <?!= include('Analytics'); ?>
         </div>
       </div>
     </main>

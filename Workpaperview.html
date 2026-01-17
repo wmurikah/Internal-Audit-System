@@ -35,6 +35,22 @@
         <div class="card-body" id="wpViewRecommendation">-</div>
       </div>
 
+      <!-- AI Insights -->
+      <div class="card mb-4" id="aiInsightsCard">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-robot me-2"></i>AI Insights</span>
+          <button class="btn btn-sm btn-outline-primary" onclick="getAIInsights()" id="btnGetAIInsights">
+            <i class="bi bi-magic me-1"></i>Generate Insights
+          </button>
+        </div>
+        <div class="card-body" id="aiInsightsContent">
+          <p class="text-muted text-center mb-0">Click "Generate Insights" to get AI-powered analysis of this work paper</p>
+        </div>
+        <div class="card-footer bg-white small text-muted" id="aiInsightsDisclaimer" style="display:none;">
+          <i class="bi bi-info-circle me-1"></i>AI-generated insights are for reference only. Verify with professional judgment.
+        </div>
+      </div>
+
       <!-- Action Plans -->
       <div class="card mb-4">
         <div class="card-header d-flex justify-content-between">
@@ -230,6 +246,52 @@ function showAddActionPlan() {
   document.getElementById('apFormId').value = '';
   document.getElementById('actionPlanFormModal').querySelector('form').reset();
   new bootstrap.Modal(document.getElementById('actionPlanFormModal')).show();
+}
+
+// AI Insights
+function getAIInsights() {
+  const btn = document.getElementById('btnGetAIInsights');
+  const content = document.getElementById('aiInsightsContent');
+  const disclaimer = document.getElementById('aiInsightsDisclaimer');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Analyzing...';
+  content.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2 mb-0 text-muted">AI is analyzing this work paper...</p></div>';
+
+  apiCall('getWorkPaperInsights', { workPaperId: currentWorkPaper.work_paper_id }).then(r => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-magic me-1"></i>Regenerate';
+
+    if (r.success && r.insights) {
+      content.innerHTML = formatAIResponse(r.insights);
+      disclaimer.style.display = 'block';
+    } else {
+      content.innerHTML = '<div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle me-2"></i>' + (r.error || 'Unable to generate insights. AI may not be configured.') + '</div>';
+    }
+  }).catch(e => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-magic me-1"></i>Generate Insights';
+    content.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-x-circle me-2"></i>Error: ' + escapeHtml(e.message) + '</div>';
+  });
+}
+
+function formatAIResponse(text) {
+  // Convert markdown-like formatting to HTML
+  let html = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^### (.*?)$/gm, '<h6 class="mt-3 text-primary">$1</h6>')
+    .replace(/^## (.*?)$/gm, '<h5 class="mt-3 text-primary">$1</h5>')
+    .replace(/^# (.*?)$/gm, '<h4 class="mt-3 text-primary">$1</h4>')
+    .replace(/^- (.*?)$/gm, '<li>$1</li>')
+    .replace(/^\d+\. (.*?)$/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+
+  // Wrap consecutive li elements in ul
+  html = html.replace(/(<li>.*?<\/li>)+/gs, match => '<ul class="mb-2">' + match + '</ul>');
+
+  return '<div class="ai-response"><p>' + html + '</p></div>';
 }
 
 function editWorkPaper(id) { navigateTo('work-paper-form', { id }); }
