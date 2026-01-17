@@ -1,0 +1,407 @@
+<!-- Work Papers List Page -->
+<div class="work-papers-list">
+  <!-- Filters -->
+  <div class="filters-bar">
+    <div class="input-group" style="max-width: 300px;">
+      <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+      <input type="text" class="form-control" id="wpSearchInput" placeholder="Search work papers..." onkeyup="filterWorkPapers()">
+    </div>
+    
+    <select class="form-select" id="wpFilterYear" onchange="filterWorkPapers()">
+      <option value="">All Years</option>
+    </select>
+    
+    <select class="form-select" id="wpFilterAffiliate" onchange="filterWorkPapers()">
+      <option value="">All Affiliates</option>
+    </select>
+    
+    <select class="form-select" id="wpFilterStatus" onchange="filterWorkPapers()">
+      <option value="">All Status</option>
+      <option value="Draft">Draft</option>
+      <option value="Submitted">Submitted</option>
+      <option value="Under Review">Under Review</option>
+      <option value="Revision Required">Revision Required</option>
+      <option value="Approved">Approved</option>
+      <option value="Sent to Auditee">Sent to Auditee</option>
+    </select>
+    
+    <select class="form-select" id="wpFilterRisk" onchange="filterWorkPapers()">
+      <option value="">All Risk Levels</option>
+      <option value="Extreme">Extreme</option>
+      <option value="High">High</option>
+      <option value="Medium">Medium</option>
+      <option value="Low">Low</option>
+    </select>
+    
+    <button class="btn btn-outline-secondary" onclick="clearWPFilters()">
+      <i class="bi bi-x-circle me-1"></i>Clear
+    </button>
+    
+    <div class="ms-auto">
+      <button class="btn btn-primary" onclick="navigateTo('work-paper-form')" id="btnNewWorkPaper">
+        <i class="bi bi-plus-circle me-2"></i>New Work Paper
+      </button>
+    </div>
+  </div>
+
+  <!-- Results Info -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <span class="text-muted" id="wpResultsInfo">Loading...</span>
+    <div class="btn-group btn-group-sm">
+      <button class="btn btn-outline-secondary active" onclick="setWPView('table')" id="btnWPViewTable">
+        <i class="bi bi-list"></i>
+      </button>
+      <button class="btn btn-outline-secondary" onclick="setWPView('cards')" id="btnWPViewCards">
+        <i class="bi bi-grid-3x3-gap"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Table View -->
+  <div class="table-container" id="wpTableView">
+    <div class="table-responsive">
+      <table class="table table-hover table-clickable">
+        <thead>
+          <tr>
+            <th onclick="sortWorkPapers('work_paper_id')" style="cursor:pointer;">ID <i class="bi bi-arrow-down-up ms-1 opacity-50"></i></th>
+            <th onclick="sortWorkPapers('observation_title')" style="cursor:pointer;">Title <i class="bi bi-arrow-down-up ms-1 opacity-50"></i></th>
+            <th>Affiliate</th>
+            <th>Risk</th>
+            <th>Status</th>
+            <th>Prepared By</th>
+            <th onclick="sortWorkPapers('created_at')" style="cursor:pointer;">Date <i class="bi bi-arrow-down-up ms-1 opacity-50"></i></th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="wpTableBody">
+          <tr>
+            <td colspan="8" class="text-center py-5">
+              <div class="spinner-border text-primary" role="status"></div>
+              <p class="mt-2 mb-0 text-muted">Loading work papers...</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Cards View -->
+  <div class="row g-3" id="wpCardsView" style="display: none;"></div>
+
+  <!-- Pagination -->
+  <nav class="mt-4" id="wpPagination">
+    <ul class="pagination justify-content-center">
+    </ul>
+  </nav>
+</div>
+
+<script>
+let workPapersData = [];
+let wpCurrentPage = 1;
+let wpPageSize = 20;
+let wpSortField = 'created_at';
+let wpSortDir = 'desc';
+let wpViewMode = 'table';
+
+function loadWorkPapers(filters) {
+  filters = filters || {};
+  
+  // Get filter values
+  const search = document.getElementById('wpSearchInput')?.value || '';
+  const year = document.getElementById('wpFilterYear')?.value || '';
+  const affiliate = document.getElementById('wpFilterAffiliate')?.value || '';
+  const status = document.getElementById('wpFilterStatus')?.value || '';
+  const risk = document.getElementById('wpFilterRisk')?.value || '';
+  
+  const requestFilters = {
+    ...filters,
+    search: search || filters.search,
+    year: year || filters.year,
+    affiliate_code: affiliate || filters.affiliate_code,
+    status: status || filters.status,
+    risk_rating: risk || filters.risk_rating
+  };
+  
+  showLoading('Loading work papers...');
+  
+  apiCall('getWorkPapers', { filters: requestFilters })
+    .then(result => {
+      hideLoading();
+      if (result.workPapers) {
+        workPapersData = result.workPapers;
+        renderWorkPapers();
+      } else {
+        showToast('Failed to load work papers', 'danger');
+      }
+    })
+    .catch(err => {
+      hideLoading();
+      console.error('Load work papers error:', err);
+      showToast('Error loading work papers', 'danger');
+    });
+}
+
+function renderWorkPapers() {
+  // Sort data
+  const sorted = [...workPapersData].sort((a, b) => {
+    let aVal = a[wpSortField] || '';
+    let bVal = b[wpSortField] || '';
+    
+    if (wpSortField === 'created_at' || wpSortField === 'updated_at') {
+      aVal = new Date(aVal || 0);
+      bVal = new Date(bVal || 0);
+    }
+    
+    if (aVal < bVal) return wpSortDir === 'asc' ? -1 : 1;
+    if (aVal > bVal) return wpSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  
+  // Paginate
+  const start = (wpCurrentPage - 1) * wpPageSize;
+  const end = start + wpPageSize;
+  const pageData = sorted.slice(start, end);
+  
+  // Update results info
+  document.getElementById('wpResultsInfo').textContent = 
+    `Showing ${start + 1}-${Math.min(end, sorted.length)} of ${sorted.length} work papers`;
+  
+  if (wpViewMode === 'table') {
+    renderWPTable(pageData);
+  } else {
+    renderWPCards(pageData);
+  }
+  
+  renderWPPagination(sorted.length);
+}
+
+function renderWPTable(data) {
+  const tbody = document.getElementById('wpTableBody');
+  
+  if (!data || data.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center py-5">
+          <div class="empty-state">
+            <i class="bi bi-folder2-open"></i>
+            <h5>No work papers found</h5>
+            <p class="text-muted">Try adjusting your filters or create a new work paper</p>
+            <button class="btn btn-primary mt-2" onclick="navigateTo('work-paper-form')">
+              <i class="bi bi-plus-circle me-2"></i>New Work Paper
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  let html = '';
+  data.forEach(wp => {
+    const statusClass = getStatusClass(wp.status);
+    const riskClass = getRiskClass(wp.risk_rating);
+    
+    html += `
+      <tr onclick="viewWorkPaper('${wp.work_paper_id}')">
+        <td><code>${wp.work_paper_id}</code></td>
+        <td>
+          <div class="fw-medium">${escapeHtml(wp.observation_title || 'Untitled')}</div>
+          <small class="text-muted">${escapeHtml(wp.audit_area_id || '')}</small>
+        </td>
+        <td>${wp.affiliate_code || '-'}</td>
+        <td><span class="badge badge-status ${riskClass}">${wp.risk_rating || 'Not Rated'}</span></td>
+        <td><span class="badge badge-status ${statusClass}">${wp.status || '-'}</span></td>
+        <td>${escapeHtml(wp.prepared_by_name || '-')}</td>
+        <td class="text-muted small">${formatDate(wp.created_at)}</td>
+        <td onclick="event.stopPropagation();">
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+              <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#" onclick="viewWorkPaper('${wp.work_paper_id}')"><i class="bi bi-eye me-2"></i>View</a></li>
+              <li><a class="dropdown-item" href="#" onclick="editWorkPaper('${wp.work_paper_id}')"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+              ${wp.status === 'Draft' ? `<li><a class="dropdown-item text-danger" href="#" onclick="deleteWorkPaper('${wp.work_paper_id}')"><i class="bi bi-trash me-2"></i>Delete</a></li>` : ''}
+            </ul>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+  
+  tbody.innerHTML = html;
+}
+
+function renderWPCards(data) {
+  const container = document.getElementById('wpCardsView');
+  
+  if (!data || data.length === 0) {
+    container.innerHTML = `
+      <div class="col-12">
+        <div class="empty-state">
+          <i class="bi bi-folder2-open"></i>
+          <h5>No work papers found</h5>
+          <p class="text-muted">Try adjusting your filters or create a new work paper</p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  
+  let html = '';
+  data.forEach(wp => {
+    const statusClass = getStatusClass(wp.status);
+    const riskClass = getRiskClass(wp.risk_rating);
+    
+    html += `
+      <div class="col-md-6 col-lg-4">
+        <div class="card h-100" style="cursor:pointer;" onclick="viewWorkPaper('${wp.work_paper_id}')">
+          <div class="card-body">
+            <div class="d-flex justify-content-between mb-2">
+              <code class="small">${wp.work_paper_id}</code>
+              <span class="badge badge-status ${statusClass}">${wp.status || '-'}</span>
+            </div>
+            <h6 class="card-title">${escapeHtml(wp.observation_title || 'Untitled')}</h6>
+            <p class="card-text small text-muted text-truncate">${escapeHtml(wp.observation_description || 'No description')}</p>
+            <div class="d-flex gap-2 flex-wrap">
+              <span class="badge bg-light text-dark">${wp.affiliate_code || '-'}</span>
+              <span class="badge badge-status ${riskClass}">${wp.risk_rating || 'Not Rated'}</span>
+            </div>
+          </div>
+          <div class="card-footer bg-white border-top small text-muted">
+            <i class="bi bi-person me-1"></i>${escapeHtml(wp.prepared_by_name || '-')} • ${formatDate(wp.created_at)}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+function renderWPPagination(totalItems) {
+  const totalPages = Math.ceil(totalItems / wpPageSize);
+  const pagination = document.getElementById('wpPagination').querySelector('ul');
+  
+  if (totalPages <= 1) {
+    pagination.innerHTML = '';
+    return;
+  }
+  
+  let html = `
+    <li class="page-item ${wpCurrentPage === 1 ? 'disabled' : ''}">
+      <a class="page-link" href="#" onclick="goToWPPage(${wpCurrentPage - 1})"><i class="bi bi-chevron-left"></i></a>
+    </li>
+  `;
+  
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= wpCurrentPage - 2 && i <= wpCurrentPage + 2)) {
+      html += `
+        <li class="page-item ${i === wpCurrentPage ? 'active' : ''}">
+          <a class="page-link" href="#" onclick="goToWPPage(${i})">${i}</a>
+        </li>
+      `;
+    } else if (i === wpCurrentPage - 3 || i === wpCurrentPage + 3) {
+      html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+    }
+  }
+  
+  html += `
+    <li class="page-item ${wpCurrentPage === totalPages ? 'disabled' : ''}">
+      <a class="page-link" href="#" onclick="goToWPPage(${wpCurrentPage + 1})"><i class="bi bi-chevron-right"></i></a>
+    </li>
+  `;
+  
+  pagination.innerHTML = html;
+}
+
+function goToWPPage(page) {
+  wpCurrentPage = page;
+  renderWorkPapers();
+  window.scrollTo(0, 0);
+}
+
+function sortWorkPapers(field) {
+  if (wpSortField === field) {
+    wpSortDir = wpSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    wpSortField = field;
+    wpSortDir = 'desc';
+  }
+  renderWorkPapers();
+}
+
+function filterWorkPapers() {
+  wpCurrentPage = 1;
+  loadWorkPapers();
+}
+
+function clearWPFilters() {
+  document.getElementById('wpSearchInput').value = '';
+  document.getElementById('wpFilterYear').value = '';
+  document.getElementById('wpFilterAffiliate').value = '';
+  document.getElementById('wpFilterStatus').value = '';
+  document.getElementById('wpFilterRisk').value = '';
+  wpCurrentPage = 1;
+  loadWorkPapers();
+}
+
+function setWPView(mode) {
+  wpViewMode = mode;
+  
+  document.getElementById('btnWPViewTable').classList.toggle('active', mode === 'table');
+  document.getElementById('btnWPViewCards').classList.toggle('active', mode === 'cards');
+  document.getElementById('wpTableView').style.display = mode === 'table' ? 'block' : 'none';
+  document.getElementById('wpCardsView').style.display = mode === 'cards' ? 'flex' : 'none';
+  
+  renderWorkPapers();
+}
+
+function viewWorkPaper(id) {
+  navigateTo('work-paper-view', { id: id });
+}
+
+function editWorkPaper(id) {
+  navigateTo('work-paper-form', { id: id });
+}
+
+function deleteWorkPaper(id) {
+  if (!confirm('Are you sure you want to delete this work paper? This action cannot be undone.')) {
+    return;
+  }
+  
+  showLoading('Deleting...');
+  
+  apiCall('deleteWorkPaper', { workPaperId: id })
+    .then(result => {
+      hideLoading();
+      if (result.success) {
+        showToast('Work paper deleted successfully', 'success');
+        loadWorkPapers();
+      } else {
+        showToast(result.error || 'Failed to delete', 'danger');
+      }
+    })
+    .catch(err => {
+      hideLoading();
+      showToast('Error deleting work paper', 'danger');
+    });
+}
+
+function initWPFilters() {
+  // Populate year dropdown
+  const yearSelect = document.getElementById('wpFilterYear');
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear + 1; y >= currentYear - 5; y--) {
+    yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+  }
+  
+  // Populate affiliate dropdown
+  const affiliateSelect = document.getElementById('wpFilterAffiliate');
+  if (window.appDropdowns && window.appDropdowns.affiliates) {
+    window.appDropdowns.affiliates.forEach(a => {
+      affiliateSelect.innerHTML += `<option value="${a.code}">${a.code} - ${a.name}</option>`;
+    });
+  }
+}
+</script>
