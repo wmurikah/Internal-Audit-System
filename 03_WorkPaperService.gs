@@ -56,6 +56,7 @@ function createWorkPaper(data, user) {
     management_response: sanitizeInput(data.management_response || ''),
     responsible_ids: data.responsible_ids || '',
     cc_recipients: data.cc_recipients || '',
+    work_paper_ref: sanitizeInput(data.work_paper_ref || ''),
     status: STATUS.WORK_PAPER.DRAFT,
     final_status: '',
     revision_count: 0,
@@ -149,7 +150,7 @@ function updateWorkPaper(workPaperId, data, user) {
     'control_objectives', 'control_classification', 'control_type', 'control_frequency', 'control_standards',
     'risk_description', 'test_objective', 'testing_steps',
     'observation_title', 'observation_description', 'risk_rating', 'risk_summary', 'recommendation',
-    'management_response', 'responsible_ids', 'cc_recipients'
+    'management_response', 'responsible_ids', 'cc_recipients', 'work_paper_ref'
   ];
   
   editableFields.forEach(field => {
