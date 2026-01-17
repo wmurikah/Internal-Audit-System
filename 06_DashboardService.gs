@@ -695,7 +695,6 @@ function getUserPermissions(roleCode) {
       permissions.canApproveWorkPaper = true;
       permissions.canCreateActionPlan = true;
       permissions.canVerifyActionPlan = true;
-      permissions.canManageUsers = true;
       permissions.canViewReports = true;
       permissions.canExportData = true;
       break;
