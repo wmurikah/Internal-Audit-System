@@ -42,16 +42,18 @@ function login(email, password) {
   
   const normalizedEmail = email.toLowerCase().trim();
   const user = getUserByEmail(normalizedEmail);
-  
+
+  // APPLICATION-LEVEL ACCESS CONTROL
+  // Only users in the Users sheet can access the system
+  // This allows deployment as "Anyone with Google Account" while controlling access via database
   if (!user) {
-    // Don't reveal if user exists
     Utilities.sleep(500); // Timing attack mitigation
-    return { success: false, error: 'Invalid email or password' };
+    return { success: false, error: 'Access denied. Contact administrator.' };
   }
-  
+
   // Check if account is active
   if (!isActive(user.is_active)) {
-    return { success: false, error: 'Account is inactive. Please contact administrator.' };
+    return { success: false, error: 'Account is inactive. Contact administrator.' };
   }
   
   // Check if account is locked
