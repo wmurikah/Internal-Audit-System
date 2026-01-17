@@ -105,14 +105,14 @@ let wpViewMode = 'table';
 
 function loadWorkPapers(filters) {
   filters = filters || {};
-  
+
   // Get filter values
   const search = document.getElementById('wpSearchInput')?.value || '';
   const year = document.getElementById('wpFilterYear')?.value || '';
   const affiliate = document.getElementById('wpFilterAffiliate')?.value || '';
   const status = document.getElementById('wpFilterStatus')?.value || '';
   const risk = document.getElementById('wpFilterRisk')?.value || '';
-  
+
   const requestFilters = {
     ...filters,
     search: search || filters.search,
@@ -121,22 +121,27 @@ function loadWorkPapers(filters) {
     status: status || filters.status,
     risk_rating: risk || filters.risk_rating
   };
-  
+
   showLoading('Loading work papers...');
-  
+
   apiCall('getWorkPapers', { filters: requestFilters })
     .then(result => {
       hideLoading();
-      if (result.workPapers) {
+      if (result && result.success !== false && result.workPapers) {
         workPapersData = result.workPapers;
         renderWorkPapers();
       } else {
-        showToast('Failed to load work papers', 'danger');
+        console.error('Work papers load error:', result?.error);
+        workPapersData = [];
+        renderWorkPapers();
+        if (result?.error) showToast(result.error, 'warning');
       }
     })
     .catch(err => {
       hideLoading();
       console.error('Load work papers error:', err);
+      workPapersData = [];
+      renderWorkPapers();
       showToast('Error loading work papers', 'danger');
     });
 }

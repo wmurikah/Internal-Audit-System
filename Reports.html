@@ -46,17 +46,36 @@
 function loadReports() {}
 
 function generateReport(type) {
-  showLoading('Generating...');
+  showLoading('Generating report...');
   let action = type === 'summary' ? 'getAuditSummaryReport' : type === 'aging' ? 'getActionPlanAgingReport' : 'getRiskSummaryReport';
-  
-  apiCall(action, { filters: {} }).then(r => {
-    hideLoading();
-    if (r.report) {
-      document.getElementById('reportResults').style.display = 'block';
-      document.getElementById('reportTitle').textContent = type === 'summary' ? 'Audit Summary Report' : type === 'aging' ? 'Action Plan Aging Report' : 'Risk Summary Report';
-      renderReport(type, r.report);
-    } else showToast('Error', 'danger');
-  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+  let reportTitle = type === 'summary' ? 'Audit Summary Report' : type === 'aging' ? 'Action Plan Aging Report' : 'Risk Summary Report';
+
+  apiCall(action, { filters: {} })
+    .then(r => {
+      hideLoading();
+      if (r && r.success !== false && r.report) {
+        document.getElementById('reportResults').style.display = 'block';
+        document.getElementById('reportTitle').textContent = reportTitle;
+        renderReport(type, r.report);
+      } else {
+        console.error('Report error:', r?.error);
+        // Show empty report with error message
+        document.getElementById('reportResults').style.display = 'block';
+        document.getElementById('reportTitle').textContent = reportTitle;
+        document.getElementById('reportContent').innerHTML = `
+          <div class="text-center py-4">
+            <i class="bi bi-exclamation-circle text-warning display-4"></i>
+            <p class="mt-3">${r?.error || 'Unable to generate report. Please try again.'}</p>
+          </div>
+        `;
+        if (r?.error) showToast(r.error, 'warning');
+      }
+    })
+    .catch(err => {
+      hideLoading();
+      console.error('Report error:', err);
+      showToast('Error generating report', 'danger');
+    });
 }
 
 function renderReport(type, data) {

@@ -20,47 +20,50 @@
 
 /**
  * Handle GET requests - serve HTML pages
+ * IMPORTANT: Login page is ALWAYS shown first (mandatory entry point)
+ * User must authenticate before accessing any module
  */
 function doGet(e) {
   try {
-    const user = getCurrentUser();
-    
-    if (!user) {
-      // User not logged in or not in system - show login page
+    const page = e.parameter.page || 'login';
+
+    // MANDATORY: Always show login page first unless explicitly requesting app after auth
+    if (page === 'login' || page !== 'app') {
       return HtmlService.createTemplateFromFile('Login')
         .evaluate()
         .setTitle('Login - Hass Petroleum Audit System')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
-    
+
+    // Only reach here if page=app (after successful login redirect)
+    const user = getCurrentUser();
+
+    if (!user) {
+      // Session expired or invalid - back to login
+      return HtmlService.createTemplateFromFile('Login')
+        .evaluate()
+        .setTitle('Login - Hass Petroleum Audit System')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    }
+
     // Check if account is active
     if (!isActive(user.is_active)) {
       return HtmlService.createHtmlOutput(
         '<h2>Account Inactive</h2><p>Your account has been deactivated. Please contact the administrator.</p>'
       ).setTitle('Account Inactive');
     }
-    
-    // Determine which page to show based on role
-    const page = e.parameter.page || 'main';
-    
-    if (page === 'login') {
-      return HtmlService.createTemplateFromFile('Login')
-        .evaluate()
-        .setTitle('Login - Hass Petroleum Audit System')
-        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    }
-    
+
     // Serve main application based on role
     let templateName = 'AuditorPortal';
-    
+
     if (user.role_code === ROLES.AUDITEE) {
       templateName = 'AuditeePortal';
     } else if (user.role_code === ROLES.MANAGEMENT || user.role_code === ROLES.OBSERVER) {
       templateName = 'ManagementPortal';
     }
-    
+
     // Check if template exists, fall back to AuditorPortal
     try {
       const template = HtmlService.createTemplateFromFile(templateName);
@@ -77,7 +80,7 @@ function doGet(e) {
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
-    
+
   } catch (error) {
     console.error('doGet error:', error);
     return HtmlService.createHtmlOutput(

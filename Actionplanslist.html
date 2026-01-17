@@ -60,12 +60,27 @@ function loadActionPlans(filters) {
   const status = document.getElementById('apFilterStatus')?.value || '';
   const overdueOnly = document.getElementById('apFilterOverdue')?.checked || false;
 
-  showLoading('Loading...');
-  apiCall('getActionPlans', { filters: { ...filters, search, status, overdue_only: overdueOnly } }).then(r => {
-    hideLoading();
-    if (r.actionPlans) { actionPlansData = r.actionPlans; renderActionPlans(); }
-    else showToast('Error loading', 'danger');
-  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+  showLoading('Loading action plans...');
+  apiCall('getActionPlans', { filters: { ...filters, search, status, overdue_only: overdueOnly } })
+    .then(r => {
+      hideLoading();
+      if (r && r.success !== false && r.actionPlans) {
+        actionPlansData = r.actionPlans;
+        renderActionPlans();
+      } else {
+        console.error('Action plans load error:', r?.error);
+        actionPlansData = [];
+        renderActionPlans();
+        if (r?.error) showToast(r.error, 'danger');
+      }
+    })
+    .catch(err => {
+      hideLoading();
+      console.error('Action plans error:', err);
+      actionPlansData = [];
+      renderActionPlans();
+      showToast('Error loading action plans', 'danger');
+    });
 }
 
 function loadActionPlansOverdue() {
