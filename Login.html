@@ -428,15 +428,15 @@
       
       hideAlerts();
       setLoading(true);
-      
+
       // Call server-side login
       google.script.run
         .withSuccessHandler(function(result) {
           setLoading(false);
-          
+
           if (result.success) {
             showSuccess('Login successful! Redirecting...');
-            
+
             // Store session info
             if (result.sessionToken) {
               sessionStorage.setItem('sessionToken', result.sessionToken);
@@ -444,11 +444,25 @@
             if (result.user) {
               sessionStorage.setItem('user', JSON.stringify(result.user));
             }
-            
-            // Redirect to main app (page=app triggers authenticated portal)
+
+            // Redirect to main app - use multiple methods for compatibility
             setTimeout(() => {
-              window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=app';
-            }, 800);
+              const appUrl = '<?= ScriptApp.getService().getUrl() ?>?page=app';
+
+              // Try different redirect methods for Google Apps Script iframe
+              try {
+                // Method 1: Top-level redirect
+                if (window.top && window.top.location) {
+                  window.top.location.replace(appUrl);
+                } else {
+                  // Method 2: Current window
+                  window.location.replace(appUrl);
+                }
+              } catch (e) {
+                // Method 3: Fallback for cross-origin restrictions
+                window.location.href = appUrl;
+              }
+            }, 500);
           } else {
             showError(result.error || 'Login failed. Please try again.');
           }

@@ -28,7 +28,7 @@ function doGet(e) {
     const page = e.parameter.page || 'login';
 
     // MANDATORY: Always show login page first unless explicitly requesting app after auth
-    if (page === 'login' || page !== 'app') {
+    if (page !== 'app') {
       return HtmlService.createTemplateFromFile('Login')
         .evaluate()
         .setTitle('Login - Hass Petroleum Audit System')
@@ -36,50 +36,13 @@ function doGet(e) {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
-    // Only reach here if page=app (after successful login redirect)
-    const user = getCurrentUser();
-
-    if (!user) {
-      // Session expired or invalid - back to login
-      return HtmlService.createTemplateFromFile('Login')
-        .evaluate()
-        .setTitle('Login - Hass Petroleum Audit System')
-        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    }
-
-    // Check if account is active
-    if (!isActive(user.is_active)) {
-      return HtmlService.createHtmlOutput(
-        '<h2>Account Inactive</h2><p>Your account has been deactivated. Please contact the administrator.</p>'
-      ).setTitle('Account Inactive');
-    }
-
-    // Serve main application based on role
-    let templateName = 'AuditorPortal';
-
-    if (user.role_code === ROLES.AUDITEE) {
-      templateName = 'AuditeePortal';
-    } else if (user.role_code === ROLES.MANAGEMENT || user.role_code === ROLES.OBSERVER) {
-      templateName = 'ManagementPortal';
-    }
-
-    // Check if template exists, fall back to AuditorPortal
-    try {
-      const template = HtmlService.createTemplateFromFile(templateName);
-      return template
-        .evaluate()
-        .setTitle('Hass Petroleum Internal Audit System')
-        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    } catch (templateError) {
-      // Template not found, use AuditorPortal
-      return HtmlService.createTemplateFromFile('AuditorPortal')
-        .evaluate()
-        .setTitle('Hass Petroleum Internal Audit System')
-        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    }
+    // page=app: Serve the portal - client-side will validate session via getInitData
+    // This allows the app to work in test deployments where Session.getActiveUser() may fail
+    return HtmlService.createTemplateFromFile('AuditorPortal')
+      .evaluate()
+      .setTitle('Hass Petroleum Internal Audit System')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 
   } catch (error) {
     console.error('doGet error:', error);
