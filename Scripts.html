@@ -159,7 +159,7 @@ function navigateTo(page, params, updateHash = true) {
     'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: loadActionPlansOverdue },
     'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => loadActionPlanView(params) },
     'reports': { el: 'page-reports', title: 'Reports', init: loadReports },
-    'users': { el: 'page-users', title: 'User Management', init: loadUsers },
+    'users': { el: 'page-settings', title: 'Settings - User Management', init: loadSettings },
     'settings': { el: 'page-settings', title: 'Settings', init: loadSettings },
     'analytics': { el: 'page-analytics', title: 'Analytics & Insights', init: initAnalyticsPage }
   };

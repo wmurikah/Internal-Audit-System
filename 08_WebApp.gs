@@ -145,7 +145,7 @@ function routeAction(action, data, user) {
       return getInitData();
       
     case 'getDashboardData':
-      return getDashboardData(user);
+      return { success: true, ...getDashboardData(user) };
       
     case 'getDropdownData':
       return { success: true, dropdowns: getDropdownData() };
