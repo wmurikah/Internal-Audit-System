@@ -1,0 +1,471 @@
+<!-- Dashboard Page Content -->
+<div class="dashboard-content">
+  <!-- Alerts Section -->
+  <div id="alertsSection" class="mb-4"></div>
+
+  <!-- Stats Row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon primary">
+          <i class="bi bi-file-earmark-text"></i>
+        </div>
+        <div class="stat-content">
+          <h3 id="statTotalWP">0</h3>
+          <p>Work Papers</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon info">
+          <i class="bi bi-hourglass-split"></i>
+        </div>
+        <div class="stat-content">
+          <h3 id="statPendingReview">0</h3>
+          <p>Pending Review</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon warning">
+          <i class="bi bi-list-check"></i>
+        </div>
+        <div class="stat-content">
+          <h3 id="statTotalAP">0</h3>
+          <p>Action Plans</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon danger">
+          <i class="bi bi-exclamation-circle"></i>
+        </div>
+        <div class="stat-content">
+          <h3 id="statOverdue">0</h3>
+          <p>Overdue</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <span><i class="bi bi-pie-chart me-2"></i>Work Paper Status</span>
+        </div>
+        <div class="card-body">
+          <canvas id="wpStatusChart" height="250"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <span><i class="bi bi-bar-chart me-2"></i>Action Plan Status</span>
+        </div>
+        <div class="card-body">
+          <canvas id="apStatusChart" height="250"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Second Charts Row -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-header">
+          <span><i class="bi bi-shield-exclamation me-2"></i>Risk Distribution</span>
+        </div>
+        <div class="card-body">
+          <canvas id="riskChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="card h-100">
+        <div class="card-header">
+          <span><i class="bi bi-graph-up me-2"></i>Monthly Trend</span>
+        </div>
+        <div class="card-body">
+          <canvas id="trendChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity & Quick Actions -->
+  <div class="row g-4">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">
+          <span><i class="bi bi-clock-history me-2"></i>Recent Activity</span>
+          <a href="#work-papers" class="btn btn-sm btn-outline-primary" onclick="navigateTo('work-papers')">View All</a>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Title</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody id="recentActivityTable">
+                <tr>
+                  <td colspan="4" class="text-center py-4 text-muted">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">
+          <span><i class="bi bi-lightning me-2"></i>Quick Actions</span>
+        </div>
+        <div class="card-body">
+          <div class="d-grid gap-2">
+            <button class="btn btn-primary" onclick="navigateTo('work-paper-form')" id="btnQuickNewWP">
+              <i class="bi bi-plus-circle me-2"></i>New Work Paper
+            </button>
+            <button class="btn btn-outline-primary" onclick="navigateTo('work-papers', {status: 'Submitted'})">
+              <i class="bi bi-eye me-2"></i>Review Submitted
+            </button>
+            <button class="btn btn-outline-warning" onclick="navigateTo('action-plans-overdue')">
+              <i class="bi bi-exclamation-triangle me-2"></i>View Overdue
+            </button>
+            <button class="btn btn-outline-secondary" onclick="navigateTo('reports')">
+              <i class="bi bi-file-earmark-bar-graph me-2"></i>Generate Report
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Due This Week -->
+      <div class="card mt-4">
+        <div class="card-header">
+          <span><i class="bi bi-calendar-week me-2"></i>Due This Week</span>
+          <span class="badge bg-warning text-dark" id="dueThisWeekBadge">0</span>
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush" id="dueThisWeekList">
+            <li class="list-group-item text-center text-muted py-3">Loading...</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Dashboard-specific functions
+let dashboardCharts = {};
+
+function loadDashboard() {
+  showLoading('Loading dashboard...');
+  
+  apiCall('getDashboardData', {})
+    .then(data => {
+      hideLoading();
+      if (data) {
+        renderDashboard(data);
+      } else {
+        showToast('Failed to load dashboard', 'danger');
+      }
+    })
+    .catch(err => {
+      hideLoading();
+      console.error('Dashboard error:', err);
+      showToast('Error loading dashboard', 'danger');
+    });
+}
+
+function renderDashboard(data) {
+  // Handle multiple response formats
+  const summary = data.summary || data.stats || {};
+  const wp = summary.workPapers || data.workPaperStats || data.workPapers || {};
+  const ap = summary.actionPlans || data.actionPlanStats || data.actionPlans || {};
+  
+  document.getElementById('statTotalWP').textContent = wp.total || data.totalWorkPapers || 0;
+  document.getElementById('statPendingReview').textContent = (wp.submitted || 0) + (wp.underReview || 0) + (data.pendingReview || 0);
+  document.getElementById('statTotalAP').textContent = ap.total || data.totalActionPlans || 0;
+  document.getElementById('statOverdue').textContent = ap.overdue || data.overdueCount || 0;
+  
+  // Update overdue badge in sidebar (check if exists)
+  const overdueEl = document.getElementById('overdueCount');
+  if (overdueEl) overdueEl.textContent = ap.overdue || data.overdueCount || 0;
+  
+  // Render alerts
+  renderAlerts(data.alerts || []);
+  
+  // Render charts
+  renderCharts(data.charts || {});
+  
+  // Render recent activity
+  renderRecentActivity(data.recentActivity || data.recentWorkPapers || []);
+  
+  // Due this week
+  renderDueThisWeek(ap.dueThisWeek || data.dueThisWeek || 0);
+}
+
+function renderAlerts(alerts) {
+  const container = document.getElementById('alertsSection');
+  if (!container) return;
+  
+  if (!alerts || alerts.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  
+  let html = '';
+  alerts.forEach(alert => {
+    html += `
+      <div class="alert-card ${alert.type}">
+        <i class="alert-icon ${alert.icon}"></i>
+        <div class="flex-grow-1">
+          <strong>${alert.title}</strong>
+          <p class="mb-0 small">${alert.message}</p>
+        </div>
+        ${alert.link ? `<a href="${alert.link}" class="btn btn-sm btn-outline-${alert.type === 'danger' ? 'danger' : alert.type === 'warning' ? 'warning' : 'primary'}">View</a>` : ''}
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+function renderCharts(charts) {
+  // Destroy existing charts
+  Object.values(dashboardCharts).forEach(chart => {
+    if (chart && typeof chart.destroy === 'function') chart.destroy();
+  });
+  dashboardCharts = {};
+  
+  // Check if Chart.js is available
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js not loaded');
+    return;
+  }
+  
+  // Work Paper Status Chart
+  const wpCtx = document.getElementById('wpStatusChart');
+  if (wpCtx && charts.wpStatusChart) {
+    dashboardCharts.wpStatus = new Chart(wpCtx.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: charts.wpStatusChart.labels,
+        datasets: [{
+          data: charts.wpStatusChart.data,
+          backgroundColor: charts.wpStatusChart.colors || ['#6c757d', '#17a2b8', '#ffc107', '#fd7e14', '#28a745', '#1a365d'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { padding: 15, usePointStyle: true }
+          }
+        }
+      }
+    });
+  }
+  
+  // Action Plan Status Chart
+  const apCtx = document.getElementById('apStatusChart');
+  if (apCtx && charts.apStatusChart) {
+    dashboardCharts.apStatus = new Chart(apCtx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: charts.apStatusChart.labels,
+        datasets: [{
+          label: 'Count',
+          data: charts.apStatusChart.data,
+          backgroundColor: charts.apStatusChart.colors || ['#6c757d', '#17a2b8', '#ffc107', '#28a745', '#1a365d', '#dc3545'],
+          borderRadius: 5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+      }
+    });
+  }
+  
+  // Risk Distribution Chart
+  const riskCtx = document.getElementById('riskChart');
+  if (riskCtx && charts.riskChart) {
+    dashboardCharts.risk = new Chart(riskCtx.getContext('2d'), {
+      type: 'pie',
+      data: {
+        labels: charts.riskChart.labels,
+        datasets: [{
+          data: charts.riskChart.data,
+          backgroundColor: charts.riskChart.colors || ['#dc3545', '#fd7e14', '#ffc107', '#28a745'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { padding: 10, usePointStyle: true }
+          }
+        }
+      }
+    });
+  }
+  
+  // Monthly Trend Chart
+  const trendCtx = document.getElementById('trendChart');
+  if (trendCtx && charts.trendChart) {
+    dashboardCharts.trend = new Chart(trendCtx.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: charts.trendChart.labels,
+        datasets: [
+          {
+            label: 'Created',
+            data: charts.trendChart.created,
+            borderColor: '#17a2b8',
+            backgroundColor: 'rgba(23, 162, 184, 0.1)',
+            fill: true,
+            tension: 0.4
+          },
+          {
+            label: 'Completed',
+            data: charts.trendChart.completed,
+            borderColor: '#28a745',
+            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+            fill: true,
+            tension: 0.4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: { usePointStyle: true }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+      }
+    });
+  }
+}
+
+function renderRecentActivity(activities) {
+  const tbody = document.getElementById('recentActivityTable');
+  if (!tbody) return;
+  
+  if (!activities || activities.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">No recent activity</td></tr>';
+    return;
+  }
+  
+  let html = '';
+  activities.forEach(item => {
+    const typeIcon = item.type === 'WORK_PAPER' ? 'bi-file-earmark-text' : 'bi-list-check';
+    const typeLabel = item.type === 'WORK_PAPER' ? 'WP' : 'AP';
+    const statusClass = getStatusClass(item.status);
+    const date = item.date || item.updated_at ? formatDate(item.date || item.updated_at) : '-';
+    const itemId = item.id || item.work_paper_id || item.action_plan_id;
+    
+    html += `
+      <tr onclick="viewItem('${item.type || 'WORK_PAPER'}', '${itemId}')" style="cursor:pointer;">
+        <td><i class="${typeIcon} me-2"></i>${typeLabel}</td>
+        <td>${escapeHtml(item.title || item.audit_title || item.action_description || '-')}</td>
+        <td><span class="badge badge-status ${statusClass}">${item.status || '-'}</span></td>
+        <td class="text-muted small">${date}</td>
+      </tr>
+    `;
+  });
+  
+  tbody.innerHTML = html;
+}
+
+function renderDueThisWeek(count) {
+  const badge = document.getElementById('dueThisWeekBadge');
+  if (badge) badge.textContent = count || 0;
+  
+  const list = document.getElementById('dueThisWeekList');
+  if (!list) return;
+  
+  if (!count || count === 0) {
+    list.innerHTML = '<li class="list-group-item text-center text-muted py-3"><i class="bi bi-check-circle me-2"></i>Nothing due this week</li>';
+    return;
+  }
+  
+  // Fetch action plans due this week
+  apiCall('getActionPlans', { filters: { limit: 10 } })
+    .then(result => {
+      const actionPlans = result.actionPlans || result.data || [];
+      if (actionPlans.length > 0) {
+        const today = new Date();
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        
+        const dueItems = actionPlans.filter(ap => {
+          if (!ap.due_date) return false;
+          const due = new Date(ap.due_date);
+          return due >= today && due <= weekEnd;
+        });
+        
+        if (dueItems.length === 0) {
+          list.innerHTML = '<li class="list-group-item text-center text-muted py-3">No items due</li>';
+          return;
+        }
+        
+        let html = '';
+        dueItems.slice(0, 5).forEach(ap => {
+          const apId = ap.action_plan_id || ap.id;
+          html += `
+            <li class="list-group-item d-flex justify-content-between align-items-center" onclick="viewItem('ACTION_PLAN', '${apId}')" style="cursor:pointer;">
+              <span class="text-truncate" style="max-width: 180px;">${escapeHtml(ap.action_description || apId)}</span>
+              <span class="badge bg-warning text-dark">${formatDate(ap.due_date)}</span>
+            </li>
+          `;
+        });
+        list.innerHTML = html;
+      } else {
+        list.innerHTML = '<li class="list-group-item text-center text-muted py-3">No items due</li>';
+      }
+    })
+    .catch(() => {
+      list.innerHTML = '<li class="list-group-item text-center text-muted py-3">Could not load items</li>';
+    });
+}
+
+function viewItem(type, id) {
+  if (type === 'WORK_PAPER') {
+    navigateTo('work-paper-view', { id: id });
+  } else {
+    navigateTo('action-plan-view', { id: id });
+  }
+}
+</script>
