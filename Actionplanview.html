@@ -1,0 +1,208 @@
+<!-- Action Plan View Page -->
+<div class="action-plan-view">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <button class="btn btn-outline-secondary btn-sm" onclick="navigateTo('action-plans')"><i class="bi bi-arrow-left me-1"></i>Back</button>
+    <div class="btn-group" id="apViewActions"></div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+          <span><i class="bi bi-list-check me-2"></i><span id="apViewId">-</span></span>
+          <span class="badge" id="apViewStatus">-</span>
+        </div>
+        <div class="card-body">
+          <h5>Action Description</h5>
+          <p id="apViewDesc">-</p>
+          <hr>
+          <div class="row g-3">
+            <div class="col-md-6"><strong>Work Paper:</strong> <a href="#" id="apViewWPLink">-</a></div>
+            <div class="col-md-6"><strong>Due Date:</strong> <span id="apViewDue">-</span></div>
+            <div class="col-md-6"><strong>Owner(s):</strong> <span id="apViewOwners">-</span></div>
+            <div class="col-md-6"><strong>Days Overdue:</strong> <span id="apViewOverdue">-</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Implementation -->
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-check2-square me-2"></i>Implementation</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Implementation Notes</label>
+            <textarea class="form-control" id="apViewNotes" rows="4"></textarea>
+          </div>
+          <div id="apImplementBtn"></div>
+        </div>
+      </div>
+
+      <!-- Evidence -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+          <span><i class="bi bi-paperclip me-2"></i>Evidence</span>
+          <button class="btn btn-sm btn-outline-primary" onclick="showUploadEvidence()"><i class="bi bi-upload me-1"></i>Upload</button>
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush" id="apViewEvidence"><li class="list-group-item text-muted text-center">No evidence uploaded</li></ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <!-- Status History -->
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-clock-history me-2"></i>History</div>
+        <div class="card-body">
+          <div class="timeline" id="apViewHistory"></div>
+        </div>
+      </div>
+
+      <!-- Review Section -->
+      <div class="card mb-4" id="apReviewCard" style="display:none;">
+        <div class="card-header"><i class="bi bi-clipboard-check me-2"></i>Verification</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Auditor Comments</label>
+            <textarea class="form-control" id="apReviewComments" rows="3"></textarea>
+          </div>
+          <div class="d-grid gap-2">
+            <button class="btn btn-success" onclick="verifyAP('approve')"><i class="bi bi-check-circle me-1"></i>Verify</button>
+            <button class="btn btn-warning" onclick="verifyAP('return')"><i class="bi bi-arrow-return-left me-1"></i>Return</button>
+            <button class="btn btn-danger" onclick="verifyAP('reject')"><i class="bi bi-x-circle me-1"></i>Reject</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentActionPlan = null;
+
+function loadActionPlanView(params) {
+  if (!params?.id) { navigateTo('action-plans'); return; }
+  showLoading('Loading...');
+  apiCall('getActionPlan', { actionPlanId: params.id, includeRelated: true }).then(r => {
+    hideLoading();
+    if (r.actionPlan) { currentActionPlan = r.actionPlan; renderActionPlanView(); }
+    else { showToast('Not found', 'danger'); navigateTo('action-plans'); }
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function renderActionPlanView() {
+  const ap = currentActionPlan;
+  document.getElementById('apViewId').textContent = ap.action_plan_id;
+  document.getElementById('apViewDesc').textContent = ap.action_description || '-';
+  document.getElementById('apViewDue').textContent = ap.due_date ? formatDate(ap.due_date) : '-';
+  document.getElementById('apViewOwners').textContent = ap.owner_names || '-';
+  document.getElementById('apViewOverdue').innerHTML = ap.days_overdue > 0 ? `<span class="badge bg-danger">${ap.days_overdue} days</span>` : '<span class="text-success">On track</span>';
+  document.getElementById('apViewNotes').value = ap.implementation_notes || '';
+
+  const statusEl = document.getElementById('apViewStatus');
+  statusEl.textContent = ap.status || '-';
+  statusEl.className = 'badge badge-status ' + getStatusClass(ap.status);
+
+  const wpLink = document.getElementById('apViewWPLink');
+  wpLink.textContent = ap.work_paper_id;
+  wpLink.onclick = () => navigateTo('work-paper-view', { id: ap.work_paper_id });
+
+  renderAPActions(ap);
+  renderAPHistory(ap.history || []);
+  renderAPEvidence(ap.evidence || []);
+
+  // Show review card for auditors if implemented
+  const user = window.currentUser;
+  const isAuditor = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR'].includes(user?.role_code);
+  document.getElementById('apReviewCard').style.display = (isAuditor && ap.status === 'Implemented') ? 'block' : 'none';
+}
+
+function renderAPActions(ap) {
+  const actions = document.getElementById('apViewActions');
+  const impl = document.getElementById('apImplementBtn');
+  const user = window.currentUser;
+  const isOwner = (ap.owner_ids || '').split(',').includes(user?.user_id);
+  const isAuditor = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR'].includes(user?.role_code);
+  
+  let actionsHtml = '';
+  let implHtml = '';
+
+  if ((isOwner || isAuditor) && !['Implemented', 'Verified'].includes(ap.status)) {
+    implHtml = `<button class="btn btn-success" onclick="markImplemented()"><i class="bi bi-check2-circle me-1"></i>Mark as Implemented</button>`;
+    actionsHtml = `<button class="btn btn-primary" onclick="saveNotes()"><i class="bi bi-save me-1"></i>Save Notes</button>`;
+  }
+
+  actions.innerHTML = actionsHtml;
+  impl.innerHTML = implHtml;
+}
+
+function renderAPHistory(history) {
+  const timeline = document.getElementById('apViewHistory');
+  if (!history.length) { timeline.innerHTML = '<p class="text-muted">No history</p>'; return; }
+  timeline.innerHTML = history.map(h => `
+    <div class="timeline-item">
+      <div class="fw-medium">${h.previous_status || 'Created'} → ${h.new_status}</div>
+      <div class="timeline-date">${formatDate(h.changed_at)} by ${h.user_name || '-'}</div>
+      ${h.comments ? `<small class="text-muted">${escapeHtml(h.comments)}</small>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderAPEvidence(evidence) {
+  const list = document.getElementById('apViewEvidence');
+  if (!evidence.length) { list.innerHTML = '<li class="list-group-item text-muted text-center">No evidence</li>'; return; }
+  list.innerHTML = evidence.map(e => `
+    <li class="list-group-item d-flex justify-content-between">
+      <a href="${e.drive_url}" target="_blank"><i class="bi bi-file-earmark me-2"></i>${escapeHtml(e.file_name)}</a>
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteEvidence('${e.evidence_id}')"><i class="bi bi-trash"></i></button>
+    </li>
+  `).join('');
+}
+
+function saveNotes() {
+  const notes = document.getElementById('apViewNotes').value;
+  showLoading('Saving...');
+  apiCall('updateActionPlan', { actionPlanId: currentActionPlan.action_plan_id, implementation_notes: notes }).then(r => {
+    hideLoading();
+    if (r.success) showToast('Saved', 'success');
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function markImplemented() {
+  const notes = document.getElementById('apViewNotes').value;
+  if (!notes && !confirm('No implementation notes provided. Continue?')) return;
+  showLoading('Processing...');
+  apiCall('markAsImplemented', { actionPlanId: currentActionPlan.action_plan_id, implementationNotes: notes }).then(r => {
+    hideLoading();
+    if (r.success) { showToast('Marked as implemented', 'success'); loadActionPlanView({ id: currentActionPlan.action_plan_id }); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function verifyAP(action) {
+  const comments = document.getElementById('apReviewComments').value;
+  showLoading('Processing...');
+  apiCall('verifyImplementation', { actionPlanId: currentActionPlan.action_plan_id, action, comments }).then(r => {
+    hideLoading();
+    if (r.success) { showToast(action === 'approve' ? 'Verified' : 'Updated', 'success'); loadActionPlanView({ id: currentActionPlan.action_plan_id }); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function showUploadEvidence() {
+  document.getElementById('uploadEntityType').value = 'ACTION_PLAN';
+  document.getElementById('uploadEntityId').value = currentActionPlan.action_plan_id;
+  new bootstrap.Modal(document.getElementById('uploadFileModal')).show();
+}
+
+function deleteEvidence(id) {
+  if (!confirm('Delete this evidence?')) return;
+  showLoading('Deleting...');
+  apiCall('deleteActionPlanEvidence', { evidenceId: id }).then(r => {
+    hideLoading();
+    if (r.success) { showToast('Deleted', 'success'); loadActionPlanView({ id: currentActionPlan.action_plan_id }); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+</script>
