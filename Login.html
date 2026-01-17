@@ -278,6 +278,54 @@
     .shake {
       animation: shake 0.4s ease;
     }
+
+    /* Success view styles */
+    .success-view {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      background: #d4edda;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+
+    .success-icon i {
+      font-size: 40px;
+      color: #28a745;
+    }
+
+    .btn-continue {
+      width: 100%;
+      padding: 14px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      background: #28a745;
+      color: #ffffff;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      text-decoration: none;
+      margin-top: 20px;
+    }
+
+    .btn-continue:hover {
+      background: #218838;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
+      color: #ffffff;
+    }
   </style>
 </head>
 <body>
@@ -298,46 +346,58 @@
         <h1>Hass Petroleum</h1>
         <p>Internal Audit Management System</p>
       </div>
-      
+
       <div class="login-body">
         <!-- Alert -->
         <div class="alert alert-danger" id="errorAlert" style="display: none;">
           <i class="bi bi-exclamation-circle-fill"></i>
           <span id="errorMessage"></span>
         </div>
-        
-        <div class="alert alert-success" id="successAlert" style="display: none;">
-          <i class="bi bi-check-circle-fill"></i>
-          <span id="successMessage"></span>
-        </div>
-        
-        <!-- Login Form -->
-        <form id="loginForm" onsubmit="handleLogin(event)">
-          <div class="form-floating position-relative">
-            <i class="bi bi-envelope input-icon"></i>
-            <input type="email" class="form-control" id="email" placeholder="Email" required autocomplete="email">
-            <label for="email">Email Address</label>
-          </div>
-          
-          <div class="form-floating position-relative">
-            <i class="bi bi-lock input-icon"></i>
-            <input type="password" class="form-control" id="password" placeholder="Password" required autocomplete="current-password">
-            <label for="password">Password</label>
-            <button type="button" class="password-toggle" onclick="togglePassword()">
-              <i class="bi bi-eye" id="passwordToggleIcon"></i>
+
+        <!-- Login Form View -->
+        <div id="loginFormView">
+          <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-floating position-relative">
+              <i class="bi bi-envelope input-icon"></i>
+              <input type="email" class="form-control" id="email" placeholder="Email" required autocomplete="email">
+              <label for="email">Email Address</label>
+            </div>
+
+            <div class="form-floating position-relative">
+              <i class="bi bi-lock input-icon"></i>
+              <input type="password" class="form-control" id="password" placeholder="Password" required autocomplete="current-password">
+              <label for="password">Password</label>
+              <button type="button" class="password-toggle" onclick="togglePassword()">
+                <i class="bi bi-eye" id="passwordToggleIcon"></i>
+              </button>
+            </div>
+
+            <button type="submit" class="btn-login" id="loginBtn">
+              <span id="loginBtnText">Sign In</span>
+              <span id="loginBtnSpinner" style="display: none;">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                Signing in...
+              </span>
             </button>
+          </form>
+        </div>
+
+        <!-- Success View (shown after login) -->
+        <div id="successView" style="display: none;">
+          <div class="success-view">
+            <div class="success-icon">
+              <i class="bi bi-check-lg"></i>
+            </div>
+            <h4 class="text-success mb-2">Login Successful!</h4>
+            <p class="text-muted mb-0">Welcome back, <strong id="welcomeName"></strong></p>
+            <a id="continueBtn" href="#" class="btn-continue">
+              <i class="bi bi-arrow-right-circle"></i>
+              Continue to Dashboard
+            </a>
           </div>
-          
-          <button type="submit" class="btn-login" id="loginBtn">
-            <span id="loginBtnText">Sign In</span>
-            <span id="loginBtnSpinner" style="display: none;">
-              <span class="spinner-border spinner-border-sm" role="status"></span>
-              Signing in...
-            </span>
-          </button>
-        </form>
+        </div>
       </div>
-      
+
       <div class="login-footer">
         <p>Having trouble? Contact <a href="mailto:audit@hasspetroleum.com">audit@hasspetroleum.com</a></p>
       </div>
@@ -345,11 +405,14 @@
   </div>
 
   <script>
+    // App URL for redirect
+    const APP_URL = '<?= ScriptApp.getService().getUrl() ?>?page=app';
+
     // Toggle password visibility
     function togglePassword() {
       const passwordInput = document.getElementById('password');
       const toggleIcon = document.getElementById('passwordToggleIcon');
-      
+
       if (passwordInput.type === 'password') {
         passwordInput.type = 'text';
         toggleIcon.classList.remove('bi-eye');
@@ -360,83 +423,73 @@
         toggleIcon.classList.add('bi-eye');
       }
     }
-    
+
     // Show error
     function showError(message) {
       const errorAlert = document.getElementById('errorAlert');
       const errorMessage = document.getElementById('errorMessage');
       const loginCard = document.getElementById('loginCard');
-      
+
       errorMessage.textContent = message;
       errorAlert.style.display = 'flex';
-      
-      // Hide success if showing
-      document.getElementById('successAlert').style.display = 'none';
-      
+
       // Shake animation
       loginCard.classList.add('shake');
       setTimeout(() => loginCard.classList.remove('shake'), 400);
     }
-    
-    // Show success
-    function showSuccess(message) {
-      const successAlert = document.getElementById('successAlert');
-      const successMessage = document.getElementById('successMessage');
-      
-      successMessage.textContent = message;
-      successAlert.style.display = 'flex';
-      
-      // Hide error if showing
+
+    // Hide error
+    function hideError() {
       document.getElementById('errorAlert').style.display = 'none';
     }
-    
-    // Hide alerts
-    function hideAlerts() {
-      document.getElementById('errorAlert').style.display = 'none';
-      document.getElementById('successAlert').style.display = 'none';
-    }
-    
+
     // Set loading state
     function setLoading(loading) {
       const loginBtn = document.getElementById('loginBtn');
       const loginBtnText = document.getElementById('loginBtnText');
       const loginBtnSpinner = document.getElementById('loginBtnSpinner');
       const loadingOverlay = document.getElementById('loadingOverlay');
-      
+
       loginBtn.disabled = loading;
       loginBtnText.style.display = loading ? 'none' : 'inline';
       loginBtnSpinner.style.display = loading ? 'inline' : 'none';
-      
+
       if (loading) {
         loadingOverlay.classList.add('show');
       } else {
         loadingOverlay.classList.remove('show');
       }
     }
-    
+
+    // Show success view with continue button
+    function showSuccessView(userName) {
+      document.getElementById('loginFormView').style.display = 'none';
+      document.getElementById('successView').style.display = 'block';
+      document.getElementById('welcomeName').textContent = userName || 'User';
+      document.getElementById('continueBtn').href = APP_URL;
+    }
+
     // Handle login
     function handleLogin(event) {
       event.preventDefault();
-      
+
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
-      
+
       if (!email || !password) {
         showError('Please enter both email and password.');
         return;
       }
-      
-      hideAlerts();
+
+      hideError();
       setLoading(true);
-      
+
       // Call server-side login
       google.script.run
         .withSuccessHandler(function(result) {
           setLoading(false);
-          
+
           if (result.success) {
-            showSuccess('Login successful! Redirecting...');
-            
             // Store session info
             if (result.sessionToken) {
               sessionStorage.setItem('sessionToken', result.sessionToken);
@@ -444,11 +497,11 @@
             if (result.user) {
               sessionStorage.setItem('user', JSON.stringify(result.user));
             }
-            
-            // Redirect to main app (page=app triggers authenticated portal)
-            setTimeout(() => {
-              window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=app';
-            }, 800);
+
+            // Show success view with continue button
+            // User must click the button to navigate (sandbox requires user activation)
+            const userName = result.user?.full_name || result.user?.email || 'User';
+            showSuccessView(userName);
           } else {
             showError(result.error || 'Login failed. Please try again.');
           }
@@ -460,11 +513,9 @@
         })
         .apiCall('login', { email: email, password: password });
     }
-    
-    // Initialize - Login is ALWAYS the mandatory entry point
-    // No auto-redirect for existing sessions - users must authenticate fresh
+
+    // Initialize
     document.addEventListener('DOMContentLoaded', function() {
-      // Focus on email field for immediate typing
       document.getElementById('email').focus();
     });
   </script>

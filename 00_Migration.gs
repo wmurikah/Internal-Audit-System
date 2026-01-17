@@ -1253,3 +1253,119 @@ function hashPasswordPBKDF2(password, salt) {
   
   return hash;
 }
+
+// ============================================================
+// PASSWORD RESET UTILITY
+// ============================================================
+
+/**
+ * Reset password for Super Admin user
+ *
+ * HOW TO USE:
+ * 1. Open Apps Script editor
+ * 2. Select "resetSuperAdminPassword" from function dropdown
+ * 3. Click Run
+ * 4. Check execution log for the new password
+ * 5. Login with new password and change it immediately
+ */
+function resetSuperAdminPassword() {
+  const EMAIL = 'wmurikah@gmail.com';
+  const NEW_PASSWORD = 'Hass@Admin2024!';  // Temporary password - CHANGE AFTER LOGIN
+
+  console.log('='.repeat(60));
+  console.log('PASSWORD RESET UTILITY');
+  console.log('='.repeat(60));
+  console.log('');
+  console.log('Resetting password for: ' + EMAIL);
+  console.log('');
+
+  try {
+    const ss = SpreadsheetApp.openById(MIGRATION_CONFIG.SPREADSHEET_ID);
+    const usersSheet = ss.getSheetByName('05_Users');
+
+    if (!usersSheet) {
+      console.log('ERROR: Users sheet (05_Users) not found!');
+      return;
+    }
+
+    const data = usersSheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // Find column indexes
+    const emailIdx = headers.indexOf('email');
+    const hashIdx = headers.indexOf('password_hash');
+    const saltIdx = headers.indexOf('password_salt');
+    const mustChangeIdx = headers.indexOf('must_change_password');
+    const lockedIdx = headers.indexOf('locked_until');
+    const attemptsIdx = headers.indexOf('login_attempts');
+
+    if (emailIdx === -1 || hashIdx === -1 || saltIdx === -1) {
+      console.log('ERROR: Required columns not found in Users sheet');
+      console.log('Expected: email, password_hash, password_salt');
+      return;
+    }
+
+    // Find user row
+    let userRow = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][emailIdx] && data[i][emailIdx].toString().toLowerCase() === EMAIL.toLowerCase()) {
+        userRow = i + 1; // +1 for 1-based row index
+        break;
+      }
+    }
+
+    if (userRow === -1) {
+      console.log('ERROR: User not found with email: ' + EMAIL);
+      return;
+    }
+
+    console.log('User found at row: ' + userRow);
+
+    // Generate new salt and hash
+    const salt = generateSecureSalt();
+    const hash = hashPasswordPBKDF2(NEW_PASSWORD, salt);
+
+    // Update user record
+    usersSheet.getRange(userRow, hashIdx + 1).setValue(hash);
+    usersSheet.getRange(userRow, saltIdx + 1).setValue(salt);
+
+    if (mustChangeIdx !== -1) {
+      usersSheet.getRange(userRow, mustChangeIdx + 1).setValue(true);
+    }
+
+    // Clear any lockout
+    if (lockedIdx !== -1) {
+      usersSheet.getRange(userRow, lockedIdx + 1).setValue('');
+    }
+    if (attemptsIdx !== -1) {
+      usersSheet.getRange(userRow, attemptsIdx + 1).setValue(0);
+    }
+
+    console.log('');
+    console.log('='.repeat(60));
+    console.log('PASSWORD RESET SUCCESSFUL!');
+    console.log('='.repeat(60));
+    console.log('');
+    console.log('  Email:    ' + EMAIL);
+    console.log('  Password: ' + NEW_PASSWORD);
+    console.log('');
+    console.log('  ⚠️  IMPORTANT: Change this password immediately after login!');
+    console.log('  ⚠️  You will be prompted to change password on first login.');
+    console.log('');
+
+  } catch (error) {
+    console.log('ERROR: ' + error.message);
+    console.log(error.stack);
+  }
+}
+
+/**
+ * Generate a secure random salt for password hashing
+ */
+function generateSecureSalt() {
+  const bytes = [];
+  for (let i = 0; i < 32; i++) {
+    bytes.push(Math.floor(Math.random() * 256));
+  }
+  return Utilities.base64Encode(bytes);
+}
