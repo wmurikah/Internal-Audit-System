@@ -287,7 +287,79 @@ function routeAction(action, data, user) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, cleaned: cleanupExpiredSessions() };
-      
+
+    // ========== SETTINGS ==========
+    case 'getPermissions':
+      return { success: true, permissions: getPermissions(data.roleCode) };
+
+    case 'updatePermissions':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return updatePermissions(data.roleCode, data.permissions, user);
+
+    case 'getUserStats':
+      return { success: true, stats: getUserStats() };
+
+    case 'getSystemConfig':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return { success: true, config: getSystemConfigValues() };
+
+    case 'saveSystemConfig':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return saveSystemConfigValues(data.config, user);
+
+    case 'getAuditLog':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return { success: true, logs: getAuditLogs(data.action, data.page, data.pageSize), total: getAuditLogCount(data.action) };
+
+    case 'rebuildAllIndexes':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Permission denied' };
+      }
+      Index.rebuild('WORK_PAPER');
+      Index.rebuild('ACTION_PLAN');
+      Index.rebuild('USER');
+      return { success: true, message: 'All indexes rebuilt' };
+
+    // ========== AI SERVICE ==========
+    case 'getAIConfigStatus':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return { success: true, config: getAIConfigStatus() };
+
+    case 'setAIApiKey':
+      return setAIApiKey(data.provider, data.apiKey, user);
+
+    case 'removeAIApiKey':
+      return removeAIApiKey(data.provider, user);
+
+    case 'setActiveAIProvider':
+      return setActiveAIProvider(data.provider, user);
+
+    case 'testAIConnection':
+      return testAIConnection(data.provider, user);
+
+    case 'getWorkPaperInsights':
+      return getWorkPaperInsights(data.workPaperId, user);
+
+    case 'validateActionPlan':
+      return validateActionPlan(data.actionPlan, data.workPaperContext, user);
+
+    case 'getAnalyticsInsights':
+      return getAnalyticsInsights(data.analyticsData, user);
+
+    // ========== ANALYTICS ==========
+    case 'getAnalyticsData':
+      return getAnalyticsData(data.year, user);
+
     default:
       return { success: false, error: 'Unknown action: ' + action };
   }

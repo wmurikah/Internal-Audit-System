@@ -1,0 +1,651 @@
+<!-- Analytics & Insights Dashboard -->
+<div class="analytics-page">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-graph-up me-2"></i>Analytics & Insights</h4>
+    <div>
+      <select class="form-select form-select-sm d-inline-block w-auto me-2" id="analyticsYear" onchange="loadAnalytics()">
+      </select>
+      <button class="btn btn-outline-primary btn-sm me-2" onclick="refreshAnalytics()">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="exportAnalytics()">
+        <i class="bi bi-download me-1"></i>Export
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI Cards Row -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label">Total Findings</div>
+              <div class="kpi-value" id="kpiTotalFindings">-</div>
+            </div>
+            <div class="kpi-icon bg-primary-subtle text-primary">
+              <i class="bi bi-file-earmark-text"></i>
+            </div>
+          </div>
+          <div class="kpi-trend mt-2" id="kpiTotalFindingsTrend"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label">Action Plans</div>
+              <div class="kpi-value" id="kpiTotalAPs">-</div>
+            </div>
+            <div class="kpi-icon bg-success-subtle text-success">
+              <i class="bi bi-list-check"></i>
+            </div>
+          </div>
+          <div class="kpi-trend mt-2" id="kpiTotalAPsTrend"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label">Implementation Rate</div>
+              <div class="kpi-value" id="kpiImplRate">-</div>
+            </div>
+            <div class="kpi-icon bg-info-subtle text-info">
+              <i class="bi bi-check-circle"></i>
+            </div>
+          </div>
+          <div class="progress mt-2" style="height: 6px;">
+            <div class="progress-bar bg-info" id="kpiImplRateBar" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label">Overdue Items</div>
+              <div class="kpi-value text-danger" id="kpiOverdue">-</div>
+            </div>
+            <div class="kpi-icon bg-danger-subtle text-danger">
+              <i class="bi bi-exclamation-triangle"></i>
+            </div>
+          </div>
+          <div class="kpi-trend text-danger mt-2" id="kpiOverdueTrend"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="row g-4 mb-4">
+    <!-- Findings by Status -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <i class="bi bi-pie-chart me-2"></i>Findings by Status
+        </div>
+        <div class="card-body">
+          <canvas id="chartFindingsByStatus" height="250"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Risk Distribution -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <i class="bi bi-bar-chart me-2"></i>Risk Distribution
+        </div>
+        <div class="card-body">
+          <canvas id="chartRiskDistribution" height="250"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trends & Heatmap Row -->
+  <div class="row g-4 mb-4">
+    <!-- Monthly Trends -->
+    <div class="col-lg-8">
+      <div class="card h-100">
+        <div class="card-header">
+          <i class="bi bi-graph-up me-2"></i>Monthly Trends
+        </div>
+        <div class="card-body">
+          <canvas id="chartMonthlyTrends" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Plan Aging -->
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header">
+          <i class="bi bi-hourglass-split me-2"></i>Action Plan Aging
+        </div>
+        <div class="card-body">
+          <canvas id="chartAPAging" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Affiliate Comparison & AI Insights Row -->
+  <div class="row g-4 mb-4">
+    <!-- By Affiliate -->
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <i class="bi bi-building me-2"></i>Findings by Affiliate
+        </div>
+        <div class="card-body">
+          <canvas id="chartByAffiliate" height="250"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Insights -->
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-robot me-2"></i>AI-Powered Insights</span>
+          <button class="btn btn-sm btn-outline-primary" onclick="generateAIInsights()" id="btnGenerateAI">
+            <i class="bi bi-magic me-1"></i>Generate
+          </button>
+        </div>
+        <div class="card-body" id="aiInsightsContent">
+          <div class="text-center text-muted py-4">
+            <i class="bi bi-lightbulb" style="font-size: 2rem;"></i>
+            <p class="mt-2 mb-0">Click "Generate" to get AI-powered insights based on your audit data</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Tables Row -->
+  <div class="row g-4 mb-4">
+    <!-- High Risk Findings -->
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <i class="bi bi-exclamation-circle text-danger me-2"></i>High/Extreme Risk Findings
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead>
+                <tr><th>ID</th><th>Title</th><th>Risk</th><th>Status</th><th>Days Open</th></tr>
+              </thead>
+              <tbody id="tableHighRiskFindings">
+                <tr><td colspan="5" class="text-center py-3 text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overdue Action Plans -->
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <i class="bi bi-clock-history text-warning me-2"></i>Overdue Action Plans
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead>
+                <tr><th>ID</th><th>Description</th><th>Owner</th><th>Days Overdue</th></tr>
+              </thead>
+              <tbody id="tableOverdueAPs">
+                <tr><td colspan="4" class="text-center py-3 text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auditor Performance -->
+  <div class="row g-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-person-lines-fill me-2"></i>Auditor Activity Summary
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Auditor</th>
+                  <th class="text-center">Work Papers</th>
+                  <th class="text-center">Drafts</th>
+                  <th class="text-center">Submitted</th>
+                  <th class="text-center">Approved</th>
+                  <th class="text-center">Avg Days to Approve</th>
+                </tr>
+              </thead>
+              <tbody id="tableAuditorPerformance">
+                <tr><td colspan="6" class="text-center py-3 text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.kpi-card {
+  border-left: 4px solid var(--primary-color);
+}
+.kpi-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+.kpi-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+.kpi-trend {
+  font-size: 0.85rem;
+}
+.kpi-trend.up { color: var(--success-color); }
+.kpi-trend.down { color: var(--danger-color); }
+
+#aiInsightsContent {
+  max-height: 400px;
+  overflow-y: auto;
+}
+#aiInsightsContent .insight-section {
+  margin-bottom: 1rem;
+}
+#aiInsightsContent h6 {
+  color: var(--primary-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+</style>
+
+<script>
+let analyticsData = null;
+let charts = {};
+
+function loadAnalytics() {
+  const year = document.getElementById('analyticsYear').value || new Date().getFullYear();
+
+  showLoading('Loading analytics...');
+
+  apiCall('getAnalyticsData', { year }).then(r => {
+    hideLoading();
+    if (r.success && r.data) {
+      analyticsData = r.data;
+      renderAnalytics();
+    } else {
+      showToast('Error loading analytics', 'danger');
+    }
+  }).catch(e => {
+    hideLoading();
+    showToast('Error: ' + e.message, 'danger');
+  });
+}
+
+function initAnalyticsPage() {
+  // Populate year dropdown
+  const yearSelect = document.getElementById('analyticsYear');
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear; y >= currentYear - 5; y--) {
+    yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+  }
+
+  loadAnalytics();
+}
+
+function renderAnalytics() {
+  if (!analyticsData) return;
+
+  // KPIs
+  document.getElementById('kpiTotalFindings').textContent = analyticsData.workPapers?.total || 0;
+  document.getElementById('kpiTotalAPs').textContent = analyticsData.actionPlans?.total || 0;
+
+  const implRate = analyticsData.actionPlans?.implementationRate || 0;
+  document.getElementById('kpiImplRate').textContent = implRate + '%';
+  document.getElementById('kpiImplRateBar').style.width = implRate + '%';
+
+  document.getElementById('kpiOverdue').textContent = analyticsData.actionPlans?.overdue || 0;
+
+  // Trends
+  if (analyticsData.trends) {
+    const lastMonth = analyticsData.trends.lastMonth || {};
+    const thisMonth = analyticsData.trends.thisMonth || {};
+
+    const wpChange = (thisMonth.workPapers || 0) - (lastMonth.workPapers || 0);
+    document.getElementById('kpiTotalFindingsTrend').innerHTML = wpChange >= 0 ?
+      `<i class="bi bi-arrow-up text-success"></i> ${wpChange} from last month` :
+      `<i class="bi bi-arrow-down text-danger"></i> ${Math.abs(wpChange)} from last month`;
+
+    const apChange = (thisMonth.actionPlans || 0) - (lastMonth.actionPlans || 0);
+    document.getElementById('kpiTotalAPsTrend').innerHTML = apChange >= 0 ?
+      `<i class="bi bi-arrow-up text-success"></i> ${apChange} from last month` :
+      `<i class="bi bi-arrow-down text-danger"></i> ${Math.abs(apChange)} from last month`;
+  }
+
+  // Charts
+  renderCharts();
+
+  // Tables
+  renderHighRiskFindings();
+  renderOverdueAPs();
+  renderAuditorPerformance();
+}
+
+function renderCharts() {
+  // Destroy existing charts
+  Object.values(charts).forEach(chart => chart?.destroy());
+
+  // Findings by Status
+  const statusData = analyticsData.workPapers?.byStatus || {};
+  charts.findingsByStatus = new Chart(document.getElementById('chartFindingsByStatus'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(statusData),
+      datasets: [{
+        data: Object.values(statusData),
+        backgroundColor: ['#6c757d', '#0d6efd', '#0dcaf0', '#ffc107', '#198754', '#dc3545']
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'right' }
+      }
+    }
+  });
+
+  // Risk Distribution
+  const riskData = analyticsData.workPapers?.byRisk || {};
+  const riskColors = { 'Extreme': '#dc3545', 'High': '#fd7e14', 'Medium': '#ffc107', 'Low': '#198754' };
+  charts.riskDistribution = new Chart(document.getElementById('chartRiskDistribution'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(riskData),
+      datasets: [{
+        label: 'Findings',
+        data: Object.values(riskData),
+        backgroundColor: Object.keys(riskData).map(k => riskColors[k] || '#6c757d')
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  // Monthly Trends
+  const monthlyData = analyticsData.trends?.monthly || [];
+  charts.monthlyTrends = new Chart(document.getElementById('chartMonthlyTrends'), {
+    type: 'line',
+    data: {
+      labels: monthlyData.map(m => m.month),
+      datasets: [
+        {
+          label: 'Work Papers',
+          data: monthlyData.map(m => m.workPapers),
+          borderColor: '#0d6efd',
+          backgroundColor: 'rgba(13, 110, 253, 0.1)',
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: 'Action Plans Closed',
+          data: monthlyData.map(m => m.actionPlansClosed),
+          borderColor: '#198754',
+          backgroundColor: 'rgba(25, 135, 84, 0.1)',
+          fill: true,
+          tension: 0.3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  // AP Aging
+  const agingData = analyticsData.actionPlans?.aging || {};
+  charts.apAging = new Chart(document.getElementById('chartAPAging'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(agingData),
+      datasets: [{
+        data: Object.values(agingData),
+        backgroundColor: ['#198754', '#0dcaf0', '#ffc107', '#fd7e14', '#dc3545']
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+
+  // By Affiliate
+  const affiliateData = analyticsData.workPapers?.byAffiliate || {};
+  charts.byAffiliate = new Chart(document.getElementById('chartByAffiliate'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(affiliateData),
+      datasets: [{
+        label: 'Findings',
+        data: Object.values(affiliateData),
+        backgroundColor: '#0d6efd'
+      }]
+    },
+    options: {
+      responsive: true,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function renderHighRiskFindings() {
+  const findings = analyticsData.highRiskFindings || [];
+  const tbody = document.getElementById('tableHighRiskFindings');
+
+  if (!findings.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No high risk findings</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = findings.slice(0, 10).map(f => `
+    <tr onclick="navigateTo('work-paper-view', {id:'${f.work_paper_id}'})" style="cursor:pointer;">
+      <td><code>${f.work_paper_id}</code></td>
+      <td>${escapeHtml((f.observation_title || '').substring(0, 40))}...</td>
+      <td><span class="badge bg-${f.risk_rating === 'Extreme' ? 'danger' : 'warning'}">${f.risk_rating}</span></td>
+      <td><span class="badge badge-status ${getStatusClass(f.status)}">${f.status}</span></td>
+      <td>${f.days_open || '-'}</td>
+    </tr>
+  `).join('');
+}
+
+function renderOverdueAPs() {
+  const aps = analyticsData.overdueActionPlans || [];
+  const tbody = document.getElementById('tableOverdueAPs');
+
+  if (!aps.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-success">No overdue action plans!</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = aps.slice(0, 10).map(ap => `
+    <tr onclick="navigateTo('action-plan-view', {id:'${ap.action_plan_id}'})" style="cursor:pointer;">
+      <td><code>${ap.action_plan_id}</code></td>
+      <td>${escapeHtml((ap.action_description || '').substring(0, 40))}...</td>
+      <td>${escapeHtml(ap.owner_names || '-')}</td>
+      <td><span class="badge bg-danger">${ap.days_overdue} days</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderAuditorPerformance() {
+  const auditors = analyticsData.auditorPerformance || [];
+  const tbody = document.getElementById('tableAuditorPerformance');
+
+  if (!auditors.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">No data available</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = auditors.map(a => `
+    <tr>
+      <td>${escapeHtml(a.name)}</td>
+      <td class="text-center">${a.total}</td>
+      <td class="text-center">${a.draft}</td>
+      <td class="text-center">${a.submitted}</td>
+      <td class="text-center">${a.approved}</td>
+      <td class="text-center">${a.avgDaysToApprove || '-'}</td>
+    </tr>
+  `).join('');
+}
+
+function generateAIInsights() {
+  const btn = document.getElementById('btnGenerateAI');
+  const content = document.getElementById('aiInsightsContent');
+
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner-border spinner-border-sm me-1"></div>Generating...';
+
+  content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2 mb-0">Analyzing your audit data...</p></div>';
+
+  // Prepare data for AI
+  const aiData = {
+    workPapers: {
+      total: analyticsData.workPapers?.total,
+      byStatus: analyticsData.workPapers?.byStatus,
+      byRisk: analyticsData.workPapers?.byRisk,
+      byAffiliate: analyticsData.workPapers?.byAffiliate
+    },
+    actionPlans: {
+      total: analyticsData.actionPlans?.total,
+      overdue: analyticsData.actionPlans?.overdue,
+      implementationRate: analyticsData.actionPlans?.implementationRate,
+      byStatus: analyticsData.actionPlans?.byStatus
+    },
+    trends: analyticsData.trends
+  };
+
+  apiCall('getAnalyticsInsights', { analyticsData: aiData }).then(r => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-magic me-1"></i>Generate';
+
+    if (r.success && r.insights) {
+      // Parse markdown-like response
+      const formattedInsights = formatAIInsights(r.insights);
+      content.innerHTML = formattedInsights +
+        '<div class="alert alert-secondary mt-3 small"><i class="bi bi-info-circle me-1"></i>' + (r.disclaimer || 'AI-generated insights are for reference only.') + '</div>';
+    } else {
+      content.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>' + (r.error || 'Unable to generate insights') + '</div>';
+    }
+  }).catch(e => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-magic me-1"></i>Generate';
+    content.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Error: ' + escapeHtml(e.message) + '</div>';
+  });
+}
+
+function formatAIInsights(text) {
+  // Simple markdown-like formatting
+  let html = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^### (.*?)$/gm, '<h6 class="mt-3">$1</h6>')
+    .replace(/^## (.*?)$/gm, '<h5 class="mt-3">$1</h5>')
+    .replace(/^# (.*?)$/gm, '<h4 class="mt-3">$1</h4>')
+    .replace(/^- (.*?)$/gm, '<li>$1</li>')
+    .replace(/^\d+\. (.*?)$/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+
+  // Wrap lists
+  html = html.replace(/(<li>.*?<\/li>)+/gs, match => '<ul class="mb-2">' + match + '</ul>');
+
+  return '<div class="ai-insights"><p>' + html + '</p></div>';
+}
+
+function refreshAnalytics() {
+  loadAnalytics();
+}
+
+function exportAnalytics() {
+  if (!analyticsData) {
+    showToast('No data to export', 'warning');
+    return;
+  }
+
+  // Create CSV
+  let csv = 'Analytics Report\n';
+  csv += 'Generated: ' + new Date().toISOString() + '\n\n';
+
+  // KPIs
+  csv += 'Key Metrics\n';
+  csv += 'Total Findings,' + (analyticsData.workPapers?.total || 0) + '\n';
+  csv += 'Total Action Plans,' + (analyticsData.actionPlans?.total || 0) + '\n';
+  csv += 'Implementation Rate,' + (analyticsData.actionPlans?.implementationRate || 0) + '%\n';
+  csv += 'Overdue Items,' + (analyticsData.actionPlans?.overdue || 0) + '\n\n';
+
+  // By Status
+  csv += 'Findings by Status\n';
+  Object.entries(analyticsData.workPapers?.byStatus || {}).forEach(([k, v]) => {
+    csv += k + ',' + v + '\n';
+  });
+  csv += '\n';
+
+  // By Risk
+  csv += 'Findings by Risk\n';
+  Object.entries(analyticsData.workPapers?.byRisk || {}).forEach(([k, v]) => {
+    csv += k + ',' + v + '\n';
+  });
+
+  // Download
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'audit_analytics_' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showToast('Analytics exported', 'success');
+}
+
+// Initialize on page load
+if (typeof loadAnalytics === 'function') {
+  initAnalyticsPage();
+}
+</script>
