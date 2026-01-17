@@ -1,0 +1,236 @@
+<!-- Work Paper View Page -->
+<div class="work-paper-view">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <button class="btn btn-outline-secondary btn-sm me-2" onclick="navigateTo('work-papers')"><i class="bi bi-arrow-left me-1"></i>Back</button>
+      <span class="badge bg-secondary" id="wpViewStatus">-</span>
+    </div>
+    <div class="btn-group" id="wpViewActions"></div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-8">
+      <!-- Main Info -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+          <span><i class="bi bi-file-earmark-text me-2"></i><span id="wpViewId">-</span></span>
+          <span class="badge" id="wpViewRisk">-</span>
+        </div>
+        <div class="card-body">
+          <h4 id="wpViewTitle">-</h4>
+          <p class="text-muted" id="wpViewDesc">-</p>
+          <hr>
+          <div class="row g-3">
+            <div class="col-md-6"><strong>Affiliate:</strong> <span id="wpViewAffiliate">-</span></div>
+            <div class="col-md-6"><strong>Audit Area:</strong> <span id="wpViewArea">-</span></div>
+            <div class="col-md-6"><strong>Period:</strong> <span id="wpViewPeriod">-</span></div>
+            <div class="col-md-6"><strong>Prepared By:</strong> <span id="wpViewPreparer">-</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recommendation -->
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-lightbulb me-2"></i>Recommendation</div>
+        <div class="card-body" id="wpViewRecommendation">-</div>
+      </div>
+
+      <!-- Action Plans -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+          <span><i class="bi bi-list-check me-2"></i>Action Plans</span>
+          <button class="btn btn-sm btn-primary" onclick="showAddActionPlan()" id="btnAddAP"><i class="bi bi-plus me-1"></i>Add</button>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead><tr><th>#</th><th>Description</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead>
+            <tbody id="wpViewActionPlans"><tr><td colspan="5" class="text-center py-3 text-muted">No action plans</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <!-- Workflow -->
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>Workflow</div>
+        <div class="card-body">
+          <div class="timeline" id="wpViewTimeline"></div>
+        </div>
+      </div>
+
+      <!-- Files -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+          <span><i class="bi bi-paperclip me-2"></i>Files</span>
+          <button class="btn btn-sm btn-outline-primary" onclick="showUploadFile()"><i class="bi bi-upload"></i></button>
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush" id="wpViewFiles"><li class="list-group-item text-muted text-center">No files</li></ul>
+        </div>
+      </div>
+
+      <!-- Review Comments -->
+      <div class="card mb-4" id="reviewCommentsCard" style="display:none;">
+        <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Review Comments</div>
+        <div class="card-body" id="wpViewReviewComments">-</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentWorkPaper = null;
+
+function loadWorkPaperView(params) {
+  if (!params || !params.id) { navigateTo('work-papers'); return; }
+  showLoading('Loading...');
+  apiCall('getWorkPaper', { workPaperId: params.id, includeRelated: true }).then(r => {
+    hideLoading();
+    if (r.workPaper) { currentWorkPaper = r.workPaper; renderWorkPaperView(); }
+    else { showToast('Not found', 'danger'); navigateTo('work-papers'); }
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function renderWorkPaperView() {
+  const wp = currentWorkPaper;
+  document.getElementById('wpViewId').textContent = wp.work_paper_id;
+  document.getElementById('wpViewTitle').textContent = wp.observation_title || 'Untitled';
+  document.getElementById('wpViewDesc').textContent = wp.observation_description || '-';
+  document.getElementById('wpViewRecommendation').textContent = wp.recommendation || '-';
+  document.getElementById('wpViewAffiliate').textContent = wp.affiliate_code || '-';
+  document.getElementById('wpViewArea').textContent = wp.audit_area_id || '-';
+  document.getElementById('wpViewPeriod').textContent = (wp.audit_period_from ? formatDate(wp.audit_period_from) : '-') + ' to ' + (wp.audit_period_to ? formatDate(wp.audit_period_to) : '-');
+  document.getElementById('wpViewPreparer').textContent = wp.prepared_by_name || '-';
+  
+  const statusEl = document.getElementById('wpViewStatus');
+  statusEl.textContent = wp.status || '-';
+  statusEl.className = 'badge badge-status ' + getStatusClass(wp.status);
+  
+  const riskEl = document.getElementById('wpViewRisk');
+  riskEl.textContent = wp.risk_rating || 'Not Rated';
+  riskEl.className = 'badge ' + getRiskClass(wp.risk_rating);
+  
+  renderWPActions(wp);
+  renderWPTimeline(wp);
+  renderWPActionPlans(wp.actionPlans || []);
+  renderWPFiles(wp.files || []);
+  
+  if (wp.review_comments) {
+    document.getElementById('reviewCommentsCard').style.display = 'block';
+    document.getElementById('wpViewReviewComments').textContent = wp.review_comments;
+  }
+}
+
+function renderWPActions(wp) {
+  const actions = document.getElementById('wpViewActions');
+  let html = '';
+  const user = window.currentUser;
+  const isAuditor = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF'].includes(user?.role_code);
+  const isReviewer = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR'].includes(user?.role_code);
+  
+  if (wp.status === 'Draft' || wp.status === 'Revision Required') {
+    if (isAuditor) html += `<button class="btn btn-outline-primary" onclick="editWorkPaper('${wp.work_paper_id}')"><i class="bi bi-pencil me-1"></i>Edit</button>`;
+    html += `<button class="btn btn-success" onclick="submitWP()"><i class="bi bi-send me-1"></i>Submit</button>`;
+  }
+  if ((wp.status === 'Submitted' || wp.status === 'Under Review') && isReviewer) {
+    html += `<button class="btn btn-primary" onclick="showReviewModal('approve')"><i class="bi bi-check-circle me-1"></i>Approve</button>`;
+    html += `<button class="btn btn-warning" onclick="showReviewModal('return')"><i class="bi bi-arrow-return-left me-1"></i>Return</button>`;
+  }
+  if (wp.status === 'Approved' && isReviewer) {
+    html += `<button class="btn btn-primary" onclick="sendToAuditee()"><i class="bi bi-send me-1"></i>Send to Auditee</button>`;
+  }
+  actions.innerHTML = html;
+}
+
+function renderWPTimeline(wp) {
+  const timeline = document.getElementById('wpViewTimeline');
+  let html = '';
+  const events = [
+    { label: 'Created', date: wp.created_at, user: wp.prepared_by_name },
+    wp.submitted_date ? { label: 'Submitted', date: wp.submitted_date } : null,
+    wp.review_date ? { label: 'Reviewed', date: wp.review_date, user: wp.reviewed_by_name } : null,
+    wp.approved_date ? { label: 'Approved', date: wp.approved_date, user: wp.approved_by_name } : null,
+    wp.sent_to_auditee_date ? { label: 'Sent to Auditee', date: wp.sent_to_auditee_date } : null
+  ].filter(Boolean);
+  
+  events.forEach(e => {
+    html += `<div class="timeline-item"><div class="fw-medium">${e.label}</div><div class="timeline-date">${formatDate(e.date)}${e.user ? ' by ' + e.user : ''}</div></div>`;
+  });
+  timeline.innerHTML = html || '<p class="text-muted">No history</p>';
+}
+
+function renderWPActionPlans(plans) {
+  const tbody = document.getElementById('wpViewActionPlans');
+  if (!plans.length) { tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No action plans</td></tr>'; return; }
+  tbody.innerHTML = plans.map(ap => `
+    <tr onclick="navigateTo('action-plan-view', {id:'${ap.action_plan_id}'})" style="cursor:pointer;">
+      <td>${ap.action_number || '-'}</td>
+      <td>${escapeHtml((ap.action_description || '').substring(0, 50))}...</td>
+      <td>${escapeHtml(ap.owner_names || '-')}</td>
+      <td>${ap.due_date ? formatDate(ap.due_date) : '-'}</td>
+      <td><span class="badge badge-status ${getStatusClass(ap.status)}">${ap.status || '-'}</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderWPFiles(files) {
+  const list = document.getElementById('wpViewFiles');
+  if (!files.length) { list.innerHTML = '<li class="list-group-item text-muted text-center">No files</li>'; return; }
+  list.innerHTML = files.map(f => `
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <a href="${f.drive_url}" target="_blank"><i class="bi bi-file-earmark me-2"></i>${escapeHtml(f.file_name)}</a>
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteFile('${f.file_id}')"><i class="bi bi-trash"></i></button>
+    </li>
+  `).join('');
+}
+
+function submitWP() {
+  if (!confirm('Submit this work paper for review?')) return;
+  showLoading('Submitting...');
+  apiCall('submitWorkPaper', { workPaperId: currentWorkPaper.work_paper_id }).then(r => {
+    hideLoading();
+    if (r.success) { showToast('Submitted', 'success'); loadWorkPaperView({ id: currentWorkPaper.work_paper_id }); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function showReviewModal(action) {
+  const modal = new bootstrap.Modal(document.getElementById('reviewModal'));
+  document.getElementById('reviewAction').value = action;
+  document.getElementById('reviewModalLabel').textContent = action === 'approve' ? 'Approve Work Paper' : 'Return for Revision';
+  document.getElementById('reviewComments').value = '';
+  modal.show();
+}
+
+function submitReview() {
+  const action = document.getElementById('reviewAction').value;
+  const comments = document.getElementById('reviewComments').value;
+  showLoading('Processing...');
+  apiCall('reviewWorkPaper', { workPaperId: currentWorkPaper.work_paper_id, action, comments }).then(r => {
+    hideLoading();
+    bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
+    if (r.success) { showToast(action === 'approve' ? 'Approved' : 'Returned', 'success'); loadWorkPaperView({ id: currentWorkPaper.work_paper_id }); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function sendToAuditee() {
+  if (!confirm('Send this work paper to the auditee?')) return;
+  showLoading('Sending...');
+  apiCall('sendToAuditee', { workPaperId: currentWorkPaper.work_paper_id }).then(r => {
+    hideLoading();
+    if (r.success) { showToast('Sent to auditee', 'success'); loadWorkPaperView({ id: currentWorkPaper.work_paper_id }); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function showAddActionPlan() {
+  document.getElementById('apFormWorkPaperId').value = currentWorkPaper.work_paper_id;
+  document.getElementById('apFormId').value = '';
+  document.getElementById('actionPlanFormModal').querySelector('form').reset();
+  new bootstrap.Modal(document.getElementById('actionPlanFormModal')).show();
+}
+
+function editWorkPaper(id) { navigateTo('work-paper-form', { id }); }
+</script>
