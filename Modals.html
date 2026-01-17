@@ -1,0 +1,157 @@
+<!-- Review Modal -->
+<div class="modal fade" id="reviewModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="reviewModalLabel">Review Work Paper</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="reviewAction">
+        <div class="mb-3">
+          <label class="form-label">Comments</label>
+          <textarea class="form-control" id="reviewComments" rows="4" placeholder="Enter review comments..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitReview()">Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Action Plan Form Modal -->
+<div class="modal fade" id="actionPlanFormModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Action Plan</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="actionPlanForm">
+          <input type="hidden" id="apFormId">
+          <input type="hidden" id="apFormWorkPaperId">
+          <div class="mb-3">
+            <label class="form-label">Action Description <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="apFormDesc" rows="3" required></textarea>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Owner(s)</label>
+              <select class="form-select" id="apFormOwners" multiple size="4"></select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Due Date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="apFormDueDate" required>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveActionPlan()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- File Upload Modal -->
+<div class="modal fade" id="uploadFileModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload File</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="uploadEntityType">
+        <input type="hidden" id="uploadEntityId">
+        <div class="mb-3">
+          <label class="form-label">Select File</label>
+          <input type="file" class="form-control" id="uploadFileInput">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-control" id="uploadFileDesc">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="uploadFile()">Upload</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- User Form Modal -->
+<div class="modal fade" id="userFormModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="userModalLabel">Add User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="userForm">
+          <input type="hidden" id="userFormId">
+          <div class="mb-3">
+            <label class="form-label">Full Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="userFormName" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email <span class="text-danger">*</span></label>
+            <input type="email" class="form-control" id="userFormEmail" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Role <span class="text-danger">*</span></label>
+            <select class="form-select" id="userFormRole" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Affiliate</label>
+            <select class="form-select" id="userFormAffiliate"></select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveUser()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Change Password</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Current Password</label>
+          <input type="password" class="form-control" id="currentPassword" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">New Password</label>
+          <input type="password" class="form-control" id="newPassword" required>
+          <small class="text-muted">Min 8 chars, 1 uppercase, 1 lowercase, 1 number</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Confirm New Password</label>
+          <input type="password" class="form-control" id="confirmPassword" required>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitChangePassword()">Change Password</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sidebar Overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
