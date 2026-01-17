@@ -3,493 +3,499 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hass Audit - Login</title>
-  <base target="_top">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Login - Hass Petroleum Audit System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     :root {
-      --hass-navy: #0F1C3F;
-      --hass-navy-light: #1A2D5A;
-      --hass-orange: #E85D04;
-      --hass-orange-light: #F77F00;
-      --white: #FFFFFF;
-      --gray-100: #F3F4F6;
-      --gray-300: #D1D5DB;
-      --gray-400: #9CA3AF;
-      --gray-600: #4B5563;
-      --gray-700: #374151;
-      --risk-extreme: #DC2626;
-      --risk-low: #16A34A;
+      --primary-color: #1a365d;
+      --accent-color: #c9a227;
+      --bg-gradient: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
     }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, var(--hass-navy) 0%, var(--hass-navy-light) 100%);
+      background: var(--bg-gradient);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    
+    .login-container {
+      width: 100%;
+      max-width: 420px;
       padding: 20px;
     }
-
-    .login-container { width: 100%; max-width: 400px; }
-
+    
     .login-card {
-      background: var(--white);
+      background: #ffffff;
       border-radius: 16px;
-      padding: 40px 32px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
     }
-
-    .brand { text-align: center; margin-bottom: 32px; }
-
-    .brand-logo {
-      width: 64px;
-      height: 64px;
-      background: linear-gradient(135deg, var(--hass-orange) 0%, var(--hass-orange-light) 100%);
-      border-radius: 16px;
+    
+    .login-header {
+      background: var(--primary-color);
+      padding: 30px;
+      text-align: center;
+      position: relative;
+    }
+    
+    .login-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--accent-color);
+    }
+    
+    .login-logo {
+      width: 80px;
+      height: 80px;
+      background: #ffffff;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 16px;
-      box-shadow: 0 8px 20px rgba(232, 93, 4, 0.3);
+      margin: 0 auto 15px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
-
-    .brand-logo svg { width: 32px; height: 32px; color: var(--white); }
-
-    .brand-name { font-size: 1.5rem; font-weight: 700; color: var(--hass-navy); margin-bottom: 4px; }
-    .brand-tagline { font-size: 0.85rem; color: var(--gray-600); }
-
-    .form-group { margin-bottom: 16px; }
-
-    .form-label {
-      display: block;
-      font-size: 0.8rem;
+    
+    .login-logo i {
+      font-size: 40px;
+      color: var(--primary-color);
+    }
+    
+    .login-header h1 {
+      color: #ffffff;
+      font-size: 1.5rem;
       font-weight: 600;
-      color: var(--gray-700);
-      margin-bottom: 6px;
+      margin-bottom: 5px;
     }
-
-    .form-input {
-      width: 100%;
-      padding: 12px 14px;
-      border: 1px solid var(--gray-300);
+    
+    .login-header p {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.9rem;
+    }
+    
+    .login-body {
+      padding: 30px;
+    }
+    
+    .form-floating {
+      margin-bottom: 20px;
+    }
+    
+    .form-floating > .form-control {
+      border: 2px solid #e9ecef;
       border-radius: 10px;
-      font-size: 0.95rem;
-      font-family: inherit;
-      transition: all 0.15s ease;
+      height: 58px;
+      padding: 1rem 1rem 0.5rem 2.8rem;
+      font-size: 1rem;
+      transition: all 0.3s ease;
     }
-
-    .form-input:focus {
-      outline: none;
-      border-color: var(--hass-orange);
-      box-shadow: 0 0 0 3px rgba(232, 93, 4, 0.15);
+    
+    .form-floating > .form-control:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1);
     }
-
-    .form-input::placeholder { color: var(--gray-400); }
-
-    .password-wrapper { position: relative; }
-
+    
+    .form-floating > label {
+      padding-left: 2.8rem;
+      color: #6c757d;
+    }
+    
+    .form-floating .input-icon {
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #6c757d;
+      font-size: 1.2rem;
+      z-index: 5;
+      transition: color 0.3s ease;
+    }
+    
+    .form-floating:focus-within .input-icon {
+      color: var(--primary-color);
+    }
+    
     .password-toggle {
       position: absolute;
-      right: 12px;
+      right: 15px;
       top: 50%;
       transform: translateY(-50%);
       background: none;
       border: none;
-      color: var(--gray-400);
+      color: #6c757d;
       cursor: pointer;
-      padding: 4px;
+      z-index: 5;
+      padding: 5px;
     }
-
-    .password-toggle:hover { color: var(--gray-600); }
-    .password-toggle svg { width: 18px; height: 18px; }
-
-    .login-btn {
+    
+    .password-toggle:hover {
+      color: var(--primary-color);
+    }
+    
+    .btn-login {
       width: 100%;
-      padding: 14px 20px;
-      background: linear-gradient(135deg, var(--hass-orange) 0%, var(--hass-orange-light) 100%);
-      color: var(--white);
+      padding: 14px;
+      font-size: 1.1rem;
+      font-weight: 600;
       border: none;
       border-radius: 10px;
-      font-family: inherit;
-      font-size: 1rem;
-      font-weight: 600;
+      background: var(--primary-color);
+      color: #ffffff;
       cursor: pointer;
+      transition: all 0.3s ease;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(232, 93, 4, 0.3);
-      margin-top: 24px;
     }
-
-    .login-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(232, 93, 4, 0.4); }
-    .login-btn:active { transform: translateY(0); }
-    .login-btn:disabled { opacity: 0.7; pointer-events: none; }
-    .login-btn svg { width: 18px; height: 18px; }
-
-    .spinner {
-      width: 18px;
-      height: 18px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: var(--white);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    
+    .btn-login:hover:not(:disabled) {
+      background: #2d4a7c;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(26, 54, 93, 0.3);
     }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .error-message {
-      margin-top: 16px;
-      padding: 12px 14px;
-      background: #FEF2F2;
-      border: 1px solid #FEE2E2;
-      border-radius: 8px;
-      color: var(--risk-extreme);
-      font-size: 0.85rem;
-      text-align: center;
-      display: none;
+    
+    .btn-login:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
     }
-
-    .error-message.show { display: block; }
-
-    .success-message {
-      margin-top: 16px;
-      padding: 12px 14px;
-      background: #F0FDF4;
-      border: 1px solid #BBF7D0;
-      border-radius: 8px;
-      color: var(--risk-low);
-      font-size: 0.85rem;
-      text-align: center;
-      display: none;
+    
+    .btn-login .spinner-border {
+      width: 20px;
+      height: 20px;
+      border-width: 2px;
     }
-
-    .success-message.show { display: block; }
-
-    .footer-text {
-      text-align: center;
-      margin-top: 20px;
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.5);
-    }
-
-    /* Change Password Modal */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 28, 63, 0.7);
+    
+    .alert {
+      border-radius: 10px;
+      padding: 12px 15px;
+      margin-bottom: 20px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.2s;
+      gap: 10px;
+      font-size: 0.9rem;
     }
-
-    .modal-overlay.open { opacity: 1; visibility: visible; }
-
-    .modal {
-      background: var(--white);
-      border-radius: 16px;
-      padding: 32px;
-      width: 100%;
-      max-width: 400px;
-      transform: scale(0.95);
-      transition: transform 0.2s;
+    
+    .alert-danger {
+      background: #fff5f5;
+      border: 1px solid #feb2b2;
+      color: #c53030;
     }
-
-    .modal-overlay.open .modal { transform: scale(1); }
-
-    .modal-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--hass-navy);
-      margin-bottom: 8px;
+    
+    .alert-success {
+      background: #f0fff4;
+      border: 1px solid #9ae6b4;
+      color: #276749;
+    }
+    
+    .login-footer {
       text-align: center;
+      padding: 20px 30px 30px;
+      background: #f8f9fa;
+      border-top: 1px solid #e9ecef;
     }
-
-    .modal-subtitle {
+    
+    .login-footer p {
+      color: #6c757d;
       font-size: 0.85rem;
-      color: var(--gray-600);
-      margin-bottom: 24px;
+      margin: 0;
+    }
+    
+    .login-footer a {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .login-footer a:hover {
+      text-decoration: underline;
+    }
+    
+    /* Loading overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    
+    .loading-overlay.show {
+      display: flex;
+    }
+    
+    .loading-spinner {
       text-align: center;
     }
-
-    .password-requirements {
-      background: var(--gray-100);
-      border-radius: 8px;
-      padding: 12px 14px;
-      margin-bottom: 16px;
+    
+    .loading-spinner .spinner-border {
+      width: 50px;
+      height: 50px;
+      color: var(--primary-color);
     }
-
-    .password-requirements-title {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--gray-700);
-      margin-bottom: 6px;
+    
+    .loading-spinner p {
+      margin-top: 15px;
+      color: var(--primary-color);
+      font-weight: 500;
     }
-
-    .password-requirements ul {
-      font-size: 0.75rem;
-      color: var(--gray-600);
-      margin: 0;
-      padding-left: 18px;
+    
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-
-    .password-requirements li { margin-bottom: 2px; }
+    
+    .login-card {
+      animation: fadeIn 0.5s ease;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    
+    .shake {
+      animation: shake 0.4s ease;
+    }
   </style>
 </head>
 <body>
-  <div class="login-container">
-    <div class="login-card">
-      <div class="brand">
-        <div class="brand-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-            <path d="m9 12 2 2 4-4"></path>
-          </svg>
-        </div>
-        <div class="brand-name">Hass Audit</div>
-        <div class="brand-tagline">Internal Audit Management System</div>
-      </div>
-
-      <form id="loginForm" onsubmit="handleLogin(event)">
-        <div class="form-group">
-          <label class="form-label">Email Address</label>
-          <input type="email" class="form-input" id="email" placeholder="your.email@example.com" required autocomplete="email">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <div class="password-wrapper">
-            <input type="password" class="form-input" id="password" placeholder="Enter your password" required autocomplete="current-password">
-            <button type="button" class="password-toggle" onclick="togglePassword('password')">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="eyeIcon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-            </button>
-          </div>
-        </div>
-
-        <button type="submit" class="login-btn" id="loginBtn">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
-          Sign In
-        </button>
-      </form>
-
-      <div class="error-message" id="errorMessage"></div>
-      <div class="success-message" id="successMessage"></div>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner">
+      <div class="spinner-border" role="status"></div>
+      <p>Signing in...</p>
     </div>
-
-    <div class="footer-text">Hass Petroleum Group &copy; 2025</div>
   </div>
 
-  <!-- Change Password Modal -->
-  <div class="modal-overlay" id="changePasswordModal">
-    <div class="modal">
-      <div class="modal-title">Change Your Password</div>
-      <div class="modal-subtitle">You must change your password before continuing.</div>
-
-      <div class="password-requirements">
-        <div class="password-requirements-title">Password Requirements:</div>
-        <ul>
-          <li>At least 8 characters</li>
-          <li>At least one uppercase letter (A-Z)</li>
-          <li>At least one lowercase letter (a-z)</li>
-          <li>At least one number (0-9)</li>
-        </ul>
+  <div class="login-container">
+    <div class="login-card" id="loginCard">
+      <div class="login-header">
+        <div class="login-logo">
+          <i class="bi bi-shield-check"></i>
+        </div>
+        <h1>Hass Petroleum</h1>
+        <p>Internal Audit Management System</p>
       </div>
-
-      <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
-        <div class="form-group">
-          <label class="form-label">New Password</label>
-          <div class="password-wrapper">
-            <input type="password" class="form-input" id="newPassword" placeholder="Enter new password" required>
-            <button type="button" class="password-toggle" onclick="togglePassword('newPassword')">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+      
+      <div class="login-body">
+        <!-- Alert -->
+        <div class="alert alert-danger" id="errorAlert" style="display: none;">
+          <i class="bi bi-exclamation-circle-fill"></i>
+          <span id="errorMessage"></span>
+        </div>
+        
+        <div class="alert alert-success" id="successAlert" style="display: none;">
+          <i class="bi bi-check-circle-fill"></i>
+          <span id="successMessage"></span>
+        </div>
+        
+        <!-- Login Form -->
+        <form id="loginForm" onsubmit="handleLogin(event)">
+          <div class="form-floating position-relative">
+            <i class="bi bi-envelope input-icon"></i>
+            <input type="email" class="form-control" id="email" placeholder="Email" required autocomplete="email">
+            <label for="email">Email Address</label>
+          </div>
+          
+          <div class="form-floating position-relative">
+            <i class="bi bi-lock input-icon"></i>
+            <input type="password" class="form-control" id="password" placeholder="Password" required autocomplete="current-password">
+            <label for="password">Password</label>
+            <button type="button" class="password-toggle" onclick="togglePassword()">
+              <i class="bi bi-eye" id="passwordToggleIcon"></i>
             </button>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Confirm New Password</label>
-          <div class="password-wrapper">
-            <input type="password" class="form-input" id="confirmPassword" placeholder="Confirm new password" required>
-            <button type="button" class="password-toggle" onclick="togglePassword('confirmPassword')">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-            </button>
-          </div>
-        </div>
-
-        <button type="submit" class="login-btn" id="changePasswordBtn">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-          Set New Password
-        </button>
-      </form>
-
-      <div class="error-message" id="changePasswordError"></div>
+          
+          <button type="submit" class="btn-login" id="loginBtn">
+            <span id="loginBtnText">Sign In</span>
+            <span id="loginBtnSpinner" style="display: none;">
+              <span class="spinner-border spinner-border-sm" role="status"></span>
+              Signing in...
+            </span>
+          </button>
+        </form>
+      </div>
+      
+      <div class="login-footer">
+        <p>Having trouble? Contact <a href="mailto:audit@hasspetroleum.com">audit@hasspetroleum.com</a></p>
+      </div>
     </div>
   </div>
 
   <script>
-    const SESSION_KEY = 'hass_audit_session';
-    let sessionToken = null;
-    let currentUser = null;
-
-    // Check for existing session on load
-    document.addEventListener('DOMContentLoaded', function() {
-      const savedToken = localStorage.getItem(SESSION_KEY);
-      if (savedToken) {
-        validateExistingSession(savedToken);
+    // Toggle password visibility
+    function togglePassword() {
+      const passwordInput = document.getElementById('password');
+      const toggleIcon = document.getElementById('passwordToggleIcon');
+      
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.classList.remove('bi-eye');
+        toggleIcon.classList.add('bi-eye-slash');
+      } else {
+        passwordInput.type = 'password';
+        toggleIcon.classList.remove('bi-eye-slash');
+        toggleIcon.classList.add('bi-eye');
       }
-    });
-
-    function validateExistingSession(token) {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success) {
-            sessionToken = token;
-            currentUser = result.user;
-            if (result.mustChangePassword) {
-              showChangePasswordModal();
-            } else {
-              redirectToPortal();
-            }
-          }
-        })
-        .withFailureHandler(function() {
-          localStorage.removeItem(SESSION_KEY);
-        })
-        .getSessionUser(token);
     }
-
+    
+    // Show error
+    function showError(message) {
+      const errorAlert = document.getElementById('errorAlert');
+      const errorMessage = document.getElementById('errorMessage');
+      const loginCard = document.getElementById('loginCard');
+      
+      errorMessage.textContent = message;
+      errorAlert.style.display = 'flex';
+      
+      // Hide success if showing
+      document.getElementById('successAlert').style.display = 'none';
+      
+      // Shake animation
+      loginCard.classList.add('shake');
+      setTimeout(() => loginCard.classList.remove('shake'), 400);
+    }
+    
+    // Show success
+    function showSuccess(message) {
+      const successAlert = document.getElementById('successAlert');
+      const successMessage = document.getElementById('successMessage');
+      
+      successMessage.textContent = message;
+      successAlert.style.display = 'flex';
+      
+      // Hide error if showing
+      document.getElementById('errorAlert').style.display = 'none';
+    }
+    
+    // Hide alerts
+    function hideAlerts() {
+      document.getElementById('errorAlert').style.display = 'none';
+      document.getElementById('successAlert').style.display = 'none';
+    }
+    
+    // Set loading state
+    function setLoading(loading) {
+      const loginBtn = document.getElementById('loginBtn');
+      const loginBtnText = document.getElementById('loginBtnText');
+      const loginBtnSpinner = document.getElementById('loginBtnSpinner');
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      
+      loginBtn.disabled = loading;
+      loginBtnText.style.display = loading ? 'none' : 'inline';
+      loginBtnSpinner.style.display = loading ? 'inline' : 'none';
+      
+      if (loading) {
+        loadingOverlay.classList.add('show');
+      } else {
+        loadingOverlay.classList.remove('show');
+      }
+    }
+    
+    // Handle login
     function handleLogin(event) {
       event.preventDefault();
       
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
-      const btn = document.getElementById('loginBtn');
       
-      hideMessages();
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner"></div> Signing in...';
-
-      google.script.run
-        .withSuccessHandler(function(result) {
-          btn.disabled = false;
-          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg> Sign In';
-          
-          if (result.success) {
-            sessionToken = result.sessionToken;
-            currentUser = result.user;
-            localStorage.setItem(SESSION_KEY, sessionToken);
-            
-            if (result.mustChangePassword) {
-              showChangePasswordModal();
-            } else {
-              showSuccess('Login successful! Redirecting...');
-              setTimeout(redirectToPortal, 1000);
-            }
-          } else {
-            showError(result.error);
-          }
-        })
-        .withFailureHandler(function(error) {
-          btn.disabled = false;
-          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg> Sign In';
-          showError('Login failed. Please try again.');
-        })
-        .login(email, password);
-    }
-
-    function showChangePasswordModal() {
-      document.getElementById('changePasswordModal').classList.add('open');
-    }
-
-    function handleChangePassword(event) {
-      event.preventDefault();
-      
-      const newPassword = document.getElementById('newPassword').value;
-      const confirmPassword = document.getElementById('confirmPassword').value;
-      const btn = document.getElementById('changePasswordBtn');
-      const errorEl = document.getElementById('changePasswordError');
-      
-      errorEl.classList.remove('show');
-      
-      if (newPassword !== confirmPassword) {
-        errorEl.textContent = 'Passwords do not match';
-        errorEl.classList.add('show');
+      if (!email || !password) {
+        showError('Please enter both email and password.');
         return;
       }
       
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner"></div> Updating...';
-
+      hideAlerts();
+      setLoading(true);
+      
+      // Call server-side login
       google.script.run
         .withSuccessHandler(function(result) {
-          btn.disabled = false;
-          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Set New Password';
+          setLoading(false);
           
           if (result.success) {
-            document.getElementById('changePasswordModal').classList.remove('open');
-            showSuccess('Password changed! Redirecting...');
-            setTimeout(redirectToPortal, 1000);
+            showSuccess('Login successful! Redirecting...');
+            
+            // Store session info
+            if (result.sessionToken) {
+              sessionStorage.setItem('sessionToken', result.sessionToken);
+            }
+            if (result.user) {
+              sessionStorage.setItem('user', JSON.stringify(result.user));
+            }
+            
+            // Check if password change required
+            if (result.user && result.user.must_change_password) {
+              // Redirect to password change
+              setTimeout(() => {
+                window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=main';
+              }, 1000);
+            } else {
+              // Redirect to main app
+              setTimeout(() => {
+                window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=main';
+              }, 1000);
+            }
           } else {
-            errorEl.textContent = result.error;
-            errorEl.classList.add('show');
+            showError(result.error || 'Login failed. Please try again.');
           }
         })
         .withFailureHandler(function(error) {
-          btn.disabled = false;
-          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Set New Password';
-          errorEl.textContent = 'Failed to change password. Please try again.';
-          errorEl.classList.add('show');
+          setLoading(false);
+          showError('Connection error. Please try again.');
+          console.error('Login error:', error);
         })
-        .changePassword(sessionToken, '', newPassword);
+        .apiCall('login', { email: email, password: password });
     }
-
-    function redirectToPortal() {
-      // Load the AuditorPortal HTML and replace current page content
-      showSuccess('Loading dashboard...');
-      
+    
+    // Check if already logged in
+    function checkExistingSession() {
       google.script.run
-        .withSuccessHandler(function(html) {
-          document.open();
-          document.write(html);
-          document.close();
+        .withSuccessHandler(function(result) {
+          if (result && result.success && result.user) {
+            // Already logged in, redirect
+            showSuccess('Already logged in. Redirecting...');
+            setTimeout(() => {
+              window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=main';
+            }, 500);
+          }
         })
         .withFailureHandler(function(error) {
-          showError('Failed to load dashboard. Please refresh the page.');
+          // Not logged in, stay on login page
+          console.log('No existing session');
         })
-        .getPortalHtml();
+        .apiCall('getInitData', {});
     }
-
-    function togglePassword(inputId) {
-      const input = document.getElementById(inputId);
-      input.type = input.type === 'password' ? 'text' : 'password';
-    }
-
-    function showError(message) {
-      const el = document.getElementById('errorMessage');
-      el.textContent = message;
-      el.classList.add('show');
-    }
-
-    function showSuccess(message) {
-      const el = document.getElementById('successMessage');
-      el.textContent = message;
-      el.classList.add('show');
-    }
-
-    function hideMessages() {
-      document.getElementById('errorMessage').classList.remove('show');
-      document.getElementById('successMessage').classList.remove('show');
-    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      // Focus on email field
+      document.getElementById('email').focus();
+      
+      // Check for existing session
+      checkExistingSession();
+    });
   </script>
 </body>
 </html>
