@@ -2,7 +2,7 @@
 <div class="work-paper-form">
   <form id="workPaperForm" onsubmit="saveWorkPaper(event)">
     <input type="hidden" id="wpFormId" value="">
-    
+
     <!-- Basic Info Card -->
     <div class="card mb-4">
       <div class="card-header"><i class="bi bi-info-circle me-2"></i>Basic Information</div>
@@ -100,6 +100,63 @@
       </div>
     </div>
 
+    <!-- Evidence Attachment Card -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-paperclip me-2"></i>Evidence Attachment</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Work Paper Ref</label>
+            <input type="text" class="form-control" id="wpWorkPaperRef" placeholder="Enter work paper reference">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Evidence Document</label>
+            <div class="input-group">
+              <input type="file" class="form-control" id="wpEvidenceFile" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg">
+              <button type="button" class="btn btn-outline-secondary" onclick="uploadEvidenceFile()">
+                <i class="bi bi-upload"></i> Upload
+              </button>
+            </div>
+            <small class="text-muted">Supported formats: PDF, Word, Excel, Images (Max 10MB)</small>
+          </div>
+          <div class="col-12">
+            <div id="wpEvidenceFilesList" class="uploaded-files-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Management Response Card -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Management Response</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Management Response</label>
+            <textarea class="form-control" id="wpManagementResponse" rows="4" placeholder="Enter management response to the audit finding..."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Plans Card (Repeatable Section) -->
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-task me-2"></i>Action Plans</span>
+        <button type="button" class="btn btn-sm btn-primary" onclick="addActionPlanEntry()">
+          <i class="bi bi-plus-circle me-1"></i>Add Action Plan
+        </button>
+      </div>
+      <div class="card-body">
+        <div id="actionPlansContainer">
+          <!-- Action plan entries will be added here dynamically -->
+        </div>
+        <div id="noActionPlansMessage" class="text-center text-muted py-4">
+          <i class="bi bi-info-circle me-2"></i>No action plans added. Click "Add Action Plan" to create one.
+        </div>
+      </div>
+    </div>
+
     <!-- Responsible Parties -->
     <div class="card mb-4">
       <div class="card-header"><i class="bi bi-people me-2"></i>Responsible Parties</div>
@@ -107,12 +164,23 @@
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">Responsible (Auditees)</label>
-            <select class="form-select" id="wpResponsible" multiple size="4"></select>
-            <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
+            <div class="autocomplete-container">
+              <input type="text" class="form-control" id="wpResponsibleInput" placeholder="Start typing to search users..." autocomplete="off">
+              <div id="wpResponsibleSuggestions" class="autocomplete-suggestions"></div>
+            </div>
+            <div id="wpResponsibleTags" class="selected-tags mt-2"></div>
+            <input type="hidden" id="wpResponsibleIds">
+            <small class="text-muted">Type to search and select auditees</small>
           </div>
           <div class="col-md-6">
             <label class="form-label">CC Recipients (Emails)</label>
-            <textarea class="form-control" id="wpCCRecipients" rows="3" placeholder="Enter emails, one per line"></textarea>
+            <div class="autocomplete-container">
+              <input type="text" class="form-control" id="wpCCRecipientsInput" placeholder="Start typing to search users or enter email..." autocomplete="off">
+              <div id="wpCCRecipientsSuggestions" class="autocomplete-suggestions"></div>
+            </div>
+            <div id="wpCCRecipientsTags" class="selected-tags mt-2"></div>
+            <input type="hidden" id="wpCCRecipients">
+            <small class="text-muted">Type to search users or enter email addresses</small>
           </div>
         </div>
       </div>
@@ -127,23 +195,214 @@
   </form>
 </div>
 
+<!-- Action Plan Entry Template -->
+<template id="actionPlanEntryTemplate">
+  <div class="action-plan-entry card mb-3" data-index="{INDEX}">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <h6 class="card-title mb-0">Action Plan #{NUM}</h6>
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeActionPlanEntry(this)">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">Action Plan Description <span class="text-danger">*</span></label>
+          <textarea class="form-control ap-description" rows="2" placeholder="Describe the action to be taken..." required></textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Owner <span class="text-danger">*</span></label>
+          <div class="autocomplete-container">
+            <input type="text" class="form-control ap-owner-input" placeholder="Start typing to search users..." autocomplete="off" required>
+            <div class="autocomplete-suggestions ap-owner-suggestions"></div>
+          </div>
+          <div class="selected-tags ap-owner-tags mt-2"></div>
+          <input type="hidden" class="ap-owner-ids">
+          <input type="hidden" class="ap-owner-names">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Due Date <span class="text-danger">*</span></label>
+          <input type="date" class="form-control ap-due-date" required>
+          <small class="text-muted">Maximum 5 months from today</small>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Evidence Document</label>
+          <div class="input-group">
+            <input type="file" class="form-control ap-evidence-file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg">
+            <button type="button" class="btn btn-outline-secondary" onclick="uploadActionPlanEvidence(this)">
+              <i class="bi bi-upload"></i> Upload
+            </button>
+          </div>
+          <div class="ap-evidence-files-list uploaded-files-list mt-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+/* Autocomplete Styles */
+.autocomplete-container {
+  position: relative;
+}
+
+.autocomplete-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-top: none;
+  border-radius: 0 0 0.375rem 0.375rem;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.autocomplete-suggestions.show {
+  display: block;
+}
+
+.autocomplete-suggestion {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.autocomplete-suggestion:hover,
+.autocomplete-suggestion.highlighted {
+  background-color: #e9ecef;
+}
+
+.autocomplete-suggestion:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-suggestion .suggestion-name {
+  font-weight: 500;
+}
+
+.autocomplete-suggestion .suggestion-email {
+  font-size: 0.85em;
+  color: #6c757d;
+}
+
+/* Selected Tags Styles */
+.selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background-color: #e7f1ff;
+  border: 1px solid #b6d4fe;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.selected-tag .remove-tag {
+  cursor: pointer;
+  color: #6c757d;
+  margin-left: 0.25rem;
+}
+
+.selected-tag .remove-tag:hover {
+  color: #dc3545;
+}
+
+/* Action Plan Entry Styles */
+.action-plan-entry {
+  border-left: 3px solid #0d6efd;
+}
+
+.action-plan-entry .card-title {
+  color: #0d6efd;
+}
+
+/* Uploaded Files List Styles */
+.uploaded-files-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.uploaded-file-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.uploaded-file-item a {
+  color: #0d6efd;
+  text-decoration: none;
+}
+
+.uploaded-file-item a:hover {
+  text-decoration: underline;
+}
+
+.uploaded-file-item .remove-file {
+  cursor: pointer;
+  color: #6c757d;
+}
+
+.uploaded-file-item .remove-file:hover {
+  color: #dc3545;
+}
+</style>
+
 <script>
 let editingWorkPaper = null;
+let actionPlanCounter = 0;
+let selectedResponsible = [];
+let selectedCCRecipients = [];
+let uploadedEvidenceFiles = [];
+let actionPlanEvidenceFiles = {};
 
 function initWorkPaperForm(params) {
+  // Initialize year dropdown
   const yearSelect = document.getElementById('wpYear');
   yearSelect.innerHTML = '<option value="">Select Year</option>';
   const currentYear = new Date().getFullYear();
   for (let y = currentYear + 1; y >= currentYear - 3; y--) {
     yearSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
   }
-  
+
+  // Initialize dropdowns
   populateDropdown('wpAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
   populateDropdown('wpAuditArea', window.appDropdowns?.auditAreas || [], 'id', 'display', 'Select Audit Area');
-  populateDropdown('wpResponsible', window.appDropdowns?.auditees || [], 'id', 'display');
-  
+
+  // Set default date
   document.getElementById('wpDate').value = new Date().toISOString().split('T')[0];
-  
+
+  // Initialize autocomplete fields
+  initAutocomplete('wpResponsibleInput', 'wpResponsibleSuggestions', 'wpResponsibleTags', 'wpResponsibleIds', 'auditees');
+  initAutocomplete('wpCCRecipientsInput', 'wpCCRecipientsSuggestions', 'wpCCRecipientsTags', 'wpCCRecipients', 'emails');
+
+  // Reset state
+  selectedResponsible = [];
+  selectedCCRecipients = [];
+  uploadedEvidenceFiles = [];
+  actionPlanEvidenceFiles = {};
+  actionPlanCounter = 0;
+  document.getElementById('actionPlansContainer').innerHTML = '';
+  document.getElementById('noActionPlansMessage').style.display = 'block';
+  document.getElementById('wpEvidenceFilesList').innerHTML = '';
+
+  // Load existing work paper if editing
   if (params && params.id) {
     loadWorkPaperForEdit(params.id);
   } else {
@@ -152,6 +411,459 @@ function initWorkPaperForm(params) {
   }
 }
 
+function initAutocomplete(inputId, suggestionsId, tagsId, hiddenId, type) {
+  const input = document.getElementById(inputId);
+  const suggestions = document.getElementById(suggestionsId);
+  const tagsContainer = document.getElementById(tagsId);
+
+  if (!input || !suggestions) return;
+
+  let selectedIndex = -1;
+  let currentSuggestions = [];
+
+  input.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    if (query.length < 2) {
+      suggestions.classList.remove('show');
+      return;
+    }
+
+    // Get users based on type
+    let users = [];
+    if (type === 'auditees') {
+      users = window.appDropdowns?.auditees || [];
+    } else {
+      users = window.appDropdowns?.users || [];
+    }
+
+    // Filter users
+    currentSuggestions = users.filter(u => {
+      const nameMatch = (u.name || '').toLowerCase().includes(query);
+      const emailMatch = (u.email || '').toLowerCase().includes(query);
+      return nameMatch || emailMatch;
+    }).slice(0, 10);
+
+    // If type is emails and query looks like email, add option to add as custom
+    if (type === 'emails' && query.includes('@') && !currentSuggestions.some(s => s.email === query)) {
+      currentSuggestions.push({ id: 'custom', email: query, name: query, isCustom: true });
+    }
+
+    renderSuggestions(suggestions, currentSuggestions, type);
+    selectedIndex = -1;
+  });
+
+  input.addEventListener('keydown', function(e) {
+    const items = suggestions.querySelectorAll('.autocomplete-suggestion');
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+      updateHighlight(items, selectedIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+      updateHighlight(items, selectedIndex);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
+        selectSuggestion(currentSuggestions[selectedIndex], inputId, suggestionsId, tagsId, hiddenId, type);
+      }
+    } else if (e.key === 'Escape') {
+      suggestions.classList.remove('show');
+    }
+  });
+
+  input.addEventListener('blur', function() {
+    setTimeout(() => suggestions.classList.remove('show'), 200);
+  });
+
+  suggestions.addEventListener('click', function(e) {
+    const item = e.target.closest('.autocomplete-suggestion');
+    if (item) {
+      const index = parseInt(item.dataset.index);
+      if (currentSuggestions[index]) {
+        selectSuggestion(currentSuggestions[index], inputId, suggestionsId, tagsId, hiddenId, type);
+      }
+    }
+  });
+}
+
+function renderSuggestions(container, suggestions, type) {
+  if (suggestions.length === 0) {
+    container.classList.remove('show');
+    return;
+  }
+
+  container.innerHTML = suggestions.map((s, i) => `
+    <div class="autocomplete-suggestion" data-index="${i}">
+      <div class="suggestion-name">${escapeHtml(s.name || s.email)}</div>
+      ${s.email && !s.isCustom ? `<div class="suggestion-email">${escapeHtml(s.email)}</div>` : ''}
+      ${s.isCustom ? '<div class="suggestion-email"><i>Add as custom email</i></div>' : ''}
+    </div>
+  `).join('');
+
+  container.classList.add('show');
+}
+
+function updateHighlight(items, index) {
+  items.forEach((item, i) => {
+    item.classList.toggle('highlighted', i === index);
+  });
+}
+
+function selectSuggestion(suggestion, inputId, suggestionsId, tagsId, hiddenId, type) {
+  const input = document.getElementById(inputId);
+  const suggestions = document.getElementById(suggestionsId);
+  const tagsContainer = document.getElementById(tagsId);
+  const hiddenInput = document.getElementById(hiddenId);
+
+  // Get current selected items
+  let selected = type === 'auditees' ? selectedResponsible : selectedCCRecipients;
+
+  // Check if already selected
+  const identifier = type === 'emails' ? (suggestion.email || suggestion.id) : suggestion.id;
+  if (selected.some(s => (type === 'emails' ? s.email : s.id) === identifier)) {
+    input.value = '';
+    suggestions.classList.remove('show');
+    return;
+  }
+
+  // Add to selected
+  selected.push(suggestion);
+
+  // Update display
+  renderSelectedTags(tagsContainer, selected, type, inputId, suggestionsId, tagsId, hiddenId);
+  updateHiddenValue(hiddenInput, selected, type);
+
+  input.value = '';
+  suggestions.classList.remove('show');
+}
+
+function renderSelectedTags(container, selected, type, inputId, suggestionsId, tagsId, hiddenId) {
+  container.innerHTML = selected.map((s, i) => `
+    <span class="selected-tag">
+      ${escapeHtml(s.name || s.email)}
+      <span class="remove-tag" onclick="removeSelectedTag(${i}, '${type}', '${inputId}', '${suggestionsId}', '${tagsId}', '${hiddenId}')">&times;</span>
+    </span>
+  `).join('');
+}
+
+function removeSelectedTag(index, type, inputId, suggestionsId, tagsId, hiddenId) {
+  let selected = type === 'auditees' ? selectedResponsible : selectedCCRecipients;
+  selected.splice(index, 1);
+
+  const tagsContainer = document.getElementById(tagsId);
+  const hiddenInput = document.getElementById(hiddenId);
+
+  renderSelectedTags(tagsContainer, selected, type, inputId, suggestionsId, tagsId, hiddenId);
+  updateHiddenValue(hiddenInput, selected, type);
+}
+
+function updateHiddenValue(hiddenInput, selected, type) {
+  if (type === 'auditees') {
+    hiddenInput.value = selected.map(s => s.id).join(',');
+  } else {
+    hiddenInput.value = selected.map(s => s.email).join('\n');
+  }
+}
+
+// Action Plan Functions
+function addActionPlanEntry() {
+  const container = document.getElementById('actionPlansContainer');
+  const template = document.getElementById('actionPlanEntryTemplate');
+  const noMessage = document.getElementById('noActionPlansMessage');
+
+  actionPlanCounter++;
+
+  let html = template.innerHTML
+    .replace(/{INDEX}/g, actionPlanCounter)
+    .replace(/{NUM}/g, actionPlanCounter);
+
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  const entry = div.firstElementChild;
+  container.appendChild(entry);
+
+  // Set max due date (5 months from today)
+  const dueDateInput = entry.querySelector('.ap-due-date');
+  const maxDate = new Date();
+  maxDate.setMonth(maxDate.getMonth() + 5);
+  dueDateInput.max = maxDate.toISOString().split('T')[0];
+  dueDateInput.min = new Date().toISOString().split('T')[0];
+
+  // Initialize autocomplete for owner field
+  initActionPlanAutocomplete(entry, actionPlanCounter);
+
+  // Initialize evidence files array
+  actionPlanEvidenceFiles[actionPlanCounter] = [];
+
+  noMessage.style.display = 'none';
+}
+
+function initActionPlanAutocomplete(entry, index) {
+  const input = entry.querySelector('.ap-owner-input');
+  const suggestions = entry.querySelector('.ap-owner-suggestions');
+  const tagsContainer = entry.querySelector('.ap-owner-tags');
+  const idsInput = entry.querySelector('.ap-owner-ids');
+  const namesInput = entry.querySelector('.ap-owner-names');
+
+  let selectedOwners = [];
+  let selectedIndex = -1;
+  let currentSuggestions = [];
+
+  input.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    if (query.length < 2) {
+      suggestions.classList.remove('show');
+      return;
+    }
+
+    const users = window.appDropdowns?.users || [];
+    currentSuggestions = users.filter(u => {
+      const nameMatch = (u.name || '').toLowerCase().includes(query);
+      const emailMatch = (u.email || '').toLowerCase().includes(query);
+      return nameMatch || emailMatch;
+    }).slice(0, 10);
+
+    renderSuggestionsAP(suggestions, currentSuggestions);
+    selectedIndex = -1;
+  });
+
+  input.addEventListener('keydown', function(e) {
+    const items = suggestions.querySelectorAll('.autocomplete-suggestion');
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+      updateHighlight(items, selectedIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+      updateHighlight(items, selectedIndex);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
+        selectOwner(currentSuggestions[selectedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      suggestions.classList.remove('show');
+    }
+  });
+
+  input.addEventListener('blur', function() {
+    setTimeout(() => suggestions.classList.remove('show'), 200);
+  });
+
+  suggestions.addEventListener('click', function(e) {
+    const item = e.target.closest('.autocomplete-suggestion');
+    if (item) {
+      const idx = parseInt(item.dataset.index);
+      if (currentSuggestions[idx]) {
+        selectOwner(currentSuggestions[idx]);
+      }
+    }
+  });
+
+  function selectOwner(user) {
+    if (selectedOwners.some(s => s.id === user.id)) {
+      input.value = '';
+      suggestions.classList.remove('show');
+      return;
+    }
+
+    selectedOwners.push(user);
+    renderOwnerTags();
+    updateOwnerInputs();
+    input.value = '';
+    suggestions.classList.remove('show');
+  }
+
+  function renderOwnerTags() {
+    tagsContainer.innerHTML = selectedOwners.map((s, i) => `
+      <span class="selected-tag">
+        ${escapeHtml(s.name || s.email)}
+        <span class="remove-tag" data-index="${i}">&times;</span>
+      </span>
+    `).join('');
+
+    tagsContainer.querySelectorAll('.remove-tag').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const idx = parseInt(this.dataset.index);
+        selectedOwners.splice(idx, 1);
+        renderOwnerTags();
+        updateOwnerInputs();
+      });
+    });
+  }
+
+  function updateOwnerInputs() {
+    idsInput.value = selectedOwners.map(s => s.id).join(',');
+    namesInput.value = selectedOwners.map(s => s.name).join(', ');
+  }
+}
+
+function renderSuggestionsAP(container, suggestions) {
+  if (suggestions.length === 0) {
+    container.classList.remove('show');
+    return;
+  }
+
+  container.innerHTML = suggestions.map((s, i) => `
+    <div class="autocomplete-suggestion" data-index="${i}">
+      <div class="suggestion-name">${escapeHtml(s.name || s.email)}</div>
+      ${s.email ? `<div class="suggestion-email">${escapeHtml(s.email)}</div>` : ''}
+    </div>
+  `).join('');
+
+  container.classList.add('show');
+}
+
+function removeActionPlanEntry(button) {
+  const entry = button.closest('.action-plan-entry');
+  const index = entry.dataset.index;
+
+  // Clean up evidence files
+  delete actionPlanEvidenceFiles[index];
+
+  entry.remove();
+
+  // Show no message if empty
+  if (document.querySelectorAll('.action-plan-entry').length === 0) {
+    document.getElementById('noActionPlansMessage').style.display = 'block';
+  }
+
+  // Renumber remaining entries
+  document.querySelectorAll('.action-plan-entry').forEach((e, i) => {
+    e.querySelector('.card-title').textContent = `Action Plan #${i + 1}`;
+  });
+}
+
+// File Upload Functions
+function uploadEvidenceFile() {
+  const fileInput = document.getElementById('wpEvidenceFile');
+  const file = fileInput.files[0];
+
+  if (!file) {
+    showToast('Please select a file to upload', 'warning');
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('File size must be less than 10MB', 'danger');
+    return;
+  }
+
+  showLoading('Uploading file...');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result.split(',')[1];
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result.success) {
+          uploadedEvidenceFiles.push(result.file);
+          renderEvidenceFilesList();
+          fileInput.value = '';
+          showToast('File uploaded successfully', 'success');
+        } else {
+          showToast(result.error || 'Upload failed', 'danger');
+        }
+      })
+      .withFailureHandler(function(err) {
+        hideLoading();
+        showToast('Upload failed: ' + err.message, 'danger');
+      })
+      .uploadFileToDrive(file.name, file.type, base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderEvidenceFilesList() {
+  const container = document.getElementById('wpEvidenceFilesList');
+  container.innerHTML = uploadedEvidenceFiles.map((f, i) => `
+    <div class="uploaded-file-item">
+      <i class="bi bi-file-earmark"></i>
+      <a href="${f.drive_url}" target="_blank">${escapeHtml(f.file_name)}</a>
+      <span class="remove-file" onclick="removeEvidenceFile(${i})">&times;</span>
+    </div>
+  `).join('');
+}
+
+function removeEvidenceFile(index) {
+  uploadedEvidenceFiles.splice(index, 1);
+  renderEvidenceFilesList();
+}
+
+function uploadActionPlanEvidence(button) {
+  const entry = button.closest('.action-plan-entry');
+  const index = entry.dataset.index;
+  const fileInput = entry.querySelector('.ap-evidence-file');
+  const file = fileInput.files[0];
+
+  if (!file) {
+    showToast('Please select a file to upload', 'warning');
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('File size must be less than 10MB', 'danger');
+    return;
+  }
+
+  showLoading('Uploading file...');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result.split(',')[1];
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result.success) {
+          if (!actionPlanEvidenceFiles[index]) {
+            actionPlanEvidenceFiles[index] = [];
+          }
+          actionPlanEvidenceFiles[index].push(result.file);
+          renderActionPlanEvidenceFiles(entry, index);
+          fileInput.value = '';
+          showToast('File uploaded successfully', 'success');
+        } else {
+          showToast(result.error || 'Upload failed', 'danger');
+        }
+      })
+      .withFailureHandler(function(err) {
+        hideLoading();
+        showToast('Upload failed: ' + err.message, 'danger');
+      })
+      .uploadFileToDrive(file.name, file.type, base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderActionPlanEvidenceFiles(entry, index) {
+  const container = entry.querySelector('.ap-evidence-files-list');
+  const files = actionPlanEvidenceFiles[index] || [];
+
+  container.innerHTML = files.map((f, i) => `
+    <div class="uploaded-file-item">
+      <i class="bi bi-file-earmark"></i>
+      <a href="${f.drive_url}" target="_blank">${escapeHtml(f.file_name)}</a>
+      <span class="remove-file" onclick="removeActionPlanEvidenceFile(${index}, ${i})">&times;</span>
+    </div>
+  `).join('');
+}
+
+function removeActionPlanEvidenceFile(apIndex, fileIndex) {
+  actionPlanEvidenceFiles[apIndex].splice(fileIndex, 1);
+  const entry = document.querySelector(`.action-plan-entry[data-index="${apIndex}"]`);
+  if (entry) {
+    renderActionPlanEvidenceFiles(entry, apIndex);
+  }
+}
+
+// Form Functions
 function loadSubAreas() {
   const areaId = document.getElementById('wpAuditArea').value;
   const subAreaSelect = document.getElementById('wpSubArea');
@@ -176,10 +888,15 @@ function autoFillFromSubArea() {
 
 function loadWorkPaperForEdit(id) {
   showLoading('Loading...');
-  apiCall('getWorkPaper', { workPaperId: id, includeRelated: false }).then(result => {
+  apiCall('getWorkPaper', { workPaperId: id, includeRelated: true }).then(result => {
     hideLoading();
-    if (result.workPaper) { editingWorkPaper = result.workPaper; populateForm(result.workPaper); }
-    else { showToast('Not found', 'danger'); navigateTo('work-papers'); }
+    if (result.workPaper) {
+      editingWorkPaper = result.workPaper;
+      populateForm(result.workPaper);
+    } else {
+      showToast('Not found', 'danger');
+      navigateTo('work-papers');
+    }
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }
 
@@ -202,15 +919,48 @@ function populateForm(wp) {
   document.getElementById('wpRiskRating').value = wp.risk_rating || '';
   document.getElementById('wpRiskSummary').value = wp.risk_summary || '';
   document.getElementById('wpRecommendation').value = wp.recommendation || '';
-  const ids = (wp.responsible_ids || '').split(',').map(s => s.trim());
-  Array.from(document.getElementById('wpResponsible').options).forEach(o => o.selected = ids.includes(o.value));
-  document.getElementById('wpCCRecipients').value = wp.cc_recipients || '';
+  document.getElementById('wpManagementResponse').value = wp.management_response || '';
+  document.getElementById('wpWorkPaperRef').value = wp.work_paper_ref || '';
+
+  // Populate responsible parties
+  const responsibleIds = (wp.responsible_ids || '').split(',').map(s => s.trim()).filter(Boolean);
+  selectedResponsible = [];
+  const users = window.appDropdowns?.users || [];
+  responsibleIds.forEach(id => {
+    const user = users.find(u => u.id === id);
+    if (user) selectedResponsible.push(user);
+  });
+  renderSelectedTags(document.getElementById('wpResponsibleTags'), selectedResponsible, 'auditees', 'wpResponsibleInput', 'wpResponsibleSuggestions', 'wpResponsibleTags', 'wpResponsibleIds');
+  updateHiddenValue(document.getElementById('wpResponsibleIds'), selectedResponsible, 'auditees');
+
+  // Populate CC recipients
+  const ccEmails = (wp.cc_recipients || '').split('\n').map(s => s.trim()).filter(Boolean);
+  selectedCCRecipients = ccEmails.map(email => {
+    const user = users.find(u => u.email === email);
+    return user || { email: email, name: email };
+  });
+  renderSelectedTags(document.getElementById('wpCCRecipientsTags'), selectedCCRecipients, 'emails', 'wpCCRecipientsInput', 'wpCCRecipientsSuggestions', 'wpCCRecipientsTags', 'wpCCRecipients');
+  updateHiddenValue(document.getElementById('wpCCRecipients'), selectedCCRecipients, 'emails');
+
+  // Populate evidence files
+  if (wp.files && wp.files.length > 0) {
+    uploadedEvidenceFiles = wp.files.map(f => ({
+      file_id: f.file_id,
+      drive_file_id: f.drive_file_id,
+      drive_url: f.drive_url,
+      file_name: f.file_name
+    }));
+    renderEvidenceFilesList();
+  }
 }
 
-function formatDateInput(d) { if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? '' : dt.toISOString().split('T')[0]; }
+function formatDateInput(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return isNaN(dt) ? '' : dt.toISOString().split('T')[0];
+}
 
 function getFormData() {
-  const sel = document.getElementById('wpResponsible');
   return {
     work_paper_id: document.getElementById('wpFormId').value || undefined,
     year: document.getElementById('wpYear').value,
@@ -229,34 +979,229 @@ function getFormData() {
     risk_rating: document.getElementById('wpRiskRating').value,
     risk_summary: document.getElementById('wpRiskSummary').value,
     recommendation: document.getElementById('wpRecommendation').value,
-    responsible_ids: Array.from(sel.selectedOptions).map(o => o.value).join(','),
+    management_response: document.getElementById('wpManagementResponse').value,
+    work_paper_ref: document.getElementById('wpWorkPaperRef').value,
+    responsible_ids: document.getElementById('wpResponsibleIds').value,
     cc_recipients: document.getElementById('wpCCRecipients').value
   };
 }
 
-function saveWorkPaper(event) {
-  event.preventDefault();
-  const data = getFormData();
-  const isEdit = !!data.work_paper_id;
-  showLoading(isEdit ? 'Updating...' : 'Creating...');
-  apiCall(isEdit ? 'updateWorkPaper' : 'createWorkPaper', isEdit ? { workPaperId: data.work_paper_id, ...data } : data)
-    .then(r => { hideLoading(); if (r.success) { showToast('Saved', 'success'); navigateTo('work-paper-view', { id: r.workPaperId || r.workPaper?.work_paper_id || data.work_paper_id }); } else showToast(r.error || 'Error', 'danger'); })
-    .catch(() => { hideLoading(); showToast('Error', 'danger'); });
+function getActionPlansData() {
+  const entries = document.querySelectorAll('.action-plan-entry');
+  const plans = [];
+
+  entries.forEach(entry => {
+    const index = entry.dataset.index;
+    const description = entry.querySelector('.ap-description').value;
+    const ownerIds = entry.querySelector('.ap-owner-ids').value;
+    const ownerNames = entry.querySelector('.ap-owner-names').value;
+    const dueDate = entry.querySelector('.ap-due-date').value;
+
+    if (description && ownerIds && dueDate) {
+      plans.push({
+        action_description: description,
+        owner_ids: ownerIds,
+        owner_names: ownerNames,
+        due_date: dueDate,
+        evidence_files: actionPlanEvidenceFiles[index] || []
+      });
+    }
+  });
+
+  return plans;
 }
 
-function saveAndSubmit() {
-  if (!document.getElementById('workPaperForm').checkValidity()) { document.getElementById('workPaperForm').reportValidity(); return; }
+function validateActionPlans() {
+  const entries = document.querySelectorAll('.action-plan-entry');
+  let valid = true;
+
+  entries.forEach(entry => {
+    const description = entry.querySelector('.ap-description');
+    const ownerIds = entry.querySelector('.ap-owner-ids');
+    const dueDate = entry.querySelector('.ap-due-date');
+
+    if (!description.value) {
+      description.classList.add('is-invalid');
+      valid = false;
+    } else {
+      description.classList.remove('is-invalid');
+    }
+
+    if (!ownerIds.value) {
+      entry.querySelector('.ap-owner-input').classList.add('is-invalid');
+      valid = false;
+    } else {
+      entry.querySelector('.ap-owner-input').classList.remove('is-invalid');
+    }
+
+    if (!dueDate.value) {
+      dueDate.classList.add('is-invalid');
+      valid = false;
+    } else {
+      dueDate.classList.remove('is-invalid');
+    }
+  });
+
+  return valid;
+}
+
+async function saveWorkPaper(event) {
+  event.preventDefault();
+
+  // Validate action plans if any exist
+  if (document.querySelectorAll('.action-plan-entry').length > 0 && !validateActionPlans()) {
+    showToast('Please fill in all required action plan fields', 'danger');
+    return;
+  }
+
   const data = getFormData();
+  const actionPlans = getActionPlansData();
+  const isEdit = !!data.work_paper_id;
+
+  showLoading(isEdit ? 'Updating...' : 'Creating...');
+
+  try {
+    // Save work paper
+    const wpResult = await apiCall(isEdit ? 'updateWorkPaper' : 'createWorkPaper',
+      isEdit ? { workPaperId: data.work_paper_id, ...data } : data);
+
+    if (!wpResult.success) {
+      throw new Error(wpResult.error || 'Failed to save work paper');
+    }
+
+    const workPaperId = wpResult.workPaperId || wpResult.workPaper?.work_paper_id || data.work_paper_id;
+
+    // Save evidence files
+    for (const file of uploadedEvidenceFiles) {
+      if (!file.file_id) {
+        await apiCall('addWorkPaperFile', {
+          workPaperId: workPaperId,
+          file_category: 'Evidence',
+          ...file
+        });
+      }
+    }
+
+    // Save action plans if any
+    if (actionPlans.length > 0) {
+      const apResult = await apiCall('createActionPlansBatch', {
+        workPaperId: workPaperId,
+        plans: actionPlans
+      });
+
+      if (apResult.success && apResult.actionPlans) {
+        // Save action plan evidence
+        for (let i = 0; i < apResult.actionPlans.length; i++) {
+          const ap = apResult.actionPlans[i];
+          const evidenceFiles = actionPlans[i].evidence_files || [];
+          for (const file of evidenceFiles) {
+            await apiCall('addActionPlanEvidence', {
+              actionPlanId: ap.actionPlanId,
+              ...file
+            });
+          }
+        }
+      }
+    }
+
+    hideLoading();
+    showToast('Saved successfully', 'success');
+    navigateTo('work-paper-view', { id: workPaperId });
+
+  } catch (err) {
+    hideLoading();
+    showToast(err.message || 'Error saving', 'danger');
+  }
+}
+
+async function saveAndSubmit() {
+  if (!document.getElementById('workPaperForm').checkValidity()) {
+    document.getElementById('workPaperForm').reportValidity();
+    return;
+  }
+
+  // Validate action plans if any exist
+  if (document.querySelectorAll('.action-plan-entry').length > 0 && !validateActionPlans()) {
+    showToast('Please fill in all required action plan fields', 'danger');
+    return;
+  }
+
+  const data = getFormData();
+  const actionPlans = getActionPlansData();
+
   showLoading('Saving...');
-  apiCall(data.work_paper_id ? 'updateWorkPaper' : 'createWorkPaper', data.work_paper_id ? { workPaperId: data.work_paper_id, ...data } : data)
-    .then(r => { if (r.success) return apiCall('submitWorkPaper', { workPaperId: r.workPaperId || r.workPaper?.work_paper_id || data.work_paper_id }); throw new Error(r.error); })
-    .then(r => { hideLoading(); if (r.success) { showToast('Submitted', 'success'); navigateTo('work-papers'); } else showToast(r.error, 'danger'); })
-    .catch(e => { hideLoading(); showToast(e.message || 'Error', 'danger'); });
+
+  try {
+    // Save work paper
+    const wpResult = await apiCall(data.work_paper_id ? 'updateWorkPaper' : 'createWorkPaper',
+      data.work_paper_id ? { workPaperId: data.work_paper_id, ...data } : data);
+
+    if (!wpResult.success) {
+      throw new Error(wpResult.error || 'Failed to save');
+    }
+
+    const workPaperId = wpResult.workPaperId || wpResult.workPaper?.work_paper_id || data.work_paper_id;
+
+    // Save evidence files
+    for (const file of uploadedEvidenceFiles) {
+      if (!file.file_id) {
+        await apiCall('addWorkPaperFile', {
+          workPaperId: workPaperId,
+          file_category: 'Evidence',
+          ...file
+        });
+      }
+    }
+
+    // Save action plans if any
+    if (actionPlans.length > 0) {
+      const apResult = await apiCall('createActionPlansBatch', {
+        workPaperId: workPaperId,
+        plans: actionPlans
+      });
+
+      if (apResult.success && apResult.actionPlans) {
+        for (let i = 0; i < apResult.actionPlans.length; i++) {
+          const ap = apResult.actionPlans[i];
+          const evidenceFiles = actionPlans[i].evidence_files || [];
+          for (const file of evidenceFiles) {
+            await apiCall('addActionPlanEvidence', {
+              actionPlanId: ap.actionPlanId,
+              ...file
+            });
+          }
+        }
+      }
+    }
+
+    // Submit
+    const submitResult = await apiCall('submitWorkPaper', { workPaperId: workPaperId });
+
+    if (!submitResult.success) {
+      throw new Error(submitResult.error || 'Failed to submit');
+    }
+
+    hideLoading();
+    showToast('Submitted successfully', 'success');
+    navigateTo('work-papers');
+
+  } catch (err) {
+    hideLoading();
+    showToast(err.message || 'Error', 'danger');
+  }
 }
 
 function populateDropdown(id, items, val, txt, ph) {
-  const el = document.getElementById(id); if (!el) return;
+  const el = document.getElementById(id);
+  if (!el) return;
   el.innerHTML = ph ? `<option value="">${ph}</option>` : '';
   items.forEach(i => el.innerHTML += `<option value="${i[val]}">${i[txt]}</option>`);
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 </script>

@@ -62,7 +62,7 @@ const SCHEMAS = {
     'control_objectives', 'control_classification', 'control_type', 'control_frequency', 'control_standards',
     'risk_description', 'test_objective', 'testing_steps',
     'observation_title', 'observation_description', 'risk_rating', 'risk_summary', 'recommendation',
-    'management_response', 'responsible_ids', 'cc_recipients',
+    'management_response', 'responsible_ids', 'cc_recipients', 'work_paper_ref',
     'status', 'final_status', 'revision_count',
     'prepared_by_id', 'prepared_by_name', 'prepared_date',
     'submitted_date', 'reviewed_by_id', 'reviewed_by_name', 'review_date', 'review_comments',
