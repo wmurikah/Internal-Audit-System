@@ -1,0 +1,84 @@
+<!-- Reports Page -->
+<div class="reports-page">
+  <div class="row g-4">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <i class="bi bi-file-earmark-bar-graph display-4 text-primary mb-3"></i>
+          <h5>Audit Summary Report</h5>
+          <p class="text-muted">Overview of work papers and action plans by affiliate</p>
+          <button class="btn btn-primary" onclick="generateReport('summary')">Generate</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <i class="bi bi-clock-history display-4 text-warning mb-3"></i>
+          <h5>Action Plan Aging</h5>
+          <p class="text-muted">Action plans grouped by overdue status</p>
+          <button class="btn btn-warning" onclick="generateReport('aging')">Generate</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <i class="bi bi-shield-exclamation display-4 text-danger mb-3"></i>
+          <h5>Risk Summary</h5>
+          <p class="text-muted">Findings grouped by risk rating</p>
+          <button class="btn btn-danger" onclick="generateReport('risk')">Generate</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-4" id="reportResults" style="display:none;">
+    <div class="card-header d-flex justify-content-between">
+      <span id="reportTitle">Report</span>
+      <button class="btn btn-sm btn-outline-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+    </div>
+    <div class="card-body" id="reportContent"></div>
+  </div>
+</div>
+
+<script>
+function loadReports() {}
+
+function generateReport(type) {
+  showLoading('Generating...');
+  let action = type === 'summary' ? 'getAuditSummaryReport' : type === 'aging' ? 'getActionPlanAgingReport' : 'getRiskSummaryReport';
+  
+  apiCall(action, { filters: {} }).then(r => {
+    hideLoading();
+    if (r.report) {
+      document.getElementById('reportResults').style.display = 'block';
+      document.getElementById('reportTitle').textContent = type === 'summary' ? 'Audit Summary Report' : type === 'aging' ? 'Action Plan Aging Report' : 'Risk Summary Report';
+      renderReport(type, r.report);
+    } else showToast('Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function renderReport(type, data) {
+  const content = document.getElementById('reportContent');
+  let html = `<p class="text-muted">Generated: ${formatDate(data.generatedAt)}</p>`;
+  
+  if (type === 'summary') {
+    html += `<h5>Summary</h5><p>Total Work Papers: ${data.summary?.totalWorkPapers || 0} | Total Action Plans: ${data.summary?.totalActionPlans || 0}</p>`;
+    html += '<h5>By Affiliate</h5><table class="table"><thead><tr><th>Affiliate</th><th>Work Papers</th><th>Action Plans</th><th>Overdue</th></tr></thead><tbody>';
+    (data.byAffiliate || []).forEach(a => {
+      html += `<tr><td>${a.affiliate_code}</td><td>${a.workPapers?.total || 0}</td><td>${a.actionPlans?.total || 0}</td><td>${a.actionPlans?.overdue || 0}</td></tr>`;
+    });
+    html += '</tbody></table>';
+  } else if (type === 'aging') {
+    html += `<h5>Summary</h5><p>Current: ${data.summary?.current || 0} | Overdue 1-30: ${data.summary?.overdue1to30 || 0} | 31-60: ${data.summary?.overdue31to60 || 0} | 61-90: ${data.summary?.overdue61to90 || 0} | 90+: ${data.summary?.overdue90plus || 0}</p>`;
+  } else {
+    html += '<h5>By Risk Level</h5><table class="table"><thead><tr><th>Risk</th><th>Work Papers</th><th>Open APs</th><th>Closed APs</th></tr></thead><tbody>';
+    (data.byRisk || []).forEach(r => {
+      html += `<tr><td><span class="badge ${getRiskClass(r.level)}">${r.level}</span></td><td>${r.count}</td><td>${r.openActionPlans}</td><td>${r.closedActionPlans}</td></tr>`;
+    });
+    html += '</tbody></table>';
+  }
+  content.innerHTML = html;
+}
+</script>
