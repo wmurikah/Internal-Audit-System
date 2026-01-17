@@ -468,14 +468,17 @@ function loadUsers() {
   document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
 
   apiCall('getUsers', { filters: {} }).then(r => {
+    console.log('getUsers response:', r);
     if (r.success && r.users) {
       usersData = r.users;
       renderUsers();
     } else {
-      document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Error loading users</td></tr>';
+      const errorMsg = r.error || 'Unknown error';
+      document.getElementById('usersTableBody').innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error loading users: ${escapeHtml(errorMsg)}</td></tr>`;
     }
-  }).catch(() => {
-    document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Error loading users</td></tr>';
+  }).catch(err => {
+    console.error('getUsers error:', err);
+    document.getElementById('usersTableBody').innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error loading users: ${escapeHtml(err.message || 'Connection error')}</td></tr>`;
   });
 }
 
