@@ -488,24 +488,78 @@ function getScriptUrl() {
 /**
  * Generic API call function for client-side
  * This is called from HTML files
+ *
+ * IMPORTANT: When deployed as "Anyone with Google Account", Session.getActiveUser().getEmail()
+ * may return empty. This function now supports session-based authentication via sessionToken.
  */
 function apiCall(action, data) {
   try {
-    const user = getCurrentUser();
-    
-    // Public actions
+    data = data || {};
+
+    // Public actions that don't require authentication
     const publicActions = ['login', 'ping'];
-    
-    if (!publicActions.includes(action) && !user) {
-      return { success: false, error: 'Authentication required' };
+
+    // Try to get user from Google session first (works in Apps Script editor)
+    let user = getCurrentUser();
+
+    // If no user from Google session, try session token validation
+    if (!user && data.sessionToken) {
+      const sessionResult = validateSession(data.sessionToken);
+      if (sessionResult.valid) {
+        // Get full user object from session result
+        user = getUserById(sessionResult.user.user_id);
+      }
     }
-    
-    return routeAction(action, data || {}, user);
-    
+
+    // Check if authentication is required
+    if (!publicActions.includes(action) && !user) {
+      return { success: false, error: 'Authentication required', requireLogin: true };
+    }
+
+    // Special handling for getInitData when user is available from session
+    if (action === 'getInitData' && user) {
+      return getInitDataWithUser(user);
+    }
+
+    return routeAction(action, data, user);
+
   } catch (error) {
     console.error('API call error:', error);
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Get init data using a provided user object (for session-based auth)
+ */
+function getInitDataWithUser(user) {
+  if (!user) {
+    return { success: false, error: 'User not found' };
+  }
+
+  if (!isActive(user.is_active)) {
+    return { success: false, error: 'Account is inactive' };
+  }
+
+  return {
+    success: true,
+    user: {
+      user_id: user.user_id,
+      email: user.email,
+      full_name: user.full_name,
+      role_code: user.role_code,
+      role_name: getRoleName(user.role_code),
+      affiliate_code: user.affiliate_code,
+      department: user.department,
+      must_change_password: user.must_change_password
+    },
+    dropdowns: getDropdownData(),
+    config: {
+      systemName: getConfigValue('SYSTEM_NAME') || 'Hass Petroleum Internal Audit System',
+      currentYear: new Date().getFullYear()
+    },
+    permissions: getUserPermissions(user.role_code)
+  };
 }
 
 // ============================================================
