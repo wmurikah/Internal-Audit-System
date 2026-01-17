@@ -56,7 +56,6 @@ function createWorkPaper(data, user) {
     management_response: sanitizeInput(data.management_response || ''),
     responsible_ids: data.responsible_ids || '',
     cc_recipients: data.cc_recipients || '',
-    work_paper_ref: sanitizeInput(data.work_paper_ref || ''),
     status: STATUS.WORK_PAPER.DRAFT,
     final_status: '',
     revision_count: 0,
@@ -73,9 +72,10 @@ function createWorkPaper(data, user) {
     approved_date: '',
     sent_to_auditee_date: '',
     created_at: now,
-    updated_at: now
+    updated_at: now,
+    work_paper_ref: sanitizeInput(data.work_paper_ref || '')
   };
-  
+
   // Insert into sheet
   const sheet = getSheet(SHEETS.WORK_PAPERS);
   const row = objectToRow('WORK_PAPERS', workPaper);

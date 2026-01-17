@@ -62,12 +62,12 @@ const SCHEMAS = {
     'control_objectives', 'control_classification', 'control_type', 'control_frequency', 'control_standards',
     'risk_description', 'test_objective', 'testing_steps',
     'observation_title', 'observation_description', 'risk_rating', 'risk_summary', 'recommendation',
-    'management_response', 'responsible_ids', 'cc_recipients', 'work_paper_ref',
+    'management_response', 'responsible_ids', 'cc_recipients',
     'status', 'final_status', 'revision_count',
     'prepared_by_id', 'prepared_by_name', 'prepared_date',
     'submitted_date', 'reviewed_by_id', 'reviewed_by_name', 'review_date', 'review_comments',
     'approved_by_id', 'approved_by_name', 'approved_date', 'sent_to_auditee_date',
-    'created_at', 'updated_at'
+    'created_at', 'updated_at', 'work_paper_ref'
   ],
   WP_REQUIREMENTS: [
     'requirement_id', 'work_paper_id', 'requirement_number', 'requirement_description',
