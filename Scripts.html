@@ -1,0 +1,237 @@
+<script>
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+window.currentUser = null;
+window.appDropdowns = null;
+let currentPage = 'dashboard';
+let pageParams = {};
+
+// ============================================================
+// INITIALIZATION
+// ============================================================
+document.addEventListener('DOMContentLoaded', initApp);
+
+function initApp() {
+  showLoading('Initializing...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        window.currentUser = result.user;
+        window.appDropdowns = result.dropdowns;
+        document.getElementById('userName').textContent = result.user.full_name;
+        document.getElementById('userRole').textContent = result.user.role_name;
+        setupNavigation(result.permissions);
+        handleHashChange();
+        window.addEventListener('hashchange', handleHashChange);
+        if (result.user.must_change_password) { showChangePassword(); showToast('Please change your password', 'warning'); }
+      } else { showToast('Failed to initialize', 'danger'); setTimeout(() => window.location.reload(), 2000); }
+    })
+    .withFailureHandler(function(error) { hideLoading(); showToast('Connection error', 'danger'); })
+    .apiCall('getInitData', {});
+}
+
+function setupNavigation(p) {
+  if (!p.canCreateWorkPaper) document.getElementById('navNewWorkPaper')?.classList.add('d-none');
+  if (!p.canViewReports) { document.getElementById('navReportsSection')?.classList.add('d-none'); document.getElementById('navReports')?.classList.add('d-none'); }
+  if (!p.canManageUsers) { document.getElementById('navAdminSection')?.classList.add('d-none'); document.getElementById('navUsers')?.classList.add('d-none'); }
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function handleHashChange() {
+  const hash = window.location.hash.slice(1) || 'dashboard';
+  const parts = hash.split('?');
+  const page = parts[0];
+  const params = {};
+  if (parts[1]) parts[1].split('&').forEach(p => { const [k, v] = p.split('='); params[k] = decodeURIComponent(v); });
+  navigateTo(page, params, false);
+}
+
+function navigateTo(page, params, updateHash = true) {
+  params = params || {};
+  if (updateHash) { window.location.hash = '#' + page + (Object.keys(params).length ? '?' + Object.entries(params).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&') : ''); return; }
+  currentPage = page; pageParams = params;
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.sidebar-nav .nav-link').forEach(l => l.classList.toggle('active', l.dataset.page === page));
+  
+  const pageMap = {
+    'dashboard': { el: 'page-dashboard', title: 'Dashboard', init: loadDashboard },
+    'work-papers': { el: 'page-work-papers', title: 'Work Papers', init: () => { initWPFilters(); loadWorkPapers(params); } },
+    'work-paper-form': { el: 'page-work-paper-form', title: params.id ? 'Edit Work Paper' : 'New Work Paper', init: () => initWorkPaperForm(params) },
+    'work-paper-view': { el: 'page-work-paper-view', title: 'Work Paper Details', init: () => loadWorkPaperView(params) },
+    'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => loadActionPlans(params) },
+    'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: loadActionPlansOverdue },
+    'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => loadActionPlanView(params) },
+    'reports': { el: 'page-reports', title: 'Reports', init: loadReports },
+    'users': { el: 'page-users', title: 'User Management', init: loadUsers }
+  };
+  const config = pageMap[page] || pageMap['dashboard'];
+  const pageEl = document.getElementById(config.el);
+  if (pageEl) pageEl.style.display = 'block';
+  document.getElementById('pageTitle').textContent = config.title;
+  if (config.init) config.init();
+  if (window.innerWidth < 992) toggleSidebar(false);
+}
+
+function refreshCurrentPage() { navigateTo(currentPage, pageParams, false); }
+
+// ============================================================
+// API CALLS
+// ============================================================
+function apiCall(action, data) {
+  return new Promise((resolve, reject) => {
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).apiCall(action, data);
+  });
+}
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function showLoading(text) { document.getElementById('loadingText').textContent = text || 'Loading...'; document.getElementById('loadingOverlay').classList.add('show'); }
+function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+
+function showToast(message, type, duration) {
+  type = type || 'info'; duration = duration || 5000;
+  const toastId = 'toast-' + Date.now();
+  const bgClass = type === 'danger' ? 'bg-danger' : type === 'success' ? 'bg-success' : type === 'warning' ? 'bg-warning text-dark' : 'bg-info';
+  document.getElementById('toastContainer').insertAdjacentHTML('beforeend', `<div id="${toastId}" class="toast ${bgClass} text-white" role="alert"><div class="d-flex"><div class="toast-body">${escapeHtml(message)}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`);
+  const toast = new bootstrap.Toast(document.getElementById(toastId), { delay: duration });
+  toast.show();
+  document.getElementById(toastId).addEventListener('hidden.bs.toast', function() { this.remove(); });
+}
+
+function toggleSidebar(show) {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (show === undefined) show = !sidebar.classList.contains('show');
+  sidebar.classList.toggle('show', show);
+  overlay.classList.toggle('show', show);
+}
+
+// ============================================================
+// FORMATTING HELPERS
+// ============================================================
+function formatDate(date) {
+  if (!date) return '-';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function getStatusClass(status) {
+  const map = { 'Draft': 'status-draft', 'Submitted': 'status-submitted', 'Under Review': 'status-under-review', 'Revision Required': 'status-revision-required', 'Approved': 'status-approved', 'Sent to Auditee': 'status-sent-to-auditee', 'Not Due': 'status-not-due', 'Pending': 'status-pending', 'In Progress': 'status-in-progress', 'Implemented': 'status-implemented', 'Verified': 'status-verified', 'Overdue': 'status-overdue', 'Not Implemented': 'status-not-implemented' };
+  return map[status] || 'bg-secondary';
+}
+
+function getRiskClass(risk) {
+  const map = { 'Extreme': 'risk-extreme', 'High': 'risk-high', 'Medium': 'risk-medium', 'Low': 'risk-low' };
+  return map[risk] || 'bg-secondary';
+}
+
+function populateDropdown(id, items, val, txt, ph) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = ph ? `<option value="">${ph}</option>` : '';
+  items.forEach(i => el.innerHTML += `<option value="${i[val]}">${i[txt]}</option>`);
+}
+
+// ============================================================
+// AUTH FUNCTIONS
+// ============================================================
+function handleLogout() {
+  if (!confirm('Sign out?')) return;
+  showLoading('Signing out...');
+  google.script.run.withSuccessHandler(() => window.top.location.reload()).withFailureHandler(() => window.top.location.reload()).apiCall('logout', {});
+}
+
+function showChangePassword() {
+  document.getElementById('currentPassword').value = '';
+  document.getElementById('newPassword').value = '';
+  document.getElementById('confirmPassword').value = '';
+  new bootstrap.Modal(document.getElementById('changePasswordModal')).show();
+}
+
+function submitChangePassword() {
+  const current = document.getElementById('currentPassword').value;
+  const newPwd = document.getElementById('newPassword').value;
+  const confirm = document.getElementById('confirmPassword').value;
+  if (newPwd !== confirm) { showToast('Passwords do not match', 'danger'); return; }
+  if (newPwd.length < 8) { showToast('Password must be at least 8 characters', 'danger'); return; }
+  showLoading('Changing password...');
+  apiCall('changePassword', { currentPassword: current, newPassword: newPwd }).then(r => {
+    hideLoading();
+    if (r.success) { bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide(); showToast('Password changed', 'success'); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+// ============================================================
+// ACTION PLAN FUNCTIONS
+// ============================================================
+function saveActionPlan() {
+  const id = document.getElementById('apFormId').value;
+  const wpId = document.getElementById('apFormWorkPaperId').value;
+  const desc = document.getElementById('apFormDesc').value;
+  const dueDate = document.getElementById('apFormDueDate').value;
+  const ownerSelect = document.getElementById('apFormOwners');
+  const ownerIds = Array.from(ownerSelect.selectedOptions).map(o => o.value).join(',');
+  const ownerNames = Array.from(ownerSelect.selectedOptions).map(o => o.text).join(', ');
+  if (!desc || !dueDate) { showToast('Please fill required fields', 'danger'); return; }
+  showLoading('Saving...');
+  apiCall(id ? 'updateActionPlan' : 'createActionPlan', { action_plan_id: id || undefined, work_paper_id: wpId, action_description: desc, due_date: dueDate, owner_ids: ownerIds, owner_names: ownerNames }).then(r => {
+    hideLoading(); bootstrap.Modal.getInstance(document.getElementById('actionPlanFormModal')).hide();
+    if (r.success) { showToast('Saved', 'success'); if (currentPage === 'work-paper-view') loadWorkPaperView(pageParams); else loadActionPlans(); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+// ============================================================
+// FILE UPLOAD
+// ============================================================
+function uploadFile() {
+  const fileInput = document.getElementById('uploadFileInput');
+  const desc = document.getElementById('uploadFileDesc').value;
+  const entityType = document.getElementById('uploadEntityType').value;
+  const entityId = document.getElementById('uploadEntityId').value;
+  if (!fileInput.files.length) { showToast('Please select a file', 'danger'); return; }
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result.split(',')[1];
+    showLoading('Uploading...');
+    google.script.run.withSuccessHandler(function(result) {
+      if (result.success) {
+        const fileData = { file_name: file.name, file_description: desc, drive_file_id: result.file.drive_file_id, drive_url: result.file.drive_url, file_size: result.file.file_size, mime_type: result.file.mime_type };
+        const action = entityType === 'WORK_PAPER' ? 'addWorkPaperFile' : 'addActionPlanEvidence';
+        const payload = entityType === 'WORK_PAPER' ? { workPaperId: entityId, ...fileData } : { actionPlanId: entityId, ...fileData };
+        apiCall(action, payload).then(r => { hideLoading(); bootstrap.Modal.getInstance(document.getElementById('uploadFileModal')).hide(); if (r.success) { showToast('Uploaded', 'success'); refreshCurrentPage(); } else showToast(r.error || 'Error', 'danger'); });
+      } else { hideLoading(); showToast(result.error || 'Upload failed', 'danger'); }
+    }).withFailureHandler(function() { hideLoading(); showToast('Upload error', 'danger'); }).uploadFileToDrive(file.name, file.type, base64, null);
+  };
+  reader.readAsDataURL(file);
+}
+
+function showUploadFile() {
+  document.getElementById('uploadEntityType').value = 'WORK_PAPER';
+  document.getElementById('uploadEntityId').value = currentWorkPaper?.work_paper_id || '';
+  document.getElementById('uploadFileInput').value = '';
+  document.getElementById('uploadFileDesc').value = '';
+  new bootstrap.Modal(document.getElementById('uploadFileModal')).show();
+}
+
+function deleteFile(fileId) {
+  if (!confirm('Delete this file?')) return;
+  showLoading('Deleting...');
+  apiCall('deleteWorkPaperFile', { fileId }).then(r => { hideLoading(); if (r.success) { showToast('Deleted', 'success'); refreshCurrentPage(); } else showToast(r.error || 'Error', 'danger'); }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+</script>
