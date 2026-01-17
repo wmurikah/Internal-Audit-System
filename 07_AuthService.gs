@@ -890,6 +890,26 @@ function updateUserIndex(userId, user, rowNumber) {
 }
 
 // ============================================================
+// EMAIL HELPERS
+// ============================================================
+
+/**
+ * Queue email for sending
+ * Wrapper for queueNotification used by auth functions
+ */
+function queueEmail(data) {
+  return queueNotification({
+    template_code: data.template_code || '',
+    recipient_user_id: data.recipient_user_id || '',
+    recipient_email: data.recipient_email || '',
+    subject: data.subject || '',
+    body: data.body || '',
+    module: data.module || 'AUTH',
+    record_id: data.record_id || ''
+  });
+}
+
+// ============================================================
 // TEST FUNCTION
 // ============================================================
 function testAuthService() {

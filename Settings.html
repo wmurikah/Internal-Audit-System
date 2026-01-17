@@ -7,7 +7,10 @@
   <!-- Tabs Navigation -->
   <ul class="nav nav-tabs mb-4" id="settingsTabs">
     <li class="nav-item">
-      <a class="nav-link active" data-bs-toggle="tab" href="#accessControl"><i class="bi bi-shield-lock me-1"></i>Access Control</a>
+      <a class="nav-link active" data-bs-toggle="tab" href="#userManagement"><i class="bi bi-people me-1"></i>User Management</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#accessControl"><i class="bi bi-shield-lock me-1"></i>Access Control</a>
     </li>
     <li class="nav-item">
       <a class="nav-link" data-bs-toggle="tab" href="#aiConfig"><i class="bi bi-robot me-1"></i>AI Configuration</a>
@@ -22,8 +25,60 @@
 
   <!-- Tab Content -->
   <div class="tab-content">
+    <!-- User Management Tab -->
+    <div class="tab-pane fade show active" id="userManagement">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="mb-0">Manage Users</h5>
+        <button class="btn btn-primary" onclick="showAddUser()"><i class="bi bi-person-plus me-2"></i>Add User</button>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <input type="text" class="form-control" placeholder="Search users..." id="userSearchInput" onkeyup="filterUsers()">
+        </div>
+        <div class="col-md-3">
+          <select class="form-select" id="userFilterRole" onchange="filterUsers()">
+            <option value="">All Roles</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <select class="form-select" id="userFilterStatus" onchange="filterUsers()">
+            <option value="">All Status</option>
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-outline-secondary w-100" onclick="loadUsers()"><i class="bi bi-arrow-repeat"></i></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Affiliate</th>
+                  <th>Status</th>
+                  <th>Last Login</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <tr><td colspan="7" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Access Control Tab -->
-    <div class="tab-pane fade show active" id="accessControl">
+    <div class="tab-pane fade" id="accessControl">
       <div class="row">
         <!-- Roles Panel -->
         <div class="col-lg-4 mb-4">
@@ -72,40 +127,15 @@
             </div>
           </div>
 
-          <!-- User Management Quick Access -->
+          <!-- System Actions -->
           <div class="card mt-4">
             <div class="card-header">
-              <i class="bi bi-person-gear me-2"></i>User Management
+              <i class="bi bi-gear me-2"></i>System Actions
             </div>
             <div class="card-body">
-              <div class="row g-3">
-                <div class="col-md-4">
-                  <div class="stat-card text-center p-3">
-                    <div class="stat-number" id="totalUsersCount">-</div>
-                    <div class="stat-label">Total Users</div>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="stat-card text-center p-3">
-                    <div class="stat-number text-success" id="activeUsersCount">-</div>
-                    <div class="stat-label">Active Users</div>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="stat-card text-center p-3">
-                    <div class="stat-number text-danger" id="lockedUsersCount">-</div>
-                    <div class="stat-label">Locked Accounts</div>
-                  </div>
-                </div>
-              </div>
-              <div class="mt-3">
-                <button class="btn btn-outline-primary me-2" onclick="navigateTo('users')">
-                  <i class="bi bi-people me-1"></i>Manage Users
-                </button>
-                <button class="btn btn-outline-secondary" onclick="rebuildIndexes()">
-                  <i class="bi bi-arrow-repeat me-1"></i>Rebuild Indexes
-                </button>
-              </div>
+              <button class="btn btn-outline-secondary" onclick="rebuildIndexes()">
+                <i class="bi bi-arrow-repeat me-1"></i>Rebuild All Indexes
+              </button>
             </div>
           </div>
         </div>
@@ -368,17 +398,195 @@
   </div>
 </div>
 
+<!-- User Form Modal -->
+<div class="modal fade" id="userFormModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="userModalLabel">Add User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="userForm">
+          <input type="hidden" id="userFormId">
+          <div class="mb-3">
+            <label class="form-label">Full Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="userFormName" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email <span class="text-danger">*</span></label>
+            <input type="email" class="form-control" id="userFormEmail" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Role <span class="text-danger">*</span></label>
+            <select class="form-select" id="userFormRole" required>
+              <option value="">Select Role</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Affiliate</label>
+            <select class="form-select" id="userFormAffiliate">
+              <option value="">Select Affiliate</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveUser()">
+          <i class="bi bi-save me-1"></i>Save User
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 let selectedRole = null;
 let permissionsData = {};
 let aiConfigStatus = null;
+let usersData = [];
 
 function loadSettings() {
+  loadUsers();
   loadRoles();
-  loadUserStats();
   loadAIConfig();
   loadSystemConfig();
   loadAuditLog();
+}
+
+// ============================================================
+// USER MANAGEMENT
+// ============================================================
+function loadUsers() {
+  const roleSelect = document.getElementById('userFilterRole');
+  if (roleSelect && window.appDropdowns?.roles) {
+    roleSelect.innerHTML = '<option value="">All Roles</option>';
+    window.appDropdowns.roles.forEach(r => roleSelect.innerHTML += `<option value="${r.code}">${r.name}</option>`);
+  }
+
+  document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+
+  apiCall('getUsers', { filters: {} }).then(r => {
+    console.log('getUsers response:', r);
+    if (r.success && r.users) {
+      usersData = r.users;
+      renderUsers();
+    } else {
+      const errorMsg = r.error || 'Unknown error';
+      document.getElementById('usersTableBody').innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error loading users: ${escapeHtml(errorMsg)}</td></tr>`;
+    }
+  }).catch(err => {
+    console.error('getUsers error:', err);
+    document.getElementById('usersTableBody').innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error loading users: ${escapeHtml(err.message || 'Connection error')}</td></tr>`;
+  });
+}
+
+function renderUsers() {
+  const search = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
+  const role = document.getElementById('userFilterRole')?.value;
+  const status = document.getElementById('userFilterStatus')?.value;
+
+  let filtered = usersData.filter(u => {
+    if (search && !u.full_name?.toLowerCase().includes(search) && !u.email?.toLowerCase().includes(search)) return false;
+    if (role && u.role_code !== role) return false;
+    if (status !== '' && String(u.is_active) !== status) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('usersTableBody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No users found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(u => `
+    <tr>
+      <td>${escapeHtml(u.full_name || '-')}</td>
+      <td>${escapeHtml(u.email || '-')}</td>
+      <td><span class="badge bg-secondary">${escapeHtml(u.role_code || '-')}</span></td>
+      <td>${u.affiliate_code || '-'}</td>
+      <td><span class="badge ${u.is_active ? 'bg-success' : 'bg-secondary'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
+      <td class="small text-muted">${u.last_login ? formatDate(u.last_login) : 'Never'}</td>
+      <td>
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="#" onclick="editUser('${u.user_id}')"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+            <li><a class="dropdown-item" href="#" onclick="resetUserPassword('${u.user_id}')"><i class="bi bi-key me-2"></i>Reset Password</a></li>
+            ${u.is_active ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger" href="#" onclick="deactivateUser('${u.user_id}')"><i class="bi bi-person-x me-2"></i>Deactivate</a></li>` : ''}
+          </ul>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterUsers() { renderUsers(); }
+
+function showAddUser() {
+  document.getElementById('userFormId').value = '';
+  document.getElementById('userForm').reset();
+  document.getElementById('userModalLabel').textContent = 'Add User';
+  populateDropdown('userFormRole', window.appDropdowns?.roles || [], 'code', 'name', 'Select Role');
+  populateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
+  new bootstrap.Modal(document.getElementById('userFormModal')).show();
+}
+
+function editUser(id) {
+  const user = usersData.find(u => u.user_id === id);
+  if (!user) return;
+  document.getElementById('userFormId').value = user.user_id;
+  document.getElementById('userFormName').value = user.full_name || '';
+  document.getElementById('userFormEmail').value = user.email || '';
+  populateDropdown('userFormRole', window.appDropdowns?.roles || [], 'code', 'name', 'Select Role');
+  populateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
+  document.getElementById('userFormRole').value = user.role_code || '';
+  document.getElementById('userFormAffiliate').value = user.affiliate_code || '';
+  document.getElementById('userModalLabel').textContent = 'Edit User';
+  new bootstrap.Modal(document.getElementById('userFormModal')).show();
+}
+
+function saveUser() {
+  const id = document.getElementById('userFormId').value;
+  const data = {
+    full_name: document.getElementById('userFormName').value,
+    email: document.getElementById('userFormEmail').value,
+    role_code: document.getElementById('userFormRole').value,
+    affiliate_code: document.getElementById('userFormAffiliate').value
+  };
+  if (id) data.userId = id;
+
+  showLoading('Saving...');
+  apiCall(id ? 'updateUser' : 'createUser', data).then(r => {
+    hideLoading();
+    bootstrap.Modal.getInstance(document.getElementById('userFormModal')).hide();
+    if (r.success) {
+      showToast(id ? 'User updated' : 'User created', 'success');
+      if (r.tempPassword) showToast('Temp password: ' + r.tempPassword, 'info', 10000);
+      loadUsers();
+    } else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error saving user', 'danger'); });
+}
+
+function resetUserPassword(id) {
+  if (!confirm('Reset password for this user?')) return;
+  showLoading('Resetting...');
+  apiCall('resetPassword', { userId: id }).then(r => {
+    hideLoading();
+    if (r.success) showToast('Password reset. Temp: ' + r.tempPassword, 'success', 10000);
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function deactivateUser(id) {
+  if (!confirm('Deactivate this user?')) return;
+  showLoading('Processing...');
+  apiCall('deactivateUser', { userId: id }).then(r => {
+    hideLoading();
+    if (r.success) { showToast('User deactivated', 'success'); loadUsers(); }
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }
 
 // ============================================================
@@ -479,16 +687,6 @@ function savePermissions() {
     hideLoading();
     showToast('Error saving permissions', 'danger');
   });
-}
-
-function loadUserStats() {
-  apiCall('getUserStats', {}).then(r => {
-    if (r.stats) {
-      document.getElementById('totalUsersCount').textContent = r.stats.total || 0;
-      document.getElementById('activeUsersCount').textContent = r.stats.active || 0;
-      document.getElementById('lockedUsersCount').textContent = r.stats.locked || 0;
-    }
-  }).catch(() => {});
 }
 
 function rebuildIndexes() {
