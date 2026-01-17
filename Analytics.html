@@ -300,18 +300,32 @@ function loadAnalytics() {
 
   showLoading('Loading analytics...');
 
-  apiCall('getAnalyticsData', { year }).then(r => {
-    hideLoading();
-    if (r.success && r.data) {
-      analyticsData = r.data;
-      renderAnalytics();
-    } else {
+  apiCall('getAnalyticsData', { year })
+    .then(r => {
+      hideLoading();
+      if (r && r.success && r.data) {
+        analyticsData = r.data;
+        renderAnalytics();
+      } else {
+        console.error('Analytics load error:', r?.error);
+        // Set empty data to prevent null errors
+        analyticsData = {
+          workPapers: { total: 0, byStatus: {}, byRisk: {}, byAffiliate: {}, byMonth: {} },
+          actionPlans: { total: 0, overdue: 0, implementationRate: 0, byStatus: {}, aging: {} },
+          trends: { monthly: [], lastMonth: {}, thisMonth: {} },
+          highRiskFindings: [],
+          overdueActionPlans: [],
+          auditorPerformance: []
+        };
+        renderAnalytics();
+        if (r?.error) showToast(r.error, 'warning');
+      }
+    })
+    .catch(e => {
+      hideLoading();
+      console.error('Analytics error:', e);
       showToast('Error loading analytics', 'danger');
-    }
-  }).catch(e => {
-    hideLoading();
-    showToast('Error: ' + e.message, 'danger');
-  });
+    });
 }
 
 function initAnalyticsPage() {

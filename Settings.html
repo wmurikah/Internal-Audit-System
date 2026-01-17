@@ -465,18 +465,25 @@ function loadUsers() {
     window.appDropdowns.roles.forEach(r => roleSelect.innerHTML += `<option value="${r.code}">${r.name}</option>`);
   }
 
-  document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+  document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading users...</td></tr>';
 
-  apiCall('getUsers', { filters: {} }).then(r => {
-    if (r.success && r.users) {
-      usersData = r.users;
-      renderUsers();
-    } else {
-      document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Error loading users</td></tr>';
-    }
-  }).catch(() => {
-    document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Error loading users</td></tr>';
-  });
+  apiCall('getUsers', { filters: {} })
+    .then(r => {
+      if (r && r.success && r.users) {
+        usersData = r.users;
+        renderUsers();
+      } else if (r && r.error === 'Permission denied') {
+        document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-lock me-2"></i>You do not have permission to view users</td></tr>';
+      } else {
+        console.error('Users load error:', r?.error);
+        usersData = [];
+        renderUsers();
+      }
+    })
+    .catch(err => {
+      console.error('Users error:', err);
+      document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Error connecting to server</td></tr>';
+    });
 }
 
 function renderUsers() {
@@ -923,15 +930,25 @@ let auditLogPage = 1;
 const auditLogPageSize = 25;
 
 function loadAuditLog() {
-  const action = document.getElementById('logFilterAction').value;
+  const action = document.getElementById('logFilterAction')?.value || '';
 
-  apiCall('getAuditLog', { action, page: auditLogPage, pageSize: auditLogPageSize }).then(r => {
-    if (r.logs) {
-      renderAuditLog(r.logs, r.total);
-    }
-  }).catch(() => {
-    document.getElementById('auditLogTable').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading logs</td></tr>';
-  });
+  document.getElementById('auditLogTable').innerHTML = '<tr><td colspan="5" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading logs...</td></tr>';
+
+  apiCall('getAuditLog', { action, page: auditLogPage, pageSize: auditLogPageSize })
+    .then(r => {
+      if (r && r.success !== false && r.logs) {
+        renderAuditLog(r.logs, r.total || r.logs.length);
+      } else if (r && r.error === 'Permission denied') {
+        document.getElementById('auditLogTable').innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-lock me-2"></i>You do not have permission to view logs</td></tr>';
+      } else {
+        console.error('Audit log error:', r?.error);
+        renderAuditLog([], 0);
+      }
+    })
+    .catch(err => {
+      console.error('Audit log error:', err);
+      document.getElementById('auditLogTable').innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Error connecting to server</td></tr>';
+    });
 }
 
 function renderAuditLog(logs, total) {

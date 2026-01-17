@@ -445,18 +445,10 @@
               sessionStorage.setItem('user', JSON.stringify(result.user));
             }
             
-            // Check if password change required
-            if (result.user && result.user.must_change_password) {
-              // Redirect to password change
-              setTimeout(() => {
-                window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=main';
-              }, 1000);
-            } else {
-              // Redirect to main app
-              setTimeout(() => {
-                window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=main';
-              }, 1000);
-            }
+            // Redirect to main app (page=app triggers authenticated portal)
+            setTimeout(() => {
+              window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=app';
+            }, 800);
           } else {
             showError(result.error || 'Login failed. Please try again.');
           }
@@ -469,32 +461,11 @@
         .apiCall('login', { email: email, password: password });
     }
     
-    // Check if already logged in
-    function checkExistingSession() {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result && result.success && result.user) {
-            // Already logged in, redirect
-            showSuccess('Already logged in. Redirecting...');
-            setTimeout(() => {
-              window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>?page=main';
-            }, 500);
-          }
-        })
-        .withFailureHandler(function(error) {
-          // Not logged in, stay on login page
-          console.log('No existing session');
-        })
-        .apiCall('getInitData', {});
-    }
-    
-    // Initialize
+    // Initialize - Login is ALWAYS the mandatory entry point
+    // No auto-redirect for existing sessions - users must authenticate fresh
     document.addEventListener('DOMContentLoaded', function() {
-      // Focus on email field
+      // Focus on email field for immediate typing
       document.getElementById('email').focus();
-      
-      // Check for existing session
-      checkExistingSession();
     });
   </script>
 </body>

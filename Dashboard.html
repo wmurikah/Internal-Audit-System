@@ -173,20 +173,25 @@ let dashboardCharts = {};
 
 function loadDashboard() {
   showLoading('Loading dashboard...');
-  
+
   apiCall('getDashboardData', {})
     .then(data => {
       hideLoading();
-      if (data) {
+      if (data && data.success !== false) {
         renderDashboard(data);
       } else {
-        showToast('Failed to load dashboard', 'danger');
+        console.error('Dashboard load failed:', data?.error);
+        showToast(data?.error || 'Failed to load dashboard', 'danger');
+        // Show empty state
+        renderDashboard({ summary: { workPapers: {}, actionPlans: {} }, alerts: [], recentActivity: [], charts: {} });
       }
     })
     .catch(err => {
       hideLoading();
       console.error('Dashboard error:', err);
       showToast('Error loading dashboard', 'danger');
+      // Show empty state
+      renderDashboard({ summary: { workPapers: {}, actionPlans: {} }, alerts: [], recentActivity: [], charts: {} });
     });
 }
 
