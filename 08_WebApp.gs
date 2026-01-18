@@ -111,7 +111,51 @@ function routeAction(action, data, user) {
       return getInitData();
       
     case 'getDashboardData':
-      return { success: true, ...getDashboardData(user) };
+      try {
+        // Ensure user is authenticated
+        if (!user) {
+          return { success: false, error: 'Authentication required', requireLogin: true };
+        }
+
+        // Call the service function
+        const dashboardData = getDashboardData(user);
+
+        // Validate the response
+        if (!dashboardData) {
+          return { success: false, error: 'Dashboard service returned null' };
+        }
+
+        // Ensure required properties exist for frontend
+        if (!dashboardData.summary) {
+          dashboardData.summary = { workPapers: {}, actionPlans: {} };
+        }
+        if (!dashboardData.charts) {
+          dashboardData.charts = {};
+        }
+        if (!dashboardData.alerts) {
+          dashboardData.alerts = [];
+        }
+        if (!dashboardData.recentActivity) {
+          dashboardData.recentActivity = [];
+        }
+
+        // Return with proper structure
+        return {
+          success: true,
+          ...dashboardData
+        };
+
+      } catch (e) {
+        console.error('getDashboardData error:', e);
+        return {
+          success: false,
+          error: 'Failed to load dashboard: ' + e.message,
+          summary: { workPapers: {}, actionPlans: {} },
+          charts: {},
+          alerts: [],
+          recentActivity: []
+        };
+      }
       
     case 'getDropdownData':
       return { success: true, dropdowns: getDropdownData() };
