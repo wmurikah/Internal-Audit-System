@@ -576,7 +576,7 @@ function runScheduledMaintenance() {
     
     // Process email queue
     console.log('Processing email queue...');
-    const emailResult = processEmailQueue();
+    const emailResult = processEmailQueue()
     console.log('Emails sent:', emailResult.sent);
     
     console.log('=== Maintenance Complete ===');
@@ -644,4 +644,3 @@ function listTriggers() {
   console.log('Current triggers:', JSON.stringify(triggerInfo, null, 2));
   return triggerInfo;
 }
-
