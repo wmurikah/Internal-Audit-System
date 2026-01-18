@@ -455,9 +455,7 @@ function loadSettings() {
   loadAuditLog();
 }
 
-// ============================================================
-// USER MANAGEMENT
-// ============================================================
+// User management
 function loadUsers() {
   const roleSelect = document.getElementById('userFilterRole');
   if (roleSelect && window.appDropdowns?.roles) {
@@ -593,9 +591,7 @@ function deactivateUser(id) {
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }
 
-// ============================================================
-// ACCESS CONTROL
-// ============================================================
+// Access control
 function loadRoles() {
   apiCall('getDropdownData', {}).then(r => {
     if (!r.dropdowns?.roles) return;
@@ -710,9 +706,7 @@ function rebuildIndexes() {
   });
 }
 
-// ============================================================
-// AI CONFIGURATION
-// ============================================================
+// AI configuration
 function loadAIConfig() {
   apiCall('getAIConfigStatus', {}).then(r => {
     if (r.config) {
@@ -885,9 +879,7 @@ function testCurrentProvider() {
   });
 }
 
-// ============================================================
-// SYSTEM CONFIG
-// ============================================================
+// System config
 function loadSystemConfig() {
   apiCall('getSystemConfig', {}).then(r => {
     if (r.config) {
@@ -923,9 +915,7 @@ function saveSystemConfig() {
   });
 }
 
-// ============================================================
-// AUDIT LOG
-// ============================================================
+// Audit log
 let auditLogPage = 1;
 const auditLogPageSize = 25;
 
