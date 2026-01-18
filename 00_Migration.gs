@@ -1,22 +1,4 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Database Migration & Restructure Script v3.0
- * 
- * RUN THIS SCRIPT ONCE TO:
- * 1. Backup existing data
- * 2. Restructure database with indexes
- * 3. Migrate data with validation
- * 4. Set up optimized configuration
- * 
- * IMPORTANT: This is a destructive operation. Backup your spreadsheet first!
- * 
- * HOW TO RUN:
- * 1. Open this script in Apps Script editor
- * 2. Select "runMigration" from the function dropdown
- * 3. Click Run
- * 4. Grant permissions when prompted
- * 5. Check execution log for progress
- */
+// 00_Migration.gs - Database Migration & Restructure Script (run once)
 
 // ============================================================
 // CONFIGURATION

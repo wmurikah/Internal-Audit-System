@@ -1,15 +1,4 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Core Services Layer v3.0
- * 
- * Foundation layer providing:
- * - Cached database access
- * - Indexed lookups (O(1) instead of O(n))
- * - Batch operations
- * - Transaction wrapper
- * - Security utilities
- * - Cache management
- */
+// 01_Core.gs - Core Services Layer: Database, Cache, Index, Security utilities
 
 // ============================================================
 // CONFIGURATION
@@ -1245,55 +1234,3 @@ function getRoleName(roleCode) {
   return roleMap[roleCode] || roleCode;
 }
 
-// ============================================================
-// TEST FUNCTIONS
-// ============================================================
-function testCoreLayer() {
-  console.log('=== Testing Core Layer ===');
-  
-  // Test cache
-  console.log('\n1. Testing Cache...');
-  Cache.set('test_key', { foo: 'bar' }, 60);
-  const cached = Cache.get('test_key');
-  console.log('Cache test:', cached && cached.foo === 'bar' ? 'PASS' : 'FAIL');
-  Cache.remove('test_key');
-  
-  // Test index lookup
-  console.log('\n2. Testing Index Lookup...');
-  const wpIndex = Index.getIndexMap('WORK_PAPER');
-  console.log('Work paper index entries:', Object.keys(wpIndex).length);
-  
-  // Test DB read
-  console.log('\n3. Testing DB Read...');
-  const users = DB.getAll('05_Users');
-  console.log('Users loaded:', users.length);
-  
-  // Test getById
-  if (Object.keys(wpIndex).length > 0) {
-    const testWpId = Object.keys(wpIndex)[0];
-    console.log('Testing getById for:', testWpId);
-    const wp = DB.getById('WORK_PAPER', testWpId);
-    console.log('GetById result:', wp ? 'PASS' : 'FAIL');
-  }
-  
-  // Test config
-  console.log('\n4. Testing Config...');
-  const config = getAllConfig();
-  console.log('Config entries:', Object.keys(config).length);
-  console.log('System name:', config.SYSTEM_NAME);
-  
-  // Test security
-  console.log('\n5. Testing Security...');
-  const salt = Security.generateSalt();
-  const hash = Security.hashPassword('testPassword123', salt);
-  const verified = Security.verifyPassword('testPassword123', salt, hash);
-  console.log('Password hashing test:', verified ? 'PASS' : 'FAIL');
-  
-  // Test permissions
-  console.log('\n6. Testing Permissions...');
-  const canCreate = checkPermission('SUPER_ADMIN', 'WORK_PAPER', 'create');
-  const cantDelete = !checkPermission('JUNIOR_STAFF', 'WORK_PAPER', 'delete');
-  console.log('Permission test:', canCreate && cantDelete ? 'PASS' : 'FAIL');
-  
-  console.log('\n=== Core Layer Tests Complete ===');
-}
