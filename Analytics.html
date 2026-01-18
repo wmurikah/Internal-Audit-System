@@ -369,7 +369,7 @@ function renderAnalytics() {
   }
 
   // Charts
-  renderCharts();
+  renderAnalyticsCharts();
 
   // Tables
   renderHighRiskFindings();
@@ -377,7 +377,7 @@ function renderAnalytics() {
   renderAuditorPerformance();
 }
 
-function renderCharts() {
+function renderAnalyticsCharts() {
   // Destroy existing charts
   Object.values(charts).forEach(chart => chart?.destroy());
 

@@ -214,7 +214,7 @@ function renderDashboard(data) {
   renderAlerts(data.alerts || []);
   
   // Render charts
-  renderCharts(data.charts || {});
+  renderDashboardCharts(data.charts || {});
   
   // Render recent activity
   renderRecentActivity(data.recentActivity || data.recentWorkPapers || []);
@@ -249,7 +249,7 @@ function renderAlerts(alerts) {
   container.innerHTML = html;
 }
 
-function renderCharts(charts) {
+function renderDashboardCharts(charts) {
   // Destroy existing charts
   Object.values(dashboardCharts).forEach(chart => {
     if (chart && typeof chart.destroy === 'function') chart.destroy();
