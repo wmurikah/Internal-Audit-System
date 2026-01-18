@@ -1,28 +1,6 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Web Application Entry Points v3.0
- * 
- * FILE: 08_WebApp.gs
- * 
- * Provides:
- * - doGet() - Serve HTML pages
- * - doPost() - API endpoint router
- * - File upload handling
- * - Error handling
- * - Request/response utilities
- * 
- * DEPENDS ON: All other service files (01-07)
- */
+// 08_WebApp.gs - Web Application Entry Points, API Router, File Upload, Request/Response Utilities
 
-// ============================================================
-// WEB APP ENTRY POINTS
-// ============================================================
-
-/**
- * Handle GET requests - serve HTML pages
- * IMPORTANT: Login page is ALWAYS shown first (mandatory entry point)
- * User must authenticate before accessing any module
- */
+// Handle GET requests - serve HTML pages (login page shown first)
 function doGet(e) {
   try {
     const page = e.parameter.page || 'login';
@@ -375,14 +353,6 @@ function routeAction(action, data, user) {
   }
 }
 
-// ============================================================
-// FILE UPLOAD HANDLING
-// ============================================================
-
-/**
- * Upload file to Google Drive
- * Called from client-side with base64 data
- */
 function uploadFileToDrive(fileName, mimeType, base64Data, folderId) {
   try {
     const user = getCurrentUser();
@@ -498,13 +468,6 @@ function deleteFileFromDrive(fileId) {
   }
 }
 
-// ============================================================
-// RESPONSE UTILITIES
-// ============================================================
-
-/**
- * Create JSON response
- */
 function jsonResponse(data, statusCode) {
   const output = ContentService.createTextOutput(JSON.stringify(data));
   output.setMimeType(ContentService.MimeType.JSON);
@@ -525,17 +488,7 @@ function getScriptUrl() {
   return ScriptApp.getService().getUrl();
 }
 
-// ============================================================
-// CLIENT-SIDE API WRAPPER
-// ============================================================
-
-/**
- * Generic API call function for client-side
- * This is called from HTML files
- *
- * IMPORTANT: When deployed as "Anyone with Google Account", Session.getActiveUser().getEmail()
- * may return empty. This function now supports session-based authentication via sessionToken.
- */
+// Generic API call function for client-side (supports session-based authentication)
 function apiCall(action, data) {
   try {
     data = data || {};
@@ -606,14 +559,7 @@ function getInitDataWithUser(user) {
   };
 }
 
-// ============================================================
-// SCHEDULED TRIGGER FUNCTIONS
-// ============================================================
-
-/**
- * Run all scheduled maintenance tasks
- * Called by time-based trigger
- */
+// Run all scheduled maintenance tasks (called by time-based trigger)
 function runScheduledMaintenance() {
   console.log('=== Running Scheduled Maintenance ===');
   
@@ -699,103 +645,3 @@ function listTriggers() {
   return triggerInfo;
 }
 
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testWebApp() {
-  console.log('=== Testing 08_WebApp.gs ===\n');
-  
-  const user = getCurrentUser();
-  
-  if (!user) {
-    console.log('FAIL: Current user not found');
-    return;
-  }
-  
-  console.log('Testing as user:', user.full_name, '(' + user.role_code + ')');
-  
-  // Test ping
-  console.log('\n1. Testing ping...');
-  try {
-    const result = apiCall('ping', {});
-    console.log('Ping response:', result.success);
-    console.log('Timestamp:', result.timestamp);
-    console.log('ping: PASS');
-  } catch (e) {
-    console.log('ping: FAIL -', e.message);
-  }
-  
-  // Test getInitData
-  console.log('\n2. Testing getInitData via apiCall...');
-  try {
-    const result = apiCall('getInitData', {});
-    console.log('Init success:', result.success);
-    console.log('User:', result.user ? result.user.full_name : 'null');
-    console.log('getInitData: PASS');
-  } catch (e) {
-    console.log('getInitData: FAIL -', e.message);
-  }
-  
-  // Test getWorkPapers
-  console.log('\n3. Testing getWorkPapers via apiCall...');
-  try {
-    const result = apiCall('getWorkPapers', { filters: { limit: 3 } });
-    console.log('Work papers:', result.workPapers ? result.workPapers.length : 0);
-    console.log('getWorkPapers: PASS');
-  } catch (e) {
-    console.log('getWorkPapers: FAIL -', e.message);
-  }
-  
-  // Test getActionPlans
-  console.log('\n4. Testing getActionPlans via apiCall...');
-  try {
-    const result = apiCall('getActionPlans', { filters: { limit: 3 } });
-    console.log('Action plans:', result.actionPlans ? result.actionPlans.length : 0);
-    console.log('getActionPlans: PASS');
-  } catch (e) {
-    console.log('getActionPlans: FAIL -', e.message);
-  }
-  
-  // Test getDashboardData
-  console.log('\n5. Testing getDashboardData via apiCall...');
-  try {
-    const result = apiCall('getDashboardData', {});
-    console.log('Dashboard user:', result.user ? result.user.full_name : 'null');
-    console.log('Alerts:', result.alerts ? result.alerts.length : 0);
-    console.log('getDashboardData: PASS');
-  } catch (e) {
-    console.log('getDashboardData: FAIL -', e.message);
-  }
-  
-  // Test unknown action
-  console.log('\n6. Testing unknown action handling...');
-  try {
-    const result = apiCall('unknownAction', {});
-    console.log('Error returned:', result.error);
-    console.log('Unknown action handling: PASS');
-  } catch (e) {
-    console.log('Unknown action handling: FAIL -', e.message);
-  }
-  
-  // Test getScriptUrl
-  console.log('\n7. Testing getScriptUrl...');
-  try {
-    const url = getScriptUrl();
-    console.log('Script URL:', url ? 'Retrieved' : 'null');
-    console.log('getScriptUrl: PASS');
-  } catch (e) {
-    console.log('getScriptUrl: FAIL -', e.message);
-  }
-  
-  // Test listTriggers
-  console.log('\n8. Testing listTriggers...');
-  try {
-    const triggers = listTriggers();
-    console.log('Current triggers:', triggers.length);
-    console.log('listTriggers: PASS');
-  } catch (e) {
-    console.log('listTriggers: FAIL -', e.message);
-  }
-  
-  console.log('\n=== 08_WebApp.gs Tests Complete ===');
-}

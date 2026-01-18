@@ -1,19 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Core Services Layer v3.0
- * 
- * Foundation layer providing:
- * - Cached database access
- * - Indexed lookups (O(1) instead of O(n))
- * - Batch operations
- * - Transaction wrapper
- * - Security utilities
- * - Cache management
- */
+// 01_Core.gs - Core Services Layer (Database, Cache, Index, Security)
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
 const CONFIG = {
   SPREADSHEET_ID: '1pInjjLXgJu4d0zIb3-RzkI3SwcX7q23_4g1K44M-pO4',
   
@@ -43,9 +29,6 @@ const CONFIG = {
   }
 };
 
-// ============================================================
-// DATABASE SINGLETON
-// ============================================================
 let _dbInstance = null;
 
 function getDatabase() {
@@ -65,13 +48,7 @@ function getSheet(sheetName) {
   return sheet;
 }
 
-// ============================================================
-// CACHE LAYER
-// ============================================================
 const Cache = {
-  /**
-   * Get value from cache
-   */
   get: function(key) {
     try {
       const cache = CacheService.getScriptCache();
@@ -84,10 +61,7 @@ const Cache = {
     }
     return null;
   },
-  
-  /**
-   * Set value in cache
-   */
+
   set: function(key, value, ttlSeconds) {
     try {
       const cache = CacheService.getScriptCache();
@@ -106,19 +80,13 @@ const Cache = {
       return false;
     }
   },
-  
-  /**
-   * Remove value from cache
-   */
+
   remove: function(key) {
     try {
       CacheService.getScriptCache().remove(key);
     } catch (e) {}
   },
-  
-  /**
-   * Remove multiple keys matching a pattern
-   */
+
   invalidatePattern: function(pattern) {
     // CacheService doesn't support pattern deletion
     // We track known cache keys and remove matching ones
@@ -138,10 +106,7 @@ const Cache = {
       }
     });
   },
-  
-  /**
-   * Clear all application caches
-   */
+
   clearAll: function() {
     try {
       // CacheService doesn't have clearAll, but we can remove known keys
@@ -156,9 +121,6 @@ const Cache = {
   }
 };
 
-// ============================================================
-// SHEET HEADERS (Cached)
-// ============================================================
 function getSheetHeaders(sheetName) {
   const cacheKey = 'headers_' + sheetName;
   
@@ -178,32 +140,18 @@ function getSheetHeaders(sheetName) {
   return headers;
 }
 
-/**
- * Get column index for a header name (0-based)
- */
 function getColumnIndex(sheetName, columnName) {
   const headers = getSheetHeaders(sheetName);
   return headers.indexOf(columnName);
 }
 
-// ============================================================
-// INDEX-BASED LOOKUPS (O(1) instead of O(n))
-// ============================================================
 const Index = {
-  /**
-   * Get the row number for an entity by ID
-   * Returns -1 if not found
-   */
   getRowNumber: function(entityType, entityId) {
     const indexMap = this.getIndexMap(entityType);
     const entry = indexMap[entityId];
     return entry ? entry.rowNumber : -1;
   },
-  
-  /**
-   * Get full index map for an entity type
-   * Returns: { entityId: { rowNumber, ...metadata } }
-   */
+
   getIndexMap: function(entityType) {
     const cacheKey = 'index_' + entityType.toLowerCase() + '_map';
     
@@ -248,10 +196,7 @@ const Index = {
     
     return indexMap;
   },
-  
-  /**
-   * Update index entry for a single entity
-   */
+
   updateEntry: function(entityType, entityId, rowNumber, metadata) {
     const indexSheetName = CONFIG.INDEX_SHEETS[entityType];
     if (!indexSheetName) return false;
@@ -292,10 +237,7 @@ const Index = {
     
     return true;
   },
-  
-  /**
-   * Remove index entry
-   */
+
   removeEntry: function(entityType, entityId) {
     const indexSheetName = CONFIG.INDEX_SHEETS[entityType];
     if (!indexSheetName) return false;
@@ -315,10 +257,7 @@ const Index = {
     
     return false;
   },
-  
-  /**
-   * Rebuild entire index for an entity type
-   */
+
   rebuild: function(entityType) {
     const dataSheetName = CONFIG.DATA_SHEETS[entityType];
     const indexSheetName = CONFIG.INDEX_SHEETS[entityType];
@@ -390,14 +329,7 @@ const Index = {
   }
 };
 
-// ============================================================
-// DATABASE READ OPERATIONS
-// ============================================================
 const DB = {
-  /**
-   * Get a single entity by ID using index lookup
-   * Much faster than scanning entire sheet
-   */
   getById: function(entityType, entityId) {
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return null;
@@ -417,10 +349,7 @@ const DB = {
     
     return entity;
   },
-  
-  /**
-   * Get multiple entities by IDs (batch operation)
-   */
+
   getByIds: function(entityType, entityIds) {
     if (!entityIds || entityIds.length === 0) return [];
     
@@ -467,11 +396,7 @@ const DB = {
     
     return results;
   },
-  
-  /**
-   * Get all rows from a sheet as objects
-   * Use sparingly - prefer filtered queries
-   */
+
   getAll: function(sheetName) {
     const sheet = getSheet(sheetName);
     if (!sheet || sheet.getLastRow() < 2) return [];
@@ -488,11 +413,7 @@ const DB = {
     
     return results;
   },
-  
-  /**
-   * Get filtered rows using index metadata
-   * Much faster than loading entire sheet
-   */
+
   getFiltered: function(entityType, filters) {
     const indexMap = Index.getIndexMap(entityType);
     const matchingIds = [];
@@ -516,10 +437,7 @@ const DB = {
     // Fetch full records for matching IDs
     return this.getByIds(entityType, matchingIds);
   },
-  
-  /**
-   * Count records matching filters
-   */
+
   count: function(entityType, filters) {
     const indexMap = Index.getIndexMap(entityType);
     let count = 0;
@@ -541,14 +459,7 @@ const DB = {
   }
 };
 
-// ============================================================
-// DATABASE WRITE OPERATIONS
-// ============================================================
 const DBWrite = {
-  /**
-   * Insert a new row
-   * Returns the row number where inserted
-   */
   insert: function(sheetName, data) {
     const sheet = getSheet(sheetName);
     if (!sheet) return -1;
@@ -566,11 +477,7 @@ const DBWrite = {
     
     return newRowNumber;
   },
-  
-  /**
-   * Update an existing row by row number
-   * Only updates specified fields
-   */
+
   updateRow: function(sheetName, rowNumber, data) {
     if (rowNumber < 2) return false;
     
@@ -595,10 +502,7 @@ const DBWrite = {
     
     return true;
   },
-  
-  /**
-   * Update entity by ID using index
-   */
+
   updateById: function(entityType, entityId, data) {
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return false;
@@ -626,11 +530,7 @@ const DBWrite = {
     
     return result;
   },
-  
-  /**
-   * Delete row by row number
-   * Note: This shifts all rows below, invalidating indexes
-   */
+
   deleteRow: function(sheetName, rowNumber) {
     if (rowNumber < 2) return false;
     
@@ -640,11 +540,7 @@ const DBWrite = {
     sheet.deleteRow(rowNumber);
     return true;
   },
-  
-  /**
-   * Delete entity by ID
-   * Handles index update
-   */
+
   deleteById: function(entityType, entityId) {
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return false;
@@ -659,11 +555,7 @@ const DBWrite = {
     
     return result;
   },
-  
-  /**
-   * Batch insert multiple rows
-   * Much faster than individual inserts
-   */
+
   batchInsert: function(sheetName, dataArray) {
     if (!dataArray || dataArray.length === 0) return [];
     
@@ -687,11 +579,7 @@ const DBWrite = {
     // Return row numbers
     return rowArrays.map((_, idx) => startRow + idx);
   },
-  
-  /**
-   * Batch update multiple rows
-   * Rows is an array of { rowNumber, data }
-   */
+
   batchUpdate: function(sheetName, updates) {
     if (!updates || updates.length === 0) return true;
     
@@ -721,21 +609,7 @@ const DBWrite = {
   }
 };
 
-// ============================================================
-// TRANSACTION WRAPPER (Pseudo-ACID)
-// ============================================================
 const Transaction = {
-  /**
-   * Execute operations in a pseudo-transaction
-   * If any operation fails, attempts rollback
-   * 
-   * Usage:
-   * Transaction.execute([
-   *   { type: 'insert', sheet: '09_WorkPapers', data: {...} },
-   *   { type: 'insert', sheet: '10_Requirements', data: {...} },
-   *   { type: 'update', sheet: '00_Config', rowNumber: 5, data: {...} }
-   * ]);
-   */
   execute: function(operations) {
     const results = [];
     const rollbackOps = [];
@@ -837,9 +711,6 @@ const Transaction = {
   }
 };
 
-// ============================================================
-// ID GENERATION
-// ============================================================
 function getNextId(prefix) {
   const lock = LockService.getScriptLock();
   
@@ -894,9 +765,6 @@ function getIdPrefix(prefix) {
   return prefixMap[prefix] || prefix + '-';
 }
 
-// ============================================================
-// CONFIGURATION ACCESS (Cached)
-// ============================================================
 function getConfig(key) {
   const allConfig = getAllConfig();
   return allConfig[key];
@@ -950,14 +818,7 @@ function setConfig(key, value) {
   return true;
 }
 
-// ============================================================
-// SECURITY UTILITIES
-// ============================================================
 const Security = {
-  /**
-   * Hash password using PBKDF2-like iteration
-   * Much more secure than plain SHA-256
-   */
   hashPassword: function(password, salt) {
     const iterations = parseInt(getConfig('PBKDF2_ITERATIONS')) || 10000;
     let hash = password + salt;
@@ -973,18 +834,12 @@ const Security = {
     
     return hash;
   },
-  
-  /**
-   * Verify password against stored hash
-   */
+
   verifyPassword: function(password, salt, storedHash) {
     const computedHash = this.hashPassword(password, salt);
     return computedHash === storedHash;
   },
-  
-  /**
-   * Generate cryptographically strong random salt
-   */
+
   generateSalt: function() {
     const bytes = [];
     for (let i = 0; i < 32; i++) {
@@ -992,10 +847,7 @@ const Security = {
     }
     return Utilities.base64Encode(bytes);
   },
-  
-  /**
-   * Generate secure random password
-   */
+
   generatePassword: function(length) {
     length = length || 12;
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
@@ -1015,10 +867,7 @@ const Security = {
     // Shuffle
     return password.split('').sort(() => Math.random() - 0.5).join('');
   },
-  
-  /**
-   * Generate session token
-   */
+
   generateSessionToken: function() {
     const bytes = [];
     for (let i = 0; i < 48; i++) {
@@ -1028,26 +877,17 @@ const Security = {
       return c === '+' ? '-' : c === '/' ? '_' : '';
     });
   },
-  
-  /**
-   * Sanitize input to prevent formula injection
-   */
+
   sanitizeInput: function(value) {
     return sanitizeValue(value);
   },
-  
-  /**
-   * Validate email format
-   */
+
   isValidEmail: function(email) {
     if (!email) return false;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   },
-  
-  /**
-   * Validate password strength
-   */
+
   isStrongPassword: function(password) {
     const minLength = parseInt(getConfig('PASSWORD_MIN_LENGTH')) || 8;
     
@@ -1068,13 +908,7 @@ const Security = {
   }
 };
 
-// ============================================================
-// UTILITY FUNCTIONS
-// ============================================================
-
-/**
- * Sanitize value to prevent formula injection
- */
+// Sanitize value to prevent formula injection
 function sanitizeValue(value) {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) return value;
@@ -1091,9 +925,6 @@ function sanitizeValue(value) {
   return value;
 }
 
-/**
- * Format date for display
- */
 function formatDate(date) {
   if (!date) return '';
   
@@ -1111,9 +942,6 @@ function formatDate(date) {
   }
 }
 
-/**
- * Format date as ISO string for forms
- */
 function formatDateISO(date) {
   if (!date) return '';
   
@@ -1126,27 +954,18 @@ function formatDateISO(date) {
   }
 }
 
-/**
- * Parse comma-separated string to array
- */
 function parseStringArray(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value;
   return String(value).split(',').map(s => s.trim()).filter(s => s);
 }
 
-/**
- * Format array to comma-separated string
- */
 function formatStringArray(arr) {
   if (!arr) return '';
   if (typeof arr === 'string') return arr;
   return arr.join(',');
 }
 
-// ============================================================
-// AUDIT LOGGING
-// ============================================================
 function logAudit(action, entityType, entityId, oldData, newData, userId) {
   try {
     const sheet = getSheet('16_AuditLog');
@@ -1171,9 +990,6 @@ function logAudit(action, entityType, entityId, oldData, newData, userId) {
   }
 }
 
-// ============================================================
-// PERMISSION CHECKING
-// ============================================================
 function checkPermission(roleCode, module, action) {
   const permissions = getPermissions(roleCode);
   const modulePerm = permissions[module];
@@ -1224,9 +1040,6 @@ function getPermissions(roleCode) {
   return permissions;
 }
 
-// ============================================================
-// ROLE NAME HELPER
-// ============================================================
 function getRoleName(roleCode) {
   if (!roleCode) return '';
   
@@ -1243,57 +1056,4 @@ function getRoleName(roleCode) {
   }
   
   return roleMap[roleCode] || roleCode;
-}
-
-// ============================================================
-// TEST FUNCTIONS
-// ============================================================
-function testCoreLayer() {
-  console.log('=== Testing Core Layer ===');
-  
-  // Test cache
-  console.log('\n1. Testing Cache...');
-  Cache.set('test_key', { foo: 'bar' }, 60);
-  const cached = Cache.get('test_key');
-  console.log('Cache test:', cached && cached.foo === 'bar' ? 'PASS' : 'FAIL');
-  Cache.remove('test_key');
-  
-  // Test index lookup
-  console.log('\n2. Testing Index Lookup...');
-  const wpIndex = Index.getIndexMap('WORK_PAPER');
-  console.log('Work paper index entries:', Object.keys(wpIndex).length);
-  
-  // Test DB read
-  console.log('\n3. Testing DB Read...');
-  const users = DB.getAll('05_Users');
-  console.log('Users loaded:', users.length);
-  
-  // Test getById
-  if (Object.keys(wpIndex).length > 0) {
-    const testWpId = Object.keys(wpIndex)[0];
-    console.log('Testing getById for:', testWpId);
-    const wp = DB.getById('WORK_PAPER', testWpId);
-    console.log('GetById result:', wp ? 'PASS' : 'FAIL');
-  }
-  
-  // Test config
-  console.log('\n4. Testing Config...');
-  const config = getAllConfig();
-  console.log('Config entries:', Object.keys(config).length);
-  console.log('System name:', config.SYSTEM_NAME);
-  
-  // Test security
-  console.log('\n5. Testing Security...');
-  const salt = Security.generateSalt();
-  const hash = Security.hashPassword('testPassword123', salt);
-  const verified = Security.verifyPassword('testPassword123', salt, hash);
-  console.log('Password hashing test:', verified ? 'PASS' : 'FAIL');
-  
-  // Test permissions
-  console.log('\n6. Testing Permissions...');
-  const canCreate = checkPermission('SUPER_ADMIN', 'WORK_PAPER', 'create');
-  const cantDelete = !checkPermission('JUNIOR_STAFF', 'WORK_PAPER', 'delete');
-  console.log('Permission test:', canCreate && cantDelete ? 'PASS' : 'FAIL');
-  
-  console.log('\n=== Core Layer Tests Complete ===');
 }

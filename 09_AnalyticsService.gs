@@ -1,25 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Analytics Service v3.0
- *
- * FILE: 09_AnalyticsService.gs
- *
- * Provides:
- * - Analytics data aggregation
- * - Trend analysis
- * - Performance metrics
- * - Report data compilation
- *
- * DEPENDS ON: 01_Core.gs, 02_Config.gs
- */
+// 09_AnalyticsService.gs - Analytics Data Aggregation, Trend Analysis, Performance Metrics
 
-// ============================================================
-// MAIN ANALYTICS DATA
-// ============================================================
-
-/**
- * Get comprehensive analytics data for the dashboard
- */
 function getAnalyticsData(year, user) {
   year = year || new Date().getFullYear();
 
@@ -261,13 +241,6 @@ function getAnalyticsData(year, user) {
   }
 }
 
-// ============================================================
-// SETTINGS HELPER FUNCTIONS
-// ============================================================
-
-/**
- * Get user statistics
- */
 function getUserStats() {
   const sheet = getSheet(SHEETS.USERS);
   const data = sheet.getDataRange().getValues();
@@ -427,60 +400,3 @@ function getAuditLogCount(actionFilter) {
   return count;
 }
 
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testAnalyticsService() {
-  console.log('=== Testing 09_AnalyticsService.gs ===\n');
-
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-
-  if (!user) {
-    console.log('FAIL: Current user not found');
-    return;
-  }
-
-  console.log('Testing as user:', user.full_name, '(' + user.role_code + ')');
-
-  // Test getAnalyticsData
-  console.log('\n1. Testing getAnalyticsData...');
-  try {
-    const result = getAnalyticsData(new Date().getFullYear(), user);
-    console.log('Success:', result.success);
-    if (result.data) {
-      console.log('Work Papers Total:', result.data.workPapers.total);
-      console.log('Action Plans Total:', result.data.actionPlans.total);
-      console.log('Implementation Rate:', result.data.actionPlans.implementationRate + '%');
-      console.log('High Risk Findings:', result.data.highRiskFindings.length);
-    }
-    console.log('getAnalyticsData: PASS');
-  } catch (e) {
-    console.log('getAnalyticsData: FAIL -', e.message);
-  }
-
-  // Test getUserStats
-  console.log('\n2. Testing getUserStats...');
-  try {
-    const stats = getUserStats();
-    console.log('Total Users:', stats.total);
-    console.log('Active Users:', stats.active);
-    console.log('Locked Users:', stats.locked);
-    console.log('getUserStats: PASS');
-  } catch (e) {
-    console.log('getUserStats: FAIL -', e.message);
-  }
-
-  // Test getSystemConfigValues
-  console.log('\n3. Testing getSystemConfigValues...');
-  try {
-    const config = getSystemConfigValues();
-    console.log('System Name:', config.SYSTEM_NAME || '(not set)');
-    console.log('Session Timeout:', config.SESSION_TIMEOUT_HOURS || '(not set)');
-    console.log('getSystemConfigValues: PASS');
-  } catch (e) {
-    console.log('getSystemConfigValues: FAIL -', e.message);
-  }
-
-  console.log('\n=== 09_AnalyticsService.gs Tests Complete ===');
-}

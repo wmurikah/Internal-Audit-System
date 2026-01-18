@@ -1,23 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * AI Service v3.0
- *
- * FILE: 05_AIService.gs
- *
- * Provides:
- * - AI API integration (OpenAI, Anthropic, Google AI)
- * - Work paper insights generation
- * - Action plan validation
- * - Risk analysis
- * - Trend detection
- * - Secure credential storage
- *
- * DEPENDS ON: 01_Core.gs, 02_Config.gs
- */
+// 05_AIService.gs - AI API Integration (OpenAI, Anthropic, Google AI), Insights, Validation
 
-// ============================================================
-// AI CONFIGURATION
-// ============================================================
 const AI_CONFIG = {
   PROVIDERS: {
     OPENAI: 'openai',
@@ -44,14 +26,6 @@ const AI_CONFIG = {
   TIMEOUT_MS: 30000
 };
 
-// ============================================================
-// CREDENTIAL MANAGEMENT (Secure Storage)
-// ============================================================
-
-/**
- * Get AI API key from secure storage (Script Properties)
- * Keys are encrypted and stored in project properties
- */
 function getAIApiKey(provider) {
   const props = PropertiesService.getScriptProperties();
   const keyName = 'AI_API_KEY_' + provider.toUpperCase();
@@ -171,13 +145,6 @@ function validateApiKeyFormat(provider, key) {
   }
 }
 
-// ============================================================
-// AI API CALLS
-// ============================================================
-
-/**
- * Make AI API call to the active provider
- */
 function callAI(prompt, systemPrompt, options) {
   const activeProvider = getConfigValue('AI_ACTIVE_PROVIDER');
 
@@ -331,13 +298,6 @@ function callGoogleAI(apiKey, prompt, systemPrompt, options) {
   };
 }
 
-// ============================================================
-// WORK PAPER AI INSIGHTS
-// ============================================================
-
-/**
- * Generate AI insights for a work paper
- */
 function getWorkPaperInsights(workPaperId, user) {
   if (!user) throw new Error('User required');
 
@@ -436,14 +396,6 @@ function buildWorkPaperContext(workPaper) {
   };
 }
 
-// ============================================================
-// ACTION PLAN AI VALIDATION
-// ============================================================
-
-/**
- * Validate action plan before submission
- * Returns validation result with suggestions
- */
 function validateActionPlan(actionPlanData, workPaperContext, user) {
   if (!user) throw new Error('User required');
 
@@ -581,13 +533,6 @@ function basicActionPlanValidation(actionPlanData) {
   };
 }
 
-// ============================================================
-// ANALYTICS AI
-// ============================================================
-
-/**
- * Get AI-powered analytics insights
- */
 function getAnalyticsInsights(analyticsData, user) {
   if (!user) throw new Error('User required');
 
@@ -647,13 +592,6 @@ Provide:
   }
 }
 
-// ============================================================
-// TEST AI CONNECTIVITY
-// ============================================================
-
-/**
- * Test AI provider connectivity
- */
 function testAIConnection(provider, user) {
   if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Permission denied');
@@ -691,14 +629,6 @@ function testAIConnection(provider, user) {
   }
 }
 
-// ============================================================
-// API ROUTING (Add to 08_WebApp.gs routeAction)
-// ============================================================
-
-/**
- * Route AI-related API calls
- * Add these cases to routeAction in 08_WebApp.gs
- */
 function routeAIAction(action, data, user) {
   switch (action) {
     case 'getAIConfigStatus':
@@ -733,73 +663,3 @@ function routeAIAction(action, data, user) {
   }
 }
 
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testAIService() {
-  console.log('=== Testing 05_AIService.gs ===\n');
-
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-
-  if (!user) {
-    console.log('FAIL: Current user not found');
-    return;
-  }
-
-  console.log('Testing as user:', user.full_name, '(' + user.role_code + ')');
-
-  // Test config status
-  console.log('\n1. Testing getAIConfigStatus...');
-  try {
-    const status = getAIConfigStatus();
-    console.log('AI Enabled:', status.aiEnabled);
-    console.log('Active Provider:', status.activeProvider || 'None');
-    console.log('Configured Providers:', Object.entries(status.providers)
-      .filter(([k, v]) => v.configured)
-      .map(([k]) => k)
-      .join(', ') || 'None');
-    console.log('getAIConfigStatus: PASS');
-  } catch (e) {
-    console.log('getAIConfigStatus: FAIL -', e.message);
-  }
-
-  // Test basic validation
-  console.log('\n2. Testing basicActionPlanValidation...');
-  try {
-    const validPlan = {
-      action_description: 'Implement automated reconciliation process to ensure all transactions are matched within 24 hours of occurrence',
-      owner_names: 'John Smith',
-      due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    };
-
-    const invalidPlan = {
-      action_description: 'Fix it',
-      owner_names: '',
-      due_date: ''
-    };
-
-    const validResult = basicActionPlanValidation(validPlan);
-    const invalidResult = basicActionPlanValidation(invalidPlan);
-
-    console.log('Valid plan score:', validResult.score, '- Valid:', validResult.isValid);
-    console.log('Invalid plan score:', invalidResult.score, '- Valid:', invalidResult.isValid);
-    console.log('Invalid plan issues:', invalidResult.issues.join('; '));
-    console.log('basicActionPlanValidation: PASS');
-  } catch (e) {
-    console.log('basicActionPlanValidation: FAIL -', e.message);
-  }
-
-  // Test API key format validation
-  console.log('\n3. Testing API key format validation...');
-  try {
-    console.log('OpenAI valid key:', validateApiKeyFormat('openai', 'sk-proj-1234567890abcdefghijklmnop'));
-    console.log('OpenAI invalid key:', validateApiKeyFormat('openai', 'invalid'));
-    console.log('Anthropic valid key:', validateApiKeyFormat('anthropic', 'sk-ant-api03-1234567890abcdefghijklmnop'));
-    console.log('API key validation: PASS');
-  } catch (e) {
-    console.log('API key validation: FAIL -', e.message);
-  }
-
-  console.log('\n=== 05_AIService.gs Tests Complete ===');
-}
