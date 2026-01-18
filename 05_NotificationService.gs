@@ -1,26 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Notification Service v3.0
- * 
- * FILE: 05_NotificationService.gs
- * 
- * Provides:
- * - Email queue management
- * - Template-based notifications
- * - Scheduled reminders
- * - Overdue alerts
- * - Batch email processing
- * 
- * DEPENDS ON: 01_Core.gs, 02_Config.gs
- */
+// 05_NotificationService.gs - Email Queue, Templates, Reminders, Alerts
 
-// ============================================================
-// EMAIL QUEUE MANAGEMENT
-// ============================================================
-
-/**
- * Add notification to queue
- */
 function queueEmail(data) {
   try {
     const notificationId = generateId('NOTIFICATION');
@@ -144,14 +123,7 @@ function getEmailTemplates() {
   return templates;
 }
 
-// ============================================================
-// EMAIL PROCESSING
-// ============================================================
-
-/**
- * Process pending emails in queue
- * Called by time-based trigger (every 5-10 minutes)
- */
+// Process pending emails in queue (called by time-based trigger)
 function processEmailQueue() {
   const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
   const data = sheet.getDataRange().getValues();
@@ -304,14 +276,7 @@ function retryFailedEmails() {
   return resetCount;
 }
 
-// ============================================================
-// SCHEDULED REMINDERS
-// ============================================================
-
-/**
- * Send daily overdue reminders
- * Called by daily trigger
- */
+// Send daily overdue reminders (called by daily trigger)
 function sendOverdueReminders() {
   const actionPlans = getActionPlans({ overdue_only: true }, null);
   
@@ -506,14 +471,7 @@ ${Object.entries(apCounts.byStatus).map(([k, v]) => `  - ${k}: ${v}`).join('\n')
   return notificationCount;
 }
 
-// ============================================================
-// NOTIFICATION TRIGGERS SETUP
-// ============================================================
-
-/**
- * Setup all notification triggers
- * Run this once to configure scheduled tasks
- */
+// Setup all notification triggers (run once to configure)
 function setupNotificationTriggers() {
   // Remove existing triggers for these functions
   const functionNames = [
@@ -624,14 +582,7 @@ function cleanupOldNotifications(daysOld) {
   return deletedCount;
 }
 
-// ============================================================
-// DIRECT NOTIFICATION FUNCTIONS
-// ============================================================
-
-/**
- * Send immediate email (bypass queue)
- * Use sparingly - for critical notifications only
- */
+// Send immediate email (bypass queue) - use sparingly for critical notifications
 function sendImmediateEmail(recipientEmail, subject, body) {
   try {
     const fromName = getConfigValue('SYSTEM_NAME') || 'Hass Audit System';
@@ -703,83 +654,3 @@ function getUserNotifications(userId, limit) {
   return notifications;
 }
 
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testNotificationService() {
-  console.log('=== Testing 05_NotificationService.gs ===\n');
-  
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-  
-  if (!user) {
-    console.log('FAIL: Current user not found');
-    return;
-  }
-  
-  console.log('Testing as user:', user.full_name);
-  
-  // Test queue email
-  console.log('\n1. Testing queueEmail...');
-  try {
-    const result = queueEmail({
-      recipient_email: email,
-      recipient_user_id: user.user_id,
-      subject: 'Test Notification',
-      body: 'This is a test notification from the audit system.',
-      module: 'TEST',
-      record_id: 'TEST-001'
-    });
-    console.log('Notification queued:', result.notificationId);
-    console.log('queueEmail: PASS');
-  } catch (e) {
-    console.log('queueEmail: FAIL -', e.message);
-  }
-  
-  // Test get templates
-  console.log('\n2. Testing getEmailTemplates...');
-  try {
-    const templates = getEmailTemplates();
-    console.log('Templates found:', templates.length);
-    if (templates.length > 0) {
-      console.log('First template:', templates[0].template_code);
-    }
-    console.log('getEmailTemplates: PASS');
-  } catch (e) {
-    console.log('getEmailTemplates: FAIL -', e.message);
-  }
-  
-  // Test queue status
-  console.log('\n3. Testing getNotificationQueueStatus...');
-  try {
-    const status = getNotificationQueueStatus();
-    console.log('Queue status:', JSON.stringify(status));
-    console.log('getNotificationQueueStatus: PASS');
-  } catch (e) {
-    console.log('getNotificationQueueStatus: FAIL -', e.message);
-  }
-  
-  // Test user notifications
-  console.log('\n4. Testing getUserNotifications...');
-  try {
-    const notifications = getUserNotifications(user.user_id, 5);
-    console.log('User notifications:', notifications.length);
-    console.log('getUserNotifications: PASS');
-  } catch (e) {
-    console.log('getUserNotifications: FAIL -', e.message);
-  }
-  
-  // Test process queue (dry run - just check it doesn't error)
-  console.log('\n5. Testing processEmailQueue...');
-  try {
-    // Note: This will actually send pending emails
-    // For a true test, you might want to skip this or use a test flag
-    const result = processEmailQueue();
-    console.log('Processed - Sent:', result.sent, 'Failed:', result.failed);
-    console.log('processEmailQueue: PASS');
-  } catch (e) {
-    console.log('processEmailQueue: FAIL -', e.message);
-  }
-  
-  console.log('\n=== 05_NotificationService.gs Tests Complete ===');
-}

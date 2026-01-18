@@ -1,23 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Authentication Service v3.0
- * 
- * FILE: 07_AuthService.gs
- * 
- * Provides:
- * - Session-based authentication
- * - Password management (PBKDF2 hashing)
- * - Login/logout handling
- * - Session validation
- * - Password reset
- * - User management
- * 
- * DEPENDS ON: 01_Core.gs, 02_Config.gs
- */
+// 07_AuthService.gs - Authentication, Session Management, Password Management, User Management
 
-// ============================================================
-// AUTHENTICATION CONSTANTS
-// ============================================================
 const AUTH_CONFIG = {
   SESSION_DURATION_HOURS: 24,
   MAX_LOGIN_ATTEMPTS: 5,
@@ -28,13 +10,6 @@ const AUTH_CONFIG = {
   TEMP_PASSWORD_LENGTH: 12
 };
 
-// ============================================================
-// LOGIN / LOGOUT
-// ============================================================
-
-/**
- * Authenticate user with email and password
- */
 function login(email, password) {
   if (!email || !password) {
     return { success: false, error: 'Email and password are required' };
@@ -184,13 +159,6 @@ function getCurrentUser() {
   return user;
 }
 
-// ============================================================
-// SESSION MANAGEMENT
-// ============================================================
-
-/**
- * Create a new session
- */
 function createSession(user) {
   const sessionId = generateId('SESSION');
   const sessionToken = generateSecureToken(AUTH_CONFIG.TOKEN_LENGTH);
@@ -306,13 +274,6 @@ function cleanupExpiredSessions() {
   return cleaned;
 }
 
-// ============================================================
-// PASSWORD MANAGEMENT
-// ============================================================
-
-/**
- * Hash password using PBKDF2
- */
 function hashPassword(password, salt) {
   // Use HMAC-SHA256 with iterations to simulate PBKDF2
   let hash = password;
@@ -521,13 +482,6 @@ function validatePassword(password) {
   return { valid: true };
 }
 
-// ============================================================
-// LOGIN ATTEMPT TRACKING
-// ============================================================
-
-/**
- * Increment failed login attempts
- */
 function incrementFailedAttempts(user) {
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex;
@@ -582,13 +536,6 @@ function updateLastLogin(user) {
   invalidateUserCache(user.email);
 }
 
-// ============================================================
-// USER MANAGEMENT
-// ============================================================
-
-/**
- * Create a new user
- */
 function createUser(userData, adminUser) {
   if (!adminUser) {
     return { success: false, error: 'Admin user required' };
@@ -866,13 +813,6 @@ function getUsers(filters, adminUser) {
   return { success: true, users: users, total: users.length };
 }
 
-// ============================================================
-// USER INDEX MANAGEMENT
-// ============================================================
-
-/**
- * Update user index
- */
 function updateUserIndex(userId, user, rowNumber) {
   const indexSheet = getSheet(SHEETS.INDEX_USERS);
   const data = indexSheet.getDataRange().getValues();
@@ -891,14 +831,6 @@ function updateUserIndex(userId, user, rowNumber) {
   indexSheet.appendRow(row);
 }
 
-// ============================================================
-// EMAIL HELPERS
-// ============================================================
-
-/**
- * Queue email for sending
- * Wrapper for queueNotification used by auth functions
- */
 function queueEmail(data) {
   return queueNotification({
     template_code: data.template_code || '',
@@ -915,98 +847,3 @@ function queueEmail(data) {
 
 
 
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testAuthService() {
-  console.log('=== Testing 07_AuthService.gs ===\n');
-  
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-  
-  if (!user) {
-    console.log('FAIL: Current user not found');
-    return;
-  }
-  
-  console.log('Testing as user:', user.full_name, '(' + user.role_code + ')');
-  
-  // Test password hashing
-  console.log('\n1. Testing password hashing...');
-  try {
-    const salt = generateSalt();
-    const hash = hashPassword('TestPassword123', salt);
-    const verified = verifyPassword('TestPassword123', salt, hash);
-    const wrongVerified = verifyPassword('WrongPassword', salt, hash);
-    
-    console.log('Salt generated:', salt.length > 0);
-    console.log('Hash generated:', hash.length > 0);
-    console.log('Correct password verified:', verified);
-    console.log('Wrong password rejected:', !wrongVerified);
-    console.log('Password hashing: PASS');
-  } catch (e) {
-    console.log('Password hashing: FAIL -', e.message);
-  }
-  
-  // Test token generation
-  console.log('\n2. Testing token generation...');
-  try {
-    const token = generateSecureToken(64);
-    const tempPwd = generateTempPassword();
-    
-    console.log('Token length:', token.length);
-    console.log('Temp password length:', tempPwd.length);
-    console.log('Token generation: PASS');
-  } catch (e) {
-    console.log('Token generation: FAIL -', e.message);
-  }
-  
-  // Test password validation
-  console.log('\n3. Testing password validation...');
-  try {
-    const valid = validatePassword('ValidPass1');
-    const tooShort = validatePassword('Short1');
-    const noUpper = validatePassword('nouppercase1');
-    const noNumber = validatePassword('NoNumberHere');
-    
-    console.log('Valid password accepted:', valid.valid);
-    console.log('Too short rejected:', !tooShort.valid);
-    console.log('No uppercase rejected:', !noUpper.valid);
-    console.log('No number rejected:', !noNumber.valid);
-    console.log('Password validation: PASS');
-  } catch (e) {
-    console.log('Password validation: FAIL -', e.message);
-  }
-  
-  // Test get users
-  console.log('\n4. Testing getUsers...');
-  try {
-    const result = getUsers({}, user);
-    console.log('Users found:', result.total);
-    console.log('getUsers: PASS');
-  } catch (e) {
-    console.log('getUsers: FAIL -', e.message);
-  }
-  
-  // Test session cleanup
-  console.log('\n5. Testing cleanupExpiredSessions...');
-  try {
-    const cleaned = cleanupExpiredSessions();
-    console.log('Cleaned sessions:', cleaned);
-    console.log('cleanupExpiredSessions: PASS');
-  } catch (e) {
-    console.log('cleanupExpiredSessions: FAIL -', e.message);
-  }
-  
-  // Test getCurrentUser
-  console.log('\n6. Testing getCurrentUser...');
-  try {
-    const currentUser = getCurrentUser();
-    console.log('Current user:', currentUser ? currentUser.full_name : 'null');
-    console.log('getCurrentUser: PASS');
-  } catch (e) {
-    console.log('getCurrentUser: FAIL -', e.message);
-  }
-  
-  console.log('\n=== 07_AuthService.gs Tests Complete ===');
-}

@@ -1,16 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Configuration & Database Helpers v3.0
- * 
- * FILE: 02_Config.gs
- * 
- * DEPENDS ON: 01_Core.gs
- * USED BY: All service files (03-07)
- */
+// 02_Config.gs - Configuration, Constants, and Database Helpers
 
-// ============================================================
-// SHEET NAME CONSTANTS (Matching actual database)
-// ============================================================
 const SHEETS = {
   CONFIG: '00_Config',
   ROLES: '01_Roles',
@@ -38,9 +27,6 @@ const SHEETS = {
   STAGING_AREA: '23_StagingArea'
 };
 
-// ============================================================
-// COLUMN SCHEMAS - Exact column order from database
-// ============================================================
 const SCHEMAS = {
   CONFIG: ['config_key', 'config_value', 'description', 'updated_at'],
   ROLES: ['role_code', 'role_name', 'role_level', 'description', 'is_active'],
@@ -113,9 +99,6 @@ const SCHEMAS = {
   EMAIL_TEMPLATES: ['template_code', 'template_name', 'subject_template', 'body_template', 'is_active']
 };
 
-// ============================================================
-// STATUS CONSTANTS
-// ============================================================
 const STATUS = {
   WORK_PAPER: {
     DRAFT: 'Draft',
@@ -147,9 +130,6 @@ const STATUS = {
   }
 };
 
-// ============================================================
-// ROLE CONSTANTS
-// ============================================================
 const ROLES = {
   SUPER_ADMIN: 'SUPER_ADMIN',
   HEAD_OF_AUDIT: 'HEAD_OF_AUDIT',
@@ -160,9 +140,6 @@ const ROLES = {
   OBSERVER: 'OBSERVER'
 };
 
-// ============================================================
-// ID GENERATION
-// ============================================================
 function generateId(entityType) {
   const lock = LockService.getScriptLock();
   
@@ -307,9 +284,6 @@ function generateIds(entityType, count) {
   }
 }
 
-// ============================================================
-// DROPDOWN DATA BUILDERS (CACHED)
-// ============================================================
 function getDropdownData() {
   const cacheKey = 'dropdown_data_all';
   const cache = CacheService.getScriptCache();
@@ -581,9 +555,6 @@ function getYearOptions() {
   return years;
 }
 
-// ============================================================
-// COMMON QUERY HELPERS
-// ============================================================
 function getUserByEmail(email) {
   if (!email) return null;
   
@@ -814,9 +785,6 @@ function getActionPlanHistory(actionPlanId) {
   return history.sort((a, b) => new Date(b.changed_at || 0) - new Date(a.changed_at || 0));
 }
 
-// ============================================================
-// ROW/OBJECT CONVERSION HELPERS
-// ============================================================
 function rowToObject(headers, row) {
   const obj = {};
   headers.forEach((header, idx) => { obj[header] = row[idx]; });
@@ -843,9 +811,6 @@ function getColumnIndex(schemaKey, columnName) {
   return idx;
 }
 
-// ============================================================
-// PERMISSION HELPERS
-// ============================================================
 function canUserPerform(user, action, entityType, entity) {
   if (!user) return false;
   
@@ -886,9 +851,6 @@ function getRoleName(roleCode) {
   return role ? role.name : roleCode;
 }
 
-// ============================================================
-// DATE/TIME HELPERS
-// ============================================================
 function formatDate(date, format) {
   if (!date) return '';
   const d = date instanceof Date ? date : new Date(date);
@@ -929,9 +891,6 @@ function isPastDue(dueDate) {
   return calculateDaysOverdue(dueDate) > 0;
 }
 
-// ============================================================
-// AUDIT LOGGING
-// ============================================================
 function logAuditEvent(action, entityType, entityId, oldData, newData, userId, userEmail) {
   try {
     const sheet = getSheet(SHEETS.AUDIT_LOG);
@@ -951,9 +910,6 @@ function logAuditEvent(action, entityType, entityId, oldData, newData, userId, u
   }
 }
 
-// ============================================================
-// CONFIG HELPERS
-// ============================================================
 function getConfigValue(key) {
   const sheet = getSheet(SHEETS.CONFIG);
   const data = sheet.getDataRange().getValues();
@@ -985,92 +941,4 @@ function setConfigValue(key, value) {
   
   sheet.appendRow([key, value, '', new Date()]);
   return true;
-}
-
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testConfig() {
-  console.log('=== Testing 02_Config.gs ===\n');
-  
-  console.log('1. Testing Sheet Access...');
-  try {
-    const configSheet = getSheet(SHEETS.CONFIG);
-    console.log('Config sheet name:', configSheet.getName());
-    console.log('Config sheet access: PASS');
-  } catch (e) {
-    console.log('Config sheet access: FAIL -', e.message);
-    return;
-  }
-  
-  console.log('\n2. Testing ID Generation...');
-  try {
-    const testId = generateId('LOG');
-    console.log('Generated ID:', testId);
-    console.log('ID format valid:', testId.startsWith('LOG-') ? 'PASS' : 'FAIL');
-  } catch (e) {
-    console.log('ID generation: FAIL -', e.message);
-  }
-  
-  console.log('\n3. Testing Dropdown Data...');
-  try {
-    const dropdowns = getDropdownData();
-    console.log('Affiliates count:', dropdowns.affiliates.length);
-    console.log('Audit areas count:', dropdowns.auditAreas.length);
-    console.log('Sub areas count:', dropdowns.subAreas.length);
-    console.log('Users count:', dropdowns.users.length);
-    console.log('Roles count:', dropdowns.roles.length);
-    console.log('Dropdowns loaded: PASS');
-  } catch (e) {
-    console.log('Dropdowns: FAIL -', e.message);
-  }
-  
-  console.log('\n4. Testing User Lookup...');
-  try {
-    const testEmail = Session.getActiveUser().getEmail();
-    console.log('Current user email:', testEmail);
-    const user = getUserByEmail(testEmail);
-    if (user) {
-      console.log('User found: PASS');
-      console.log('User name:', user.full_name);
-      console.log('User role:', user.role_code);
-    } else {
-      console.log('User found: FAIL (not in database)');
-    }
-  } catch (e) {
-    console.log('User lookup: FAIL -', e.message);
-  }
-  
-  console.log('\n5. Testing Date Helpers...');
-  const testDate = new Date();
-  const formatted = formatDate(testDate, 'YYYY-MM-DD HH:mm:ss');
-  console.log('Formatted date:', formatted);
-  
-  const pastDate = new Date();
-  pastDate.setDate(pastDate.getDate() - 10);
-  const overdue = calculateDaysOverdue(pastDate);
-  console.log('Days overdue (10 days ago):', overdue);
-  console.log('Overdue calculation:', overdue === 10 ? 'PASS' : 'FAIL');
-  
-  console.log('\n6. Testing Schema Access...');
-  try {
-    const wpIdIdx = getColumnIndex('WORK_PAPERS', 'work_paper_id');
-    const statusIdx = getColumnIndex('WORK_PAPERS', 'status');
-    console.log('work_paper_id index:', wpIdIdx);
-    console.log('status index:', statusIdx);
-    console.log('Schema access: PASS');
-  } catch (e) {
-    console.log('Schema access: FAIL -', e.message);
-  }
-  
-  console.log('\n7. Testing Config Value...');
-  try {
-    const systemName = getConfigValue('SYSTEM_NAME');
-    console.log('System name:', systemName || '(not set)');
-    console.log('Config value: PASS');
-  } catch (e) {
-    console.log('Config value: FAIL -', e.message);
-  }
-  
-  console.log('\n=== 02_Config.gs Tests Complete ===');
 }

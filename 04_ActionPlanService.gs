@@ -1,27 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Action Plan Service v3.0
- * 
- * FILE: 04_ActionPlanService.gs
- * 
- * Provides:
- * - Action plan CRUD operations
- * - Status workflow (implementation, verification)
- * - Evidence management
- * - History tracking
- * - Overdue calculations
- * - Batch operations
- * 
- * DEPENDS ON: 01_Core.gs, 02_Config.gs
- */
+// 04_ActionPlanService.gs - Action Plan CRUD, Workflow, Evidence, History
 
-// ============================================================
-// ACTION PLAN CRUD OPERATIONS
-// ============================================================
-
-/**
- * Create a new action plan
- */
 function createActionPlan(data, user) {
   if (!user) throw new Error('User required');
   if (!canUserPerform(user, 'create', 'ACTION_PLAN', null)) {
@@ -330,13 +308,6 @@ function deleteActionPlan(actionPlanId, user) {
   return { success: true };
 }
 
-// ============================================================
-// ACTION PLAN LIST & SEARCH
-// ============================================================
-
-/**
- * Get action plans with filters
- */
 function getActionPlans(filters, user) {
   filters = filters || {};
   
@@ -481,13 +452,6 @@ function isImplementedOrVerified(status) {
   return status === STATUS.ACTION_PLAN.IMPLEMENTED || status === STATUS.ACTION_PLAN.VERIFIED;
 }
 
-// ============================================================
-// STATUS WORKFLOW
-// ============================================================
-
-/**
- * Mark action plan as implemented (by auditee)
- */
 function markAsImplemented(actionPlanId, implementationNotes, user) {
   if (!user) throw new Error('User required');
   
@@ -702,13 +666,6 @@ function updateOverdueStatuses() {
   return updatedCount;
 }
 
-// ============================================================
-// EVIDENCE MANAGEMENT
-// ============================================================
-
-/**
- * Add evidence to action plan
- */
 function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   if (!user) throw new Error('User required');
   
@@ -788,13 +745,6 @@ function deleteActionPlanEvidence(evidenceId, user) {
   throw new Error('Evidence not found: ' + evidenceId);
 }
 
-// ============================================================
-// HISTORY TRACKING
-// ============================================================
-
-/**
- * Add history entry
- */
 function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments, user) {
   const historyId = generateId('HISTORY');
   const now = new Date();
@@ -817,13 +767,6 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
   return history;
 }
 
-// ============================================================
-// INDEX MANAGEMENT
-// ============================================================
-
-/**
- * Update action plan index
- */
 function updateActionPlanIndex(actionPlanId, actionPlan, rowNumber) {
   const indexSheet = getSheet(SHEETS.INDEX_ACTION_PLANS);
   const data = indexSheet.getDataRange().getValues();
@@ -891,10 +834,6 @@ function rebuildActionPlanIndex() {
   return indexRows.length;
 }
 
-// ============================================================
-// NOTIFICATION HELPERS
-// ============================================================
-
 function queueImplementationNotification(actionPlanId, actionPlan, implementer) {
   const auditors = getUsersDropdown().filter(u => 
     [ROLES.SENIOR_AUDITOR, ROLES.HEAD_OF_AUDIT, ROLES.SUPER_ADMIN].includes(u.roleCode)
@@ -934,13 +873,6 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
   });
 }
 
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
-
-/**
- * Delete related rows from a sheet
- */
 function deleteRelatedRows(sheetName, foreignKeyColumn, foreignKeyValue) {
   const sheet = getSheet(sheetName);
   const data = sheet.getDataRange().getValues();
@@ -955,82 +887,3 @@ function deleteRelatedRows(sheetName, foreignKeyColumn, foreignKeyValue) {
   }
 }
 
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testActionPlanService() {
-  console.log('=== Testing 04_ActionPlanService.gs ===\n');
-  
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-  
-  if (!user) {
-    console.log('FAIL: Current user not found');
-    return;
-  }
-  
-  console.log('Testing as user:', user.full_name, '(' + user.role_code + ')');
-  
-  // Test get action plans
-  console.log('\n1. Testing getActionPlans...');
-  try {
-    const plans = getActionPlans({ limit: 5 }, user);
-    console.log('Action plans found:', plans.length);
-    console.log('getActionPlans: PASS');
-  } catch (e) {
-    console.log('getActionPlans: FAIL -', e.message);
-  }
-  
-  // Test get counts
-  console.log('\n2. Testing getActionPlanCounts...');
-  try {
-    const counts = getActionPlanCounts({}, user);
-    console.log('Total action plans:', counts.total);
-    console.log('Overdue:', counts.overdue);
-    console.log('Due this week:', counts.dueThisWeek);
-    console.log('By status:', JSON.stringify(counts.byStatus));
-    console.log('getActionPlanCounts: PASS');
-  } catch (e) {
-    console.log('getActionPlanCounts: FAIL -', e.message);
-  }
-  
-  // Test get single action plan
-  console.log('\n3. Testing getActionPlan...');
-  try {
-    const plans = getActionPlans({ limit: 1 }, user);
-    if (plans.length > 0) {
-      const plan = getActionPlan(plans[0].action_plan_id, true);
-      console.log('Action plan ID:', plan.action_plan_id);
-      console.log('Status:', plan.status);
-      console.log('Evidence count:', plan.evidence ? plan.evidence.length : 0);
-      console.log('History count:', plan.history ? plan.history.length : 0);
-      console.log('getActionPlan: PASS');
-    } else {
-      console.log('getActionPlan: SKIPPED (no action plans)');
-    }
-  } catch (e) {
-    console.log('getActionPlan: FAIL -', e.message);
-  }
-  
-  // Test index rebuild
-  console.log('\n4. Testing rebuildActionPlanIndex...');
-  try {
-    const count = rebuildActionPlanIndex();
-    console.log('Index entries:', count);
-    console.log('rebuildActionPlanIndex: PASS');
-  } catch (e) {
-    console.log('rebuildActionPlanIndex: FAIL -', e.message);
-  }
-  
-  // Test overdue update
-  console.log('\n5. Testing updateOverdueStatuses...');
-  try {
-    const updated = updateOverdueStatuses();
-    console.log('Statuses updated:', updated);
-    console.log('updateOverdueStatuses: PASS');
-  } catch (e) {
-    console.log('updateOverdueStatuses: FAIL -', e.message);
-  }
-  
-  console.log('\n=== 04_ActionPlanService.gs Tests Complete ===');
-}

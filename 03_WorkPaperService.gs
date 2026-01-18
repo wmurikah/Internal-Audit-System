@@ -1,27 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Work Paper Service v3.0
- * 
- * FILE: 03_WorkPaperService.gs
- * 
- * Provides:
- * - Work paper CRUD operations
- * - Requirements management
- * - File attachments
- * - Revision history
- * - Status workflow
- * - Batch operations
- * 
- * DEPENDS ON: 01_Core.gs, 02_Config.gs
- */
+// 03_WorkPaperService.gs - Work Paper CRUD, Requirements, Files, Revisions, Workflow
 
-// ============================================================
-// WORK PAPER CRUD OPERATIONS
-// ============================================================
-
-/**
- * Create a new work paper
- */
 function createWorkPaper(data, user) {
   if (!user) throw new Error('User required');
   if (!canUserPerform(user, 'create', 'WORK_PAPER', null)) {
@@ -222,13 +200,6 @@ function deleteWorkPaper(workPaperId, user) {
   return { success: true };
 }
 
-// ============================================================
-// WORK PAPER LIST & SEARCH
-// ============================================================
-
-/**
- * Get work papers with filters
- */
 function getWorkPapers(filters, user) {
   filters = filters || {};
   
@@ -349,13 +320,6 @@ function getWorkPaperCounts(filters, user) {
   return counts;
 }
 
-// ============================================================
-// STATUS WORKFLOW
-// ============================================================
-
-/**
- * Submit work paper for review
- */
 function submitWorkPaper(workPaperId, user) {
   if (!user) throw new Error('User required');
   
@@ -537,13 +501,6 @@ function sendToAuditee(workPaperId, user) {
   return { success: true, workPaper: updated };
 }
 
-// ============================================================
-// REQUIREMENTS MANAGEMENT
-// ============================================================
-
-/**
- * Add requirement to work paper
- */
 function addWorkPaperRequirement(workPaperId, requirementData, user) {
   if (!user) throw new Error('User required');
   
@@ -636,13 +593,6 @@ function deleteWorkPaperRequirement(requirementId, user) {
   throw new Error('Requirement not found: ' + requirementId);
 }
 
-// ============================================================
-// FILE ATTACHMENTS
-// ============================================================
-
-/**
- * Add file to work paper
- */
 function addWorkPaperFile(workPaperId, fileData, user) {
   if (!user) throw new Error('User required');
   
@@ -710,13 +660,6 @@ function deleteWorkPaperFile(fileId, user) {
   throw new Error('File not found: ' + fileId);
 }
 
-// ============================================================
-// REVISION HISTORY
-// ============================================================
-
-/**
- * Add revision entry
- */
 function addWorkPaperRevision(workPaperId, action, comments, user) {
   const revisionId = generateId('REVISION');
   const now = new Date();
@@ -744,13 +687,6 @@ function addWorkPaperRevision(workPaperId, action, comments, user) {
   return revision;
 }
 
-// ============================================================
-// INDEX MANAGEMENT
-// ============================================================
-
-/**
- * Update work paper index entry
- */
 function updateWorkPaperIndex(workPaperId, workPaper, rowNumber) {
   const indexSheet = getSheet(SHEETS.INDEX_WORK_PAPERS);
   const data = indexSheet.getDataRange().getValues();
@@ -839,13 +775,6 @@ function rebuildWorkPaperIndex() {
   return indexRows.length;
 }
 
-// ============================================================
-// NOTIFICATION HELPERS
-// ============================================================
-
-/**
- * Queue notification for reviewers
- */
 function queueReviewNotification(workPaperId, workPaper, submitter) {
   // Get reviewers (Senior Auditors and Head of Audit)
   const users = getUsersDropdown();
@@ -943,13 +872,7 @@ function queueNotification(data) {
   }
 }
 
-// ============================================================
-// INPUT SANITIZATION
-// ============================================================
-
-/**
- * Sanitize user input to prevent formula injection
- */
+// Sanitize user input to prevent formula injection
 function sanitizeInput(value) {
   if (typeof value !== 'string') return value;
   
@@ -967,82 +890,3 @@ function sanitizeInput(value) {
   return sanitized.trim();
 }
 
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testWorkPaperService() {
-  console.log('=== Testing 03_WorkPaperService.gs ===\n');
-  
-  // Get current user
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-  
-  if (!user) {
-    console.log('FAIL: Current user not found in database');
-    return;
-  }
-  
-  console.log('Testing as user:', user.full_name, '(' + user.role_code + ')');
-  
-  // Test get work papers
-  console.log('\n1. Testing getWorkPapers...');
-  try {
-    const workPapers = getWorkPapers({ limit: 5 }, user);
-    console.log('Work papers found:', workPapers.length);
-    console.log('getWorkPapers: PASS');
-  } catch (e) {
-    console.log('getWorkPapers: FAIL -', e.message);
-  }
-  
-  // Test get counts
-  console.log('\n2. Testing getWorkPaperCounts...');
-  try {
-    const counts = getWorkPaperCounts({}, user);
-    console.log('Total work papers:', counts.total);
-    console.log('By status:', JSON.stringify(counts.byStatus));
-    console.log('getWorkPaperCounts: PASS');
-  } catch (e) {
-    console.log('getWorkPaperCounts: FAIL -', e.message);
-  }
-  
-  // Test create (only if user has permission)
-  console.log('\n3. Testing createWorkPaper...');
-  if (canUserPerform(user, 'create', 'WORK_PAPER', null)) {
-    try {
-      const result = createWorkPaper({
-        year: new Date().getFullYear(),
-        affiliate_code: 'KE',
-        observation_title: 'TEST - Delete Me',
-        observation_description: 'This is a test work paper created by testWorkPaperService'
-      }, user);
-      console.log('Created work paper:', result.workPaperId);
-      console.log('createWorkPaper: PASS');
-      
-      // Clean up - delete the test work paper
-      console.log('\n4. Testing deleteWorkPaper...');
-      try {
-        deleteWorkPaper(result.workPaperId, user);
-        console.log('Deleted test work paper');
-        console.log('deleteWorkPaper: PASS');
-      } catch (e) {
-        console.log('deleteWorkPaper: FAIL -', e.message);
-      }
-    } catch (e) {
-      console.log('createWorkPaper: FAIL -', e.message);
-    }
-  } else {
-    console.log('createWorkPaper: SKIPPED (no permission)');
-  }
-  
-  // Test index rebuild
-  console.log('\n5. Testing rebuildWorkPaperIndex...');
-  try {
-    const count = rebuildWorkPaperIndex();
-    console.log('Index entries:', count);
-    console.log('rebuildWorkPaperIndex: PASS');
-  } catch (e) {
-    console.log('rebuildWorkPaperIndex: FAIL -', e.message);
-  }
-  
-  console.log('\n=== 03_WorkPaperService.gs Tests Complete ===');
-}

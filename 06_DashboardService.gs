@@ -1,28 +1,5 @@
-/**
- * HASS PETROLEUM INTERNAL AUDIT MANAGEMENT SYSTEM
- * Dashboard Service v3.0
- * 
- * FILE: 06_DashboardService.gs
- * 
- * Provides:
- * - Dashboard statistics
- * - Charts data
- * - Quick summaries
- * - Role-based views
- * - Recent activity
- * - Performance metrics
- * 
- * DEPENDS ON: 01_Core.gs, 02_Config.gs, 03_WorkPaperService.gs, 04_ActionPlanService.gs
- */
+// 06_DashboardService.gs - Dashboard Statistics, Charts, Role-based Views, Recent Activity
 
-// ============================================================
-// MAIN DASHBOARD DATA
-// ============================================================
-
-/**
- * Get complete dashboard data for a user
- * This is the main entry point called on dashboard load
- */
 function getDashboardData(user) {
   if (!user) {
     const email = Session.getActiveUser().getEmail();
@@ -337,13 +314,6 @@ function getQuickLinks(roleCode) {
   return links;
 }
 
-// ============================================================
-// ROLE-SPECIFIC DATA
-// ============================================================
-
-/**
- * Get action plans for auditee (their assignments)
- */
 function getMyActionPlans(user) {
   const plans = getActionPlans({ owner_id: user.user_id }, user);
   
@@ -411,13 +381,6 @@ function getTeamStats(user) {
   return stats;
 }
 
-// ============================================================
-// REPORTING
-// ============================================================
-
-/**
- * Get audit summary report data
- */
 function getAuditSummaryReport(filters) {
   filters = filters || {};
   
@@ -580,13 +543,6 @@ function getRiskSummaryReport(filters) {
   };
 }
 
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
-
-/**
- * Get color for status
- */
 function getStatusColor(status, type) {
   if (type === 'WORK_PAPER') {
     const colors = {
@@ -629,14 +585,7 @@ function getRiskColor(risk) {
   return colors[risk] || '#6c757d';
 }
 
-// ============================================================
-// INITIALIZATION DATA
-// ============================================================
-
-/**
- * Get initialization data for the frontend
- * Called once on page load
- */
+// Get initialization data for the frontend (called once on page load)
 function getInitData() {
   const email = Session.getActiveUser().getEmail();
   const user = getUserByEmail(email);
@@ -728,93 +677,3 @@ function getUserPermissions(roleCode) {
   return permissions;
 }
 
-// ============================================================
-// TEST FUNCTION
-// ============================================================
-function testDashboardService() {
-  console.log('=== Testing 06_DashboardService.gs ===\n');
-  
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-  
-  if (!user) {
-    console.log('FAIL: Current user not found');
-    return;
-  }
-  
-  console.log('Testing as user:', user.full_name, '(' + user.role_code + ')');
-  
-  // Test get init data
-  console.log('\n1. Testing getInitData...');
-  try {
-    const initData = getInitData();
-    console.log('Init success:', initData.success);
-    console.log('User:', initData.user.full_name);
-    console.log('Dropdowns loaded:', Object.keys(initData.dropdowns).length, 'types');
-    console.log('getInitData: PASS');
-  } catch (e) {
-    console.log('getInitData: FAIL -', e.message);
-  }
-  
-  // Test get dashboard data
-  console.log('\n2. Testing getDashboardData...');
-  try {
-    const dashboard = getDashboardData(user);
-    console.log('Summary - Work Papers:', dashboard.summary.workPapers.total);
-    console.log('Summary - Action Plans:', dashboard.summary.actionPlans.total);
-    console.log('Alerts:', dashboard.alerts.length);
-    console.log('Recent Activity:', dashboard.recentActivity.length);
-    console.log('getDashboardData: PASS');
-  } catch (e) {
-    console.log('getDashboardData: FAIL -', e.message);
-  }
-  
-  // Test chart data
-  console.log('\n3. Testing getChartData...');
-  try {
-    const charts = getChartData(user);
-    console.log('WP Status Chart labels:', charts.wpStatusChart.labels.length);
-    console.log('AP Status Chart labels:', charts.apStatusChart.labels.length);
-    console.log('Trend Chart months:', charts.trendChart.labels.length);
-    console.log('getChartData: PASS');
-  } catch (e) {
-    console.log('getChartData: FAIL -', e.message);
-  }
-  
-  // Test audit summary report
-  console.log('\n4. Testing getAuditSummaryReport...');
-  try {
-    const report = getAuditSummaryReport({});
-    console.log('Total Work Papers:', report.summary.totalWorkPapers);
-    console.log('Total Action Plans:', report.summary.totalActionPlans);
-    console.log('By Affiliate:', report.byAffiliate.length, 'affiliates');
-    console.log('getAuditSummaryReport: PASS');
-  } catch (e) {
-    console.log('getAuditSummaryReport: FAIL -', e.message);
-  }
-  
-  // Test aging report
-  console.log('\n5. Testing getActionPlanAgingReport...');
-  try {
-    const aging = getActionPlanAgingReport();
-    console.log('Current:', aging.summary.current);
-    console.log('Overdue 1-30:', aging.summary.overdue1to30);
-    console.log('Total Overdue:', aging.summary.totalOverdue);
-    console.log('getActionPlanAgingReport: PASS');
-  } catch (e) {
-    console.log('getActionPlanAgingReport: FAIL -', e.message);
-  }
-  
-  // Test risk report
-  console.log('\n6. Testing getRiskSummaryReport...');
-  try {
-    const risk = getRiskSummaryReport({});
-    console.log('Risk levels with data:', risk.byRisk.length);
-    risk.byRisk.forEach(r => console.log('  -', r.level + ':', r.count, 'work papers'));
-    console.log('getRiskSummaryReport: PASS');
-  } catch (e) {
-    console.log('getRiskSummaryReport: FAIL -', e.message);
-  }
-  
-  console.log('\n=== 06_DashboardService.gs Tests Complete ===');
-}
