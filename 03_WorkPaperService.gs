@@ -202,9 +202,19 @@ function deleteWorkPaper(workPaperId, user) {
 
 function getWorkPapers(filters, user) {
   filters = filters || {};
-  
+
   const sheet = getSheet(SHEETS.WORK_PAPERS);
+  if (!sheet) {
+    console.error('getWorkPapers: Work Papers sheet not found:', SHEETS.WORK_PAPERS);
+    return [];
+  }
+
   const data = sheet.getDataRange().getValues();
+  if (!data || data.length < 2) {
+    console.log('getWorkPapers: No data in Work Papers sheet');
+    return [];
+  }
+
   const headers = data[0];
   
   // Build column index map
@@ -295,14 +305,24 @@ function getWorkPapers(filters, user) {
  */
 function getWorkPaperCounts(filters, user) {
   const workPapers = getWorkPapers(filters, user);
-  
+
+  if (!workPapers || !Array.isArray(workPapers)) {
+    console.error('getWorkPaperCounts: Invalid workPapers returned');
+    return {
+      total: 0,
+      byStatus: {},
+      byRisk: {},
+      byAffiliate: {}
+    };
+  }
+
   const counts = {
     total: workPapers.length,
     byStatus: {},
     byRisk: {},
     byAffiliate: {}
   };
-  
+
   workPapers.forEach(wp => {
     // By status
     const status = wp.status || 'Unknown';
