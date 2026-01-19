@@ -179,39 +179,157 @@ function navigateTo(page, params, updateHash = true) {
 
 function refreshCurrentPage() { navigateTo(currentPage, pageParams, false); }
 
-// API calls
+// API calls with comprehensive debugging
 function apiCall(action, data) {
   return new Promise((resolve, reject) => {
+    // START DEBUG LOGGING
+    const debugId = 'API_' + Date.now();
+    const sessionToken = sessionStorage.getItem('sessionToken');
+
+    console.log('========================================');
+    console.log('[' + debugId + '] API CALL START');
+    console.log('[' + debugId + '] Action:', action);
+    console.log('[' + debugId + '] Has session token:', !!sessionToken);
+    console.log('[' + debugId + '] Session token length:', sessionToken ? sessionToken.length : 0);
+    console.log('[' + debugId + '] Data keys:', data ? Object.keys(data) : 'null');
+    console.log('[' + debugId + '] Timestamp:', new Date().toISOString());
+
     // Include sessionToken with all API calls for session-based authentication
     // This is required when deployed as "Anyone with Google Account"
     const requestData = {
       ...(data || {}),
-      sessionToken: sessionStorage.getItem('sessionToken') || ''
+      sessionToken: sessionToken || ''
     };
+
+    console.log('[' + debugId + '] Calling google.script.run.apiCall...');
+    const startTime = Date.now();
 
     google.script.run
       .withSuccessHandler(result => {
+        const duration = Date.now() - startTime;
+        console.log('[' + debugId + '] SUCCESS HANDLER CALLED');
+        console.log('[' + debugId + '] Duration:', duration + 'ms');
+        console.log('[' + debugId + '] Result type:', typeof result);
+        console.log('[' + debugId + '] Result is null:', result === null);
+        console.log('[' + debugId + '] Result is undefined:', result === undefined);
+
+        if (result !== null && result !== undefined) {
+          console.log('[' + debugId + '] Result keys:', Object.keys(result));
+          console.log('[' + debugId + '] Result.success:', result.success);
+          console.log('[' + debugId + '] Result.error:', result.error);
+          console.log('[' + debugId + '] Full result:', JSON.stringify(result, null, 2).substring(0, 500));
+        }
+
         // Ensure we always return an object
         if (result === null || result === undefined) {
-          resolve({ success: false, error: 'No response from server' });
+          console.error('[' + debugId + '] CRITICAL: Backend returned null/undefined!');
+          resolve({ success: false, error: 'No response from server (null/undefined)' });
         } else {
           // Check if session expired and redirect to login
           if (result.requireLogin) {
+            console.log('[' + debugId + '] Session expired, redirecting to login');
             sessionStorage.removeItem('sessionToken');
             window.top.location.href = window.top.location.pathname;
             return;
           }
+          console.log('[' + debugId + '] Resolving with result');
           resolve(result);
         }
+        console.log('[' + debugId + '] API CALL END');
+        console.log('========================================');
       })
       .withFailureHandler(error => {
-        console.error('API error for ' + action + ':', error);
+        const duration = Date.now() - startTime;
+        console.error('[' + debugId + '] FAILURE HANDLER CALLED');
+        console.error('[' + debugId + '] Duration:', duration + 'ms');
+        console.error('[' + debugId + '] Error type:', typeof error);
+        console.error('[' + debugId + '] Error message:', error?.message);
+        console.error('[' + debugId + '] Error stack:', error?.stack);
+        console.error('[' + debugId + '] Full error:', error);
+        console.error('[' + debugId + '] API CALL END (ERROR)');
+        console.log('========================================');
+
         // Convert error to object for consistent handling
         resolve({ success: false, error: error?.message || 'Connection error' });
       })
       .apiCall(action, requestData);
   });
 }
+
+// DEBUG TOOL: Test API connectivity
+window.debugTestAPI = function() {
+  console.log('===== STARTING API DEBUG TEST =====');
+
+  // Test 1: Simple ping
+  console.log('\n[TEST 1] Testing basic connectivity with ping...');
+  apiCall('ping', {}).then(r => {
+    console.log('[TEST 1] Ping result:', r);
+
+    // Test 2: Test connection
+    console.log('\n[TEST 2] Testing backend with testConnection...');
+    return apiCall('testConnection', {});
+  }).then(r => {
+    console.log('[TEST 2] Test connection result:', r);
+
+    // Test 3: Get init data
+    console.log('\n[TEST 3] Getting init data...');
+    return apiCall('getInitData', {});
+  }).then(r => {
+    console.log('[TEST 3] Init data result (summary):', {
+      success: r.success,
+      error: r.error,
+      hasUser: !!r.user,
+      hasDropdowns: !!r.dropdowns,
+      hasPermissions: !!r.permissions
+    });
+
+    // Test 4: Run comprehensive diagnostic
+    console.log('\n[TEST 4] Running comprehensive diagnostic...');
+    return apiCall('diagnosticTest', {});
+  }).then(r => {
+    console.log('[TEST 4] Diagnostic test result:', r);
+
+    // Test 5: Get dashboard data
+    console.log('\n[TEST 5] Getting dashboard data...');
+    return apiCall('getDashboardData', {});
+  }).then(r => {
+    console.log('[TEST 5] Dashboard data result (summary):', {
+      success: r.success,
+      error: r.error,
+      hasUser: !!r.user,
+      hasSummary: !!r.summary,
+      hasCharts: !!r.charts,
+      hasAlerts: !!r.alerts
+    });
+
+    if (r.error) {
+      console.error('[TEST 5] Dashboard error details:', r.error);
+    }
+
+    console.log('\n===== API DEBUG TEST COMPLETE =====');
+    console.log('All tests completed. Check the logs above for details.');
+  }).catch(err => {
+    console.error('\n===== API DEBUG TEST FAILED =====');
+    console.error('Error:', err);
+  });
+};
+
+// DEBUG TOOL: Check session info
+window.debugSessionInfo = function() {
+  console.log('===== SESSION DEBUG INFO =====');
+  console.log('Session token exists:', !!sessionStorage.getItem('sessionToken'));
+  console.log('Session token length:', sessionStorage.getItem('sessionToken')?.length || 0);
+  console.log('Session token (first 20 chars):', sessionStorage.getItem('sessionToken')?.substring(0, 20));
+  console.log('Local storage keys:', Object.keys(localStorage));
+  console.log('Session storage keys:', Object.keys(sessionStorage));
+  console.log('=============================');
+};
+
+// Make debug functions available in console
+console.log('%c=== DEBUG TOOLS LOADED ===', 'color: green; font-weight: bold');
+console.log('%cTo test API connectivity, run: debugTestAPI()', 'color: cyan');
+console.log('%cTo check session info, run: debugSessionInfo()', 'color: cyan');
+console.log('%c=========================', 'color: green; font-weight: bold');
 
 // UI helpers
 function showLoading(text) { document.getElementById('loadingText').textContent = text || 'Loading...'; document.getElementById('loadingOverlay').classList.add('show'); }

@@ -68,7 +68,86 @@ function routeAction(action, data, user) {
     // ========== AUTH ==========
     case 'ping':
       return { success: true, timestamp: new Date().toISOString() };
-      
+
+    case 'testConnection':
+      return {
+        success: true,
+        message: 'Backend is working!',
+        timestamp: new Date().toISOString(),
+        user: user ? { email: user.email, role: user.role_code } : null
+      };
+
+    case 'diagnosticTest':
+      // Comprehensive diagnostic test
+      const diagnostic = {
+        success: true,
+        timestamp: new Date().toISOString(),
+        tests: {}
+      };
+
+      // Test 1: User authentication
+      diagnostic.tests.userAuth = {
+        authenticated: !!user,
+        userEmail: user?.email || null,
+        userRole: user?.role_code || null,
+        sessionToken: !!data.sessionToken
+      };
+
+      // Test 2: Sheet access
+      try {
+        const usersSheet = getSheet(SHEETS.USERS);
+        diagnostic.tests.sheetsAccess = {
+          success: true,
+          usersSheetExists: !!usersSheet,
+          usersRowCount: usersSheet ? usersSheet.getLastRow() : 0
+        };
+      } catch (e) {
+        diagnostic.tests.sheetsAccess = {
+          success: false,
+          error: e.message
+        };
+      }
+
+      // Test 3: Index access
+      try {
+        const userIndexMap = Index.getIndexMap('USER');
+        diagnostic.tests.indexAccess = {
+          success: true,
+          userIndexCount: Object.keys(userIndexMap).length
+        };
+      } catch (e) {
+        diagnostic.tests.indexAccess = {
+          success: false,
+          error: e.message
+        };
+      }
+
+      // Test 4: Dashboard data
+      if (user) {
+        try {
+          const dashboardData = getDashboardData(user);
+          diagnostic.tests.dashboardData = {
+            success: !!dashboardData,
+            hasSummary: !!dashboardData?.summary,
+            hasCharts: !!dashboardData?.charts,
+            hasAlerts: !!dashboardData?.alerts,
+            error: dashboardData?.error || null
+          };
+        } catch (e) {
+          diagnostic.tests.dashboardData = {
+            success: false,
+            error: e.message
+          };
+        }
+      } else {
+        diagnostic.tests.dashboardData = {
+          success: false,
+          error: 'No user authenticated'
+        };
+      }
+
+      return diagnostic;
+
     case 'login':
       return login(data.email, data.password);
       
