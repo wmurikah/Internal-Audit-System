@@ -1,43 +1,44 @@
 // 06_DashboardService.gs - Dashboard Statistics, Charts, Role-based Views, Recent Activity
 
 function getDashboardData(user) {
-  try {
-    console.log('getDashboardData called for user:', user ? user.email : 'null');
+  console.log('getDashboardData called for user:', user ? user.email : 'null');
 
+  try {
+    // Attempt to get user from session if not provided
     if (!user) {
       try {
         const email = Session.getActiveUser().getEmail();
         user = getUserByEmail(email);
       } catch (e) {
         console.error('Error getting user from session:', e);
+        return { 
+          success: false, 
+          error: 'User not found', 
+          errorDetail: 'Failed to retrieve user from session: ' + e.message 
+        };
       }
     }
 
     if (!user) {
       console.error('getDashboardData: No user provided or found');
-      // CRITICAL: Return error object instead of throwing
-      return {
-        success: false,
-        error: 'User not found',
-        user: {},
-        summary: { workPapers: {}, actionPlans: {} },
-        recentActivity: [],
-        charts: {},
-        alerts: [],
-        quickLinks: []
+      return { 
+        success: false, 
+        error: 'User not found', 
+        errorDetail: 'No user object available. User may not exist in the system or session has expired.' 
       };
     }
 
-    const roleCode = user.role_code;
+    const roleCode = user.role_code || '';
     console.log('Building dashboard for role:', roleCode);
 
     // Build dashboard based on role - with error handling for each section
     const dashboard = {
+      success: true,
       user: {
         user_id: user.user_id || '',
-        full_name: user.full_name || '',
+        full_name: user.full_name || 'Unknown User',
         email: user.email || '',
-        role_code: roleCode || '',
+        role_code: roleCode,
         role_name: '',
         affiliate_code: user.affiliate_code || ''
       },
@@ -45,7 +46,8 @@ function getDashboardData(user) {
       recentActivity: [],
       charts: {},
       alerts: [],
-      quickLinks: []
+      quickLinks: [],
+      errors: [] // Track non-fatal errors for debugging
     };
 
     // Get role name
@@ -53,7 +55,8 @@ function getDashboardData(user) {
       dashboard.user.role_name = getRoleName(roleCode) || roleCode;
     } catch (e) {
       console.error('Error getting role name:', e);
-      dashboard.user.role_name = roleCode || '';
+      dashboard.user.role_name = roleCode;
+      dashboard.errors.push('Failed to load role name: ' + e.message);
     }
 
     // Get summary stats
@@ -66,6 +69,7 @@ function getDashboardData(user) {
         workPapers: { total: 0, draft: 0, submitted: 0, underReview: 0, approved: 0, sentToAuditee: 0, byRisk: {}, byAffiliate: {} },
         actionPlans: { total: 0, overdue: 0, dueThisWeek: 0, dueThisMonth: 0, implemented: 0, verified: 0, notImplemented: 0, byStatus: {} }
       };
+      dashboard.errors.push('Failed to load summary stats: ' + e.message);
     }
 
     // Get recent activity
@@ -75,6 +79,7 @@ function getDashboardData(user) {
     } catch (e) {
       console.error('Error loading recent activity:', e);
       dashboard.recentActivity = [];
+      dashboard.errors.push('Failed to load recent activity: ' + e.message);
     }
 
     // Get chart data
@@ -84,6 +89,7 @@ function getDashboardData(user) {
     } catch (e) {
       console.error('Error loading chart data:', e);
       dashboard.charts = { wpStatusChart: {}, apStatusChart: {}, riskChart: {}, affiliateChart: {}, trendChart: {} };
+      dashboard.errors.push('Failed to load chart data: ' + e.message);
     }
 
     // Get alerts
@@ -93,6 +99,7 @@ function getDashboardData(user) {
     } catch (e) {
       console.error('Error loading alerts:', e);
       dashboard.alerts = [];
+      dashboard.errors.push('Failed to load alerts: ' + e.message);
     }
 
     // Get quick links
@@ -101,6 +108,7 @@ function getDashboardData(user) {
     } catch (e) {
       console.error('Error loading quick links:', e);
       dashboard.quickLinks = [];
+      dashboard.errors.push('Failed to load quick links: ' + e.message);
     }
 
     // Add role-specific data with error handling
@@ -115,35 +123,24 @@ function getDashboardData(user) {
       }
     } catch (e) {
       console.error('Error loading role-specific data:', e);
+      dashboard.errors.push('Failed to load role-specific data: ' + e.message);
+    }
+
+    // Log any non-fatal errors that occurred
+    if (dashboard.errors.length > 0) {
+      console.warn('Dashboard loaded with errors:', dashboard.errors);
     }
 
     console.log('getDashboardData completed successfully');
     return dashboard;
 
-  } catch (error) {
-    console.error('getDashboardData: Fatal error:', error);
-    console.error('getDashboardData: Error stack:', error.stack);
-
-    // CRITICAL: Always return a valid object, never null/undefined
-    return {
-      success: false,
-      error: 'Failed to load dashboard: ' + error.message,
-      user: {
-        user_id: user?.user_id || '',
-        full_name: user?.full_name || '',
-        email: user?.email || '',
-        role_code: user?.role_code || '',
-        role_name: '',
-        affiliate_code: user?.affiliate_code || ''
-      },
-      summary: {
-        workPapers: { total: 0, draft: 0, submitted: 0, underReview: 0, approved: 0, sentToAuditee: 0, byRisk: {}, byAffiliate: {} },
-        actionPlans: { total: 0, overdue: 0, dueThisWeek: 0, dueThisMonth: 0, implemented: 0, verified: 0, notImplemented: 0, byStatus: {} }
-      },
-      recentActivity: [],
-      charts: { wpStatusChart: {}, apStatusChart: {}, riskChart: {}, affiliateChart: {}, trendChart: {} },
-      alerts: [],
-      quickLinks: []
+  } catch (e) {
+    // Catch-all for any unexpected errors
+    console.error('Unexpected error in getDashboardData:', e);
+    return { 
+      success: false, 
+      error: 'Failed to load dashboard', 
+      errorDetail: 'Unexpected error: ' + e.message 
     };
   }
 }
@@ -782,4 +779,3 @@ function getUserPermissions(roleCode) {
   
   return permissions;
 }
-
