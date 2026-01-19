@@ -52,6 +52,17 @@ function doPost(e) {
     
     // Route to handler
     const result = routeAction(action, data, user);
+    
+    // Ensure we never return null/undefined
+    if (result === null || result === undefined) {
+      console.error('doPost: routeAction returned null/undefined for action:', action);
+      return jsonResponse({ 
+        success: false, 
+        error: 'No response from server', 
+        errorDetail: 'routeAction returned null/undefined for action: ' + action 
+      }, 500);
+    }
+    
     return jsonResponse(result);
     
   } catch (error) {
@@ -100,7 +111,17 @@ function routeAction(action, data, user) {
 
         // Validate the response
         if (!dashboardData) {
-          return { success: false, error: 'Dashboard service returned null' };
+          console.error('getDashboardData: Dashboard service returned null/undefined');
+          return { 
+            success: false, 
+            error: 'Dashboard service returned null',
+            errorDetail: 'getDashboardData() returned null/undefined'
+          };
+        }
+
+        // If getDashboardData already returned an error response, pass it through
+        if (dashboardData.success === false) {
+          return dashboardData;
         }
 
         // Ensure required properties exist for frontend
@@ -128,6 +149,7 @@ function routeAction(action, data, user) {
         return {
           success: false,
           error: 'Failed to load dashboard: ' + e.message,
+          errorDetail: 'Exception in getDashboardData handler: ' + e.message,
           summary: { workPapers: {}, actionPlans: {} },
           charts: {},
           alerts: [],
@@ -547,24 +569,41 @@ function apiCall(action, data) {
     // Special handling for getInitData when user is available from session
     if (action === 'getInitData' && user) {
       console.log('Calling getInitDataWithUser...');
-      return getInitDataWithUser(user);
+      const initResult = getInitDataWithUser(user);
+      
+      // Ensure we never return null/undefined
+      if (initResult === null || initResult === undefined) {
+        console.error('apiCall: getInitDataWithUser returned null/undefined');
+        return { 
+          success: false, 
+          error: 'Failed to initialize application', 
+          errorDetail: 'getInitDataWithUser returned null/undefined' 
+        };
+      }
+      
+      console.log('apiCall completed successfully for action:', action);
+      return initResult;
     }
 
     const result = routeAction(action, data, user);
-
-    // CRITICAL: Ensure we never return null/undefined
+    
+    // Ensure we never return null/undefined
     if (result === null || result === undefined) {
-      console.error('routeAction returned null/undefined for action:', action);
-      return { success: false, error: 'No response from server (null result)' };
+      console.error('apiCall: routeAction returned null/undefined for action:', action);
+      return { 
+        success: false, 
+        error: 'No response from server', 
+        errorDetail: 'routeAction returned null/undefined for action: ' + action 
+      };
     }
-
-    console.log('API call completed successfully for action:', action);
+    
+    console.log('apiCall completed successfully for action:', action);
     return result;
 
   } catch (error) {
     console.error('API call error:', error);
     console.error('Stack:', error.stack);
-    return { success: false, error: error.message || 'Unknown error occurred' };
+    return { success: false, error: error.message, errorDetail: 'Exception in apiCall: ' + error.message };
   }
 }
 
