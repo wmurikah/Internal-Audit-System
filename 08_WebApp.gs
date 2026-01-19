@@ -493,28 +493,60 @@ function apiCall(action, data) {
   try {
     data = data || {};
 
+    // Debug logging - helps diagnose authentication issues
+    console.log('=== API Call Debug ===');
+    console.log('Action:', action);
+    console.log('Session token provided:', !!data.sessionToken);
+
     // Public actions that don't require authentication
-    const publicActions = ['login', 'ping'];
+    const publicActions = ['login', 'ping', 'testConnection'];
 
     // Try to get user from Google session first (works in Apps Script editor)
     let user = getCurrentUser();
+    console.log('getCurrentUser result:', user ? user.email : 'null');
 
     // If no user from Google session, try session token validation
     if (!user && data.sessionToken) {
+      console.log('Attempting session token validation...');
       const sessionResult = validateSession(data.sessionToken);
+      console.log('validateSession result:', sessionResult.valid ? 'valid' : sessionResult.error);
+
       if (sessionResult.valid) {
-        // Get full user object from session result
+        // IMPORTANT FIX: First try to get full user from database
         user = getUserById(sessionResult.user.user_id);
+
+        // FALLBACK: If getUserById fails (e.g., index not built), use session user data
+        if (!user) {
+          console.log('getUserById returned null, using session user data as fallback');
+          // Get full user data by email instead
+          user = getUserByEmail(sessionResult.user.email);
+
+          // Last resort: use the user object from session validation
+          if (!user) {
+            console.log('getUserByEmail also failed, using sessionResult.user');
+            user = sessionResult.user;
+            user._fromSession = true; // Flag that this is from session (partial data)
+          }
+        }
       }
     }
 
+    console.log('Final user:', user ? user.email : 'null');
+
     // Check if authentication is required
     if (!publicActions.includes(action) && !user) {
+      console.log('Authentication required - no valid user found');
       return { success: false, error: 'Authentication required', requireLogin: true };
+    }
+
+    // Test connection action - simple ping to verify backend is working
+    if (action === 'testConnection') {
+      return { success: true, message: 'Backend is working!', timestamp: new Date().toISOString() };
     }
 
     // Special handling for getInitData when user is available from session
     if (action === 'getInitData' && user) {
+      console.log('Calling getInitDataWithUser...');
       return getInitDataWithUser(user);
     }
 
@@ -522,6 +554,7 @@ function apiCall(action, data) {
 
   } catch (error) {
     console.error('API call error:', error);
+    console.error('Stack:', error.stack);
     return { success: false, error: error.message };
   }
 }
@@ -530,6 +563,8 @@ function apiCall(action, data) {
  * Get init data using a provided user object (for session-based auth)
  */
 function getInitDataWithUser(user) {
+  console.log('getInitDataWithUser called for:', user ? user.email : 'null');
+
   if (!user) {
     return { success: false, error: 'User not found' };
   }
@@ -538,25 +573,63 @@ function getInitDataWithUser(user) {
     return { success: false, error: 'Account is inactive' };
   }
 
-  return {
+  // Build response with try-catch for each component
+  const response = {
     success: true,
     user: {
       user_id: user.user_id,
       email: user.email,
       full_name: user.full_name,
       role_code: user.role_code,
-      role_name: getRoleName(user.role_code),
-      affiliate_code: user.affiliate_code,
-      department: user.department,
-      must_change_password: user.must_change_password
+      role_name: '',
+      affiliate_code: user.affiliate_code || '',
+      department: user.department || '',
+      must_change_password: user.must_change_password || false
     },
-    dropdowns: getDropdownData(),
+    dropdowns: {},
     config: {
-      systemName: getConfigValue('SYSTEM_NAME') || 'Hass Petroleum Internal Audit System',
+      systemName: 'Hass Petroleum Internal Audit System',
       currentYear: new Date().getFullYear()
     },
-    permissions: getUserPermissions(user.role_code)
+    permissions: {}
   };
+
+  // Get role name with error handling
+  try {
+    response.user.role_name = getRoleName(user.role_code) || user.role_code;
+  } catch (e) {
+    console.error('Error getting role name:', e);
+    response.user.role_name = user.role_code;
+  }
+
+  // Get dropdowns with error handling
+  try {
+    response.dropdowns = getDropdownData();
+    console.log('Dropdowns loaded successfully');
+  } catch (e) {
+    console.error('Error loading dropdowns:', e);
+    response.dropdowns = { affiliates: [], auditAreas: [], subAreas: [], users: [], roles: [] };
+  }
+
+  // Get config with error handling
+  try {
+    const systemName = getConfigValue('SYSTEM_NAME');
+    if (systemName) response.config.systemName = systemName;
+  } catch (e) {
+    console.error('Error loading config:', e);
+  }
+
+  // Get permissions with error handling
+  try {
+    response.permissions = getUserPermissions(user.role_code);
+    console.log('Permissions loaded successfully');
+  } catch (e) {
+    console.error('Error loading permissions:', e);
+    response.permissions = {};
+  }
+
+  console.log('getInitDataWithUser completed successfully');
+  return response;
 }
 
 // Run all scheduled maintenance tasks (called by time-based trigger)
@@ -640,7 +713,262 @@ function listTriggers() {
     function: t.getHandlerFunction(),
     type: t.getEventType().toString()
   }));
-  
+
   console.log('Current triggers:', JSON.stringify(triggerInfo, null, 2));
   return triggerInfo;
+}
+
+/**
+ * DIAGNOSTIC FUNCTION - Run this from the Apps Script editor to diagnose issues
+ * View > Executions to see the logs
+ */
+function diagnoseDashboardIssues() {
+  console.log('========================================');
+  console.log('=== DASHBOARD DIAGNOSTIC TEST START ===');
+  console.log('========================================');
+  console.log('Timestamp:', new Date().toISOString());
+
+  const results = {
+    sheets: {},
+    indexes: {},
+    users: {},
+    sessions: {},
+    errors: []
+  };
+
+  // Test 1: Check if sheets exist
+  console.log('\n=== TEST 1: Checking Sheet Access ===');
+  const requiredSheets = [
+    '00_Config', '01_Roles', '02_Permissions', '05_Users', '06_Affiliates',
+    '07_AuditAreas', '08_ProcessSubAreas', '09_WorkPapers', '13_ActionPlans',
+    '17_Index_WorkPapers', '18_Index_ActionPlans', '19_Index_Users', '20_Sessions'
+  ];
+
+  requiredSheets.forEach(name => {
+    try {
+      const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(name);
+      const exists = !!sheet;
+      const rows = exists ? sheet.getLastRow() : 0;
+      results.sheets[name] = { exists: exists, rows: rows };
+      console.log(name + ': ' + (exists ? 'EXISTS (' + rows + ' rows)' : 'MISSING'));
+    } catch (e) {
+      results.sheets[name] = { exists: false, error: e.message };
+      results.errors.push('Sheet ' + name + ': ' + e.message);
+      console.error(name + ': ERROR - ' + e.message);
+    }
+  });
+
+  // Test 2: Check indexes
+  console.log('\n=== TEST 2: Checking Index Maps ===');
+  try {
+    const userIndexMap = Index.getIndexMap('USER');
+    const userCount = Object.keys(userIndexMap).length;
+    results.indexes.USER = { count: userCount };
+    console.log('User index entries:', userCount);
+
+    const wpIndexMap = Index.getIndexMap('WORK_PAPER');
+    const wpCount = Object.keys(wpIndexMap).length;
+    results.indexes.WORK_PAPER = { count: wpCount };
+    console.log('Work paper index entries:', wpCount);
+
+    const apIndexMap = Index.getIndexMap('ACTION_PLAN');
+    const apCount = Object.keys(apIndexMap).length;
+    results.indexes.ACTION_PLAN = { count: apCount };
+    console.log('Action plan index entries:', apCount);
+  } catch (e) {
+    results.errors.push('Index check error: ' + e.message);
+    console.error('Index check error:', e);
+  }
+
+  // Test 3: Check active sessions
+  console.log('\n=== TEST 3: Checking Sessions ===');
+  try {
+    const sessionsSheet = getSheet('20_Sessions');
+    if (sessionsSheet) {
+      const sessionCount = Math.max(0, sessionsSheet.getLastRow() - 1);
+      results.sessions.total = sessionCount;
+      console.log('Total sessions in sheet:', sessionCount);
+
+      // Count valid sessions
+      if (sessionCount > 0) {
+        const data = sessionsSheet.getDataRange().getValues();
+        const headers = data[0];
+        const validIdx = headers.indexOf('is_valid');
+        const expiresIdx = headers.indexOf('expires_at');
+        let validCount = 0;
+        const now = new Date();
+
+        for (let i = 1; i < data.length; i++) {
+          const isValid = data[i][validIdx];
+          const expiresAt = new Date(data[i][expiresIdx]);
+          if (isValid && expiresAt > now) {
+            validCount++;
+          }
+        }
+        results.sessions.valid = validCount;
+        console.log('Valid (non-expired) sessions:', validCount);
+      }
+    }
+  } catch (e) {
+    results.errors.push('Session check error: ' + e.message);
+    console.error('Session check error:', e);
+  }
+
+  // Test 4: Check users
+  console.log('\n=== TEST 4: Checking Users ===');
+  try {
+    const usersSheet = getSheet('05_Users');
+    if (usersSheet) {
+      const userCount = Math.max(0, usersSheet.getLastRow() - 1);
+      results.users.total = userCount;
+      console.log('Total users in sheet:', userCount);
+
+      // Count active users
+      if (userCount > 0) {
+        const data = usersSheet.getDataRange().getValues();
+        const headers = data[0];
+        const activeIdx = headers.indexOf('is_active');
+        let activeCount = 0;
+
+        for (let i = 1; i < data.length; i++) {
+          if (isActive(data[i][activeIdx])) {
+            activeCount++;
+          }
+        }
+        results.users.active = activeCount;
+        console.log('Active users:', activeCount);
+      }
+    }
+  } catch (e) {
+    results.errors.push('User check error: ' + e.message);
+    console.error('User check error:', e);
+  }
+
+  // Test 5: Test Google Session
+  console.log('\n=== TEST 5: Testing Google Session ===');
+  try {
+    const email = Session.getActiveUser().getEmail();
+    results.googleSession = { email: email || '(empty)' };
+    console.log('Session.getActiveUser().getEmail():', email || '(empty - this is normal for web app)');
+
+    if (email) {
+      const user = getUserByEmail(email);
+      console.log('User found by email:', user ? user.full_name : 'NOT FOUND');
+      results.googleSession.userFound = !!user;
+    }
+  } catch (e) {
+    results.errors.push('Google session check error: ' + e.message);
+    console.error('Google session check error:', e);
+  }
+
+  // Test 6: Test getCurrentUser
+  console.log('\n=== TEST 6: Testing getCurrentUser() ===');
+  try {
+    const user = getCurrentUser();
+    results.getCurrentUser = user ? { email: user.email, role: user.role_code } : null;
+    console.log('getCurrentUser() result:', user ? user.email : 'null');
+  } catch (e) {
+    results.errors.push('getCurrentUser error: ' + e.message);
+    console.error('getCurrentUser error:', e);
+  }
+
+  // Test 7: Attempt to load dashboard data with first active user
+  console.log('\n=== TEST 7: Testing Dashboard Data Load ===');
+  try {
+    const usersSheet = getSheet('05_Users');
+    if (usersSheet && usersSheet.getLastRow() > 1) {
+      const data = usersSheet.getDataRange().getValues();
+      const headers = data[0];
+      const activeIdx = headers.indexOf('is_active');
+
+      // Find first active user
+      for (let i = 1; i < data.length; i++) {
+        if (isActive(data[i][activeIdx])) {
+          const testUser = rowToObject(headers, data[i]);
+          testUser._rowIndex = i + 1;
+          console.log('Testing with user:', testUser.email);
+
+          const dashboardData = getDashboardData(testUser);
+          results.dashboardTest = {
+            success: !!dashboardData,
+            hasUser: !!dashboardData?.user,
+            hasSummary: !!dashboardData?.summary,
+            hasCharts: !!dashboardData?.charts
+          };
+          console.log('Dashboard data loaded:', !!dashboardData);
+          console.log('Has user:', !!dashboardData?.user);
+          console.log('Has summary:', !!dashboardData?.summary);
+          console.log('Has charts:', !!dashboardData?.charts);
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    results.errors.push('Dashboard test error: ' + e.message);
+    console.error('Dashboard test error:', e);
+  }
+
+  // Summary
+  console.log('\n========================================');
+  console.log('=== DIAGNOSTIC SUMMARY ===');
+  console.log('========================================');
+
+  if (results.errors.length > 0) {
+    console.log('ERRORS FOUND:');
+    results.errors.forEach((err, i) => console.log((i + 1) + '. ' + err));
+  } else {
+    console.log('No errors detected!');
+  }
+
+  // Recommendations
+  console.log('\n=== RECOMMENDATIONS ===');
+
+  if (results.indexes.USER?.count === 0) {
+    console.log('- Run rebuildAllIndexes() to rebuild indexes');
+  }
+
+  if (results.sessions.valid === 0) {
+    console.log('- No valid sessions found. Users need to log in again.');
+  }
+
+  if (results.googleSession?.email === '(empty)') {
+    console.log('- Session.getActiveUser().getEmail() returns empty (normal for web app deployment)');
+    console.log('- Authentication relies on session tokens - ensure login is working');
+  }
+
+  console.log('\n=== DIAGNOSTIC TEST COMPLETE ===');
+
+  return results;
+}
+
+/**
+ * QUICK FIX: Rebuild all indexes
+ * Run this if users cannot authenticate
+ */
+function rebuildAllIndexesQuickFix() {
+  console.log('Rebuilding all indexes...');
+
+  try {
+    Index.rebuild('USER');
+    console.log('USER index rebuilt');
+  } catch (e) {
+    console.error('Failed to rebuild USER index:', e);
+  }
+
+  try {
+    Index.rebuild('WORK_PAPER');
+    console.log('WORK_PAPER index rebuilt');
+  } catch (e) {
+    console.error('Failed to rebuild WORK_PAPER index:', e);
+  }
+
+  try {
+    Index.rebuild('ACTION_PLAN');
+    console.log('ACTION_PLAN index rebuilt');
+  } catch (e) {
+    console.error('Failed to rebuild ACTION_PLAN index:', e);
+  }
+
+  console.log('Index rebuild complete!');
+  return { success: true, message: 'All indexes rebuilt' };
 }

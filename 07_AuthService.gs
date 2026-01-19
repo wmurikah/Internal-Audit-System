@@ -100,33 +100,67 @@ function logout(sessionToken) {
  * Validate session and return user
  */
 function validateSession(sessionToken) {
+  console.log('validateSession called, token provided:', !!sessionToken);
+
   if (!sessionToken) {
     return { valid: false, error: 'No session token' };
   }
-  
+
   const session = getSessionByToken(sessionToken);
-  
+  console.log('Session lookup result:', session ? 'found' : 'not found');
+
   if (!session) {
     return { valid: false, error: 'Session not found' };
   }
-  
+
   if (!session.is_valid) {
+    console.log('Session is invalidated');
     return { valid: false, error: 'Session invalidated' };
   }
-  
+
   const expiresAt = new Date(session.expires_at);
   if (expiresAt < new Date()) {
+    console.log('Session expired at:', expiresAt);
     invalidateSession(session.session_id);
     return { valid: false, error: 'Session expired' };
   }
-  
-  // Get user
-  const user = getUserById(session.user_id);
+
+  // Get user - try multiple methods
+  console.log('Looking up user:', session.user_id);
+  let user = getUserById(session.user_id);
+
+  // Fallback: If getUserById fails (index issue), try direct lookup
+  if (!user) {
+    console.log('getUserById returned null, trying direct sheet lookup...');
+    try {
+      const sheet = getSheet(SHEETS.USERS);
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0];
+        const idIdx = headers.indexOf('user_id');
+
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][idIdx] === session.user_id) {
+            user = rowToObject(headers, data[i]);
+            user._rowIndex = i + 1;
+            console.log('Found user via direct lookup:', user.email);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Direct user lookup failed:', e);
+    }
+  }
+
   if (!user || !isActive(user.is_active)) {
+    console.log('User not found or inactive');
     invalidateSession(session.session_id);
     return { valid: false, error: 'User not found or inactive' };
   }
-  
+
+  console.log('Session valid for user:', user.email);
+
   return {
     valid: true,
     user: {
@@ -137,26 +171,40 @@ function validateSession(sessionToken) {
       role_name: getRoleName(user.role_code),
       affiliate_code: user.affiliate_code,
       department: user.department,
-      must_change_password: user.must_change_password
+      must_change_password: user.must_change_password,
+      is_active: user.is_active
     }
   };
 }
 
 /**
  * Get current user from Google session (for Apps Script web apps)
+ * Note: Returns null when deployed as web app with "Anyone with Google Account"
+ * because Session.getActiveUser().getEmail() returns empty string
  */
 function getCurrentUser() {
-  const email = Session.getActiveUser().getEmail();
-  if (!email) {
+  try {
+    const email = Session.getActiveUser().getEmail();
+    console.log('getCurrentUser - email from Session:', email || '(empty)');
+
+    if (!email) {
+      // This is NORMAL for web apps deployed as "Anyone with Google Account"
+      // Authentication will fall back to session token validation
+      return null;
+    }
+
+    const user = getUserByEmail(email);
+    console.log('getCurrentUser - user lookup:', user ? user.email : 'not found');
+
+    if (!user || !isActive(user.is_active)) {
+      return null;
+    }
+
+    return user;
+  } catch (e) {
+    console.error('getCurrentUser error:', e);
     return null;
   }
-  
-  const user = getUserByEmail(email);
-  if (!user || !isActive(user.is_active)) {
-    return null;
-  }
-  
-  return user;
 }
 
 function createSession(user) {
