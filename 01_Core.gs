@@ -333,20 +333,23 @@ const DB = {
   getById: function(entityType, entityId) {
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return null;
-    
+
     const sheetName = CONFIG.DATA_SHEETS[entityType];
     const sheet = getSheet(sheetName);
     if (!sheet) return null;
-    
+
     const headers = getSheetHeaders(sheetName);
     const rowData = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
-    
+
     // Convert to object
     const entity = {};
     headers.forEach((h, idx) => {
       entity[h] = rowData[idx];
     });
-    
+
+    // CRITICAL: Include _rowIndex for update operations
+    entity._rowIndex = rowNumber;
+
     return entity;
   },
 
