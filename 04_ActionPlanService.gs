@@ -310,9 +310,19 @@ function deleteActionPlan(actionPlanId, user) {
 
 function getActionPlans(filters, user) {
   filters = filters || {};
-  
+
   const sheet = getSheet(SHEETS.ACTION_PLANS);
+  if (!sheet) {
+    console.error('getActionPlans: Action Plans sheet not found:', SHEETS.ACTION_PLANS);
+    return [];
+  }
+
   const data = sheet.getDataRange().getValues();
+  if (!data || data.length < 2) {
+    console.log('getActionPlans: No data in Action Plans sheet');
+    return [];
+  }
+
   const headers = data[0];
   
   const colMap = {};
@@ -400,7 +410,18 @@ function getActionPlans(filters, user) {
  */
 function getActionPlanCounts(filters, user) {
   const plans = getActionPlans(filters, user);
-  
+
+  if (!plans || !Array.isArray(plans)) {
+    console.error('getActionPlanCounts: Invalid plans returned');
+    return {
+      total: 0,
+      byStatus: {},
+      overdue: 0,
+      dueThisWeek: 0,
+      dueThisMonth: 0
+    };
+  }
+
   const counts = {
     total: plans.length,
     byStatus: {},
