@@ -550,12 +550,21 @@ function apiCall(action, data) {
       return getInitDataWithUser(user);
     }
 
-    return routeAction(action, data, user);
+    const result = routeAction(action, data, user);
+
+    // CRITICAL: Ensure we never return null/undefined
+    if (result === null || result === undefined) {
+      console.error('routeAction returned null/undefined for action:', action);
+      return { success: false, error: 'No response from server (null result)' };
+    }
+
+    console.log('API call completed successfully for action:', action);
+    return result;
 
   } catch (error) {
     console.error('API call error:', error);
     console.error('Stack:', error.stack);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || 'Unknown error occurred' };
   }
 }
 

@@ -1,113 +1,151 @@
 // 06_DashboardService.gs - Dashboard Statistics, Charts, Role-based Views, Recent Activity
 
 function getDashboardData(user) {
-  console.log('getDashboardData called for user:', user ? user.email : 'null');
+  try {
+    console.log('getDashboardData called for user:', user ? user.email : 'null');
 
-  if (!user) {
-    try {
-      const email = Session.getActiveUser().getEmail();
-      user = getUserByEmail(email);
-    } catch (e) {
-      console.error('Error getting user from session:', e);
+    if (!user) {
+      try {
+        const email = Session.getActiveUser().getEmail();
+        user = getUserByEmail(email);
+      } catch (e) {
+        console.error('Error getting user from session:', e);
+      }
     }
-  }
 
-  if (!user) {
-    console.error('getDashboardData: No user provided or found');
-    throw new Error('User not found');
-  }
+    if (!user) {
+      console.error('getDashboardData: No user provided or found');
+      // CRITICAL: Return error object instead of throwing
+      return {
+        success: false,
+        error: 'User not found',
+        user: {},
+        summary: { workPapers: {}, actionPlans: {} },
+        recentActivity: [],
+        charts: {},
+        alerts: [],
+        quickLinks: []
+      };
+    }
 
-  const roleCode = user.role_code;
-  console.log('Building dashboard for role:', roleCode);
+    const roleCode = user.role_code;
+    console.log('Building dashboard for role:', roleCode);
 
-  // Build dashboard based on role - with error handling for each section
-  const dashboard = {
-    user: {
-      user_id: user.user_id,
-      full_name: user.full_name,
-      email: user.email,
-      role_code: roleCode,
-      role_name: '',
-      affiliate_code: user.affiliate_code || ''
-    },
-    summary: { workPapers: {}, actionPlans: {} },
-    recentActivity: [],
-    charts: {},
-    alerts: [],
-    quickLinks: []
-  };
+    // Build dashboard based on role - with error handling for each section
+    const dashboard = {
+      user: {
+        user_id: user.user_id || '',
+        full_name: user.full_name || '',
+        email: user.email || '',
+        role_code: roleCode || '',
+        role_name: '',
+        affiliate_code: user.affiliate_code || ''
+      },
+      summary: { workPapers: {}, actionPlans: {} },
+      recentActivity: [],
+      charts: {},
+      alerts: [],
+      quickLinks: []
+    };
 
-  // Get role name
-  try {
-    dashboard.user.role_name = getRoleName(roleCode) || roleCode;
-  } catch (e) {
-    console.error('Error getting role name:', e);
-    dashboard.user.role_name = roleCode;
-  }
+    // Get role name
+    try {
+      dashboard.user.role_name = getRoleName(roleCode) || roleCode;
+    } catch (e) {
+      console.error('Error getting role name:', e);
+      dashboard.user.role_name = roleCode || '';
+    }
 
-  // Get summary stats
-  try {
-    dashboard.summary = getSummaryStats(user);
-    console.log('Summary stats loaded');
-  } catch (e) {
-    console.error('Error loading summary stats:', e);
-    dashboard.summary = {
-      workPapers: { total: 0, draft: 0, submitted: 0, underReview: 0, approved: 0, sentToAuditee: 0, byRisk: {}, byAffiliate: {} },
-      actionPlans: { total: 0, overdue: 0, dueThisWeek: 0, dueThisMonth: 0, implemented: 0, verified: 0, notImplemented: 0, byStatus: {} }
+    // Get summary stats
+    try {
+      dashboard.summary = getSummaryStats(user);
+      console.log('Summary stats loaded');
+    } catch (e) {
+      console.error('Error loading summary stats:', e);
+      dashboard.summary = {
+        workPapers: { total: 0, draft: 0, submitted: 0, underReview: 0, approved: 0, sentToAuditee: 0, byRisk: {}, byAffiliate: {} },
+        actionPlans: { total: 0, overdue: 0, dueThisWeek: 0, dueThisMonth: 0, implemented: 0, verified: 0, notImplemented: 0, byStatus: {} }
+      };
+    }
+
+    // Get recent activity
+    try {
+      dashboard.recentActivity = getRecentActivity(user, 10);
+      console.log('Recent activity loaded:', dashboard.recentActivity.length, 'items');
+    } catch (e) {
+      console.error('Error loading recent activity:', e);
+      dashboard.recentActivity = [];
+    }
+
+    // Get chart data
+    try {
+      dashboard.charts = getChartData(user);
+      console.log('Chart data loaded');
+    } catch (e) {
+      console.error('Error loading chart data:', e);
+      dashboard.charts = { wpStatusChart: {}, apStatusChart: {}, riskChart: {}, affiliateChart: {}, trendChart: {} };
+    }
+
+    // Get alerts
+    try {
+      dashboard.alerts = getAlerts(user);
+      console.log('Alerts loaded:', dashboard.alerts.length, 'alerts');
+    } catch (e) {
+      console.error('Error loading alerts:', e);
+      dashboard.alerts = [];
+    }
+
+    // Get quick links
+    try {
+      dashboard.quickLinks = getQuickLinks(roleCode);
+    } catch (e) {
+      console.error('Error loading quick links:', e);
+      dashboard.quickLinks = [];
+    }
+
+    // Add role-specific data with error handling
+    try {
+      if (roleCode === ROLES.AUDITEE) {
+        dashboard.myActionPlans = getMyActionPlans(user);
+      } else if (roleCode === ROLES.JUNIOR_STAFF) {
+        dashboard.myWorkPapers = getMyWorkPapers(user);
+      } else if ([ROLES.SENIOR_AUDITOR, ROLES.HEAD_OF_AUDIT, ROLES.SUPER_ADMIN].includes(roleCode)) {
+        dashboard.pendingReviews = getPendingReviews(user);
+        dashboard.teamStats = getTeamStats(user);
+      }
+    } catch (e) {
+      console.error('Error loading role-specific data:', e);
+    }
+
+    console.log('getDashboardData completed successfully');
+    return dashboard;
+
+  } catch (error) {
+    console.error('getDashboardData: Fatal error:', error);
+    console.error('getDashboardData: Error stack:', error.stack);
+
+    // CRITICAL: Always return a valid object, never null/undefined
+    return {
+      success: false,
+      error: 'Failed to load dashboard: ' + error.message,
+      user: {
+        user_id: user?.user_id || '',
+        full_name: user?.full_name || '',
+        email: user?.email || '',
+        role_code: user?.role_code || '',
+        role_name: '',
+        affiliate_code: user?.affiliate_code || ''
+      },
+      summary: {
+        workPapers: { total: 0, draft: 0, submitted: 0, underReview: 0, approved: 0, sentToAuditee: 0, byRisk: {}, byAffiliate: {} },
+        actionPlans: { total: 0, overdue: 0, dueThisWeek: 0, dueThisMonth: 0, implemented: 0, verified: 0, notImplemented: 0, byStatus: {} }
+      },
+      recentActivity: [],
+      charts: { wpStatusChart: {}, apStatusChart: {}, riskChart: {}, affiliateChart: {}, trendChart: {} },
+      alerts: [],
+      quickLinks: []
     };
   }
-
-  // Get recent activity
-  try {
-    dashboard.recentActivity = getRecentActivity(user, 10);
-    console.log('Recent activity loaded:', dashboard.recentActivity.length, 'items');
-  } catch (e) {
-    console.error('Error loading recent activity:', e);
-    dashboard.recentActivity = [];
-  }
-
-  // Get chart data
-  try {
-    dashboard.charts = getChartData(user);
-    console.log('Chart data loaded');
-  } catch (e) {
-    console.error('Error loading chart data:', e);
-    dashboard.charts = { wpStatusChart: {}, apStatusChart: {}, riskChart: {}, affiliateChart: {}, trendChart: {} };
-  }
-
-  // Get alerts
-  try {
-    dashboard.alerts = getAlerts(user);
-    console.log('Alerts loaded:', dashboard.alerts.length, 'alerts');
-  } catch (e) {
-    console.error('Error loading alerts:', e);
-    dashboard.alerts = [];
-  }
-
-  // Get quick links
-  try {
-    dashboard.quickLinks = getQuickLinks(roleCode);
-  } catch (e) {
-    console.error('Error loading quick links:', e);
-    dashboard.quickLinks = [];
-  }
-
-  // Add role-specific data with error handling
-  try {
-    if (roleCode === ROLES.AUDITEE) {
-      dashboard.myActionPlans = getMyActionPlans(user);
-    } else if (roleCode === ROLES.JUNIOR_STAFF) {
-      dashboard.myWorkPapers = getMyWorkPapers(user);
-    } else if ([ROLES.SENIOR_AUDITOR, ROLES.HEAD_OF_AUDIT, ROLES.SUPER_ADMIN].includes(roleCode)) {
-      dashboard.pendingReviews = getPendingReviews(user);
-      dashboard.teamStats = getTeamStats(user);
-    }
-  } catch (e) {
-    console.error('Error loading role-specific data:', e);
-  }
-
-  console.log('getDashboardData completed successfully');
-  return dashboard;
 }
 
 /**

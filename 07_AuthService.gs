@@ -402,74 +402,135 @@ function generateTempPassword() {
  * Change password
  */
 function changePassword(userId, currentPassword, newPassword) {
-  console.log('changePassword called for userId:', userId);
+  try {
+    console.log('changePassword called for userId:', userId);
 
-  const user = getUserById(userId);
-  if (!user) {
-    console.error('changePassword: User not found:', userId);
-    return { success: false, error: 'User not found' };
-  }
+    if (!userId) {
+      console.error('changePassword: No userId provided');
+      return { success: false, error: 'User ID is required' };
+    }
 
-  // CRITICAL: Verify _rowIndex exists
-  if (!user._rowIndex) {
-    console.error('changePassword: User found but _rowIndex is missing:', user.email);
-    // Try to find the row index directly
-    const sheet = getSheet(SHEETS.USERS);
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const idIdx = headers.indexOf('user_id');
+    if (!currentPassword || !newPassword) {
+      console.error('changePassword: Missing password parameters');
+      return { success: false, error: 'Current and new passwords are required' };
+    }
 
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][idIdx] === userId) {
-        user._rowIndex = i + 1;
-        console.log('changePassword: Found _rowIndex via direct lookup:', user._rowIndex);
-        break;
+    const user = getUserById(userId);
+    if (!user) {
+      console.error('changePassword: User not found:', userId);
+      return { success: false, error: 'User not found' };
+    }
+
+    console.log('changePassword: User found:', user.email, ', _rowIndex:', user._rowIndex);
+
+    // CRITICAL: Verify _rowIndex exists
+    if (!user._rowIndex) {
+      console.error('changePassword: User found but _rowIndex is missing:', user.email);
+      // Try to find the row index directly
+      try {
+        const sheet = getSheet(SHEETS.USERS);
+        if (!sheet) {
+          console.error('changePassword: Users sheet not found');
+          return { success: false, error: 'System error: Users sheet not found' };
+        }
+
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0];
+        const idIdx = headers.indexOf('user_id');
+
+        if (idIdx === -1) {
+          console.error('changePassword: user_id column not found in sheet');
+          return { success: false, error: 'System error: Invalid sheet structure' };
+        }
+
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][idIdx] === userId) {
+            user._rowIndex = i + 1;
+            console.log('changePassword: Found _rowIndex via direct lookup:', user._rowIndex);
+            break;
+          }
+        }
+
+        if (!user._rowIndex) {
+          console.error('changePassword: Could not find user row after direct lookup');
+          return { success: false, error: 'Unable to locate user record for update' };
+        }
+      } catch (lookupError) {
+        console.error('changePassword: Error during direct lookup:', lookupError);
+        return { success: false, error: 'System error during user lookup: ' + lookupError.message };
       }
     }
 
-    if (!user._rowIndex) {
-      return { success: false, error: 'Unable to locate user record for update' };
+    // Verify current password
+    console.log('changePassword: Verifying current password');
+    if (!verifyPassword(currentPassword, user.password_salt, user.password_hash)) {
+      console.log('changePassword: Current password verification failed');
+      return { success: false, error: 'Current password is incorrect' };
     }
+
+    // Validate new password
+    console.log('changePassword: Validating new password');
+    const validation = validatePassword(newPassword);
+    if (!validation.valid) {
+      console.log('changePassword: New password validation failed:', validation.error);
+      return { success: false, error: validation.error };
+    }
+
+    // Hash new password
+    console.log('changePassword: Hashing new password');
+    const salt = generateSalt();
+    const hash = hashPassword(newPassword, salt);
+
+    // Update user
+    const sheet = getSheet(SHEETS.USERS);
+    if (!sheet) {
+      console.error('changePassword: Could not get Users sheet for update');
+      return { success: false, error: 'System error: Users sheet not found' };
+    }
+
+    const rowIndex = user._rowIndex;
+    console.log('changePassword: Updating row', rowIndex, 'for user', user.email);
+
+    // Get column indexes
+    const hashIdx = getColumnIndex('USERS', 'password_hash');
+    const saltIdx = getColumnIndex('USERS', 'password_salt');
+    const mustChangeIdx = getColumnIndex('USERS', 'must_change_password');
+    const updatedIdx = getColumnIndex('USERS', 'updated_at');
+
+    console.log('changePassword: Column indexes - hash:', hashIdx, 'salt:', saltIdx, 'mustChange:', mustChangeIdx, 'updated:', updatedIdx);
+
+    // Perform updates
+    sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
+    sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
+    sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(false);
+    sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
+
+    console.log('changePassword: Sheet updated successfully');
+
+    // Invalidate user cache
+    try {
+      invalidateUserCache(user.email);
+      console.log('changePassword: User cache invalidated');
+    } catch (cacheError) {
+      console.error('changePassword: Error invalidating cache (non-fatal):', cacheError);
+    }
+
+    // Log audit event
+    try {
+      logAuditEvent('CHANGE_PASSWORD', 'USER', userId, null, null, userId, user.email);
+      console.log('changePassword: Audit event logged');
+    } catch (auditError) {
+      console.error('changePassword: Error logging audit event (non-fatal):', auditError);
+    }
+
+    console.log('changePassword: Success for user', user.email);
+    return { success: true };
+
+  } catch (error) {
+    console.error('changePassword: Unexpected error:', error);
+    console.error('changePassword: Error stack:', error.stack);
+    return { success: false, error: 'System error: ' + error.message };
   }
-
-  // Verify current password
-  if (!verifyPassword(currentPassword, user.password_salt, user.password_hash)) {
-    return { success: false, error: 'Current password is incorrect' };
-  }
-
-  // Validate new password
-  const validation = validatePassword(newPassword);
-  if (!validation.valid) {
-    return { success: false, error: validation.error };
-  }
-
-  // Hash new password
-  const salt = generateSalt();
-  const hash = hashPassword(newPassword, salt);
-
-  // Update user
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex;
-
-  console.log('changePassword: Updating row', rowIndex, 'for user', user.email);
-
-  const hashIdx = getColumnIndex('USERS', 'password_hash');
-  const saltIdx = getColumnIndex('USERS', 'password_salt');
-  const mustChangeIdx = getColumnIndex('USERS', 'must_change_password');
-  const updatedIdx = getColumnIndex('USERS', 'updated_at');
-
-  sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
-  sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
-  sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(false);
-  sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
-
-  // Invalidate user cache
-  invalidateUserCache(user.email);
-
-  logAuditEvent('CHANGE_PASSWORD', 'USER', userId, null, null, userId, user.email);
-
-  console.log('changePassword: Success for user', user.email);
-  return { success: true };
 }
 
 /**
