@@ -402,45 +402,73 @@ function generateTempPassword() {
  * Change password
  */
 function changePassword(userId, currentPassword, newPassword) {
+  console.log('changePassword called for userId:', userId);
+
   const user = getUserById(userId);
   if (!user) {
+    console.error('changePassword: User not found:', userId);
     return { success: false, error: 'User not found' };
   }
-  
+
+  // CRITICAL: Verify _rowIndex exists
+  if (!user._rowIndex) {
+    console.error('changePassword: User found but _rowIndex is missing:', user.email);
+    // Try to find the row index directly
+    const sheet = getSheet(SHEETS.USERS);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idIdx = headers.indexOf('user_id');
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][idIdx] === userId) {
+        user._rowIndex = i + 1;
+        console.log('changePassword: Found _rowIndex via direct lookup:', user._rowIndex);
+        break;
+      }
+    }
+
+    if (!user._rowIndex) {
+      return { success: false, error: 'Unable to locate user record for update' };
+    }
+  }
+
   // Verify current password
   if (!verifyPassword(currentPassword, user.password_salt, user.password_hash)) {
     return { success: false, error: 'Current password is incorrect' };
   }
-  
+
   // Validate new password
   const validation = validatePassword(newPassword);
   if (!validation.valid) {
     return { success: false, error: validation.error };
   }
-  
+
   // Hash new password
   const salt = generateSalt();
   const hash = hashPassword(newPassword, salt);
-  
+
   // Update user
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex;
-  
+
+  console.log('changePassword: Updating row', rowIndex, 'for user', user.email);
+
   const hashIdx = getColumnIndex('USERS', 'password_hash');
   const saltIdx = getColumnIndex('USERS', 'password_salt');
   const mustChangeIdx = getColumnIndex('USERS', 'must_change_password');
   const updatedIdx = getColumnIndex('USERS', 'updated_at');
-  
+
   sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
   sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
   sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(false);
   sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
-  
+
   // Invalidate user cache
   invalidateUserCache(user.email);
-  
+
   logAuditEvent('CHANGE_PASSWORD', 'USER', userId, null, null, userId, user.email);
-  
+
+  console.log('changePassword: Success for user', user.email);
   return { success: true };
 }
 

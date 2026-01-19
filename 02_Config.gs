@@ -590,15 +590,28 @@ function invalidateUserCache(email) {
 
 function getUserById(userId) {
   if (!userId) return null;
+
+  // Try DB.getById first (uses index for fast lookup)
   if (typeof DB !== 'undefined' && DB.getById) {
-    return DB.getById('USER', userId);
+    const user = DB.getById('USER', userId);
+    if (user && user._rowIndex) {
+      return user;
+    }
+    // If DB.getById returned null or no _rowIndex, fall through to direct lookup
+    console.log('getUserById: DB.getById returned null or no _rowIndex, using direct lookup');
   }
-  
+
+  // Direct sheet lookup (slower but guaranteed to work)
   const sheet = getSheet(SHEETS.USERS);
+  if (!sheet) {
+    console.error('getUserById: Users sheet not found');
+    return null;
+  }
+
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const idIdx = headers.indexOf('user_id');
-  
+
   for (let i = 1; i < data.length; i++) {
     if (data[i][idIdx] === userId) {
       const user = rowToObject(headers, data[i]);
@@ -606,6 +619,8 @@ function getUserById(userId) {
       return user;
     }
   }
+
+  console.log('getUserById: User not found:', userId);
   return null;
 }
 
