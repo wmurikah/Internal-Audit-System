@@ -909,4 +909,3 @@ function sanitizeInput(value) {
   
   return sanitized.trim();
 }
-
