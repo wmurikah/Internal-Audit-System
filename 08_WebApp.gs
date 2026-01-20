@@ -101,34 +101,53 @@ function routeAction(action, data, user) {
       
     case 'getDashboardData':
       try {
+        console.log('=== getDashboardData Handler START ===');
+        console.log('User object exists:', !!user);
+        if (user) {
+          console.log('User email:', user.email);
+          console.log('User role:', user.role_code);
+          console.log('User ID:', user.user_id);
+          console.log('User has _rowIndex:', !!user._rowIndex);
+        }
+
         // Ensure user is authenticated
         if (!user) {
+          console.error('getDashboardData: No user object - authentication required');
           return { success: false, error: 'Authentication required', requireLogin: true };
         }
 
+        console.log('Calling getDashboardData service function...');
         // Call the service function
         const dashboardData = getDashboardData(user);
+        console.log('getDashboardData service returned:', !!dashboardData);
 
         // Validate the response
         if (!dashboardData) {
           console.error('getDashboardData: Dashboard service returned null/undefined');
-          return { 
-            success: false, 
+          return {
+            success: false,
             error: 'Dashboard service returned null',
             errorDetail: 'getDashboardData() returned null/undefined'
           };
         }
 
+        console.log('dashboardData.success:', dashboardData.success);
+        console.log('dashboardData has summary:', !!dashboardData.summary);
+        console.log('dashboardData has charts:', !!dashboardData.charts);
+
         // If getDashboardData already returned an error response, pass it through
         if (dashboardData.success === false) {
+          console.error('getDashboardData returned error:', dashboardData.error);
           return dashboardData;
         }
 
         // Ensure required properties exist for frontend
         if (!dashboardData.summary) {
+          console.warn('No summary in dashboardData, adding defaults');
           dashboardData.summary = { workPapers: {}, actionPlans: {} };
         }
         if (!dashboardData.charts) {
+          console.warn('No charts in dashboardData, adding defaults');
           dashboardData.charts = {};
         }
         if (!dashboardData.alerts) {
@@ -138,6 +157,7 @@ function routeAction(action, data, user) {
           dashboardData.recentActivity = [];
         }
 
+        console.log('=== getDashboardData Handler SUCCESS ===');
         // Return with proper structure
         return {
           success: true,
@@ -145,11 +165,13 @@ function routeAction(action, data, user) {
         };
 
       } catch (e) {
-        console.error('getDashboardData error:', e);
+        console.error('=== getDashboardData Handler EXCEPTION ===');
+        console.error('Error:', e.message);
+        console.error('Stack:', e.stack);
         return {
           success: false,
           error: 'Failed to load dashboard: ' + e.message,
-          errorDetail: 'Exception in getDashboardData handler: ' + e.message,
+          errorDetail: 'Exception in getDashboardData handler: ' + e.stack,
           summary: { workPapers: {}, actionPlans: {} },
           charts: {},
           alerts: [],
@@ -516,44 +538,59 @@ function apiCall(action, data) {
     data = data || {};
 
     // Debug logging - helps diagnose authentication issues
-    console.log('=== API Call Debug ===');
+    console.log('===========================');
+    console.log('=== API Call Debug START ===');
+    console.log('===========================');
     console.log('Action:', action);
     console.log('Session token provided:', !!data.sessionToken);
+    console.log('Session token length:', data.sessionToken ? data.sessionToken.length : 0);
 
     // Public actions that don't require authentication
     const publicActions = ['login', 'ping', 'testConnection'];
 
     // Try to get user from Google session first (works in Apps Script editor)
     let user = getCurrentUser();
-    console.log('getCurrentUser result:', user ? user.email : 'null');
+    console.log('STEP 1: getCurrentUser result:', user ? user.email : 'null');
 
     // If no user from Google session, try session token validation
     if (!user && data.sessionToken) {
-      console.log('Attempting session token validation...');
+      console.log('STEP 2: No Google user - trying session token validation...');
       const sessionResult = validateSession(data.sessionToken);
-      console.log('validateSession result:', sessionResult.valid ? 'valid' : sessionResult.error);
+      console.log('STEP 3: validateSession result:', sessionResult.valid ? 'VALID' : 'INVALID');
+      if (!sessionResult.valid) {
+        console.error('Session validation error:', sessionResult.error);
+      }
 
       if (sessionResult.valid) {
+        console.log('STEP 4: Session valid - user from session:', sessionResult.user.email);
+        console.log('STEP 5: Attempting getUserById with ID:', sessionResult.user.user_id);
+
         // IMPORTANT FIX: First try to get full user from database
         user = getUserById(sessionResult.user.user_id);
+        console.log('STEP 6: getUserById result:', user ? 'FOUND (' + user.email + ')' : 'NULL');
 
         // FALLBACK: If getUserById fails (e.g., index not built), use session user data
         if (!user) {
-          console.log('getUserById returned null, using session user data as fallback');
+          console.log('STEP 7: getUserById failed - trying getUserByEmail with:', sessionResult.user.email);
           // Get full user data by email instead
           user = getUserByEmail(sessionResult.user.email);
+          console.log('STEP 8: getUserByEmail result:', user ? 'FOUND (' + user.email + ')' : 'NULL');
 
           // Last resort: use the user object from session validation
           if (!user) {
-            console.log('getUserByEmail also failed, using sessionResult.user');
+            console.warn('STEP 9: Both getUserById and getUserByEmail failed - using session user object');
             user = sessionResult.user;
             user._fromSession = true; // Flag that this is from session (partial data)
+            console.log('STEP 10: Using session user (partial data)');
           }
         }
       }
     }
 
-    console.log('Final user:', user ? user.email : 'null');
+    console.log('===========================');
+    console.log('FINAL USER RESULT:', user ? user.email : 'NULL');
+    console.log('User has _rowIndex:', user ? (!!user._rowIndex) : 'N/A');
+    console.log('===========================');
 
     // Check if authentication is required
     if (!publicActions.includes(action) && !user) {
