@@ -113,7 +113,7 @@ function validateSession(sessionToken) {
     return { valid: false, error: 'Session not found' };
   }
 
-  if (!session.is_valid) {
+  if (!isActive(session.is_valid)) {
     console.log('Session is invalidated');
     return { valid: false, error: 'Session invalidated' };
   }
