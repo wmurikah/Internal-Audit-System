@@ -132,7 +132,7 @@ function getDashboardData(user) {
     }
 
     console.log('getDashboardData completed successfully');
-    return dashboard;
+    return sanitizeForClient(dashboard);
 
   } catch (e) {
     // Catch-all for any unexpected errors
@@ -531,7 +531,7 @@ function getAuditSummaryReport(filters) {
     }
   });
   
-  return {
+  return sanitizeForClient({
     generatedAt: new Date(),
     filters: filters,
     summary: {
@@ -540,7 +540,7 @@ function getAuditSummaryReport(filters) {
       overdueActionPlans: actionPlans.filter(ap => ap.days_overdue > 0 && !isImplementedOrVerified(ap.status)).length
     },
     byAffiliate: Object.values(byAffiliate)
-  };
+  });
 }
 
 /**
@@ -575,7 +575,7 @@ function getActionPlanAgingReport() {
     }
   });
   
-  return {
+  return sanitizeForClient({
     generatedAt: new Date(),
     summary: {
       current: aging.current.length,
@@ -587,7 +587,7 @@ function getActionPlanAgingReport() {
                     aging.overdue61to90.length + aging.overdue90plus.length
     },
     details: aging
-  };
+  });
 }
 
 /**
@@ -639,11 +639,11 @@ function getRiskSummaryReport(filters) {
     });
   });
   
-  return {
+  return sanitizeForClient({
     generatedAt: new Date(),
     filters: filters,
     byRisk: Object.values(byRisk).filter(r => r.count > 0)
-  };
+  });
 }
 
 function getStatusColor(status, type) {
@@ -701,7 +701,7 @@ function getInitData() {
     return { success: false, error: 'Account is inactive' };
   }
   
-  return {
+  return sanitizeForClient({
     success: true,
     user: {
       user_id: user.user_id,
@@ -718,7 +718,7 @@ function getInitData() {
       currentYear: new Date().getFullYear()
     },
     permissions: getUserPermissions(user.role_code)
-  };
+  });
 }
 
 /**
@@ -778,4 +778,24 @@ function getUserPermissions(roleCode) {
   }
   
   return permissions;
+}
+
+/**
+ * Sanitize object for safe transport to browser via google.script.run
+ * Converts Date objects to ISO strings and removes undefined values
+ */
+function sanitizeForClient(obj) {
+  return JSON.parse(JSON.stringify(obj, function (key, value) {
+    // Convert Date objects to ISO strings (Dates break postMessage)
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    
+    // Replace undefined with null (undefined breaks transport)
+    if (value === undefined) {
+      return null;
+    }
+    
+    return value;
+  }));
 }
