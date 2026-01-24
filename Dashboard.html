@@ -3,10 +3,25 @@
   <!-- Alerts Section -->
   <div id="alertsSection" class="mb-4"></div>
 
+  <!-- Role-Based Welcome Section -->
+  <div class="dashboard-section" id="welcomeSection">
+    <div class="card mb-4">
+      <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+          <h4 class="mb-1">Welcome back, <span id="dashboardUserName">User</span></h4>
+          <p class="text-muted mb-0" id="dashboardRoleMessage">Your dashboard overview</p>
+        </div>
+        <div class="d-flex gap-2" id="dashboardQuickActions">
+          <!-- Role-specific quick actions will be inserted here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Stats Row -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="stat-card">
+      <div class="stat-card clickable" onclick="navigateTo('work-papers')">
         <div class="stat-icon primary">
           <i class="bi bi-file-earmark-text"></i>
         </div>
@@ -17,7 +32,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card">
+      <div class="stat-card clickable" onclick="navigateTo('work-papers', {status: 'Submitted'})">
         <div class="stat-icon info">
           <i class="bi bi-hourglass-split"></i>
         </div>
@@ -28,7 +43,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card">
+      <div class="stat-card clickable" onclick="navigateTo('action-plans')">
         <div class="stat-icon warning">
           <i class="bi bi-list-check"></i>
         </div>
@@ -39,13 +54,95 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card">
+      <div class="stat-card clickable" onclick="navigateTo('action-plans-overdue')">
         <div class="stat-icon danger">
           <i class="bi bi-exclamation-circle"></i>
         </div>
         <div class="stat-content">
           <h3 id="statOverdue">0</h3>
           <p>Overdue</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role-Specific Section: My Action Plans (for Auditee/Unit Manager) -->
+  <div class="dashboard-section" id="myActionPlansSection" style="display:none;">
+    <div class="dashboard-section-title">
+      <i class="bi bi-list-task"></i>
+      <span>My Action Plans</span>
+    </div>
+    <div class="row g-4">
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-clipboard-check me-2"></i>Assigned to Me</span>
+            <a href="#action-plans" class="btn btn-sm btn-outline-primary" onclick="navigateTo('action-plans', {mine: true})">View All</a>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Description</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="myActionPlansTable">
+                  <tr><td colspan="5" class="text-center py-4 text-muted">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <span><i class="bi bi-pie-chart me-2"></i>My Implementation Status</span>
+          </div>
+          <div class="card-body">
+            <canvas id="myAPStatusChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role-Specific Section: Pending Reviews (for Auditors/HOA) -->
+  <div class="dashboard-section" id="pendingReviewsSection" style="display:none;">
+    <div class="dashboard-section-title">
+      <i class="bi bi-clock-history"></i>
+      <span>Pending Reviews</span>
+    </div>
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-file-earmark-check me-2"></i>Work Papers to Review</span>
+            <span class="badge bg-info" id="wpReviewCount">0</span>
+          </div>
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="pendingWPReviewList">
+              <li class="list-group-item text-center text-muted py-3">Loading...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-check2-square me-2"></i>Action Plans to Verify</span>
+            <span class="badge bg-warning text-dark" id="apVerifyCount">0</span>
+          </div>
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="pendingAPVerifyList">
+              <li class="list-group-item text-center text-muted py-3">Loading...</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -109,7 +206,7 @@
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0 table-clickable">
               <thead>
                 <tr>
                   <th>Type</th>
@@ -165,6 +262,36 @@
       </div>
     </div>
   </div>
+
+  <!-- Role-Specific Section: Team Performance (for HOA/Senior Auditor) -->
+  <div class="dashboard-section mt-4" id="teamPerformanceSection" style="display:none;">
+    <div class="dashboard-section-title">
+      <i class="bi bi-people"></i>
+      <span>Team Performance</span>
+    </div>
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-bar-chart-line me-2"></i>Auditor Productivity</span>
+          </div>
+          <div class="card-body">
+            <canvas id="auditorProductivityChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-building me-2"></i>Affiliate Comparison</span>
+          </div>
+          <div class="card-body">
+            <canvas id="affiliateComparisonChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -179,10 +306,10 @@ function loadDashboard() {
       hideLoading();
       if (data && data.success !== false) {
         renderDashboard(data);
+        renderRoleBasedSections(data);
       } else {
         console.error('Dashboard load failed:', data?.error);
         showToast(data?.error || 'Failed to load dashboard', 'danger');
-        // Show empty state
         renderDashboard({ summary: { workPapers: {}, actionPlans: {} }, alerts: [], recentActivity: [], charts: {} });
       }
     })
@@ -190,7 +317,6 @@ function loadDashboard() {
       hideLoading();
       console.error('Dashboard error:', err);
       showToast('Error loading dashboard', 'danger');
-      // Show empty state
       renderDashboard({ summary: { workPapers: {}, actionPlans: {} }, alerts: [], recentActivity: [], charts: {} });
     });
 }
@@ -200,52 +326,272 @@ function renderDashboard(data) {
   const summary = data.summary || data.stats || {};
   const wp = summary.workPapers || data.workPaperStats || data.workPapers || {};
   const ap = summary.actionPlans || data.actionPlanStats || data.actionPlans || {};
-  
+
+  // Update stats
   document.getElementById('statTotalWP').textContent = wp.total || data.totalWorkPapers || 0;
   document.getElementById('statPendingReview').textContent = (wp.submitted || 0) + (wp.underReview || 0) + (data.pendingReview || 0);
   document.getElementById('statTotalAP').textContent = ap.total || data.totalActionPlans || 0;
   document.getElementById('statOverdue').textContent = ap.overdue || data.overdueCount || 0;
-  
-  // Update overdue badge in sidebar (check if exists)
-  const overdueEl = document.getElementById('overdueCount');
-  if (overdueEl) overdueEl.textContent = ap.overdue || data.overdueCount || 0;
-  
+
+  // Update sidebar quick stats
+  if (typeof updateQuickStats === 'function') {
+    const pending = (wp.submitted || 0) + (wp.underReview || 0) + (data.pendingReview || 0);
+    const overdue = ap.overdue || data.overdueCount || 0;
+    updateQuickStats(pending, overdue);
+  }
+
+  // Update welcome section
+  if (window.currentUser) {
+    document.getElementById('dashboardUserName').textContent = window.currentUser.full_name || 'User';
+    setRoleBasedMessage(window.currentUser.role_code);
+  }
+
   // Render alerts
   renderAlerts(data.alerts || []);
-  
+
   // Render charts
   renderDashboardCharts(data.charts || {});
-  
+
   // Render recent activity
   renderRecentActivity(data.recentActivity || data.recentWorkPapers || []);
-  
+
   // Due this week
   renderDueThisWeek(ap.dueThisWeek || data.dueThisWeek || 0);
+}
+
+function setRoleBasedMessage(roleCode) {
+  const messages = {
+    'SUPER_ADMIN': 'System administrator overview',
+    'HEAD_OF_AUDIT': 'Head of Internal Audit dashboard',
+    'AUDITOR': 'Your audit management overview',
+    'SENIOR_AUDITOR': 'Senior auditor overview',
+    'UNIT_MANAGER': 'Your action plans and findings overview',
+    'AUDITEE': 'Your assigned action items',
+    'JUNIOR_STAFF': 'Your tasks overview',
+    'MANAGEMENT': 'Executive summary',
+    'BOARD': 'Board oversight view',
+    'EXTERNAL_AUDITOR': 'External auditor view'
+  };
+  document.getElementById('dashboardRoleMessage').textContent = messages[roleCode] || 'Your dashboard overview';
+}
+
+function renderRoleBasedSections(data) {
+  const role = window.currentUser?.role_code || '';
+  const quickActions = document.getElementById('dashboardQuickActions');
+
+  // Auditee/Unit Manager specific sections
+  if (['AUDITEE', 'UNIT_MANAGER', 'JUNIOR_STAFF'].includes(role)) {
+    document.getElementById('myActionPlansSection').style.display = 'block';
+    document.getElementById('btnQuickNewWP').style.display = 'none';
+    renderMyActionPlans(data.myActionPlans || []);
+
+    quickActions.innerHTML = `
+      <button class="btn btn-primary" onclick="navigateTo('action-plans', {mine: true})">
+        <i class="bi bi-list-check me-2"></i>My Action Plans
+      </button>
+      <button class="btn btn-outline-primary" onclick="navigateTo('work-papers')">
+        <i class="bi bi-file-earmark-text me-2"></i>View Findings
+      </button>
+    `;
+  }
+
+  // Auditor specific sections
+  if (['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(role)) {
+    document.getElementById('pendingReviewsSection').style.display = 'block';
+    renderPendingReviews(data.pendingReviews || {});
+
+    quickActions.innerHTML = `
+      <button class="btn btn-primary" onclick="navigateTo('work-paper-form')">
+        <i class="bi bi-plus-circle me-2"></i>New Work Paper
+      </button>
+      <button class="btn btn-outline-primary" onclick="navigateTo('work-papers', {status: 'Submitted'})">
+        <i class="bi bi-eye me-2"></i>Review Queue
+      </button>
+    `;
+  }
+
+  // HOA/Senior Auditor team performance section
+  if (['HEAD_OF_AUDIT', 'SUPER_ADMIN', 'SENIOR_AUDITOR'].includes(role)) {
+    document.getElementById('teamPerformanceSection').style.display = 'block';
+    renderTeamPerformance(data.teamStats || {});
+  }
+
+  // Management view
+  if (['MANAGEMENT', 'BOARD'].includes(role)) {
+    document.getElementById('btnQuickNewWP').style.display = 'none';
+
+    quickActions.innerHTML = `
+      <button class="btn btn-primary" onclick="navigateTo('reports')">
+        <i class="bi bi-file-earmark-bar-graph me-2"></i>View Reports
+      </button>
+      <button class="btn btn-outline-primary" onclick="navigateTo('analytics')">
+        <i class="bi bi-graph-up me-2"></i>Analytics
+      </button>
+    `;
+  }
+}
+
+function renderMyActionPlans(actionPlans) {
+  const tbody = document.getElementById('myActionPlansTable');
+  if (!tbody) return;
+
+  if (!actionPlans || actionPlans.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No action plans assigned to you</td></tr>';
+    return;
+  }
+
+  let html = '';
+  actionPlans.slice(0, 5).forEach(ap => {
+    const statusClass = getStatusClass(ap.status);
+    const isOverdue = ap.days_overdue > 0;
+    const dueDate = formatDate(ap.due_date);
+
+    html += `
+      <tr onclick="navigateTo('action-plan-view', {id: '${ap.action_plan_id}'})">
+        <td><span class="badge bg-secondary">${ap.action_plan_id}</span></td>
+        <td class="text-truncate" style="max-width: 200px;">${escapeHtml(ap.action_description || '-')}</td>
+        <td>
+          <span class="${isOverdue ? 'text-danger fw-bold' : ''}">${dueDate}</span>
+          ${isOverdue ? '<br><small class="text-danger">' + ap.days_overdue + ' days overdue</small>' : ''}
+        </td>
+        <td><span class="badge badge-status ${statusClass}">${ap.status || '-'}</span></td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); navigateTo('action-plan-view', {id: '${ap.action_plan_id}'})">
+            <i class="bi bi-eye"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+}
+
+function renderPendingReviews(pendingReviews) {
+  // Work Papers to Review
+  const wpList = document.getElementById('pendingWPReviewList');
+  const wpReviews = pendingReviews.workPapers || [];
+  document.getElementById('wpReviewCount').textContent = wpReviews.length;
+
+  if (wpReviews.length === 0) {
+    wpList.innerHTML = '<li class="list-group-item text-center text-muted py-3"><i class="bi bi-check-circle me-2"></i>No pending reviews</li>';
+  } else {
+    wpList.innerHTML = wpReviews.slice(0, 5).map(wp => `
+      <li class="list-group-item d-flex justify-content-between align-items-center" onclick="navigateTo('work-paper-view', {id: '${wp.work_paper_id}'})" style="cursor:pointer;">
+        <div>
+          <span class="fw-bold">${wp.work_paper_id}</span>
+          <br><small class="text-muted text-truncate d-inline-block" style="max-width: 200px;">${escapeHtml(wp.observation_title || '-')}</small>
+        </div>
+        <span class="badge ${getRiskClass(wp.risk_rating)}">${wp.risk_rating || '-'}</span>
+      </li>
+    `).join('');
+  }
+
+  // Action Plans to Verify
+  const apList = document.getElementById('pendingAPVerifyList');
+  const apVerify = pendingReviews.actionPlans || [];
+  document.getElementById('apVerifyCount').textContent = apVerify.length;
+
+  if (apVerify.length === 0) {
+    apList.innerHTML = '<li class="list-group-item text-center text-muted py-3"><i class="bi bi-check-circle me-2"></i>No pending verifications</li>';
+  } else {
+    apList.innerHTML = apVerify.slice(0, 5).map(ap => `
+      <li class="list-group-item d-flex justify-content-between align-items-center" onclick="navigateTo('action-plan-view', {id: '${ap.action_plan_id}'})" style="cursor:pointer;">
+        <div>
+          <span class="fw-bold">${ap.action_plan_id}</span>
+          <br><small class="text-muted text-truncate d-inline-block" style="max-width: 200px;">${escapeHtml(ap.action_description || '-')}</small>
+        </div>
+        <span class="badge bg-success">Implemented</span>
+      </li>
+    `).join('');
+  }
+}
+
+function renderTeamPerformance(teamStats) {
+  // Auditor Productivity Chart
+  const prodCtx = document.getElementById('auditorProductivityChart');
+  if (prodCtx && teamStats.auditorStats) {
+    if (dashboardCharts.productivity) dashboardCharts.productivity.destroy();
+    dashboardCharts.productivity = new Chart(prodCtx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: teamStats.auditorStats.map(s => s.name),
+        datasets: [{
+          label: 'Work Papers',
+          data: teamStats.auditorStats.map(s => s.workPapers),
+          backgroundColor: 'rgba(26, 54, 93, 0.8)',
+          borderRadius: 5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+  }
+
+  // Affiliate Comparison Chart
+  const affCtx = document.getElementById('affiliateComparisonChart');
+  if (affCtx && teamStats.affiliateStats) {
+    if (dashboardCharts.affiliate) dashboardCharts.affiliate.destroy();
+    dashboardCharts.affiliate = new Chart(affCtx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: teamStats.affiliateStats.map(s => s.name),
+        datasets: [
+          {
+            label: 'Open',
+            data: teamStats.affiliateStats.map(s => s.open),
+            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+            borderRadius: 5
+          },
+          {
+            label: 'Closed',
+            data: teamStats.affiliateStats.map(s => s.closed),
+            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+            borderRadius: 5
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'top' } },
+        scales: { y: { beginAtZero: true, stacked: false } }
+      }
+    });
+  }
 }
 
 function renderAlerts(alerts) {
   const container = document.getElementById('alertsSection');
   if (!container) return;
-  
+
   if (!alerts || alerts.length === 0) {
     container.innerHTML = '';
     return;
   }
-  
+
   let html = '';
   alerts.forEach(alert => {
+    const iconClass = alert.type === 'danger' ? 'bi-exclamation-triangle-fill' :
+                     alert.type === 'warning' ? 'bi-exclamation-circle-fill' :
+                     alert.type === 'success' ? 'bi-check-circle-fill' : 'bi-info-circle-fill';
+
     html += `
       <div class="alert-card ${alert.type}">
-        <i class="alert-icon ${alert.icon}"></i>
+        <i class="alert-icon bi ${iconClass}"></i>
         <div class="flex-grow-1">
-          <strong>${alert.title}</strong>
-          <p class="mb-0 small">${alert.message}</p>
+          <strong>${escapeHtml(alert.title)}</strong>
+          <p class="mb-0 small">${escapeHtml(alert.message)}</p>
         </div>
-        ${alert.link ? `<a href="${alert.link}" class="btn btn-sm btn-outline-${alert.type === 'danger' ? 'danger' : alert.type === 'warning' ? 'warning' : 'primary'}">View</a>` : ''}
+        ${alert.action ? `<button class="btn btn-sm btn-outline-${alert.type === 'danger' ? 'danger' : alert.type === 'warning' ? 'warning' : 'primary'}" onclick="${alert.action.onclick}">${alert.action.text}</button>` : ''}
       </div>
     `;
   });
-  
+
   container.innerHTML = html;
 }
 
@@ -255,13 +601,13 @@ function renderDashboardCharts(charts) {
     if (chart && typeof chart.destroy === 'function') chart.destroy();
   });
   dashboardCharts = {};
-  
+
   // Check if Chart.js is available
   if (typeof Chart === 'undefined') {
     console.warn('Chart.js not loaded');
     return;
   }
-  
+
   // Work Paper Status Chart
   const wpCtx = document.getElementById('wpStatusChart');
   if (wpCtx && charts.wpStatusChart) {
@@ -287,7 +633,7 @@ function renderDashboardCharts(charts) {
       }
     });
   }
-  
+
   // Action Plan Status Chart
   const apCtx = document.getElementById('apStatusChart');
   if (apCtx && charts.apStatusChart) {
@@ -314,7 +660,7 @@ function renderDashboardCharts(charts) {
       }
     });
   }
-  
+
   // Risk Distribution Chart
   const riskCtx = document.getElementById('riskChart');
   if (riskCtx && charts.riskChart) {
@@ -340,7 +686,7 @@ function renderDashboardCharts(charts) {
       }
     });
   }
-  
+
   // Monthly Trend Chart
   const trendCtx = document.getElementById('trendChart');
   if (trendCtx && charts.trendChart) {
@@ -387,12 +733,12 @@ function renderDashboardCharts(charts) {
 function renderRecentActivity(activities) {
   const tbody = document.getElementById('recentActivityTable');
   if (!tbody) return;
-  
+
   if (!activities || activities.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">No recent activity</td></tr>';
     return;
   }
-  
+
   let html = '';
   activities.forEach(item => {
     const typeIcon = item.type === 'WORK_PAPER' ? 'bi-file-earmark-text' : 'bi-list-check';
@@ -400,32 +746,32 @@ function renderRecentActivity(activities) {
     const statusClass = getStatusClass(item.status);
     const date = item.date || item.updated_at ? formatDate(item.date || item.updated_at) : '-';
     const itemId = item.id || item.work_paper_id || item.action_plan_id;
-    
+
     html += `
       <tr onclick="viewItem('${item.type || 'WORK_PAPER'}', '${itemId}')" style="cursor:pointer;">
         <td><i class="${typeIcon} me-2"></i>${typeLabel}</td>
-        <td>${escapeHtml(item.title || item.audit_title || item.action_description || '-')}</td>
+        <td class="text-truncate" style="max-width: 250px;">${escapeHtml(item.title || item.audit_title || item.action_description || '-')}</td>
         <td><span class="badge badge-status ${statusClass}">${item.status || '-'}</span></td>
         <td class="text-muted small">${date}</td>
       </tr>
     `;
   });
-  
+
   tbody.innerHTML = html;
 }
 
 function renderDueThisWeek(count) {
   const badge = document.getElementById('dueThisWeekBadge');
   if (badge) badge.textContent = count || 0;
-  
+
   const list = document.getElementById('dueThisWeekList');
   if (!list) return;
-  
+
   if (!count || count === 0) {
     list.innerHTML = '<li class="list-group-item text-center text-muted py-3"><i class="bi bi-check-circle me-2"></i>Nothing due this week</li>';
     return;
   }
-  
+
   // Fetch action plans due this week
   apiCall('getActionPlans', { filters: { limit: 10 } })
     .then(result => {
@@ -434,18 +780,18 @@ function renderDueThisWeek(count) {
         const today = new Date();
         const weekEnd = new Date(today);
         weekEnd.setDate(weekEnd.getDate() + 7);
-        
+
         const dueItems = actionPlans.filter(ap => {
           if (!ap.due_date) return false;
           const due = new Date(ap.due_date);
           return due >= today && due <= weekEnd;
         });
-        
+
         if (dueItems.length === 0) {
           list.innerHTML = '<li class="list-group-item text-center text-muted py-3">No items due</li>';
           return;
         }
-        
+
         let html = '';
         dueItems.slice(0, 5).forEach(ap => {
           const apId = ap.action_plan_id || ap.id;
@@ -472,5 +818,15 @@ function viewItem(type, id) {
   } else {
     navigateTo('action-plan-view', { id: id });
   }
+}
+
+function getRiskClass(risk) {
+  if (!risk) return 'bg-secondary';
+  const r = risk.toLowerCase();
+  if (r === 'extreme') return 'risk-extreme';
+  if (r === 'high') return 'risk-high';
+  if (r === 'medium') return 'risk-medium';
+  if (r === 'low') return 'risk-low';
+  return 'bg-secondary';
 }
 </script>

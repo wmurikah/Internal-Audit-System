@@ -39,12 +39,25 @@
 
       <!-- Evidence -->
       <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between">
-          <span><i class="bi bi-paperclip me-2"></i>Evidence</span>
-          <button class="btn btn-sm btn-outline-primary" onclick="showUploadEvidence()"><i class="bi bi-upload me-1"></i>Upload</button>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-paperclip me-2"></i>Evidence Documents</span>
+          <span class="badge bg-secondary" id="evidenceCount">0</span>
         </div>
-        <div class="card-body p-0">
-          <ul class="list-group list-group-flush" id="apViewEvidence"><li class="list-group-item text-muted text-center">No evidence uploaded</li></ul>
+        <div class="card-body">
+          <!-- Inline Upload Zone -->
+          <div class="ap-upload-zone" id="apUploadZone" onclick="document.getElementById('apEvidenceFileInput').click()">
+            <input type="file" class="d-none" id="apEvidenceFileInput"
+                   accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                   onchange="handleAPEvidenceUpload(this)">
+            <i class="bi bi-cloud-arrow-up ap-upload-icon"></i>
+            <div class="ap-upload-text">
+              <strong>Drop files here or click to browse</strong>
+              <br><small class="text-muted">PDF, Word, Excel, Images (Max 10MB)</small>
+            </div>
+          </div>
+
+          <!-- Evidence Files List -->
+          <div id="apViewEvidence" class="ap-evidence-list mt-3"></div>
         </div>
       </div>
     </div>
@@ -77,8 +90,229 @@
   </div>
 </div>
 
+<style>
+/* Action Plan Upload Zone */
+.ap-upload-zone {
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  background: #fafafa;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.ap-upload-zone:hover,
+.ap-upload-zone.dragover {
+  border-color: #1a365d;
+  background: #f0f4f8;
+}
+
+.ap-upload-zone .ap-upload-icon {
+  font-size: 32px;
+  color: #9ca3af;
+}
+
+.ap-upload-zone:hover .ap-upload-icon {
+  color: #1a365d;
+}
+
+.ap-upload-text {
+  text-align: left;
+}
+
+/* Evidence List */
+.ap-evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ap-evidence-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.ap-evidence-item:hover {
+  background: #f1f5f9;
+}
+
+.ap-evidence-item .evidence-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  margin-right: 12px;
+  font-size: 18px;
+}
+
+.ap-evidence-item .evidence-icon.pdf { background: #fee2e2; color: #dc2626; }
+.ap-evidence-item .evidence-icon.doc { background: #dbeafe; color: #2563eb; }
+.ap-evidence-item .evidence-icon.xls { background: #dcfce7; color: #16a34a; }
+.ap-evidence-item .evidence-icon.img { background: #fef3c7; color: #d97706; }
+.ap-evidence-item .evidence-icon.default { background: #e5e7eb; color: #6b7280; }
+
+.ap-evidence-item .evidence-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ap-evidence-item .evidence-name {
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  display: block;
+}
+
+.ap-evidence-item .evidence-name:hover {
+  color: #1a365d;
+  text-decoration: underline;
+}
+
+.ap-evidence-item .evidence-meta {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.ap-evidence-item .evidence-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ap-evidence-empty {
+  text-align: center;
+  padding: 24px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.ap-evidence-empty i {
+  font-size: 32px;
+  margin-bottom: 8px;
+  display: block;
+}
+</style>
+
 <script>
 let currentActionPlan = null;
+
+// Setup drag and drop for AP upload zone
+function setupAPUploadZone() {
+  const uploadZone = document.getElementById('apUploadZone');
+  if (!uploadZone) return;
+
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    uploadZone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    uploadZone.addEventListener(eventName, () => uploadZone.classList.add('dragover'), false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('dragover'), false);
+  });
+
+  uploadZone.addEventListener('drop', (e) => {
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      document.getElementById('apEvidenceFileInput').files = files;
+      handleAPEvidenceUpload(document.getElementById('apEvidenceFileInput'));
+    }
+  }, false);
+}
+
+// Handle AP evidence upload
+function handleAPEvidenceUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('File size must be less than 10MB', 'danger');
+    input.value = '';
+    return;
+  }
+
+  showLoading('Uploading evidence...');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result.split(',')[1];
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          // Add evidence to action plan
+          apiCall('addActionPlanEvidence', {
+            actionPlanId: currentActionPlan.action_plan_id,
+            drive_file_id: result.file.drive_file_id,
+            drive_url: result.file.drive_url,
+            file_name: result.file.file_name
+          }).then(r => {
+            hideLoading();
+            if (r.success) {
+              showToast('Evidence uploaded successfully', 'success');
+              loadActionPlanView({ id: currentActionPlan.action_plan_id });
+            } else {
+              showToast(r.error || 'Failed to save evidence', 'danger');
+            }
+          }).catch(() => {
+            hideLoading();
+            showToast('Error saving evidence', 'danger');
+          });
+        } else {
+          hideLoading();
+          showToast(result.error || 'Upload failed', 'danger');
+        }
+        input.value = '';
+      })
+      .withFailureHandler(function(err) {
+        hideLoading();
+        showToast('Upload failed: ' + err.message, 'danger');
+        input.value = '';
+      })
+      .uploadFileToDrive(file.name, file.type, base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+// Get file icon class
+function getEvidenceIconClass(fileName) {
+  const ext = fileName.split('.').pop().toLowerCase();
+  if (['pdf'].includes(ext)) return 'pdf';
+  if (['doc', 'docx'].includes(ext)) return 'doc';
+  if (['xls', 'xlsx'].includes(ext)) return 'xls';
+  if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) return 'img';
+  return 'default';
+}
+
+// Get file icon
+function getEvidenceIcon(fileName) {
+  const ext = fileName.split('.').pop().toLowerCase();
+  if (['pdf'].includes(ext)) return 'bi-file-earmark-pdf';
+  if (['doc', 'docx'].includes(ext)) return 'bi-file-earmark-word';
+  if (['xls', 'xlsx'].includes(ext)) return 'bi-file-earmark-excel';
+  if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) return 'bi-file-earmark-image';
+  return 'bi-file-earmark';
+}
 
 function loadActionPlanView(params) {
   if (!params?.id) { navigateTo('action-plans'); return; }
@@ -110,6 +344,9 @@ function renderActionPlanView() {
   renderAPActions(ap);
   renderAPHistory(ap.history || []);
   renderAPEvidence(ap.evidence || []);
+
+  // Setup upload zone drag and drop
+  setupAPUploadZone();
 
   // Show review card for auditors if implemented
   const user = window.currentUser;
@@ -150,13 +387,47 @@ function renderAPHistory(history) {
 
 function renderAPEvidence(evidence) {
   const list = document.getElementById('apViewEvidence');
-  if (!evidence.length) { list.innerHTML = '<li class="list-group-item text-muted text-center">No evidence</li>'; return; }
-  list.innerHTML = evidence.map(e => `
-    <li class="list-group-item d-flex justify-content-between">
-      <a href="${e.drive_url}" target="_blank"><i class="bi bi-file-earmark me-2"></i>${escapeHtml(e.file_name)}</a>
-      <button class="btn btn-sm btn-outline-danger" onclick="deleteEvidence('${e.evidence_id}')"><i class="bi bi-trash"></i></button>
-    </li>
-  `).join('');
+  const countBadge = document.getElementById('evidenceCount');
+
+  // Update count badge
+  if (countBadge) countBadge.textContent = evidence.length;
+
+  if (!evidence.length) {
+    list.innerHTML = `
+      <div class="ap-evidence-empty">
+        <i class="bi bi-folder2-open"></i>
+        <p class="mb-0">No evidence uploaded yet</p>
+        <small>Upload files to support implementation</small>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = evidence.map(e => {
+    const iconClass = getEvidenceIconClass(e.file_name);
+    const icon = getEvidenceIcon(e.file_name);
+    const uploadDate = e.uploaded_at ? formatDate(e.uploaded_at) : 'Recently';
+
+    return `
+      <div class="ap-evidence-item">
+        <div class="evidence-icon ${iconClass}">
+          <i class="bi ${icon}"></i>
+        </div>
+        <div class="evidence-info">
+          <a href="${e.drive_url}" target="_blank" class="evidence-name">${escapeHtml(e.file_name)}</a>
+          <div class="evidence-meta">Uploaded ${uploadDate}</div>
+        </div>
+        <div class="evidence-actions">
+          <a href="${e.drive_url}" target="_blank" class="btn btn-sm btn-outline-primary" title="View file">
+            <i class="bi bi-eye"></i>
+          </a>
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteEvidence('${e.evidence_id}')" title="Delete">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function saveNotes() {

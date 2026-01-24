@@ -11,14 +11,17 @@
       --primary-color: #1a365d;
       --accent-color: #c9a227;
       --bg-gradient: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
+      --success-color: #28a745;
+      --error-color: #dc3545;
+      --warning-color: #ffc107;
     }
-    
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
     body {
       min-height: 100vh;
       display: flex;
@@ -27,7 +30,25 @@
       background: var(--bg-gradient);
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
-    
+
+    /* Skip link for accessibility */
+    .skip-link {
+      position: absolute;
+      top: -40px;
+      left: 0;
+      background: var(--accent-color);
+      color: var(--primary-color);
+      padding: 8px 16px;
+      z-index: 100;
+      font-weight: 600;
+      text-decoration: none;
+      border-radius: 0 0 8px 0;
+    }
+
+    .skip-link:focus {
+      top: 0;
+    }
+
     .login-container {
       width: 100%;
       max-width: 420px;
@@ -326,13 +347,205 @@
       box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
       color: #ffffff;
     }
+
+    /* Remember me checkbox */
+    .form-options {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .remember-me {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .remember-me input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary-color);
+      cursor: pointer;
+    }
+
+    .remember-me label {
+      color: #6c757d;
+      font-size: 0.9rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .forgot-password {
+      color: var(--primary-color);
+      font-size: 0.9rem;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.3s ease;
+    }
+
+    .forgot-password:hover {
+      color: var(--accent-color);
+      text-decoration: underline;
+    }
+
+    /* Form validation states */
+    .form-floating > .form-control.is-valid {
+      border-color: var(--success-color);
+    }
+
+    .form-floating > .form-control.is-invalid {
+      border-color: var(--error-color);
+    }
+
+    .validation-feedback {
+      font-size: 0.8rem;
+      margin-top: 4px;
+      display: none;
+    }
+
+    .validation-feedback.show {
+      display: block;
+    }
+
+    .validation-feedback.valid {
+      color: var(--success-color);
+    }
+
+    .validation-feedback.invalid {
+      color: var(--error-color);
+    }
+
+    /* Session checking overlay */
+    .session-check-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      transition: opacity 0.3s ease;
+    }
+
+    .session-check-overlay.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .session-check-content {
+      text-align: center;
+      color: #ffffff;
+    }
+
+    .session-check-content .spinner-border {
+      width: 50px;
+      height: 50px;
+      color: var(--accent-color);
+    }
+
+    .session-check-content p {
+      margin-top: 15px;
+      font-size: 1rem;
+      opacity: 0.9;
+    }
+
+    /* Security info */
+    .security-info {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 15px;
+      color: #6c757d;
+      font-size: 0.8rem;
+    }
+
+    .security-info i {
+      color: var(--success-color);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 480px) {
+      .login-container {
+        padding: 10px;
+      }
+
+      .login-header {
+        padding: 25px 20px;
+      }
+
+      .login-body {
+        padding: 25px 20px;
+      }
+
+      .login-footer {
+        padding: 15px 20px 25px;
+      }
+
+      .form-options {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .login-header h1 {
+        font-size: 1.3rem;
+      }
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+      .form-floating > .form-control {
+        border-width: 3px;
+      }
+
+      .btn-login {
+        border: 2px solid #ffffff;
+      }
+    }
+
+    /* Reduced motion support */
+    @media (prefers-reduced-motion: reduce) {
+      .login-card {
+        animation: none;
+      }
+
+      .shake {
+        animation: none;
+      }
+
+      * {
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 <body>
+  <!-- Skip link for accessibility -->
+  <a href="#loginForm" class="skip-link">Skip to login form</a>
+
+  <!-- Session Check Overlay -->
+  <div class="session-check-overlay" id="sessionCheckOverlay">
+    <div class="session-check-content">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Checking session...</span>
+      </div>
+      <p>Checking your session...</p>
+    </div>
+  </div>
+
   <!-- Loading Overlay -->
-  <div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-overlay" id="loadingOverlay" role="alert" aria-live="polite">
     <div class="loading-spinner">
-      <div class="spinner-border" role="status"></div>
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Signing in...</span>
+      </div>
       <p>Signing in...</p>
     </div>
   </div>
@@ -356,29 +569,48 @@
 
         <!-- Login Form View -->
         <div id="loginFormView">
-          <form id="loginForm" onsubmit="handleLogin(event)">
+          <form id="loginForm" onsubmit="handleLogin(event)" aria-label="Login form">
             <div class="form-floating position-relative">
-              <i class="bi bi-envelope input-icon"></i>
-              <input type="email" class="form-control" id="email" placeholder="Email" required autocomplete="email">
+              <i class="bi bi-envelope input-icon" aria-hidden="true"></i>
+              <input type="email" class="form-control" id="email" placeholder="Email" required
+                     autocomplete="email" aria-describedby="emailHelp"
+                     onblur="validateEmail(this)">
               <label for="email">Email Address</label>
+              <div class="validation-feedback" id="emailFeedback" role="alert"></div>
             </div>
 
             <div class="form-floating position-relative">
-              <i class="bi bi-lock input-icon"></i>
-              <input type="password" class="form-control" id="password" placeholder="Password" required autocomplete="current-password">
+              <i class="bi bi-lock input-icon" aria-hidden="true"></i>
+              <input type="password" class="form-control" id="password" placeholder="Password" required
+                     autocomplete="current-password" aria-describedby="passwordHelp"
+                     minlength="6">
               <label for="password">Password</label>
-              <button type="button" class="password-toggle" onclick="togglePassword()">
-                <i class="bi bi-eye" id="passwordToggleIcon"></i>
+              <button type="button" class="password-toggle" onclick="togglePassword()"
+                      aria-label="Toggle password visibility" title="Show/hide password">
+                <i class="bi bi-eye" id="passwordToggleIcon" aria-hidden="true"></i>
               </button>
             </div>
 
-            <button type="submit" class="btn-login" id="loginBtn">
+            <div class="form-options">
+              <div class="remember-me">
+                <input type="checkbox" id="rememberMe" name="rememberMe">
+                <label for="rememberMe">Remember me</label>
+              </div>
+              <a href="#" class="forgot-password" onclick="showForgotPassword(event)">Forgot password?</a>
+            </div>
+
+            <button type="submit" class="btn-login" id="loginBtn" aria-describedby="loginHelp">
               <span id="loginBtnText">Sign In</span>
-              <span id="loginBtnSpinner" style="display: none;">
+              <span id="loginBtnSpinner" style="display: none;" aria-hidden="true">
                 <span class="spinner-border spinner-border-sm" role="status"></span>
                 Signing in...
               </span>
             </button>
+
+            <div class="security-info">
+              <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
+              <span>Secure connection (256-bit encryption)</span>
+            </div>
           </form>
         </div>
 
@@ -407,20 +639,114 @@
   <script>
     // App URL for redirect
     const APP_URL = '<?= ScriptApp.getService().getUrl() ?>?page=app';
+    const STORAGE_KEY_EMAIL = 'hass_audit_remembered_email';
+
+    // Check for existing session on page load
+    function checkExistingSession() {
+      const sessionToken = sessionStorage.getItem('sessionToken');
+      const user = sessionStorage.getItem('user');
+
+      if (sessionToken && user) {
+        // Validate the session with the server
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.success && result.valid) {
+              // Session is still valid, redirect to app
+              window.location.href = APP_URL;
+            } else {
+              // Session invalid, clear and show login
+              sessionStorage.removeItem('sessionToken');
+              sessionStorage.removeItem('user');
+              hideSessionCheckOverlay();
+            }
+          })
+          .withFailureHandler(function() {
+            // On error, just show login form
+            hideSessionCheckOverlay();
+          })
+          .apiCall('validateSession', { sessionToken: sessionToken });
+      } else {
+        // No session, show login form
+        hideSessionCheckOverlay();
+      }
+    }
+
+    // Hide session check overlay
+    function hideSessionCheckOverlay() {
+      const overlay = document.getElementById('sessionCheckOverlay');
+      overlay.classList.add('fade-out');
+      setTimeout(() => {
+        overlay.style.display = 'none';
+        // Load remembered email if exists
+        loadRememberedEmail();
+        document.getElementById('email').focus();
+      }, 300);
+    }
+
+    // Load remembered email
+    function loadRememberedEmail() {
+      const rememberedEmail = localStorage.getItem(STORAGE_KEY_EMAIL);
+      if (rememberedEmail) {
+        document.getElementById('email').value = rememberedEmail;
+        document.getElementById('rememberMe').checked = true;
+        document.getElementById('password').focus();
+      }
+    }
+
+    // Save remembered email
+    function saveRememberedEmail(email) {
+      localStorage.setItem(STORAGE_KEY_EMAIL, email);
+    }
+
+    // Clear remembered email
+    function clearRememberedEmail() {
+      localStorage.removeItem(STORAGE_KEY_EMAIL);
+    }
+
+    // Validate email format
+    function validateEmail(input) {
+      const email = input.value.trim();
+      const feedback = document.getElementById('emailFeedback');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!email) {
+        input.classList.remove('is-valid', 'is-invalid');
+        feedback.classList.remove('show', 'valid', 'invalid');
+        return false;
+      }
+
+      if (emailRegex.test(email)) {
+        input.classList.remove('is-invalid');
+        input.classList.add('is-valid');
+        feedback.textContent = '';
+        feedback.classList.remove('show', 'invalid');
+        return true;
+      } else {
+        input.classList.remove('is-valid');
+        input.classList.add('is-invalid');
+        feedback.textContent = 'Please enter a valid email address';
+        feedback.classList.add('show', 'invalid');
+        feedback.classList.remove('valid');
+        return false;
+      }
+    }
 
     // Toggle password visibility
     function togglePassword() {
       const passwordInput = document.getElementById('password');
       const toggleIcon = document.getElementById('passwordToggleIcon');
+      const toggleBtn = document.querySelector('.password-toggle');
 
       if (passwordInput.type === 'password') {
         passwordInput.type = 'text';
         toggleIcon.classList.remove('bi-eye');
         toggleIcon.classList.add('bi-eye-slash');
+        toggleBtn.setAttribute('aria-label', 'Hide password');
       } else {
         passwordInput.type = 'password';
         toggleIcon.classList.remove('bi-eye-slash');
         toggleIcon.classList.add('bi-eye');
+        toggleBtn.setAttribute('aria-label', 'Show password');
       }
     }
 
@@ -432,10 +758,14 @@
 
       errorMessage.textContent = message;
       errorAlert.style.display = 'flex';
+      errorAlert.setAttribute('role', 'alert');
 
       // Shake animation
       loginCard.classList.add('shake');
       setTimeout(() => loginCard.classList.remove('shake'), 400);
+
+      // Focus on alert for screen readers
+      errorAlert.focus();
     }
 
     // Hide error
@@ -451,8 +781,10 @@
       const loadingOverlay = document.getElementById('loadingOverlay');
 
       loginBtn.disabled = loading;
+      loginBtn.setAttribute('aria-busy', loading ? 'true' : 'false');
       loginBtnText.style.display = loading ? 'none' : 'inline';
       loginBtnSpinner.style.display = loading ? 'inline' : 'none';
+      loginBtnSpinner.setAttribute('aria-hidden', loading ? 'false' : 'true');
 
       if (loading) {
         loadingOverlay.classList.add('show');
@@ -467,6 +799,15 @@
       document.getElementById('successView').style.display = 'block';
       document.getElementById('welcomeName').textContent = userName || 'User';
       document.getElementById('continueBtn').href = APP_URL;
+
+      // Focus on continue button for accessibility
+      setTimeout(() => document.getElementById('continueBtn').focus(), 100);
+    }
+
+    // Show forgot password modal/message
+    function showForgotPassword(event) {
+      event.preventDefault();
+      alert('Please contact your system administrator at audit@hasspetroleum.com to reset your password.');
     }
 
     // Handle login
@@ -475,14 +816,36 @@
 
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
+      const rememberMe = document.getElementById('rememberMe').checked;
 
-      if (!email || !password) {
-        showError('Please enter both email and password.');
+      // Validate email format
+      if (!validateEmail(document.getElementById('email'))) {
+        showError('Please enter a valid email address.');
+        document.getElementById('email').focus();
+        return;
+      }
+
+      if (!password) {
+        showError('Please enter your password.');
+        document.getElementById('password').focus();
+        return;
+      }
+
+      if (password.length < 6) {
+        showError('Password must be at least 6 characters.');
+        document.getElementById('password').focus();
         return;
       }
 
       hideError();
       setLoading(true);
+
+      // Handle remember me
+      if (rememberMe) {
+        saveRememberedEmail(email);
+      } else {
+        clearRememberedEmail();
+      }
 
       // Call server-side login
       google.script.run
@@ -503,20 +866,34 @@
             const userName = result.user?.full_name || result.user?.email || 'User';
             showSuccessView(userName);
           } else {
-            showError(result.error || 'Login failed. Please try again.');
+            // Clear password on failed attempt
+            document.getElementById('password').value = '';
+            showError(result.error || 'Invalid email or password. Please try again.');
           }
         })
         .withFailureHandler(function(error) {
           setLoading(false);
-          showError('Connection error. Please try again.');
+          showError('Connection error. Please check your internet and try again.');
           console.error('Login error:', error);
         })
         .apiCall('login', { email: email, password: password });
     }
 
+    // Handle Enter key on form fields
+    function handleKeyPress(event) {
+      if (event.key === 'Enter') {
+        document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+      }
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
-      document.getElementById('email').focus();
+      // Check for existing session
+      checkExistingSession();
+
+      // Add keyboard event listeners
+      document.getElementById('email').addEventListener('keypress', handleKeyPress);
+      document.getElementById('password').addEventListener('keypress', handleKeyPress);
     });
   </script>
 </body>
