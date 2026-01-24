@@ -2,6 +2,8 @@
 // Global State
 window.currentUser = null;
 window.appDropdowns = null;
+window.currentWorkPaper = null;
+window.currentActionPlan = null;
 let currentPage = 'dashboard';
 let pageParams = {};
 
@@ -97,12 +99,25 @@ function initApp() {
       if (result && result.success) {
         window.currentUser = result.user;
         window.appDropdowns = result.dropdowns;
+
+        // Update user info in sidebar and header
         document.getElementById('userName').textContent = result.user.full_name;
         document.getElementById('userRole').textContent = result.user.role_name;
+        if (document.getElementById('profileName')) {
+          document.getElementById('profileName').textContent = result.user.full_name;
+        }
+        if (document.getElementById('profileEmail')) {
+          document.getElementById('profileEmail').textContent = result.user.email;
+        }
+
         setupNavigation(result.permissions);
         handleHashChange();
         window.addEventListener('hashchange', handleHashChange);
-        if (result.user.must_change_password) { showChangePassword(); showToast('Please change your password', 'warning'); }
+
+        if (result.user.must_change_password) {
+          showChangePassword();
+          showToast('Please change your password', 'warning');
+        }
       } else if (result && result.requireLogin) {
         // Session expired or not authenticated - redirect to login
         sessionStorage.removeItem('sessionToken');
@@ -124,18 +139,40 @@ function initApp() {
 }
 
 function setupNavigation(p) {
-  if (!p.canCreateWorkPaper) document.getElementById('navNewWorkPaper')?.classList.add('d-none');
-  if (!p.canViewReports) { document.getElementById('navReportsSection')?.classList.add('d-none'); document.getElementById('navReports')?.classList.add('d-none'); }
+  const role = window.currentUser?.role_code || '';
+
+  // Hide elements based on permissions
+  if (!p.canCreateWorkPaper) {
+    document.getElementById('navNewWorkPaper')?.classList.add('d-none');
+  }
+
+  if (!p.canViewReports) {
+    document.getElementById('navInsightsSection')?.classList.add('d-none');
+    document.getElementById('navReports')?.classList.add('d-none');
+  }
+
   if (!p.canManageUsers) {
     document.getElementById('navAdminSection')?.classList.add('d-none');
     document.getElementById('navUsers')?.classList.add('d-none');
     document.getElementById('navSettings')?.classList.add('d-none');
   }
+
   // Show analytics for auditors and management
-  const auditorRoles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'MANAGEMENT'];
-  if (!auditorRoles.includes(window.currentUser?.role_code)) {
-    document.getElementById('navAnalyticsSection')?.classList.add('d-none');
+  const auditorRoles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'AUDITOR', 'MANAGEMENT', 'BOARD'];
+  if (!auditorRoles.includes(role)) {
     document.getElementById('navAnalytics')?.classList.add('d-none');
+  }
+
+  // Hide quick stats for non-auditors
+  if (!['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'AUDITOR'].includes(role)) {
+    document.getElementById('navQuickStats')?.classList.add('d-none');
+  }
+
+  // Auditee-specific navigation
+  if (['AUDITEE', 'UNIT_MANAGER', 'JUNIOR_STAFF'].includes(role)) {
+    document.getElementById('navMyWorkPapers')?.classList.add('d-none');
+    document.getElementById('navPendingReview')?.classList.add('d-none');
+    document.getElementById('navNewWorkPaper')?.classList.add('d-none');
   }
 }
 
@@ -145,45 +182,90 @@ function handleHashChange() {
   const parts = hash.split('?');
   const page = parts[0];
   const params = {};
-  if (parts[1]) parts[1].split('&').forEach(p => { const [k, v] = p.split('='); params[k] = decodeURIComponent(v); });
+  if (parts[1]) {
+    parts[1].split('&').forEach(p => {
+      const [k, v] = p.split('=');
+      params[k] = decodeURIComponent(v);
+    });
+  }
   navigateTo(page, params, false);
 }
 
 function navigateTo(page, params, updateHash = true) {
   params = params || {};
-  if (updateHash) { window.location.hash = '#' + page + (Object.keys(params).length ? '?' + Object.entries(params).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&') : ''); return; }
-  currentPage = page; pageParams = params;
+
+  if (updateHash) {
+    const hashParams = Object.keys(params).length
+      ? '?' + Object.entries(params).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&')
+      : '';
+    window.location.hash = '#' + page + hashParams;
+    return;
+  }
+
+  currentPage = page;
+  pageParams = params;
+
+  // Hide all pages
   document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
-  document.querySelectorAll('.sidebar-nav .nav-link').forEach(l => l.classList.toggle('active', l.dataset.page === page));
-  
+
+  // Update active nav links
+  document.querySelectorAll('.sidebar-nav .nav-link').forEach(l => {
+    const linkPage = l.dataset.page;
+    l.classList.toggle('active', linkPage === page || (linkPage && page.startsWith(linkPage)));
+  });
+
+  // Open relevant submenu
+  if (typeof openSubmenuForPage === 'function') {
+    openSubmenuForPage(page);
+  }
+
+  // Page configuration
   const pageMap = {
     'dashboard': { el: 'page-dashboard', title: 'Dashboard', init: loadDashboard },
-    'work-papers': { el: 'page-work-papers', title: 'Work Papers', init: () => { initWPFilters(); loadWorkPapers(params); } },
-    'work-paper-form': { el: 'page-work-paper-form', title: params.id ? 'Edit Work Paper' : 'New Work Paper', init: () => initWorkPaperForm(params) },
-    'work-paper-view': { el: 'page-work-paper-view', title: 'Work Paper Details', init: () => loadWorkPaperView(params) },
-    'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => loadActionPlans(params) },
-    'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: loadActionPlansOverdue },
-    'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => loadActionPlanView(params) },
-    'reports': { el: 'page-reports', title: 'Reports', init: loadReports },
-    'users': { el: 'page-settings', title: 'Settings - User Management', init: loadSettings },
-    'settings': { el: 'page-settings', title: 'Settings', init: loadSettings },
-    'analytics': { el: 'page-analytics', title: 'Analytics & Insights', init: initAnalyticsPage }
+    'work-papers': { el: 'page-work-papers', title: 'Work Papers', init: () => { if (typeof initWPFilters === 'function') initWPFilters(); if (typeof loadWorkPapers === 'function') loadWorkPapers(params); } },
+    'work-paper-form': { el: 'page-work-paper-form', title: params.id ? 'Edit Work Paper' : 'New Work Paper', init: () => { if (typeof initWorkPaperForm === 'function') initWorkPaperForm(params); } },
+    'work-paper-view': { el: 'page-work-paper-view', title: 'Work Paper Details', init: () => { if (typeof loadWorkPaperView === 'function') loadWorkPaperView(params); } },
+    'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => { if (typeof loadActionPlans === 'function') loadActionPlans(params); } },
+    'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: () => { if (typeof loadActionPlansOverdue === 'function') loadActionPlansOverdue(); else if (typeof loadActionPlans === 'function') loadActionPlans({ overdue: true }); } },
+    'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => { if (typeof loadActionPlanView === 'function') loadActionPlanView(params); } },
+    'reports': { el: 'page-reports', title: 'Reports', init: () => { if (typeof loadReports === 'function') loadReports(); } },
+    'users': { el: 'page-settings', title: 'User Management', init: () => { if (typeof loadSettings === 'function') loadSettings({ tab: 'users' }); } },
+    'settings': { el: 'page-settings', title: 'Settings', init: () => { if (typeof loadSettings === 'function') loadSettings(params); } },
+    'analytics': { el: 'page-analytics', title: 'Analytics & Insights', init: () => { if (typeof initAnalyticsPage === 'function') initAnalyticsPage(); } }
   };
+
   const config = pageMap[page] || pageMap['dashboard'];
   const pageEl = document.getElementById(config.el);
-  if (pageEl) pageEl.style.display = 'block';
+
+  if (pageEl) {
+    pageEl.style.display = 'block';
+  }
+
+  // Update page title and breadcrumb
   document.getElementById('pageTitle').textContent = config.title;
-  if (config.init) config.init();
-  if (window.innerWidth < 992) toggleSidebar(false);
+  if (typeof updateBreadcrumb === 'function') {
+    updateBreadcrumb(page, config.title);
+  }
+
+  // Initialize the page
+  if (config.init) {
+    config.init();
+  }
+
+  // Close sidebar on mobile
+  if (window.innerWidth < 992) {
+    toggleSidebar(false);
+  }
 }
 
-function refreshCurrentPage() { navigateTo(currentPage, pageParams, false); }
+function refreshCurrentPage() {
+  navigateTo(currentPage, pageParams, false);
+}
 
 // API calls
 function apiCall(action, data) {
   return new Promise((resolve, reject) => {
     // Include sessionToken with all API calls for session-based authentication
-    // This is required when deployed as "Anyone with Google Account"
     const requestData = {
       ...(data || {}),
       sessionToken: sessionStorage.getItem('sessionToken') || ''
@@ -191,7 +273,6 @@ function apiCall(action, data) {
 
     google.script.run
       .withSuccessHandler(result => {
-        // Ensure we always return an object
         if (result === null || result === undefined) {
           resolve({ success: false, error: 'No response from server' });
         } else {
@@ -206,7 +287,6 @@ function apiCall(action, data) {
       })
       .withFailureHandler(error => {
         console.error('API error for ' + action + ':', error);
-        // Convert error to object for consistent handling
         resolve({ success: false, error: error?.message || 'Connection error' });
       })
       .apiCall(action, requestData);
@@ -214,23 +294,48 @@ function apiCall(action, data) {
 }
 
 // UI helpers
-function showLoading(text) { document.getElementById('loadingText').textContent = text || 'Loading...'; document.getElementById('loadingOverlay').classList.add('show'); }
-function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+function showLoading(text) {
+  document.getElementById('loadingText').textContent = text || 'Loading...';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
 
 function showToast(message, type, duration) {
-  type = type || 'info'; duration = duration || 5000;
+  type = type || 'info';
+  duration = duration || 5000;
   const toastId = 'toast-' + Date.now();
-  const bgClass = type === 'danger' ? 'bg-danger' : type === 'success' ? 'bg-success' : type === 'warning' ? 'bg-warning text-dark' : 'bg-info';
-  document.getElementById('toastContainer').insertAdjacentHTML('beforeend', `<div id="${toastId}" class="toast ${bgClass} text-white" role="alert"><div class="d-flex"><div class="toast-body">${escapeHtml(message)}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`);
+  const bgClass = type === 'danger' ? 'bg-danger' :
+                  type === 'success' ? 'bg-success' :
+                  type === 'warning' ? 'bg-warning text-dark' : 'bg-info';
+
+  const html = `
+    <div id="${toastId}" class="toast ${bgClass} text-white" role="alert">
+      <div class="d-flex">
+        <div class="toast-body">${escapeHtml(message)}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('toastContainer').insertAdjacentHTML('beforeend', html);
   const toast = new bootstrap.Toast(document.getElementById(toastId), { delay: duration });
   toast.show();
-  document.getElementById(toastId).addEventListener('hidden.bs.toast', function() { this.remove(); });
+  document.getElementById(toastId).addEventListener('hidden.bs.toast', function() {
+    this.remove();
+  });
 }
 
 function toggleSidebar(show) {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
-  if (show === undefined) show = !sidebar.classList.contains('show');
+
+  if (show === undefined) {
+    show = !sidebar.classList.contains('show');
+  }
+
   sidebar.classList.toggle('show', show);
   overlay.classList.toggle('show', show);
 }
@@ -243,6 +348,16 @@ function formatDate(date) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function formatDateTime(date) {
+  if (!date) return '-';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
 function escapeHtml(text) {
   if (!text) return '';
   const div = document.createElement('div');
@@ -251,27 +366,79 @@ function escapeHtml(text) {
 }
 
 function getStatusClass(status) {
-  const map = { 'Draft': 'status-draft', 'Submitted': 'status-submitted', 'Under Review': 'status-under-review', 'Revision Required': 'status-revision-required', 'Approved': 'status-approved', 'Sent to Auditee': 'status-sent-to-auditee', 'Not Due': 'status-not-due', 'Pending': 'status-pending', 'In Progress': 'status-in-progress', 'Implemented': 'status-implemented', 'Verified': 'status-verified', 'Overdue': 'status-overdue', 'Not Implemented': 'status-not-implemented' };
-  return map[status] || 'bg-secondary';
+  if (!status) return 'bg-secondary';
+  const s = status.toLowerCase().replace(/\s+/g, '-');
+  const map = {
+    'draft': 'status-draft',
+    'submitted': 'status-submitted',
+    'under-review': 'status-under-review',
+    'revision-required': 'status-revision-required',
+    'approved': 'status-approved',
+    'sent-to-auditee': 'status-sent-to-auditee',
+    'not-due': 'status-not-due',
+    'pending': 'status-pending',
+    'in-progress': 'status-in-progress',
+    'implemented': 'status-implemented',
+    'verified': 'status-verified',
+    'overdue': 'status-overdue',
+    'not-implemented': 'status-not-implemented',
+    'closed': 'status-closed',
+    'pending-hoa-review': 'status-pending-hoa-review'
+  };
+  return map[s] || 'bg-secondary';
 }
 
 function getRiskClass(risk) {
-  const map = { 'Extreme': 'risk-extreme', 'High': 'risk-high', 'Medium': 'risk-medium', 'Low': 'risk-low' };
-  return map[risk] || 'bg-secondary';
+  if (!risk) return 'bg-secondary';
+  const map = {
+    'extreme': 'risk-extreme',
+    'high': 'risk-high',
+    'medium': 'risk-medium',
+    'low': 'risk-low'
+  };
+  return map[risk.toLowerCase()] || 'bg-secondary';
 }
 
-function populateDropdown(id, items, val, txt, ph) {
+function populateDropdown(id, items, valueField, textField, placeholder) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.innerHTML = ph ? `<option value="">${ph}</option>` : '';
-  items.forEach(i => el.innerHTML += `<option value="${i[val]}">${i[txt]}</option>`);
+
+  el.innerHTML = placeholder ? `<option value="">${placeholder}</option>` : '';
+
+  if (items && items.length) {
+    items.forEach(item => {
+      el.innerHTML += `<option value="${item[valueField]}">${escapeHtml(item[textField])}</option>`;
+    });
+  }
+}
+
+function populateMultiSelect(id, items, valueField, textField) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  el.innerHTML = '';
+
+  if (items && items.length) {
+    items.forEach(item => {
+      el.innerHTML += `<option value="${item[valueField]}">${escapeHtml(item[textField])}</option>`;
+    });
+  }
 }
 
 // Auth functions
 function handleLogout() {
-  if (!confirm('Sign out?')) return;
+  if (!confirm('Are you sure you want to sign out?')) return;
   showLoading('Signing out...');
-  google.script.run.withSuccessHandler(() => window.top.location.reload()).withFailureHandler(() => window.top.location.reload()).apiCall('logout', {});
+
+  apiCall('logout', {})
+    .then(() => {
+      sessionStorage.removeItem('sessionToken');
+      window.top.location.reload();
+    })
+    .catch(() => {
+      sessionStorage.removeItem('sessionToken');
+      window.top.location.reload();
+    });
 }
 
 function showChangePassword() {
@@ -285,14 +452,49 @@ function submitChangePassword() {
   const current = document.getElementById('currentPassword').value;
   const newPwd = document.getElementById('newPassword').value;
   const confirm = document.getElementById('confirmPassword').value;
-  if (newPwd !== confirm) { showToast('Passwords do not match', 'danger'); return; }
-  if (newPwd.length < 8) { showToast('Password must be at least 8 characters', 'danger'); return; }
+
+  if (newPwd !== confirm) {
+    showToast('Passwords do not match', 'danger');
+    return;
+  }
+
+  if (newPwd.length < 8) {
+    showToast('Password must be at least 8 characters', 'danger');
+    return;
+  }
+
+  // Validate password strength
+  if (!/[A-Z]/.test(newPwd)) {
+    showToast('Password must contain at least one uppercase letter', 'danger');
+    return;
+  }
+  if (!/[a-z]/.test(newPwd)) {
+    showToast('Password must contain at least one lowercase letter', 'danger');
+    return;
+  }
+  if (!/[0-9]/.test(newPwd)) {
+    showToast('Password must contain at least one digit', 'danger');
+    return;
+  }
+
   showLoading('Changing password...');
-  apiCall('changePassword', { currentPassword: current, newPassword: newPwd }).then(r => {
-    hideLoading();
-    if (r.success) { bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide(); showToast('Password changed', 'success'); }
-    else showToast(r.error || 'Error', 'danger');
-  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+  apiCall('changePassword', { currentPassword: current, newPassword: newPwd })
+    .then(r => {
+      hideLoading();
+      if (r.success) {
+        bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+        showToast('Password changed successfully', 'success');
+        if (window.currentUser) {
+          window.currentUser.must_change_password = false;
+        }
+      } else {
+        showToast(r.error || 'Failed to change password', 'danger');
+      }
+    })
+    .catch(() => {
+      hideLoading();
+      showToast('Error changing password', 'danger');
+    });
 }
 
 // Action plan functions
@@ -304,50 +506,282 @@ function saveActionPlan() {
   const ownerSelect = document.getElementById('apFormOwners');
   const ownerIds = Array.from(ownerSelect.selectedOptions).map(o => o.value).join(',');
   const ownerNames = Array.from(ownerSelect.selectedOptions).map(o => o.text).join(', ');
-  if (!desc || !dueDate) { showToast('Please fill required fields', 'danger'); return; }
+
+  if (!desc || !dueDate) {
+    showToast('Please fill required fields', 'danger');
+    return;
+  }
+
   showLoading('Saving...');
-  apiCall(id ? 'updateActionPlan' : 'createActionPlan', { action_plan_id: id || undefined, work_paper_id: wpId, action_description: desc, due_date: dueDate, owner_ids: ownerIds, owner_names: ownerNames }).then(r => {
-    hideLoading(); bootstrap.Modal.getInstance(document.getElementById('actionPlanFormModal')).hide();
-    if (r.success) { showToast('Saved', 'success'); if (currentPage === 'work-paper-view') loadWorkPaperView(pageParams); else loadActionPlans(); }
-    else showToast(r.error || 'Error', 'danger');
-  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
-}
-
-// File upload
-function uploadFile() {
-  const fileInput = document.getElementById('uploadFileInput');
-  const desc = document.getElementById('uploadFileDesc').value;
-  const entityType = document.getElementById('uploadEntityType').value;
-  const entityId = document.getElementById('uploadEntityId').value;
-  if (!fileInput.files.length) { showToast('Please select a file', 'danger'); return; }
-  const file = fileInput.files[0];
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const base64 = e.target.result.split(',')[1];
-    showLoading('Uploading...');
-    google.script.run.withSuccessHandler(function(result) {
-      if (result.success) {
-        const fileData = { file_name: file.name, file_description: desc, drive_file_id: result.file.drive_file_id, drive_url: result.file.drive_url, file_size: result.file.file_size, mime_type: result.file.mime_type };
-        const action = entityType === 'WORK_PAPER' ? 'addWorkPaperFile' : 'addActionPlanEvidence';
-        const payload = entityType === 'WORK_PAPER' ? { workPaperId: entityId, ...fileData } : { actionPlanId: entityId, ...fileData };
-        apiCall(action, payload).then(r => { hideLoading(); bootstrap.Modal.getInstance(document.getElementById('uploadFileModal')).hide(); if (r.success) { showToast('Uploaded', 'success'); refreshCurrentPage(); } else showToast(r.error || 'Error', 'danger'); });
-      } else { hideLoading(); showToast(result.error || 'Upload failed', 'danger'); }
-    }).withFailureHandler(function() { hideLoading(); showToast('Upload error', 'danger'); }).uploadFileToDrive(file.name, file.type, base64, null);
+  const action = id ? 'updateActionPlan' : 'createActionPlan';
+  const payload = {
+    action_plan_id: id || undefined,
+    work_paper_id: wpId,
+    action_description: desc,
+    due_date: dueDate,
+    owner_ids: ownerIds,
+    owner_names: ownerNames
   };
-  reader.readAsDataURL(file);
+
+  apiCall(action, payload)
+    .then(r => {
+      hideLoading();
+      bootstrap.Modal.getInstance(document.getElementById('actionPlanFormModal')).hide();
+      if (r.success) {
+        showToast('Action plan saved', 'success');
+        ClientCache.invalidate('action');
+        if (currentPage === 'work-paper-view') {
+          loadWorkPaperView(pageParams);
+        } else {
+          if (typeof loadActionPlans === 'function') loadActionPlans();
+        }
+      } else {
+        showToast(r.error || 'Error saving action plan', 'danger');
+      }
+    })
+    .catch(() => {
+      hideLoading();
+      showToast('Error saving action plan', 'danger');
+    });
 }
 
-function showUploadFile() {
-  document.getElementById('uploadEntityType').value = 'WORK_PAPER';
-  document.getElementById('uploadEntityId').value = currentWorkPaper?.work_paper_id || '';
+// File upload functions
+function showUploadModal(entityType, entityId) {
+  document.getElementById('uploadEntityType').value = entityType;
+  document.getElementById('uploadEntityId').value = entityId;
   document.getElementById('uploadFileInput').value = '';
-  document.getElementById('uploadFileDesc').value = '';
+  if (document.getElementById('uploadFileDesc')) document.getElementById('uploadFileDesc').value = '';
+  if (document.getElementById('uploadFileCategory')) document.getElementById('uploadFileCategory').value = 'Evidence';
   new bootstrap.Modal(document.getElementById('uploadFileModal')).show();
 }
 
-function deleteFile(fileId) {
+function showUploadFile() {
+  showUploadModal('WORK_PAPER', window.currentWorkPaper?.work_paper_id || '');
+}
+
+function uploadFile() {
+  const fileInput = document.getElementById('uploadFileInput');
+  const desc = document.getElementById('uploadFileDesc')?.value || '';
+  const category = document.getElementById('uploadFileCategory')?.value || 'Evidence';
+  const entityType = document.getElementById('uploadEntityType').value;
+  const entityId = document.getElementById('uploadEntityId').value;
+
+  if (!fileInput.files.length) {
+    showToast('Please select a file', 'danger');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const maxSize = 10 * 1024 * 1024; // 10 MB
+
+  if (file.size > maxSize) {
+    showToast('File size exceeds 10 MB limit', 'danger');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result.split(',')[1];
+    showLoading('Uploading ' + file.name + '...');
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result && result.success) {
+          const fileData = {
+            file_name: file.name,
+            file_description: desc,
+            file_category: category,
+            drive_file_id: result.file.drive_file_id,
+            drive_url: result.file.drive_url,
+            file_size: result.file.file_size,
+            mime_type: result.file.mime_type
+          };
+
+          const action = entityType === 'WORK_PAPER' ? 'addWorkPaperFile' : 'addActionPlanEvidence';
+          const payload = entityType === 'WORK_PAPER'
+            ? { workPaperId: entityId, ...fileData }
+            : { actionPlanId: entityId, ...fileData };
+
+          apiCall(action, payload)
+            .then(r => {
+              hideLoading();
+              bootstrap.Modal.getInstance(document.getElementById('uploadFileModal'))?.hide();
+              if (r.success) {
+                showToast('Uploaded successfully', 'success');
+                ClientCache.invalidate('file');
+                refreshCurrentPage();
+              } else {
+                showToast(r.error || 'Error saving file record', 'danger');
+              }
+            });
+        } else {
+          hideLoading();
+          showToast(result?.error || 'Upload failed', 'danger');
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        showToast('Upload error: ' + (error?.message || 'Unknown error'), 'danger');
+      })
+      .uploadFileToDrive(file.name, file.type, base64, null);
+  };
+
+  reader.onerror = function() {
+    showToast('Error reading file', 'danger');
+  };
+
+  reader.readAsDataURL(file);
+}
+
+function deleteFile(fileId, entityType) {
   if (!confirm('Delete this file?')) return;
+
   showLoading('Deleting...');
-  apiCall('deleteWorkPaperFile', { fileId }).then(r => { hideLoading(); if (r.success) { showToast('Deleted', 'success'); refreshCurrentPage(); } else showToast(r.error || 'Error', 'danger'); }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+  const action = entityType === 'ACTION_PLAN' ? 'deleteActionPlanEvidence' : 'deleteWorkPaperFile';
+
+  apiCall(action, { fileId: fileId, evidenceId: fileId })
+    .then(r => {
+      hideLoading();
+      if (r.success) {
+        showToast('File deleted', 'success');
+        ClientCache.invalidate('file');
+        refreshCurrentPage();
+      } else {
+        showToast(r.error || 'Error deleting file', 'danger');
+      }
+    })
+    .catch(() => {
+      hideLoading();
+      showToast('Error deleting file', 'danger');
+    });
+}
+
+function getFileIcon(mimeType, fileName) {
+  if (!mimeType && fileName) {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const mimeMap = {
+      'pdf': 'bi-file-earmark-pdf',
+      'doc': 'bi-file-earmark-word',
+      'docx': 'bi-file-earmark-word',
+      'xls': 'bi-file-earmark-excel',
+      'xlsx': 'bi-file-earmark-excel',
+      'png': 'bi-file-earmark-image',
+      'jpg': 'bi-file-earmark-image',
+      'jpeg': 'bi-file-earmark-image',
+      'gif': 'bi-file-earmark-image',
+      'zip': 'bi-file-earmark-zip',
+      'txt': 'bi-file-earmark-text',
+      'csv': 'bi-file-earmark-spreadsheet'
+    };
+    return mimeMap[ext] || 'bi-file-earmark';
+  }
+
+  if (mimeType?.includes('pdf')) return 'bi-file-earmark-pdf';
+  if (mimeType?.includes('word')) return 'bi-file-earmark-word';
+  if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet')) return 'bi-file-earmark-excel';
+  if (mimeType?.includes('image')) return 'bi-file-earmark-image';
+  if (mimeType?.includes('zip')) return 'bi-file-earmark-zip';
+  return 'bi-file-earmark';
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function renderFilesList(files, containerId, entityType, canDelete = true) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (!files || files.length === 0) {
+    container.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-folder2-open me-2"></i>No files attached</div>';
+    return;
+  }
+
+  let html = '';
+  files.forEach(file => {
+    const iconClass = getFileIcon(file.mime_type, file.file_name);
+    const categoryClass = (file.file_category || 'other').toLowerCase();
+
+    html += `
+      <div class="file-item">
+        <div class="file-icon">
+          <i class="bi ${iconClass}"></i>
+        </div>
+        <div class="file-info">
+          <div class="file-name">
+            ${escapeHtml(file.file_name || 'Unknown')}
+            ${file.file_category ? `<span class="file-category ${categoryClass}">${file.file_category}</span>` : ''}
+          </div>
+          <div class="file-meta">
+            ${formatFileSize(file.file_size)} | Uploaded ${formatDate(file.uploaded_at)}
+            ${file.uploaded_by_name ? ' by ' + escapeHtml(file.uploaded_by_name) : ''}
+          </div>
+        </div>
+        <div class="file-actions">
+          ${file.drive_url ? `<a href="${file.drive_url}" target="_blank" class="btn btn-sm btn-outline-primary" title="View"><i class="bi bi-eye"></i></a>` : ''}
+          ${canDelete ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteFile('${file.file_id || file.evidence_id}', '${entityType}')" title="Delete"><i class="bi bi-trash"></i></button>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+// Export to CSV helper
+function exportToCSV(data, filename) {
+  if (!data || !data.length) {
+    showToast('No data to export', 'warning');
+    return;
+  }
+
+  const headers = Object.keys(data[0]);
+  const csvContent = [
+    headers.join(','),
+    ...data.map(row => headers.map(h => {
+      let val = row[h] || '';
+      if (typeof val === 'string' && (val.includes(',') || val.includes('"') || val.includes('\n'))) {
+        val = '"' + val.replace(/"/g, '""') + '"';
+      }
+      return val;
+    }).join(','))
+  ].join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename || 'export.csv';
+  link.click();
+}
+
+// Print helper
+function printContent(elementId, title) {
+  const content = document.getElementById(elementId);
+  if (!content) return;
+
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`
+    <html>
+    <head>
+      <title>${title || 'Print'}</title>
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+      <style>
+        body { padding: 20px; }
+        @media print {
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <h2>${title || ''}</h2>
+      ${content.innerHTML}
+      <script>window.onload = function() { window.print(); window.close(); }<\/script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
 }
 </script>

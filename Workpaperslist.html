@@ -1,20 +1,45 @@
 <!-- Work Papers List Page -->
 <div class="work-papers-list">
+  <!-- Quick Filter Presets -->
+  <div class="quick-filters mb-3">
+    <span class="text-muted small me-2">Quick filters:</span>
+    <button class="btn btn-sm btn-outline-secondary quick-filter-btn active" data-filter="all" onclick="applyQuickFilter('all')">
+      All
+    </button>
+    <button class="btn btn-sm btn-outline-danger quick-filter-btn" data-filter="high-risk" onclick="applyQuickFilter('high-risk')">
+      <i class="bi bi-exclamation-triangle me-1"></i>High Risk
+    </button>
+    <button class="btn btn-sm btn-outline-warning quick-filter-btn" data-filter="pending-review" onclick="applyQuickFilter('pending-review')">
+      <i class="bi bi-hourglass-split me-1"></i>Pending Review
+    </button>
+    <button class="btn btn-sm btn-outline-primary quick-filter-btn" data-filter="my-papers" onclick="applyQuickFilter('my-papers')">
+      <i class="bi bi-person me-1"></i>My Papers
+    </button>
+    <button class="btn btn-sm btn-outline-info quick-filter-btn" data-filter="recent" onclick="applyQuickFilter('recent')">
+      <i class="bi bi-clock-history me-1"></i>Recent (7 days)
+    </button>
+  </div>
+
   <!-- Filters -->
   <div class="filters-bar">
     <div class="input-group" style="max-width: 300px;">
       <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-      <input type="text" class="form-control" id="wpSearchInput" placeholder="Search work papers..." onkeyup="filterWorkPapers()">
+      <input type="text" class="form-control" id="wpSearchInput" placeholder="Search work papers..."
+             onkeyup="debounceSearch(filterWorkPapers)">
     </div>
-    
+
     <select class="form-select" id="wpFilterYear" onchange="filterWorkPapers()">
       <option value="">All Years</option>
     </select>
-    
+
     <select class="form-select" id="wpFilterAffiliate" onchange="filterWorkPapers()">
       <option value="">All Affiliates</option>
     </select>
-    
+
+    <select class="form-select" id="wpFilterAuditArea" onchange="filterWorkPapers()">
+      <option value="">All Audit Areas</option>
+    </select>
+
     <select class="form-select" id="wpFilterStatus" onchange="filterWorkPapers()">
       <option value="">All Status</option>
       <option value="Draft">Draft</option>
@@ -24,7 +49,7 @@
       <option value="Approved">Approved</option>
       <option value="Sent to Auditee">Sent to Auditee</option>
     </select>
-    
+
     <select class="form-select" id="wpFilterRisk" onchange="filterWorkPapers()">
       <option value="">All Risk Levels</option>
       <option value="Extreme">Extreme</option>
@@ -32,11 +57,11 @@
       <option value="Medium">Medium</option>
       <option value="Low">Low</option>
     </select>
-    
-    <button class="btn btn-outline-secondary" onclick="clearWPFilters()">
-      <i class="bi bi-x-circle me-1"></i>Clear
+
+    <button class="btn btn-outline-secondary" onclick="toggleAdvancedFilters()" id="btnAdvancedFilters">
+      <i class="bi bi-funnel me-1"></i>More
     </button>
-    
+
     <div class="ms-auto">
       <button class="btn btn-primary" onclick="navigateTo('work-paper-form')" id="btnNewWorkPaper">
         <i class="bi bi-plus-circle me-2"></i>New Work Paper
@@ -44,16 +69,74 @@
     </div>
   </div>
 
+  <!-- Advanced Filters (Collapsible) -->
+  <div class="advanced-filters collapse" id="advancedFiltersPanel">
+    <div class="card card-body bg-light border-0 mb-3">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label small">Date From</label>
+          <input type="date" class="form-control form-control-sm" id="wpFilterDateFrom" onchange="filterWorkPapers()">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">Date To</label>
+          <input type="date" class="form-control form-control-sm" id="wpFilterDateTo" onchange="filterWorkPapers()">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">Prepared By</label>
+          <select class="form-select form-select-sm" id="wpFilterPreparedBy" onchange="filterWorkPapers()">
+            <option value="">All Users</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">Has Action Plans</label>
+          <select class="form-select form-select-sm" id="wpFilterHasAP" onchange="filterWorkPapers()">
+            <option value="">Any</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Filters Chips -->
+  <div class="active-filters mb-3" id="activeFiltersBar" style="display: none;">
+    <span class="text-muted small me-2">Active filters:</span>
+    <div class="filter-chips" id="filterChips"></div>
+    <button class="btn btn-sm btn-link text-danger" onclick="clearWPFilters()">
+      Clear all
+    </button>
+  </div>
+
   <!-- Results Info -->
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <span class="text-muted" id="wpResultsInfo">Loading...</span>
-    <div class="btn-group btn-group-sm">
-      <button class="btn btn-outline-secondary active" onclick="setWPView('table')" id="btnWPViewTable">
-        <i class="bi bi-list"></i>
-      </button>
-      <button class="btn btn-outline-secondary" onclick="setWPView('cards')" id="btnWPViewCards">
-        <i class="bi bi-grid-3x3-gap"></i>
-      </button>
+    <div>
+      <span class="text-muted" id="wpResultsInfo">Loading...</span>
+      <div class="dropdown d-inline-block ms-2">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+          <i class="bi bi-download me-1"></i>Export
+        </button>
+        <ul class="dropdown-menu">
+          <li><a class="dropdown-item" href="#" onclick="exportWPList('csv')"><i class="bi bi-filetype-csv me-2"></i>Export as CSV</a></li>
+          <li><a class="dropdown-item" href="#" onclick="exportWPList('excel')"><i class="bi bi-file-earmark-excel me-2"></i>Export as Excel</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <select class="form-select form-select-sm" style="width: auto;" id="wpPageSizeSelect" onchange="changeWPPageSize()">
+        <option value="10">10 per page</option>
+        <option value="20" selected>20 per page</option>
+        <option value="50">50 per page</option>
+        <option value="100">100 per page</option>
+      </select>
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-secondary active" onclick="setWPView('table')" id="btnWPViewTable" title="Table view">
+          <i class="bi bi-list"></i>
+        </button>
+        <button class="btn btn-outline-secondary" onclick="setWPView('cards')" id="btnWPViewCards" title="Card view">
+          <i class="bi bi-grid-3x3-gap"></i>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -95,6 +178,75 @@
   </nav>
 </div>
 
+<style>
+/* Quick Filters */
+.quick-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-filter-btn {
+  border-radius: 20px;
+  font-size: 0.8rem;
+  padding: 4px 12px;
+}
+
+.quick-filter-btn.active {
+  font-weight: 600;
+}
+
+/* Advanced Filters Panel */
+.advanced-filters {
+  margin-top: -8px;
+}
+
+/* Active Filters Bar */
+.active-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #e7f1ff;
+  border: 1px solid #b6d4fe;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  color: #1a365d;
+}
+
+.filter-chip .chip-remove {
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+.filter-chip .chip-remove:hover {
+  opacity: 1;
+  color: #dc3545;
+}
+
+/* Sort Indicators */
+th.sorted-asc::after { content: ' ↑'; opacity: 0.7; }
+th.sorted-desc::after { content: ' ↓'; opacity: 0.7; }
+</style>
+
 <script>
 let workPapersData = [];
 let wpCurrentPage = 1;
@@ -102,6 +254,169 @@ let wpPageSize = 20;
 let wpSortField = 'created_at';
 let wpSortDir = 'desc';
 let wpViewMode = 'table';
+let wpSearchTimeout = null;
+let wpActiveQuickFilter = 'all';
+
+// Debounce search input
+function debounceSearch(callback) {
+  if (wpSearchTimeout) clearTimeout(wpSearchTimeout);
+  wpSearchTimeout = setTimeout(callback, 300);
+}
+
+// Apply quick filter preset
+function applyQuickFilter(filterType) {
+  // Clear all filters first
+  document.getElementById('wpSearchInput').value = '';
+  document.getElementById('wpFilterYear').value = '';
+  document.getElementById('wpFilterAffiliate').value = '';
+  document.getElementById('wpFilterAuditArea').value = '';
+  document.getElementById('wpFilterStatus').value = '';
+  document.getElementById('wpFilterRisk').value = '';
+
+  const dateFrom = document.getElementById('wpFilterDateFrom');
+  const dateTo = document.getElementById('wpFilterDateTo');
+  const preparedBy = document.getElementById('wpFilterPreparedBy');
+  if (dateFrom) dateFrom.value = '';
+  if (dateTo) dateTo.value = '';
+  if (preparedBy) preparedBy.value = '';
+
+  wpActiveQuickFilter = filterType;
+
+  // Update button states
+  document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filterType);
+  });
+
+  // Apply specific filter preset
+  switch (filterType) {
+    case 'high-risk':
+      document.getElementById('wpFilterRisk').value = 'High';
+      break;
+    case 'pending-review':
+      document.getElementById('wpFilterStatus').value = 'Submitted';
+      break;
+    case 'my-papers':
+      if (preparedBy && window.currentUser) {
+        preparedBy.value = window.currentUser.user_id;
+      }
+      break;
+    case 'recent':
+      if (dateFrom) {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        dateFrom.value = sevenDaysAgo.toISOString().split('T')[0];
+      }
+      break;
+  }
+
+  wpCurrentPage = 1;
+  loadWorkPapers();
+}
+
+// Toggle advanced filters panel
+function toggleAdvancedFilters() {
+  const panel = document.getElementById('advancedFiltersPanel');
+  const btn = document.getElementById('btnAdvancedFilters');
+
+  if (panel.classList.contains('show')) {
+    panel.classList.remove('show');
+    btn.classList.remove('active');
+  } else {
+    panel.classList.add('show');
+    btn.classList.add('active');
+  }
+}
+
+// Update active filter chips
+function updateFilterChips() {
+  const chips = [];
+  const filtersBar = document.getElementById('activeFiltersBar');
+  const chipsContainer = document.getElementById('filterChips');
+
+  const filters = [
+    { id: 'wpSearchInput', label: 'Search', getValue: (el) => el.value },
+    { id: 'wpFilterYear', label: 'Year', getValue: (el) => el.value },
+    { id: 'wpFilterAffiliate', label: 'Affiliate', getValue: (el) => el.value },
+    { id: 'wpFilterAuditArea', label: 'Audit Area', getValue: (el) => el.options[el.selectedIndex]?.text || el.value },
+    { id: 'wpFilterStatus', label: 'Status', getValue: (el) => el.value },
+    { id: 'wpFilterRisk', label: 'Risk', getValue: (el) => el.value },
+    { id: 'wpFilterDateFrom', label: 'From', getValue: (el) => el.value },
+    { id: 'wpFilterDateTo', label: 'To', getValue: (el) => el.value },
+    { id: 'wpFilterPreparedBy', label: 'Prepared By', getValue: (el) => el.options[el.selectedIndex]?.text || '' }
+  ];
+
+  filters.forEach(filter => {
+    const el = document.getElementById(filter.id);
+    if (el && el.value && el.value.trim() !== '') {
+      const displayValue = filter.getValue(el);
+      if (displayValue && displayValue !== 'All Users') {
+        chips.push({
+          id: filter.id,
+          label: filter.label,
+          value: displayValue
+        });
+      }
+    }
+  });
+
+  if (chips.length > 0) {
+    filtersBar.style.display = 'flex';
+    chipsContainer.innerHTML = chips.map(chip => `
+      <span class="filter-chip">
+        <strong>${chip.label}:</strong> ${escapeHtml(chip.value)}
+        <span class="chip-remove" onclick="removeFilterChip('${chip.id}')">&times;</span>
+      </span>
+    `).join('');
+  } else {
+    filtersBar.style.display = 'none';
+  }
+}
+
+// Remove a specific filter chip
+function removeFilterChip(filterId) {
+  const el = document.getElementById(filterId);
+  if (el) {
+    el.value = '';
+    filterWorkPapers();
+  }
+}
+
+// Change page size
+function changeWPPageSize() {
+  wpPageSize = parseInt(document.getElementById('wpPageSizeSelect').value);
+  wpCurrentPage = 1;
+  renderWorkPapers();
+}
+
+// Export work papers list
+function exportWPList(format) {
+  showLoading('Exporting...');
+
+  // Get current filters
+  const filters = {
+    search: document.getElementById('wpSearchInput')?.value || '',
+    year: document.getElementById('wpFilterYear')?.value || '',
+    affiliate_code: document.getElementById('wpFilterAffiliate')?.value || '',
+    audit_area_id: document.getElementById('wpFilterAuditArea')?.value || '',
+    status: document.getElementById('wpFilterStatus')?.value || '',
+    risk_rating: document.getElementById('wpFilterRisk')?.value || ''
+  };
+
+  apiCall('exportWorkPapers', { filters, format })
+    .then(result => {
+      hideLoading();
+      if (result.success && result.downloadUrl) {
+        window.open(result.downloadUrl, '_blank');
+        showToast('Export ready for download', 'success');
+      } else {
+        showToast(result.error || 'Export failed', 'danger');
+      }
+    })
+    .catch(() => {
+      hideLoading();
+      showToast('Export failed', 'danger');
+    });
+}
 
 function loadWorkPapers(filters) {
   filters = filters || {};
@@ -110,17 +425,30 @@ function loadWorkPapers(filters) {
   const search = document.getElementById('wpSearchInput')?.value || '';
   const year = document.getElementById('wpFilterYear')?.value || '';
   const affiliate = document.getElementById('wpFilterAffiliate')?.value || '';
+  const auditArea = document.getElementById('wpFilterAuditArea')?.value || '';
   const status = document.getElementById('wpFilterStatus')?.value || '';
   const risk = document.getElementById('wpFilterRisk')?.value || '';
+  const dateFrom = document.getElementById('wpFilterDateFrom')?.value || '';
+  const dateTo = document.getElementById('wpFilterDateTo')?.value || '';
+  const preparedBy = document.getElementById('wpFilterPreparedBy')?.value || '';
+  const hasAP = document.getElementById('wpFilterHasAP')?.value || '';
 
   const requestFilters = {
     ...filters,
     search: search || filters.search,
     year: year || filters.year,
     affiliate_code: affiliate || filters.affiliate_code,
+    audit_area_id: auditArea || filters.audit_area_id,
     status: status || filters.status,
-    risk_rating: risk || filters.risk_rating
+    risk_rating: risk || filters.risk_rating,
+    date_from: dateFrom || filters.date_from,
+    date_to: dateTo || filters.date_to,
+    prepared_by: preparedBy || filters.prepared_by,
+    has_action_plans: hasAP || filters.has_action_plans
   };
+
+  // Update filter chips display
+  updateFilterChips();
 
   showLoading('Loading work papers...');
 
@@ -345,8 +673,26 @@ function clearWPFilters() {
   document.getElementById('wpSearchInput').value = '';
   document.getElementById('wpFilterYear').value = '';
   document.getElementById('wpFilterAffiliate').value = '';
+  document.getElementById('wpFilterAuditArea').value = '';
   document.getElementById('wpFilterStatus').value = '';
   document.getElementById('wpFilterRisk').value = '';
+
+  const dateFrom = document.getElementById('wpFilterDateFrom');
+  const dateTo = document.getElementById('wpFilterDateTo');
+  const preparedBy = document.getElementById('wpFilterPreparedBy');
+  const hasAP = document.getElementById('wpFilterHasAP');
+
+  if (dateFrom) dateFrom.value = '';
+  if (dateTo) dateTo.value = '';
+  if (preparedBy) preparedBy.value = '';
+  if (hasAP) hasAP.value = '';
+
+  // Reset quick filter to 'all'
+  wpActiveQuickFilter = 'all';
+  document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === 'all');
+  });
+
   wpCurrentPage = 1;
   loadWorkPapers();
 }
@@ -400,7 +746,7 @@ function initWPFilters() {
   for (let y = currentYear + 1; y >= currentYear - 5; y--) {
     yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
   }
-  
+
   // Populate affiliate dropdown
   const affiliateSelect = document.getElementById('wpFilterAffiliate');
   if (window.appDropdowns && window.appDropdowns.affiliates) {
@@ -408,5 +754,26 @@ function initWPFilters() {
       affiliateSelect.innerHTML += `<option value="${a.code}">${a.code} - ${a.name}</option>`;
     });
   }
+
+  // Populate audit area dropdown
+  const auditAreaSelect = document.getElementById('wpFilterAuditArea');
+  if (auditAreaSelect && window.appDropdowns && window.appDropdowns.auditAreas) {
+    window.appDropdowns.auditAreas.forEach(a => {
+      auditAreaSelect.innerHTML += `<option value="${a.id}">${a.display || a.name}</option>`;
+    });
+  }
+
+  // Populate prepared by dropdown
+  const preparedBySelect = document.getElementById('wpFilterPreparedBy');
+  if (preparedBySelect && window.appDropdowns && window.appDropdowns.users) {
+    window.appDropdowns.users
+      .filter(u => ['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(u.role_code))
+      .forEach(u => {
+        preparedBySelect.innerHTML += `<option value="${u.id}">${u.name}</option>`;
+      });
+  }
+
+  // Initialize page size from selector
+  wpPageSize = parseInt(document.getElementById('wpPageSizeSelect')?.value || 20);
 }
 </script>
