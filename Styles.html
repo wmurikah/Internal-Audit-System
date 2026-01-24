@@ -625,6 +625,32 @@
     font-size: 0.9rem;
   }
 
+  /* Chart Container - Prevents vertical stretching */
+  .chart-container {
+    position: relative;
+    width: 100%;
+    height: 250px;
+    max-height: 250px;
+  }
+
+  .chart-container.chart-sm {
+    height: 200px;
+    max-height: 200px;
+  }
+
+  .chart-container.chart-lg {
+    height: 300px;
+    max-height: 300px;
+  }
+
+  /* Card with chart - constrain body height */
+  .card-chart .card-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+  }
+
   /* Role-Based Dashboard Sections */
   .dashboard-section {
     margin-bottom: 30px;
