@@ -5,7 +5,6 @@ function doGet(e) {
   try {
     const page = e.parameter.page || 'login';
 
-    // MANDATORY: Always show login page first unless explicitly requesting app after auth
     if (page !== 'app') {
       return HtmlService.createTemplateFromFile('Login')
         .evaluate()
@@ -14,8 +13,6 @@ function doGet(e) {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
-    // page=app: Serve the portal - client-side will validate session via getInitData
-    // This allows the app to work in test deployments where Session.getActiveUser() may fail
     return HtmlService.createTemplateFromFile('AuditorPortal')
       .evaluate()
       .setTitle('Hass Petroleum Internal Audit System')
@@ -40,20 +37,16 @@ function doPost(e) {
     const action = request.action;
     const data = request.data || {};
     
-    // Get current user
     const user = getCurrentUser();
     
-    // Public actions (no auth required)
     const publicActions = ['login', 'ping'];
     
     if (!publicActions.includes(action) && !user) {
       return jsonResponse({ success: false, error: 'Authentication required' }, 401);
     }
     
-    // Route to handler
     const result = routeAction(action, data, user);
     
-    // Ensure we never return null/undefined
     if (result === null || result === undefined) {
       console.error('doPost: routeAction returned null/undefined for action:', action);
       return jsonResponse({ 
@@ -100,87 +93,10 @@ function routeAction(action, data, user) {
       return getInitData();
       
     case 'getDashboardData':
-      try {
-        console.log('=== getDashboardData Handler START ===');
-        console.log('User object exists:', !!user);
-        if (user) {
-          console.log('User email:', user.email);
-          console.log('User role:', user.role_code);
-          console.log('User ID:', user.user_id);
-          console.log('User has _rowIndex:', !!user._rowIndex);
-        }
-
-        // Ensure user is authenticated
-        if (!user) {
-          console.error('getDashboardData: No user object - authentication required');
-          return { success: false, error: 'Authentication required', requireLogin: true };
-        }
-
-        console.log('Calling getDashboardData service function...');
-        // Call the service function
-        const dashboardData = getDashboardData(user);
-        console.log('getDashboardData service returned:', !!dashboardData);
-
-        // Validate the response
-        if (!dashboardData) {
-          console.error('getDashboardData: Dashboard service returned null/undefined');
-          return {
-            success: false,
-            error: 'Dashboard service returned null',
-            errorDetail: 'getDashboardData() returned null/undefined'
-          };
-        }
-
-        console.log('dashboardData.success:', dashboardData.success);
-        console.log('dashboardData has summary:', !!dashboardData.summary);
-        console.log('dashboardData has charts:', !!dashboardData.charts);
-
-        // If getDashboardData already returned an error response, pass it through
-        if (dashboardData.success === false) {
-          console.error('getDashboardData returned error:', dashboardData.error);
-          return dashboardData;
-        }
-
-        // Ensure required properties exist for frontend
-        if (!dashboardData.summary) {
-          console.warn('No summary in dashboardData, adding defaults');
-          dashboardData.summary = { workPapers: {}, actionPlans: {} };
-        }
-        if (!dashboardData.charts) {
-          console.warn('No charts in dashboardData, adding defaults');
-          dashboardData.charts = {};
-        }
-        if (!dashboardData.alerts) {
-          dashboardData.alerts = [];
-        }
-        if (!dashboardData.recentActivity) {
-          dashboardData.recentActivity = [];
-        }
-
-        console.log('=== getDashboardData Handler SUCCESS ===');
-        // Return with proper structure
-        return {
-          success: true,
-          ...dashboardData
-        };
-
-      } catch (e) {
-        console.error('=== getDashboardData Handler EXCEPTION ===');
-        console.error('Error:', e.message);
-        console.error('Stack:', e.stack);
-        return {
-          success: false,
-          error: 'Failed to load dashboard: ' + e.message,
-          errorDetail: 'Exception in getDashboardData handler: ' + e.stack,
-          summary: { workPapers: {}, actionPlans: {} },
-          charts: {},
-          alerts: [],
-          recentActivity: []
-        };
-      }
+      return getDashboardDataSafe(user);
       
     case 'getDropdownData':
-      return { success: true, dropdowns: getDropdownData() };
+      return { success: true, dropdowns: getDropdownDataCached() };
       
     // ========== WORK PAPERS ==========
     case 'getWorkPapers':
@@ -322,7 +238,7 @@ function routeAction(action, data, user) {
 
     // ========== SETTINGS ==========
     case 'getPermissions':
-      return { success: true, permissions: getPermissions(data.roleCode) };
+      return { success: true, permissions: getPermissionsCached(data.roleCode) };
 
     case 'updatePermissions':
       if (user.role_code !== ROLES.SUPER_ADMIN) {
@@ -392,9 +308,226 @@ function routeAction(action, data, user) {
     case 'getAnalyticsData':
       return getAnalyticsData(data.year, user);
 
+    // ========== CACHE MANAGEMENT ==========
+    case 'warmCache':
+      return warmAllCaches();
+
+    case 'clearCache':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return clearAllCaches();
+
     default:
       return { success: false, error: 'Unknown action: ' + action };
   }
+}
+
+/**
+ * Get dashboard data with proper error handling
+ */
+function getDashboardDataSafe(user) {
+  try {
+    if (!user) {
+      return { success: false, error: 'Authentication required', requireLogin: true };
+    }
+
+    const dashboardData = getDashboardData(user);
+
+    if (!dashboardData) {
+      console.error('getDashboardData: Dashboard service returned null/undefined');
+      return { 
+        success: false, 
+        error: 'Dashboard service returned null',
+        errorDetail: 'getDashboardData() returned null/undefined'
+      };
+    }
+
+    if (dashboardData.success === false) {
+      return dashboardData;
+    }
+
+    if (!dashboardData.summary) {
+      dashboardData.summary = { workPapers: {}, actionPlans: {} };
+    }
+    if (!dashboardData.charts) {
+      dashboardData.charts = {};
+    }
+    if (!dashboardData.alerts) {
+      dashboardData.alerts = [];
+    }
+    if (!dashboardData.recentActivity) {
+      dashboardData.recentActivity = [];
+    }
+
+    return {
+      success: true,
+      ...dashboardData
+    };
+
+  } catch (e) {
+    console.error('getDashboardData error:', e);
+    return {
+      success: false,
+      error: 'Failed to load dashboard: ' + e.message,
+      errorDetail: 'Exception in getDashboardData handler: ' + e.message,
+      summary: { workPapers: {}, actionPlans: {} },
+      charts: {},
+      alerts: [],
+      recentActivity: []
+    };
+  }
+}
+
+/**
+ * Get dropdown data with caching - OPTIMIZED
+ */
+function getDropdownDataCached() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'dropdown_data_all';
+  
+  // Try cache first
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (e) {
+      console.warn('Dropdown cache parse error:', e);
+    }
+  }
+  
+  // Fall back to database
+  const dropdowns = getDropdownData();
+  
+  // Cache for 30 minutes
+  try {
+    cache.put(cacheKey, JSON.stringify(dropdowns), 1800);
+  } catch (e) {
+    console.warn('Failed to cache dropdowns:', e);
+  }
+  
+  return dropdowns;
+}
+
+/**
+ * Get permissions with caching
+ */
+function getPermissionsCached(roleCode) {
+  if (!roleCode) return {};
+  
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'perm_' + roleCode;
+  
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (e) {}
+  }
+  
+  const permissions = getPermissions(roleCode);
+  
+  try {
+    cache.put(cacheKey, JSON.stringify(permissions), 1800);
+  } catch (e) {}
+  
+  return permissions;
+}
+
+/**
+ * Warm all caches - call after login or on app start
+ */
+function warmAllCaches() {
+  const startTime = new Date().getTime();
+  console.log('Starting cache warm...');
+  
+  const cache = CacheService.getScriptCache();
+  const results = { success: true, cached: [] };
+  
+  try {
+    // 1. Cache dropdowns
+    const dropdowns = getDropdownData();
+    cache.put('dropdown_data_all', JSON.stringify(dropdowns), 1800);
+    results.cached.push('dropdowns');
+    console.log('Cached dropdowns');
+    
+    // 2. Cache all role permissions
+    const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR'];
+    roles.forEach(role => {
+      try {
+        const perms = getPermissions(role);
+        cache.put('perm_' + role, JSON.stringify(perms), 1800);
+      } catch (e) {
+        console.warn('Failed to cache permissions for role:', role);
+      }
+    });
+    results.cached.push('permissions');
+    console.log('Cached permissions');
+    
+    // 3. Cache config values
+    const configKeys = ['SYSTEM_NAME', 'SESSION_TIMEOUT_HOURS', 'AUDIT_FILES_FOLDER_ID'];
+    configKeys.forEach(key => {
+      try {
+        const value = getConfigValue(key);
+        if (value) {
+          cache.put('config_' + key, value, 3600);
+        }
+      } catch (e) {}
+    });
+    results.cached.push('config');
+    console.log('Cached config');
+    
+    // 4. Cache role names
+    roles.forEach(role => {
+      try {
+        const name = getRoleName(role);
+        cache.put('role_name_' + role, name, 3600);
+      } catch (e) {}
+    });
+    results.cached.push('roleNames');
+    console.log('Cached role names');
+    
+  } catch (e) {
+    console.error('Cache warm error:', e);
+    results.error = e.message;
+  }
+  
+  results.duration = new Date().getTime() - startTime;
+  console.log('Cache warm completed in', results.duration, 'ms');
+  
+  return results;
+}
+
+/**
+ * Clear all caches
+ */
+function clearAllCaches() {
+  const cache = CacheService.getScriptCache();
+  
+  // Can't enumerate cache keys in Apps Script, so we clear known keys
+  const keysToRemove = [
+    'dropdown_data_all',
+    'config_SYSTEM_NAME',
+    'config_SESSION_TIMEOUT_HOURS',
+    'config_AUDIT_FILES_FOLDER_ID',
+    'role_names'
+  ];
+  
+  const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR'];
+  roles.forEach(role => {
+    keysToRemove.push('perm_' + role);
+    keysToRemove.push('role_name_' + role);
+  });
+  
+  keysToRemove.forEach(key => {
+    try {
+      cache.remove(key);
+    } catch (e) {}
+  });
+  
+  console.log('Cleared caches:', keysToRemove.length, 'keys');
+  
+  return { success: true, cleared: keysToRemove.length };
 }
 
 function uploadFileToDrive(fileName, mimeType, base64Data, folderId) {
@@ -404,15 +537,12 @@ function uploadFileToDrive(fileName, mimeType, base64Data, folderId) {
       return { success: false, error: 'Authentication required' };
     }
     
-    // Decode base64
     const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
     
-    // Get or create folder
     let folder;
     if (folderId) {
       folder = DriveApp.getFolderById(folderId);
     } else {
-      // Use default audit files folder
       const rootFolderId = getConfigValue('AUDIT_FILES_FOLDER_ID');
       if (rootFolderId) {
         folder = DriveApp.getFolderById(rootFolderId);
@@ -421,10 +551,7 @@ function uploadFileToDrive(fileName, mimeType, base64Data, folderId) {
       }
     }
     
-    // Create file
     const file = folder.createFile(blob);
-    
-    // Set sharing to anyone with link can view
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     
     return {
@@ -455,7 +582,6 @@ function createWorkPaperFolder(workPaperId, affiliateCode, year) {
     if (rootFolderId) {
       rootFolder = DriveApp.getFolderById(rootFolderId);
     } else {
-      // Create root folder if it doesn't exist
       const folders = DriveApp.getFoldersByName('Hass Audit Files');
       if (folders.hasNext()) {
         rootFolder = folders.next();
@@ -465,7 +591,6 @@ function createWorkPaperFolder(workPaperId, affiliateCode, year) {
       }
     }
     
-    // Create year folder
     let yearFolder;
     const yearFolders = rootFolder.getFoldersByName(String(year));
     if (yearFolders.hasNext()) {
@@ -474,7 +599,6 @@ function createWorkPaperFolder(workPaperId, affiliateCode, year) {
       yearFolder = rootFolder.createFolder(String(year));
     }
     
-    // Create affiliate folder
     let affiliateFolder;
     const affiliateFolders = yearFolder.getFoldersByName(affiliateCode);
     if (affiliateFolders.hasNext()) {
@@ -483,7 +607,6 @@ function createWorkPaperFolder(workPaperId, affiliateCode, year) {
       affiliateFolder = yearFolder.createFolder(affiliateCode);
     }
     
-    // Create work paper folder
     const wpFolder = affiliateFolder.createFolder(workPaperId);
     
     return {
@@ -532,99 +655,69 @@ function getScriptUrl() {
   return ScriptApp.getService().getUrl();
 }
 
-// Generic API call function for client-side (supports session-based authentication)
+/**
+ * Generic API call function for client-side - FIXED
+ * Now checks session token FIRST before falling back to Google session
+ */
 function apiCall(action, data) {
+  const startTime = new Date().getTime();
+  
   try {
     data = data || {};
 
-    // Debug logging - helps diagnose authentication issues
-    console.log('===========================');
-    console.log('=== API Call Debug START ===');
-    console.log('===========================');
-    console.log('Action:', action);
-    console.log('Session token provided:', !!data.sessionToken);
-    console.log('Session token length:', data.sessionToken ? data.sessionToken.length : 0);
+    console.log('=== API Call: ' + action + ' ===');
 
-    // Public actions that don't require authentication
     const publicActions = ['login', 'ping', 'testConnection'];
 
-    // Try to get user from Google session first (works in Apps Script editor)
-    let user = getCurrentUser();
-    console.log('STEP 1: getCurrentUser result:', user ? user.email : 'null');
+    let user = null;
 
-    // If no user from Google session, try session token validation
-    if (!user && data.sessionToken) {
-      console.log('STEP 2: No Google user - trying session token validation...');
+    // FIXED: Try session token FIRST, then fall back to Google session
+    if (data.sessionToken) {
       const sessionResult = validateSession(data.sessionToken);
-      console.log('STEP 3: validateSession result:', sessionResult.valid ? 'VALID' : 'INVALID');
-      if (!sessionResult.valid) {
-        console.error('Session validation error:', sessionResult.error);
-      }
 
       if (sessionResult.valid) {
-        console.log('STEP 4: Session valid - user from session:', sessionResult.user.email);
-        console.log('STEP 5: Attempting getUserById with ID:', sessionResult.user.user_id);
+        user = getUserByIdCached(sessionResult.user.user_id);
 
-        // IMPORTANT FIX: First try to get full user from database
-        user = getUserById(sessionResult.user.user_id);
-        console.log('STEP 6: getUserById result:', user ? 'FOUND (' + user.email + ')' : 'NULL');
-
-        // FALLBACK: If getUserById fails (e.g., index not built), use session user data
         if (!user) {
-          console.log('STEP 7: getUserById failed - trying getUserByEmail with:', sessionResult.user.email);
-          // Get full user data by email instead
-          user = getUserByEmail(sessionResult.user.email);
-          console.log('STEP 8: getUserByEmail result:', user ? 'FOUND (' + user.email + ')' : 'NULL');
-
-          // Last resort: use the user object from session validation
-          if (!user) {
-            console.warn('STEP 9: Both getUserById and getUserByEmail failed - using session user object');
-            user = sessionResult.user;
-            user._fromSession = true; // Flag that this is from session (partial data)
-            console.log('STEP 10: Using session user (partial data)');
-          }
+          user = getUserByEmailCached(sessionResult.user.email);
         }
+
+        if (!user) {
+          user = sessionResult.user;
+          user._fromSession = true;
+        }
+        
+        console.log('User from session token:', user.email, 'role:', user.role_code);
+      } else {
+        console.log('Session token invalid:', sessionResult.error);
+      }
+    }
+    
+    // Only fall back to Google session if no valid session token
+    if (!user) {
+      user = getCurrentUser();
+      if (user) {
+        console.log('User from Google session:', user.email, 'role:', user.role_code);
       }
     }
 
-    console.log('===========================');
-    console.log('FINAL USER RESULT:', user ? user.email : 'NULL');
-    console.log('User has _rowIndex:', user ? (!!user._rowIndex) : 'N/A');
-    console.log('===========================');
-
-    // Check if authentication is required
     if (!publicActions.includes(action) && !user) {
-      console.log('Authentication required - no valid user found');
       return { success: false, error: 'Authentication required', requireLogin: true };
     }
 
-    // Test connection action - simple ping to verify backend is working
     if (action === 'testConnection') {
       return { success: true, message: 'Backend is working!', timestamp: new Date().toISOString() };
     }
 
-    // Special handling for getInitData when user is available from session
+    // Special handling for getInitData - use optimized version
     if (action === 'getInitData' && user) {
-      console.log('Calling getInitDataWithUser...');
-      const initResult = getInitDataWithUser(user);
-      
-      // Ensure we never return null/undefined
-      if (initResult === null || initResult === undefined) {
-        console.error('apiCall: getInitDataWithUser returned null/undefined');
-        return { 
-          success: false, 
-          error: 'Failed to initialize application', 
-          errorDetail: 'getInitDataWithUser returned null/undefined' 
-        };
-      }
-      
-      console.log('apiCall completed successfully for action:', action);
+      const initResult = getInitDataOptimized(user);
+      console.log('getInitData completed in', new Date().getTime() - startTime, 'ms');
       return initResult;
     }
 
     const result = routeAction(action, data, user);
     
-    // Ensure we never return null/undefined
     if (result === null || result === undefined) {
       console.error('apiCall: routeAction returned null/undefined for action:', action);
       return { 
@@ -634,31 +727,33 @@ function apiCall(action, data) {
       };
     }
     
-    console.log('apiCall completed successfully for action:', action);
+    console.log('apiCall completed in', new Date().getTime() - startTime, 'ms');
     return result;
 
   } catch (error) {
     console.error('API call error:', error);
-    console.error('Stack:', error.stack);
     return { success: false, error: error.message, errorDetail: 'Exception in apiCall: ' + error.message };
   }
 }
 
 /**
- * Get init data using a provided user object (for session-based auth)
+ * Get init data - OPTIMIZED with batched operations and caching
  */
-function getInitDataWithUser(user) {
-  console.log('getInitDataWithUser called for:', user ? user.email : 'null');
+function getInitDataOptimized(user) {
+  const startTime = new Date().getTime();
+  console.log('getInitDataOptimized called for:', user ? user.email : 'null');
 
   if (!user) {
-    return { success: false, error: 'User not found' };
+    return { success: false, error: 'User not found', requireLogin: true };
   }
 
   if (!isActive(user.is_active)) {
     return { success: false, error: 'Account is inactive' };
   }
 
-  // Build response with try-catch for each component
+  const cache = CacheService.getScriptCache();
+  
+  // Build response
   const response = {
     success: true,
     user: {
@@ -679,63 +774,79 @@ function getInitDataWithUser(user) {
     permissions: {}
   };
 
-  // Get role name with error handling
+  // Get role name (try cache first)
   try {
-    response.user.role_name = getRoleName(user.role_code) || user.role_code;
+    let roleName = cache.get('role_name_' + user.role_code);
+    if (!roleName) {
+      roleName = getRoleName(user.role_code) || user.role_code;
+      cache.put('role_name_' + user.role_code, roleName, 3600);
+    }
+    response.user.role_name = roleName;
+    console.log('Role name for', user.role_code, ':', roleName);
   } catch (e) {
-    console.error('Error getting role name:', e);
     response.user.role_name = user.role_code;
+    console.error('Error getting role name:', e);
   }
 
-  // Get dropdowns with error handling
+  // Get dropdowns (try cache first)
   try {
-    response.dropdowns = getDropdownData();
-    console.log('Dropdowns loaded successfully');
+    response.dropdowns = getDropdownDataCached();
+    console.log('Dropdowns loaded in', new Date().getTime() - startTime, 'ms');
   } catch (e) {
     console.error('Error loading dropdowns:', e);
     response.dropdowns = { affiliates: [], auditAreas: [], subAreas: [], users: [], roles: [] };
   }
 
-  // Get config with error handling
+  // Get config (try cache first)
   try {
-    const systemName = getConfigValue('SYSTEM_NAME');
+    let systemName = cache.get('config_SYSTEM_NAME');
+    if (!systemName) {
+      systemName = getConfigValue('SYSTEM_NAME');
+      if (systemName) {
+        cache.put('config_SYSTEM_NAME', systemName, 3600);
+      }
+    }
     if (systemName) response.config.systemName = systemName;
   } catch (e) {
     console.error('Error loading config:', e);
   }
 
-  // Get permissions with error handling
+  // Get permissions (try cache first)
   try {
-    response.permissions = getUserPermissions(user.role_code);
-    console.log('Permissions loaded successfully');
+    response.permissions = getPermissionsCached(user.role_code);
+    console.log('Permissions loaded in', new Date().getTime() - startTime, 'ms');
   } catch (e) {
     console.error('Error loading permissions:', e);
     response.permissions = {};
   }
 
-  console.log('getInitDataWithUser completed successfully');
-  return response;
+  console.log('getInitDataOptimized completed in', new Date().getTime() - startTime, 'ms');
+  return sanitizeForClient(response);
 }
 
-// Run all scheduled maintenance tasks (called by time-based trigger)
+/**
+ * Legacy getInitDataWithUser - redirects to optimized version
+ */
+function getInitDataWithUser(user) {
+  return getInitDataOptimized(user);
+}
+
+// Run all scheduled maintenance tasks
 function runScheduledMaintenance() {
   console.log('=== Running Scheduled Maintenance ===');
   
   try {
-    // Update overdue statuses
-    console.log('Updating overdue statuses...');
     const overdueCount = updateOverdueStatuses();
-    console.log('Updated:', overdueCount);
+    console.log('Overdue statuses updated:', overdueCount);
     
-    // Clean up expired sessions
-    console.log('Cleaning expired sessions...');
     const sessionsCleaned = cleanupExpiredSessions();
-    console.log('Cleaned:', sessionsCleaned);
+    console.log('Sessions cleaned:', sessionsCleaned);
     
-    // Process email queue
-    console.log('Processing email queue...');
-    const emailResult = processEmailQueue()
+    const emailResult = processEmailQueue();
     console.log('Emails sent:', emailResult.sent);
+    
+    // Warm caches after maintenance
+    warmAllCaches();
     
     console.log('=== Maintenance Complete ===');
     
@@ -754,33 +865,34 @@ function runScheduledMaintenance() {
 
 /**
  * Setup all time-based triggers
- * Run this once to configure scheduled tasks
  */
 function setupAllTriggers() {
-  // Remove existing triggers
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(trigger => {
     ScriptApp.deleteTrigger(trigger);
   });
   
-  // Email queue processing - every 10 minutes
   ScriptApp.newTrigger('processEmailQueue')
     .timeBased()
     .everyMinutes(10)
     .create();
   
-  // Daily maintenance - 6 AM
   ScriptApp.newTrigger('dailyMaintenance')
     .timeBased()
     .atHour(6)
     .everyDays(1)
     .create();
   
-  // Weekly summary - Monday 8 AM
   ScriptApp.newTrigger('sendWeeklySummary')
     .timeBased()
     .onWeekDay(ScriptApp.WeekDay.MONDAY)
     .atHour(8)
+    .create();
+  
+  // Add cache warm trigger - runs every 6 hours to keep caches fresh
+  ScriptApp.newTrigger('warmAllCaches')
+    .timeBased()
+    .everyHours(6)
     .create();
   
   console.log('All triggers configured successfully');
@@ -804,8 +916,22 @@ function listTriggers() {
 }
 
 /**
- * DIAGNOSTIC FUNCTION - Run this from the Apps Script editor to diagnose issues
- * View > Executions to see the logs
+ * Sanitize object for safe transport to browser
+ */
+function sanitizeForClient(obj) {
+  return JSON.parse(JSON.stringify(obj, function (key, value) {
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (value === undefined) {
+      return null;
+    }
+    return value;
+  }));
+}
+
+/**
+ * DIAGNOSTIC FUNCTION
  */
 function diagnoseDashboardIssues() {
   console.log('========================================');
@@ -818,15 +944,25 @@ function diagnoseDashboardIssues() {
     indexes: {},
     users: {},
     sessions: {},
+    cache: {},
     errors: []
   };
 
-  // Test 1: Check if sheets exist
-  console.log('\n=== TEST 1: Checking Sheet Access ===');
+  // Test cache
+  console.log('\n=== TEST: Cache Status ===');
+  const cache = CacheService.getScriptCache();
+  const cacheKeys = ['dropdown_data_all', 'config_SYSTEM_NAME'];
+  cacheKeys.forEach(key => {
+    const value = cache.get(key);
+    results.cache[key] = value ? 'HIT' : 'MISS';
+    console.log(key + ':', value ? 'CACHED' : 'NOT CACHED');
+  });
+
+  // Test sheets
+  console.log('\n=== TEST: Sheet Access ===');
   const requiredSheets = [
     '00_Config', '01_Roles', '02_Permissions', '05_Users', '06_Affiliates',
-    '07_AuditAreas', '08_ProcessSubAreas', '09_WorkPapers', '13_ActionPlans',
-    '17_Index_WorkPapers', '18_Index_ActionPlans', '19_Index_Users', '20_Sessions'
+    '07_AuditAreas', '08_ProcessSubAreas', '09_WorkPapers', '13_ActionPlans'
   ];
 
   requiredSheets.forEach(name => {
@@ -839,196 +975,36 @@ function diagnoseDashboardIssues() {
     } catch (e) {
       results.sheets[name] = { exists: false, error: e.message };
       results.errors.push('Sheet ' + name + ': ' + e.message);
-      console.error(name + ': ERROR - ' + e.message);
     }
   });
 
-  // Test 2: Check indexes
-  console.log('\n=== TEST 2: Checking Index Maps ===');
-  try {
-    const userIndexMap = Index.getIndexMap('USER');
-    const userCount = Object.keys(userIndexMap).length;
-    results.indexes.USER = { count: userCount };
-    console.log('User index entries:', userCount);
-
-    const wpIndexMap = Index.getIndexMap('WORK_PAPER');
-    const wpCount = Object.keys(wpIndexMap).length;
-    results.indexes.WORK_PAPER = { count: wpCount };
-    console.log('Work paper index entries:', wpCount);
-
-    const apIndexMap = Index.getIndexMap('ACTION_PLAN');
-    const apCount = Object.keys(apIndexMap).length;
-    results.indexes.ACTION_PLAN = { count: apCount };
-    console.log('Action plan index entries:', apCount);
-  } catch (e) {
-    results.errors.push('Index check error: ' + e.message);
-    console.error('Index check error:', e);
-  }
-
-  // Test 3: Check active sessions
-  console.log('\n=== TEST 3: Checking Sessions ===');
-  try {
-    const sessionsSheet = getSheet('20_Sessions');
-    if (sessionsSheet) {
-      const sessionCount = Math.max(0, sessionsSheet.getLastRow() - 1);
-      results.sessions.total = sessionCount;
-      console.log('Total sessions in sheet:', sessionCount);
-
-      // Count valid sessions
-      if (sessionCount > 0) {
-        const data = sessionsSheet.getDataRange().getValues();
-        const headers = data[0];
-        const validIdx = headers.indexOf('is_valid');
-        const expiresIdx = headers.indexOf('expires_at');
-        let validCount = 0;
-        const now = new Date();
-
-        for (let i = 1; i < data.length; i++) {
-          const isValid = data[i][validIdx];
-          const expiresAt = new Date(data[i][expiresIdx]);
-          if (isValid && expiresAt > now) {
-            validCount++;
-          }
-        }
-        results.sessions.valid = validCount;
-        console.log('Valid (non-expired) sessions:', validCount);
-      }
+  // Test performance
+  console.log('\n=== TEST: Performance ===');
+  
+  const perfTests = [
+    { name: 'getDropdownDataCached', fn: () => getDropdownDataCached() },
+    { name: 'warmAllCaches', fn: () => warmAllCaches() }
+  ];
+  
+  perfTests.forEach(test => {
+    const start = new Date().getTime();
+    try {
+      test.fn();
+      const duration = new Date().getTime() - start;
+      results[test.name] = { duration: duration + 'ms' };
+      console.log(test.name + ':', duration, 'ms');
+    } catch (e) {
+      results[test.name] = { error: e.message };
+      console.error(test.name + ' failed:', e);
     }
-  } catch (e) {
-    results.errors.push('Session check error: ' + e.message);
-    console.error('Session check error:', e);
-  }
+  });
 
-  // Test 4: Check users
-  console.log('\n=== TEST 4: Checking Users ===');
-  try {
-    const usersSheet = getSheet('05_Users');
-    if (usersSheet) {
-      const userCount = Math.max(0, usersSheet.getLastRow() - 1);
-      results.users.total = userCount;
-      console.log('Total users in sheet:', userCount);
-
-      // Count active users
-      if (userCount > 0) {
-        const data = usersSheet.getDataRange().getValues();
-        const headers = data[0];
-        const activeIdx = headers.indexOf('is_active');
-        let activeCount = 0;
-
-        for (let i = 1; i < data.length; i++) {
-          if (isActive(data[i][activeIdx])) {
-            activeCount++;
-          }
-        }
-        results.users.active = activeCount;
-        console.log('Active users:', activeCount);
-      }
-    }
-  } catch (e) {
-    results.errors.push('User check error: ' + e.message);
-    console.error('User check error:', e);
-  }
-
-  // Test 5: Test Google Session
-  console.log('\n=== TEST 5: Testing Google Session ===');
-  try {
-    const email = Session.getActiveUser().getEmail();
-    results.googleSession = { email: email || '(empty)' };
-    console.log('Session.getActiveUser().getEmail():', email || '(empty - this is normal for web app)');
-
-    if (email) {
-      const user = getUserByEmail(email);
-      console.log('User found by email:', user ? user.full_name : 'NOT FOUND');
-      results.googleSession.userFound = !!user;
-    }
-  } catch (e) {
-    results.errors.push('Google session check error: ' + e.message);
-    console.error('Google session check error:', e);
-  }
-
-  // Test 6: Test getCurrentUser
-  console.log('\n=== TEST 6: Testing getCurrentUser() ===');
-  try {
-    const user = getCurrentUser();
-    results.getCurrentUser = user ? { email: user.email, role: user.role_code } : null;
-    console.log('getCurrentUser() result:', user ? user.email : 'null');
-  } catch (e) {
-    results.errors.push('getCurrentUser error: ' + e.message);
-    console.error('getCurrentUser error:', e);
-  }
-
-  // Test 7: Attempt to load dashboard data with first active user
-  console.log('\n=== TEST 7: Testing Dashboard Data Load ===');
-  try {
-    const usersSheet = getSheet('05_Users');
-    if (usersSheet && usersSheet.getLastRow() > 1) {
-      const data = usersSheet.getDataRange().getValues();
-      const headers = data[0];
-      const activeIdx = headers.indexOf('is_active');
-
-      // Find first active user
-      for (let i = 1; i < data.length; i++) {
-        if (isActive(data[i][activeIdx])) {
-          const testUser = rowToObject(headers, data[i]);
-          testUser._rowIndex = i + 1;
-          console.log('Testing with user:', testUser.email);
-
-          const dashboardData = getDashboardData(testUser);
-          results.dashboardTest = {
-            success: !!dashboardData,
-            hasUser: !!dashboardData?.user,
-            hasSummary: !!dashboardData?.summary,
-            hasCharts: !!dashboardData?.charts
-          };
-          console.log('Dashboard data loaded:', !!dashboardData);
-          console.log('Has user:', !!dashboardData?.user);
-          console.log('Has summary:', !!dashboardData?.summary);
-          console.log('Has charts:', !!dashboardData?.charts);
-          break;
-        }
-      }
-    }
-  } catch (e) {
-    results.errors.push('Dashboard test error: ' + e.message);
-    console.error('Dashboard test error:', e);
-  }
-
-  // Summary
-  console.log('\n========================================');
-  console.log('=== DIAGNOSTIC SUMMARY ===');
-  console.log('========================================');
-
-  if (results.errors.length > 0) {
-    console.log('ERRORS FOUND:');
-    results.errors.forEach((err, i) => console.log((i + 1) + '. ' + err));
-  } else {
-    console.log('No errors detected!');
-  }
-
-  // Recommendations
-  console.log('\n=== RECOMMENDATIONS ===');
-
-  if (results.indexes.USER?.count === 0) {
-    console.log('- Run rebuildAllIndexes() to rebuild indexes');
-  }
-
-  if (results.sessions.valid === 0) {
-    console.log('- No valid sessions found. Users need to log in again.');
-  }
-
-  if (results.googleSession?.email === '(empty)') {
-    console.log('- Session.getActiveUser().getEmail() returns empty (normal for web app deployment)');
-    console.log('- Authentication relies on session tokens - ensure login is working');
-  }
-
-  console.log('\n=== DIAGNOSTIC TEST COMPLETE ===');
-
+  console.log('\n=== DIAGNOSTIC COMPLETE ===');
   return results;
 }
 
 /**
  * QUICK FIX: Rebuild all indexes
- * Run this if users cannot authenticate
  */
 function rebuildAllIndexesQuickFix() {
   console.log('Rebuilding all indexes...');
@@ -1054,6 +1030,9 @@ function rebuildAllIndexesQuickFix() {
     console.error('Failed to rebuild ACTION_PLAN index:', e);
   }
 
+  // Warm caches after rebuild
+  warmAllCaches();
+
   console.log('Index rebuild complete!');
-  return { success: true, message: 'All indexes rebuilt' };
+  return { success: true, message: 'All indexes rebuilt and caches warmed' };
 }
