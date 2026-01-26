@@ -688,37 +688,38 @@ function getRiskColor(risk) {
   return colors[risk] || '#6c757d';
 }
 
-// Get initialization data for the frontend (called once on page load)
-function getInitData() {
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-  
-  if (!user) {
-    return { success: false, error: 'User not found' };
+function getInitData(sessionToken) {
+  // First try to get user from session token
+  if (sessionToken) {
+    const sessionResult = validateSession(sessionToken);
+    if (sessionResult.valid) {
+      const user = getUserByEmail(sessionResult.user.email);
+      
+      if (user && isActive(user.is_active)) {
+        return sanitizeForClient({
+          success: true,
+          user: {
+            user_id: user.user_id,
+            email: user.email,
+            full_name: user.full_name,
+            role_code: user.role_code,
+            role_name: getRoleName(user.role_code),
+            affiliate_code: user.affiliate_code,
+            department: user.department
+          },
+          dropdowns: getDropdownData(),
+          config: {
+            systemName: getConfigValue('SYSTEM_NAME') || 'Hass Petroleum Internal Audit System',
+            currentYear: new Date().getFullYear()
+          },
+          permissions: getUserPermissions(user.role_code)
+        });
+      }
+    }
   }
   
-  if (!isActive(user.is_active)) {
-    return { success: false, error: 'Account is inactive' };
-  }
-  
-  return sanitizeForClient({
-    success: true,
-    user: {
-      user_id: user.user_id,
-      email: user.email,
-      full_name: user.full_name,
-      role_code: user.role_code,
-      role_name: getRoleName(user.role_code),
-      affiliate_code: user.affiliate_code,
-      department: user.department
-    },
-    dropdowns: getDropdownData(),
-    config: {
-      systemName: getConfigValue('SYSTEM_NAME') || 'Hass Petroleum Internal Audit System',
-      currentYear: new Date().getFullYear()
-    },
-    permissions: getUserPermissions(user.role_code)
-  });
+  // No valid session - require login
+  return { success: false, requireLogin: true };
 }
 
 /**
