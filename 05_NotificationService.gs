@@ -25,7 +25,7 @@ function queueEmail(data) {
     const row = objectToRow('NOTIFICATION_QUEUE', notification);
     sheet.appendRow(row);
     
-    return { success: true, notificationId: notificationId };
+    return sanitizeForClient({ success: true, notificationId: notificationId });
   } catch (e) {
     console.error('Failed to queue email:', e);
     return { success: false, error: e.message };
@@ -120,7 +120,7 @@ function getEmailTemplates() {
     }
   }
   
-  return templates;
+  return sanitizeForClient(templates);
 }
 
 // Process pending emails in queue (called by time-based trigger)
@@ -278,7 +278,7 @@ function retryFailedEmails() {
 
 // Send daily overdue reminders (called by daily trigger)
 function sendOverdueReminders() {
-  const actionPlans = getActionPlans({ overdue_only: true }, null);
+  const actionPlans = getActionPlansRaw({ overdue_only: true }, null);
   
   if (actionPlans.length === 0) {
     console.log('No overdue action plans');
@@ -627,7 +627,7 @@ function getNotificationQueueStatus() {
     else if (status === STATUS.NOTIFICATION.FAILED) counts.failed++;
   }
   
-  return counts;
+  return sanitizeForClient(counts);
 }
 
 /**
@@ -651,6 +651,25 @@ function getUserNotifications(userId, limit) {
     }
   }
   
-  return notifications;
+  return sanitizeForClient(notifications);
 }
 
+/**
+ * Sanitize object for safe transport to browser via google.script.run
+ * Converts Date objects to ISO strings and removes undefined values
+ */
+function sanitizeForClient(obj) {
+  return JSON.parse(JSON.stringify(obj, function (key, value) {
+    // Convert Date objects to ISO strings (Dates break postMessage)
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    
+    // Replace undefined with null (undefined breaks transport)
+    if (value === undefined) {
+      return null;
+    }
+    
+    return value;
+  }));
+}
