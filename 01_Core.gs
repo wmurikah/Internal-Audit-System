@@ -1,7 +1,7 @@
 // 01_Core.gs - Core Services Layer (Database, Cache, Index, Security)
 
 const CONFIG = {
-  SPREADSHEET_ID: '1pInjjLXgJu4d0zIb3-RzkI3SwcX7q23_4g1K44M-pO4',
+ SPREADSHEET_ID: '1pInjjLXgJu4d0zIb3-RzkI3SwcX7q23_4g1K44M-pO4',
   
   // Cache TTLs (seconds)
   CACHE_TTL: {
