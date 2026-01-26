@@ -20,7 +20,7 @@ function createActionPlan(data, user) {
   const now = new Date();
   
   // Get next action number for this work paper
-  const existingPlans = getActionPlansByWorkPaper(data.work_paper_id);
+  const existingPlans = getActionPlansByWorkPaperRaw(data.work_paper_id);
   const nextNum = existingPlans.length > 0 ? Math.max(...existingPlans.map(p => p.action_number || 0)) + 1 : 1;
   
   // Calculate initial status based on due date
@@ -77,7 +77,7 @@ function createActionPlan(data, user) {
   // Log audit event
   logAuditEvent('CREATE', 'ACTION_PLAN', actionPlanId, null, actionPlan, user.user_id, user.email);
   
-  return { success: true, actionPlanId: actionPlanId, actionPlan: actionPlan };
+  return sanitizeForClient({ success: true, actionPlanId: actionPlanId, actionPlan: actionPlan });
 }
 
 /**
@@ -92,7 +92,7 @@ function createActionPlansBatch(workPaperId, plansData, user) {
   const results = [];
   const ids = generateIds('ACTION_PLAN', plansData.length);
   
-  const existingPlans = getActionPlansByWorkPaper(workPaperId);
+  const existingPlans = getActionPlansByWorkPaperRaw(workPaperId);
   let nextNum = existingPlans.length > 0 ? Math.max(...existingPlans.map(p => p.action_number || 0)) + 1 : 1;
   
   const now = new Date();
@@ -154,7 +154,7 @@ function createActionPlansBatch(workPaperId, plansData, user) {
   // Log audit event
   logAuditEvent('BATCH_CREATE', 'ACTION_PLAN', workPaperId, null, { count: results.length }, user.user_id, user.email);
   
-  return { success: true, count: results.length, actionPlans: results };
+  return sanitizeForClient({ success: true, count: results.length, actionPlans: results });
 }
 
 /**
@@ -194,6 +194,27 @@ function getActionPlan(actionPlanId, includeRelated) {
     }
   }
   
+  return sanitizeForClient(actionPlan);
+}
+
+/**
+ * Get action plan by ID without sanitization (for internal use)
+ */
+function getActionPlanRaw(actionPlanId) {
+  if (!actionPlanId) return null;
+  
+  let actionPlan = null;
+  if (typeof DB !== 'undefined' && DB.getById) {
+    actionPlan = DB.getById('ACTION_PLAN', actionPlanId);
+  } else {
+    actionPlan = getActionPlanById(actionPlanId);
+  }
+  
+  if (!actionPlan) return null;
+  
+  // Calculate days overdue
+  actionPlan.days_overdue = calculateDaysOverdue(actionPlan.due_date);
+  
   return actionPlan;
 }
 
@@ -203,7 +224,7 @@ function getActionPlan(actionPlanId, includeRelated) {
 function updateActionPlan(actionPlanId, data, user) {
   if (!user) throw new Error('User required');
   
-  const existing = getActionPlan(actionPlanId, false);
+  const existing = getActionPlanRaw(actionPlanId);
   if (!existing) throw new Error('Action plan not found: ' + actionPlanId);
   
   if (!canUserPerform(user, 'update', 'ACTION_PLAN', existing)) {
@@ -252,7 +273,7 @@ function updateActionPlan(actionPlanId, data, user) {
   // Log audit event
   logAuditEvent('UPDATE', 'ACTION_PLAN', actionPlanId, existing, updated, user.user_id, user.email);
   
-  return { success: true, actionPlan: updated };
+  return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
 /**
@@ -261,7 +282,7 @@ function updateActionPlan(actionPlanId, data, user) {
 function deleteActionPlan(actionPlanId, user) {
   if (!user) throw new Error('User required');
   
-  const existing = getActionPlan(actionPlanId, false);
+  const existing = getActionPlanRaw(actionPlanId);
   if (!existing) throw new Error('Action plan not found: ' + actionPlanId);
   
   if (!canUserPerform(user, 'delete', 'ACTION_PLAN', existing)) {
@@ -402,14 +423,114 @@ function getActionPlans(filters, user) {
     results = results.slice(offset, offset + filters.limit);
   }
   
+  return sanitizeForClient(results);
+}
+
+/**
+ * Get action plans without sanitization (for internal use)
+ */
+function getActionPlansRaw(filters, user) {
+  filters = filters || {};
+
+  const sheet = getSheet(SHEETS.ACTION_PLANS);
+  if (!sheet) {
+    console.error('getActionPlansRaw: Action Plans sheet not found:', SHEETS.ACTION_PLANS);
+    return [];
+  }
+
+  const data = sheet.getDataRange().getValues();
+  if (!data || data.length < 2) {
+    console.log('getActionPlansRaw: No data in Action Plans sheet');
+    return [];
+  }
+
+  const headers = data[0];
+  
+  const colMap = {};
+  headers.forEach((h, i) => colMap[h] = i);
+  
+  let results = [];
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    
+    if (!row[colMap['action_plan_id']]) continue;
+    
+    let match = true;
+    
+    if (filters.work_paper_id && row[colMap['work_paper_id']] !== filters.work_paper_id) match = false;
+    if (filters.status && row[colMap['status']] !== filters.status) match = false;
+    if (filters.owner_id) {
+      const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
+      if (!ownerIds.includes(filters.owner_id)) match = false;
+    }
+    
+    if (filters.overdue_only) {
+      const dueDate = row[colMap['due_date']];
+      const status = row[colMap['status']];
+      const implementedStatuses = [STATUS.ACTION_PLAN.IMPLEMENTED, STATUS.ACTION_PLAN.VERIFIED];
+      
+      if (implementedStatuses.includes(status)) {
+        match = false;
+      } else if (!isPastDue(dueDate)) {
+        match = false;
+      }
+    }
+    
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      const desc = String(row[colMap['action_description']] || '').toLowerCase();
+      const notes = String(row[colMap['implementation_notes']] || '').toLowerCase();
+      if (!desc.includes(searchLower) && !notes.includes(searchLower)) {
+        match = false;
+      }
+    }
+    
+    if (user) {
+      const roleCode = user.role_code;
+      
+      if (roleCode === ROLES.AUDITEE) {
+        const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
+        if (!ownerIds.includes(user.user_id)) {
+          match = false;
+        }
+      }
+    }
+    
+    if (match) {
+      const ap = rowToObject(headers, row);
+      ap._rowIndex = i + 1;
+      ap.days_overdue = calculateDaysOverdue(ap.due_date);
+      results.push(ap);
+    }
+  }
+  
+  results.sort((a, b) => {
+    const dateA = a.due_date ? new Date(a.due_date) : new Date('9999-12-31');
+    const dateB = b.due_date ? new Date(b.due_date) : new Date('9999-12-31');
+    return dateA - dateB;
+  });
+  
+  if (filters.limit) {
+    const offset = filters.offset || 0;
+    results = results.slice(offset, offset + filters.limit);
+  }
+  
   return results;
+}
+
+/**
+ * Get action plans by work paper ID without sanitization (for internal use)
+ */
+function getActionPlansByWorkPaperRaw(workPaperId) {
+  return getActionPlansRaw({ work_paper_id: workPaperId }, null);
 }
 
 /**
  * Get action plan counts
  */
 function getActionPlanCounts(filters, user) {
-  const plans = getActionPlans(filters, user);
+  const plans = getActionPlansRaw(filters, user);
 
   if (!plans || !Array.isArray(plans)) {
     console.error('getActionPlanCounts: Invalid plans returned');
@@ -476,7 +597,7 @@ function isImplementedOrVerified(status) {
 function markAsImplemented(actionPlanId, implementationNotes, user) {
   if (!user) throw new Error('User required');
   
-  const actionPlan = getActionPlan(actionPlanId, false);
+  const actionPlan = getActionPlanRaw(actionPlanId);
   if (!actionPlan) throw new Error('Action plan not found');
   
   // Verify user is an owner or has permission
@@ -518,7 +639,7 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   // Log audit event
   logAuditEvent('IMPLEMENT', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
   
-  return { success: true, actionPlan: updated };
+  return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
 /**
@@ -533,7 +654,7 @@ function verifyImplementation(actionPlanId, action, comments, user) {
     throw new Error('Permission denied: Only auditors can verify implementation');
   }
   
-  const actionPlan = getActionPlan(actionPlanId, false);
+  const actionPlan = getActionPlanRaw(actionPlanId);
   if (!actionPlan) throw new Error('Action plan not found');
   
   if (actionPlan.status !== STATUS.ACTION_PLAN.IMPLEMENTED) {
@@ -585,7 +706,7 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   // Log audit event
   logAuditEvent('VERIFY', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
   
-  return { success: true, actionPlan: updated };
+  return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
 /**
@@ -599,7 +720,7 @@ function hoaReview(actionPlanId, action, comments, user) {
     throw new Error('Permission denied: Only Head of Audit can perform final review');
   }
   
-  const actionPlan = getActionPlan(actionPlanId, false);
+  const actionPlan = getActionPlanRaw(actionPlanId);
   if (!actionPlan) throw new Error('Action plan not found');
   
   const now = new Date();
@@ -631,7 +752,7 @@ function hoaReview(actionPlanId, action, comments, user) {
   // Log audit event
   logAuditEvent('HOA_REVIEW', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
   
-  return { success: true, actionPlan: updated };
+  return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
 /**
@@ -690,7 +811,7 @@ function updateOverdueStatuses() {
 function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   if (!user) throw new Error('User required');
   
-  const actionPlan = getActionPlan(actionPlanId, false);
+  const actionPlan = getActionPlanRaw(actionPlanId);
   if (!actionPlan) throw new Error('Action plan not found');
   
   // Verify user can add evidence
@@ -728,7 +849,7 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   
   logAuditEvent('ADD_EVIDENCE', 'ACTION_PLAN', actionPlanId, null, evidence, user.user_id, user.email);
   
-  return { success: true, evidenceId: evidenceId, evidence: evidence };
+  return sanitizeForClient({ success: true, evidenceId: evidenceId, evidence: evidence });
 }
 
 /**
@@ -906,4 +1027,24 @@ function deleteRelatedRows(sheetName, foreignKeyColumn, foreignKeyValue) {
       sheet.deleteRow(i + 1);
     }
   }
+}
+
+/**
+ * Sanitize object for safe transport to browser via google.script.run
+ * Converts Date objects to ISO strings and removes undefined values
+ */
+function sanitizeForClient(obj) {
+  return JSON.parse(JSON.stringify(obj, function (key, value) {
+    // Convert Date objects to ISO strings (Dates break postMessage)
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    
+    // Replace undefined with null (undefined breaks transport)
+    if (value === undefined) {
+      return null;
+    }
+    
+    return value;
+  }));
 }
