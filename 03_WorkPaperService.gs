@@ -66,7 +66,7 @@ function createWorkPaper(data, user) {
   // Log audit event
   logAuditEvent('CREATE', 'WORK_PAPER', workPaperId, null, workPaper, user.user_id, user.email);
   
-  return { success: true, workPaperId: workPaperId, workPaper: workPaper };
+  return sanitizeForClient({ success: true, workPaperId: workPaperId, workPaper: workPaper });
 }
 
 /**
@@ -92,7 +92,7 @@ function getWorkPaper(workPaperId, includeRelated) {
     workPaper.actionPlans = getActionPlansByWorkPaper(workPaperId);
   }
   
-  return workPaper;
+  return sanitizeForClient(workPaper);
 }
 
 /**
@@ -101,7 +101,7 @@ function getWorkPaper(workPaperId, includeRelated) {
 function updateWorkPaper(workPaperId, data, user) {
   if (!user) throw new Error('User required');
   
-  const existing = getWorkPaper(workPaperId, false);
+  const existing = getWorkPaperRaw(workPaperId);
   if (!existing) throw new Error('Work paper not found: ' + workPaperId);
   
   if (!canUserPerform(user, 'update', 'WORK_PAPER', existing)) {
@@ -159,7 +159,7 @@ function updateWorkPaper(workPaperId, data, user) {
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
   
-  return { success: true, workPaper: updated };
+  return sanitizeForClient({ success: true, workPaper: updated });
 }
 
 /**
@@ -168,7 +168,7 @@ function updateWorkPaper(workPaperId, data, user) {
 function deleteWorkPaper(workPaperId, user) {
   if (!user) throw new Error('User required');
   
-  const existing = getWorkPaper(workPaperId, false);
+  const existing = getWorkPaperRaw(workPaperId);
   if (!existing) throw new Error('Work paper not found: ' + workPaperId);
   
   if (!canUserPerform(user, 'delete', 'WORK_PAPER', existing)) {
@@ -198,6 +198,22 @@ function deleteWorkPaper(workPaperId, user) {
   logAuditEvent('DELETE', 'WORK_PAPER', workPaperId, existing, null, user.user_id, user.email);
   
   return { success: true };
+}
+
+/**
+ * Get work paper by ID without sanitization (for internal use)
+ */
+function getWorkPaperRaw(workPaperId) {
+  if (!workPaperId) return null;
+  
+  let workPaper = null;
+  if (typeof DB !== 'undefined' && DB.getById) {
+    workPaper = DB.getById('WORK_PAPER', workPaperId);
+  } else {
+    workPaper = getWorkPaperById(workPaperId);
+  }
+  
+  return workPaper;
 }
 
 function getWorkPapers(filters, user) {
@@ -297,14 +313,14 @@ function getWorkPapers(filters, user) {
     results = results.slice(offset, offset + filters.limit);
   }
   
-  return results;
+  return sanitizeForClient(results);
 }
 
 /**
  * Get work paper counts by status
  */
 function getWorkPaperCounts(filters, user) {
-  const workPapers = getWorkPapers(filters, user);
+  const workPapers = getWorkPapersRaw(filters, user);
 
   if (!workPapers || !Array.isArray(workPapers)) {
     console.error('getWorkPaperCounts: Invalid workPapers returned');
@@ -340,10 +356,102 @@ function getWorkPaperCounts(filters, user) {
   return counts;
 }
 
+/**
+ * Get work papers without sanitization (for internal use)
+ */
+function getWorkPapersRaw(filters, user) {
+  filters = filters || {};
+
+  const sheet = getSheet(SHEETS.WORK_PAPERS);
+  if (!sheet) {
+    console.error('getWorkPapersRaw: Work Papers sheet not found:', SHEETS.WORK_PAPERS);
+    return [];
+  }
+
+  const data = sheet.getDataRange().getValues();
+  if (!data || data.length < 2) {
+    console.log('getWorkPapersRaw: No data in Work Papers sheet');
+    return [];
+  }
+
+  const headers = data[0];
+  
+  const colMap = {};
+  headers.forEach((h, i) => colMap[h] = i);
+  
+  let results = [];
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    
+    if (!row[colMap['work_paper_id']]) continue;
+    
+    let match = true;
+    
+    if (filters.year && row[colMap['year']] != filters.year) match = false;
+    if (filters.affiliate_code && row[colMap['affiliate_code']] !== filters.affiliate_code) match = false;
+    if (filters.audit_area_id && row[colMap['audit_area_id']] !== filters.audit_area_id) match = false;
+    if (filters.status && row[colMap['status']] !== filters.status) match = false;
+    if (filters.risk_rating && row[colMap['risk_rating']] !== filters.risk_rating) match = false;
+    if (filters.prepared_by_id && row[colMap['prepared_by_id']] !== filters.prepared_by_id) match = false;
+    
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      const title = String(row[colMap['observation_title']] || '').toLowerCase();
+      const desc = String(row[colMap['observation_description']] || '').toLowerCase();
+      if (!title.includes(searchLower) && !desc.includes(searchLower)) {
+        match = false;
+      }
+    }
+    
+    if (user) {
+      const roleCode = user.role_code;
+      
+      if (roleCode === ROLES.AUDITEE) {
+        if (row[colMap['status']] !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+          match = false;
+        }
+        const responsibleIds = String(row[colMap['responsible_ids']] || '').split(',').map(s => s.trim());
+        if (!responsibleIds.includes(user.user_id)) {
+          match = false;
+        }
+      }
+      
+      if (roleCode === ROLES.JUNIOR_STAFF) {
+        if (row[colMap['prepared_by_id']] !== user.user_id) {
+          match = false;
+        }
+      }
+      
+      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.HEAD_OF_AUDIT) {
+        const userAffiliates = String(user.affiliate_code).split(',').map(s => s.trim());
+        if (!userAffiliates.includes(row[colMap['affiliate_code']])) {
+          match = false;
+        }
+      }
+    }
+    
+    if (match) {
+      const wp = rowToObject(headers, row);
+      wp._rowIndex = i + 1;
+      results.push(wp);
+    }
+  }
+  
+  results.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  
+  if (filters.limit) {
+    const offset = filters.offset || 0;
+    results = results.slice(offset, offset + filters.limit);
+  }
+  
+  return results;
+}
+
 function submitWorkPaper(workPaperId, user) {
   if (!user) throw new Error('User required');
   
-  const workPaper = getWorkPaper(workPaperId, false);
+  const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
   
   // Validate status
@@ -391,7 +499,7 @@ function submitWorkPaper(workPaperId, user) {
   // Log audit event
   logAuditEvent('SUBMIT', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
   
-  return { success: true, workPaper: updated };
+  return sanitizeForClient({ success: true, workPaper: updated });
 }
 
 /**
@@ -406,7 +514,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
     throw new Error('Permission denied: Only reviewers can review work papers');
   }
   
-  const workPaper = getWorkPaper(workPaperId, false);
+  const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
   
   // Validate status
@@ -469,7 +577,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   // Log audit event
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
   
-  return { success: true, workPaper: updated };
+  return sanitizeForClient({ success: true, workPaper: updated });
 }
 
 /**
@@ -478,7 +586,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
 function sendToAuditee(workPaperId, user) {
   if (!user) throw new Error('User required');
   
-  const workPaper = getWorkPaper(workPaperId, false);
+  const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
   
   // Must be approved
@@ -518,13 +626,13 @@ function sendToAuditee(workPaperId, user) {
   // Log audit event
   logAuditEvent('SEND_TO_AUDITEE', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
   
-  return { success: true, workPaper: updated };
+  return sanitizeForClient({ success: true, workPaper: updated });
 }
 
 function addWorkPaperRequirement(workPaperId, requirementData, user) {
   if (!user) throw new Error('User required');
   
-  const workPaper = getWorkPaper(workPaperId, false);
+  const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
   
   const requirementId = generateId('REQUIREMENT');
@@ -552,7 +660,7 @@ function addWorkPaperRequirement(workPaperId, requirementData, user) {
   
   logAuditEvent('ADD_REQUIREMENT', 'WORK_PAPER', workPaperId, null, requirement, user.user_id, user.email);
   
-  return { success: true, requirementId: requirementId, requirement: requirement };
+  return sanitizeForClient({ success: true, requirementId: requirementId, requirement: requirement });
 }
 
 /**
@@ -581,7 +689,7 @@ function updateWorkPaperRequirement(requirementId, data, user) {
       
       logAuditEvent('UPDATE_REQUIREMENT', 'WORK_PAPER', existing.work_paper_id, existing, updated, user.user_id, user.email);
       
-      return { success: true, requirement: updated };
+      return sanitizeForClient({ success: true, requirement: updated });
     }
   }
   
@@ -616,7 +724,7 @@ function deleteWorkPaperRequirement(requirementId, user) {
 function addWorkPaperFile(workPaperId, fileData, user) {
   if (!user) throw new Error('User required');
   
-  const workPaper = getWorkPaper(workPaperId, false);
+  const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
   
   const fileId = generateId('FILE');
@@ -642,7 +750,7 @@ function addWorkPaperFile(workPaperId, fileData, user) {
   
   logAuditEvent('ADD_FILE', 'WORK_PAPER', workPaperId, null, file, user.user_id, user.email);
   
-  return { success: true, fileId: fileId, file: file };
+  return sanitizeForClient({ success: true, fileId: fileId, file: file });
 }
 
 /**
@@ -908,4 +1016,24 @@ function sanitizeInput(value) {
   sanitized = sanitized.replace(/^=/, "'=");
   
   return sanitized.trim();
+}
+
+/**
+ * Sanitize object for safe transport to browser via google.script.run
+ * Converts Date objects to ISO strings and removes undefined values
+ */
+function sanitizeForClient(obj) {
+  return JSON.parse(JSON.stringify(obj, function (key, value) {
+    // Convert Date objects to ISO strings (Dates break postMessage)
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    
+    // Replace undefined with null (undefined breaks transport)
+    if (value === undefined) {
+      return null;
+    }
+    
+    return value;
+  }));
 }
