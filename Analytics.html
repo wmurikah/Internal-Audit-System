@@ -1,8 +1,8 @@
 <!-- Analytics & Insights Dashboard -->
 <div class="analytics-page">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-graph-up me-2"></i>Analytics & Insights</h4>
-    <div>
+    <h4 class="page-title"><i class="bi bi-graph-up me-2"></i>Analytics & Insights</h4>
+    <div class="page-actions">
       <select class="form-select form-select-sm d-inline-block w-auto me-2" id="analyticsYear" onchange="loadAnalytics()">
       </select>
       <button class="btn btn-outline-primary btn-sm me-2" onclick="refreshAnalytics()">
@@ -60,7 +60,7 @@
               <i class="bi bi-check-circle"></i>
             </div>
           </div>
-          <div class="progress mt-2" style="height: 6px;">
+          <div class="progress kpi-progress mt-2">
             <div class="progress-bar bg-info" id="kpiImplRateBar" style="width: 0%"></div>
           </div>
         </div>
@@ -72,13 +72,13 @@
           <div class="d-flex justify-content-between align-items-start">
             <div>
               <div class="kpi-label">Overdue Items</div>
-              <div class="kpi-value text-danger" id="kpiOverdue">-</div>
+              <div class="kpi-value kpi-value-danger" id="kpiOverdue">-</div>
             </div>
             <div class="kpi-icon bg-danger-subtle text-danger">
               <i class="bi bi-exclamation-triangle"></i>
             </div>
           </div>
-          <div class="kpi-trend text-danger mt-2" id="kpiOverdueTrend"></div>
+          <div class="kpi-trend kpi-trend-danger mt-2" id="kpiOverdueTrend"></div>
         </div>
       </div>
     </div>
@@ -88,24 +88,28 @@
   <div class="row g-4 mb-4">
     <!-- Findings by Status -->
     <div class="col-md-6">
-      <div class="card h-100">
+      <div class="card chart-card">
         <div class="card-header">
           <i class="bi bi-pie-chart me-2"></i>Findings by Status
         </div>
         <div class="card-body">
-          <canvas id="chartFindingsByStatus" height="250"></canvas>
+          <div class="chart-container">
+            <canvas id="chartFindingsByStatus"></canvas>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Risk Distribution -->
     <div class="col-md-6">
-      <div class="card h-100">
+      <div class="card chart-card">
         <div class="card-header">
           <i class="bi bi-bar-chart me-2"></i>Risk Distribution
         </div>
         <div class="card-body">
-          <canvas id="chartRiskDistribution" height="250"></canvas>
+          <div class="chart-container">
+            <canvas id="chartRiskDistribution"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -115,24 +119,28 @@
   <div class="row g-4 mb-4">
     <!-- Monthly Trends -->
     <div class="col-lg-8">
-      <div class="card h-100">
+      <div class="card chart-card">
         <div class="card-header">
           <i class="bi bi-graph-up me-2"></i>Monthly Trends
         </div>
         <div class="card-body">
-          <canvas id="chartMonthlyTrends" height="200"></canvas>
+          <div class="chart-container-sm">
+            <canvas id="chartMonthlyTrends"></canvas>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Action Plan Aging -->
     <div class="col-lg-4">
-      <div class="card h-100">
+      <div class="card chart-card-sm">
         <div class="card-header">
           <i class="bi bi-hourglass-split me-2"></i>Action Plan Aging
         </div>
         <div class="card-body">
-          <canvas id="chartAPAging" height="200"></canvas>
+          <div class="chart-container-sm">
+            <canvas id="chartAPAging"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -142,19 +150,21 @@
   <div class="row g-4 mb-4">
     <!-- By Affiliate -->
     <div class="col-lg-6">
-      <div class="card h-100">
+      <div class="card chart-card">
         <div class="card-header">
           <i class="bi bi-building me-2"></i>Findings by Affiliate
         </div>
         <div class="card-body">
-          <canvas id="chartByAffiliate" height="250"></canvas>
+          <div class="chart-container">
+            <canvas id="chartByAffiliate"></canvas>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- AI Insights -->
     <div class="col-lg-6">
-      <div class="card h-100">
+      <div class="card ai-insights-card">
         <div class="card-header d-flex justify-content-between align-items-center">
           <span><i class="bi bi-robot me-2"></i>AI-Powered Insights</span>
           <button class="btn btn-sm btn-outline-primary" onclick="generateAIInsights()" id="btnGenerateAI">
@@ -162,9 +172,9 @@
           </button>
         </div>
         <div class="card-body" id="aiInsightsContent">
-          <div class="text-center text-muted py-4">
-            <i class="bi bi-lightbulb" style="font-size: 2rem;"></i>
-            <p class="mt-2 mb-0">Click "Generate" to get AI-powered insights based on your audit data</p>
+          <div class="ai-placeholder">
+            <i class="bi bi-lightbulb"></i>
+            <p>Click "Generate" to get AI-powered insights based on your audit data</p>
           </div>
         </div>
       </div>
@@ -175,18 +185,24 @@
   <div class="row g-4 mb-4">
     <!-- High Risk Findings -->
     <div class="col-lg-6">
-      <div class="card h-100">
+      <div class="card analytics-table-card">
         <div class="card-header">
           <i class="bi bi-exclamation-circle text-danger me-2"></i>High/Extreme Risk Findings
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
+            <table class="table table-hover analytics-table mb-0">
               <thead>
-                <tr><th>ID</th><th>Title</th><th>Risk</th><th>Status</th><th>Days Open</th></tr>
+                <tr>
+                  <th>ID</th>
+                  <th>Title</th>
+                  <th>Risk</th>
+                  <th>Status</th>
+                  <th>Days Open</th>
+                </tr>
               </thead>
               <tbody id="tableHighRiskFindings">
-                <tr><td colspan="5" class="text-center py-3 text-muted">Loading...</td></tr>
+                <tr><td colspan="5" class="table-empty-state">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -196,18 +212,23 @@
 
     <!-- Overdue Action Plans -->
     <div class="col-lg-6">
-      <div class="card h-100">
+      <div class="card analytics-table-card">
         <div class="card-header">
           <i class="bi bi-clock-history text-warning me-2"></i>Overdue Action Plans
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
+            <table class="table table-hover analytics-table mb-0">
               <thead>
-                <tr><th>ID</th><th>Description</th><th>Owner</th><th>Days Overdue</th></tr>
+                <tr>
+                  <th>ID</th>
+                  <th>Description</th>
+                  <th>Owner</th>
+                  <th>Days Overdue</th>
+                </tr>
               </thead>
               <tbody id="tableOverdueAPs">
-                <tr><td colspan="4" class="text-center py-3 text-muted">Loading...</td></tr>
+                <tr><td colspan="4" class="table-empty-state">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -219,13 +240,13 @@
   <!-- Auditor Performance -->
   <div class="row g-4">
     <div class="col-12">
-      <div class="card">
+      <div class="card analytics-table-card">
         <div class="card-header">
           <i class="bi bi-person-lines-fill me-2"></i>Auditor Activity Summary
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover analytics-table mb-0">
               <thead>
                 <tr>
                   <th>Auditor</th>
@@ -237,7 +258,7 @@
                 </tr>
               </thead>
               <tbody id="tableAuditorPerformance">
-                <tr><td colspan="6" class="text-center py-3 text-muted">Loading...</td></tr>
+                <tr><td colspan="6" class="table-empty-state">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -248,46 +269,275 @@
 </div>
 
 <style>
-.kpi-card {
-  border-left: 4px solid var(--primary-color);
+/* ============================================
+   ANALYTICS PAGE STYLES
+   All sizes use CSS variables from main stylesheet
+   ============================================ */
+
+/* Page Title */
+.analytics-page .page-title {
+  font-size: var(--font-size-page-title, 1.25rem);
+  font-weight: 600;
+  color: var(--primary-color);
+  margin: 0;
 }
-.kpi-label {
-  font-size: 0.85rem;
+
+/* KPI Cards */
+.analytics-page .kpi-card {
+  border-left: 4px solid var(--primary-color);
+  transition: var(--transition);
+}
+
+.analytics-page .kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--box-shadow-hover);
+}
+
+.analytics-page .kpi-label {
+  font-size: var(--font-size-label, 0.75rem);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-weight: 500;
 }
-.kpi-value {
-  font-size: 2rem;
-  font-weight: 600;
+
+.analytics-page .kpi-value {
+  font-size: var(--font-size-kpi, 1.75rem);
+  font-weight: 700;
   color: var(--text-color);
+  line-height: 1.2;
 }
-.kpi-icon {
+
+.analytics-page .kpi-value-danger {
+  color: var(--danger-color);
+}
+
+.analytics-page .kpi-icon {
   width: 48px;
   height: 48px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: var(--font-size-icon-lg, 1.25rem);
+  flex-shrink: 0;
 }
-.kpi-trend {
-  font-size: 0.85rem;
-}
-.kpi-trend.up { color: var(--success-color); }
-.kpi-trend.down { color: var(--danger-color); }
 
-#aiInsightsContent {
-  max-height: 400px;
+.analytics-page .kpi-trend {
+  font-size: var(--font-size-small, 0.8rem);
+  color: var(--text-muted);
+}
+
+.analytics-page .kpi-trend-danger {
+  color: var(--danger-color);
+}
+
+.analytics-page .kpi-progress {
+  height: 6px;
+  border-radius: 3px;
+}
+
+/* Chart Cards */
+.analytics-page .chart-card,
+.analytics-page .chart-card-sm {
+  height: auto;
+}
+
+.analytics-page .chart-card .card-body {
+  height: 280px;
+  padding: 15px;
+}
+
+.analytics-page .chart-card-sm .card-body {
+  height: 230px;
+  padding: 15px;
+}
+
+.analytics-page .chart-container {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.analytics-page .chart-container-sm {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.analytics-page .chart-container canvas,
+.analytics-page .chart-container-sm canvas {
+  max-height: 100% !important;
+  width: 100% !important;
+}
+
+/* AI Insights Card */
+.analytics-page .ai-insights-card .card-body {
+  max-height: 350px;
   overflow-y: auto;
 }
-#aiInsightsContent .insight-section {
-  margin-bottom: 1rem;
+
+.analytics-page .ai-placeholder {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px 20px;
 }
-#aiInsightsContent h6 {
+
+.analytics-page .ai-placeholder i {
+  font-size: var(--font-size-icon-xl, 2rem);
+  display: block;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.analytics-page .ai-placeholder p {
+  font-size: var(--font-size-body, 0.875rem);
+  margin: 0;
+}
+
+.analytics-page .ai-insights {
+  font-size: var(--font-size-body, 0.875rem);
+  line-height: 1.6;
+}
+
+.analytics-page .ai-insights h4 {
+  font-size: var(--font-size-heading-lg, 1.1rem);
+  color: var(--primary-color);
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.analytics-page .ai-insights h5 {
+  font-size: var(--font-size-heading, 1rem);
+  color: var(--primary-color);
+  margin-top: 14px;
+  margin-bottom: 6px;
+}
+
+.analytics-page .ai-insights h6 {
+  font-size: var(--font-size-heading-sm, 0.9rem);
   color: var(--primary-color);
   border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.5rem;
+  padding-bottom: 6px;
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+
+.analytics-page .ai-insights ul {
+  padding-left: 20px;
+  margin-bottom: 12px;
+}
+
+.analytics-page .ai-insights li {
+  margin-bottom: 4px;
+}
+
+.analytics-page .ai-insights .alert {
+  font-size: var(--font-size-small, 0.8rem);
+}
+
+/* Analytics Tables */
+.analytics-page .analytics-table-card .card-header {
+  font-size: var(--font-size-card-header, 0.9rem);
+}
+
+.analytics-page .analytics-table {
+  font-size: var(--font-size-table, 0.85rem);
+}
+
+.analytics-page .analytics-table thead th {
+  font-size: var(--font-size-table-header, 0.8rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.analytics-page .analytics-table tbody td {
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+
+.analytics-page .analytics-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.analytics-page .analytics-table tbody tr:hover {
+  background-color: var(--bg-light);
+}
+
+.analytics-page .analytics-table code {
+  font-size: var(--font-size-code, 0.8rem);
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.analytics-page .analytics-table .badge {
+  font-size: var(--font-size-badge, 0.7rem);
+  font-weight: 500;
+  padding: 4px 8px;
+}
+
+.analytics-page .table-empty-state {
+  text-align: center;
+  padding: 24px 12px;
+  color: var(--text-muted);
+  font-size: var(--font-size-body, 0.875rem);
+}
+
+.analytics-page .table-empty-state.success {
+  color: var(--success-color);
+}
+
+/* Card Headers */
+.analytics-page .card-header {
+  font-size: var(--font-size-card-header, 0.9rem);
+  font-weight: 600;
+}
+
+.analytics-page .card-header i {
+  font-size: var(--font-size-icon, 1rem);
+}
+
+/* Buttons */
+.analytics-page .btn-sm {
+  font-size: var(--font-size-btn-sm, 0.8rem);
+  padding: 6px 12px;
+}
+
+.analytics-page .form-select-sm {
+  font-size: var(--font-size-input-sm, 0.8rem);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 767.98px) {
+  .analytics-page .page-title {
+    font-size: var(--font-size-page-title-mobile, 1.1rem);
+  }
+  
+  .analytics-page .kpi-value {
+    font-size: var(--font-size-kpi-mobile, 1.5rem);
+  }
+  
+  .analytics-page .kpi-icon {
+    width: 40px;
+    height: 40px;
+    font-size: var(--font-size-icon, 1rem);
+  }
+  
+  .analytics-page .chart-card .card-body,
+  .analytics-page .chart-card-sm .card-body {
+    height: 200px;
+  }
+  
+  .analytics-page .page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 </style>
 
@@ -308,7 +558,6 @@ function loadAnalytics() {
         renderAnalytics();
       } else {
         console.error('Analytics load error:', r?.error);
-        // Set empty data to prevent null errors
         analyticsData = {
           workPapers: { total: 0, byStatus: {}, byRisk: {}, byAffiliate: {}, byMonth: {} },
           actionPlans: { total: 0, overdue: 0, implementationRate: 0, byStatus: {}, aging: {} },
@@ -329,7 +578,6 @@ function loadAnalytics() {
 }
 
 function initAnalyticsPage() {
-  // Populate year dropdown
   const yearSelect = document.getElementById('analyticsYear');
   const currentYear = new Date().getFullYear();
   for (let y = currentYear; y >= currentYear - 5; y--) {
@@ -381,6 +629,15 @@ function renderAnalyticsCharts() {
   // Destroy existing charts
   Object.values(charts).forEach(chart => chart?.destroy());
 
+  // Get CSS variables for consistent styling
+  const rootStyles = getComputedStyle(document.documentElement);
+  const primaryColor = rootStyles.getPropertyValue('--primary-color').trim() || '#1a365d';
+  const fontFamily = rootStyles.getPropertyValue('--font-family').trim() || "'Inter', 'Segoe UI', sans-serif";
+  
+  // Chart.js default font settings
+  Chart.defaults.font.family = fontFamily;
+  Chart.defaults.font.size = 12;
+
   // Findings by Status
   const statusData = analyticsData.workPapers?.byStatus || {};
   charts.findingsByStatus = new Chart(document.getElementById('chartFindingsByStatus'), {
@@ -394,8 +651,12 @@ function renderAnalyticsCharts() {
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'right' }
+        legend: { 
+          position: 'right',
+          labels: { font: { size: 11 }, padding: 12 }
+        }
       }
     }
   });
@@ -415,8 +676,19 @@ function renderAnalyticsCharts() {
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
+      maintainAspectRatio: false,
+      plugins: { 
+        legend: { display: false }
+      },
+      scales: { 
+        y: { 
+          beginAtZero: true,
+          ticks: { font: { size: 11 } }
+        },
+        x: {
+          ticks: { font: { size: 11 } }
+        }
+      }
     }
   });
 
@@ -447,7 +719,21 @@ function renderAnalyticsCharts() {
     },
     options: {
       responsive: true,
-      scales: { y: { beginAtZero: true } }
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { 
+          labels: { font: { size: 11 }, padding: 15 }
+        }
+      },
+      scales: { 
+        y: { 
+          beginAtZero: true,
+          ticks: { font: { size: 11 } }
+        },
+        x: {
+          ticks: { font: { size: 11 } }
+        }
+      }
     }
   });
 
@@ -464,7 +750,13 @@ function renderAnalyticsCharts() {
     },
     options: {
       responsive: true,
-      plugins: { legend: { position: 'bottom' } }
+      maintainAspectRatio: false,
+      plugins: { 
+        legend: { 
+          position: 'bottom',
+          labels: { font: { size: 10 }, padding: 8 }
+        }
+      }
     }
   });
 
@@ -477,13 +769,24 @@ function renderAnalyticsCharts() {
       datasets: [{
         label: 'Findings',
         data: Object.values(affiliateData),
-        backgroundColor: '#0d6efd'
+        backgroundColor: primaryColor
       }]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       indexAxis: 'y',
-      plugins: { legend: { display: false } }
+      plugins: { 
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          ticks: { font: { size: 11 } }
+        },
+        y: {
+          ticks: { font: { size: 11 } }
+        }
+      }
     }
   });
 }
@@ -493,12 +796,12 @@ function renderHighRiskFindings() {
   const tbody = document.getElementById('tableHighRiskFindings');
 
   if (!findings.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No high risk findings</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="table-empty-state">No high risk findings</td></tr>';
     return;
   }
 
   tbody.innerHTML = findings.slice(0, 10).map(f => `
-    <tr onclick="navigateTo('work-paper-view', {id:'${f.work_paper_id}'})" style="cursor:pointer;">
+    <tr onclick="navigateTo('work-paper-view', {id:'${f.work_paper_id}'})">
       <td><code>${f.work_paper_id}</code></td>
       <td>${escapeHtml((f.observation_title || '').substring(0, 40))}...</td>
       <td><span class="badge bg-${f.risk_rating === 'Extreme' ? 'danger' : 'warning'}">${f.risk_rating}</span></td>
@@ -513,12 +816,12 @@ function renderOverdueAPs() {
   const tbody = document.getElementById('tableOverdueAPs');
 
   if (!aps.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-success">No overdue action plans!</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="table-empty-state success">No overdue action plans!</td></tr>';
     return;
   }
 
   tbody.innerHTML = aps.slice(0, 10).map(ap => `
-    <tr onclick="navigateTo('action-plan-view', {id:'${ap.action_plan_id}'})" style="cursor:pointer;">
+    <tr onclick="navigateTo('action-plan-view', {id:'${ap.action_plan_id}'})">
       <td><code>${ap.action_plan_id}</code></td>
       <td>${escapeHtml((ap.action_description || '').substring(0, 40))}...</td>
       <td>${escapeHtml(ap.owner_names || '-')}</td>
@@ -532,7 +835,7 @@ function renderAuditorPerformance() {
   const tbody = document.getElementById('tableAuditorPerformance');
 
   if (!auditors.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">No data available</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="table-empty-state">No data available</td></tr>';
     return;
   }
 
@@ -553,11 +856,10 @@ function generateAIInsights() {
   const content = document.getElementById('aiInsightsContent');
 
   btn.disabled = true;
-  btn.innerHTML = '<div class="spinner-border spinner-border-sm me-1"></div>Generating...';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
 
-  content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2 mb-0">Analyzing your audit data...</p></div>';
+  content.innerHTML = '<div class="ai-placeholder"><span class="spinner-border text-primary"></span><p class="mt-3">Analyzing your audit data...</p></div>';
 
-  // Prepare data for AI
   const aiData = {
     workPapers: {
       total: analyticsData.workPapers?.total,
@@ -579,10 +881,9 @@ function generateAIInsights() {
     btn.innerHTML = '<i class="bi bi-magic me-1"></i>Generate';
 
     if (r.success && r.insights) {
-      // Parse markdown-like response
       const formattedInsights = formatAIInsights(r.insights);
-      content.innerHTML = formattedInsights +
-        '<div class="alert alert-secondary mt-3 small"><i class="bi bi-info-circle me-1"></i>' + (r.disclaimer || 'AI-generated insights are for reference only.') + '</div>';
+      content.innerHTML = '<div class="ai-insights">' + formattedInsights + '</div>' +
+        '<div class="alert alert-secondary mt-3"><i class="bi bi-info-circle me-1"></i>' + (r.disclaimer || 'AI-generated insights are for reference only.') + '</div>';
     } else {
       content.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>' + (r.error || 'Unable to generate insights') + '</div>';
     }
@@ -594,22 +895,20 @@ function generateAIInsights() {
 }
 
 function formatAIInsights(text) {
-  // Simple markdown-like formatting
   let html = text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/^### (.*?)$/gm, '<h6 class="mt-3">$1</h6>')
-    .replace(/^## (.*?)$/gm, '<h5 class="mt-3">$1</h5>')
-    .replace(/^# (.*?)$/gm, '<h4 class="mt-3">$1</h4>')
+    .replace(/^### (.*?)$/gm, '<h6>$1</h6>')
+    .replace(/^## (.*?)$/gm, '<h5>$1</h5>')
+    .replace(/^# (.*?)$/gm, '<h4>$1</h4>')
     .replace(/^- (.*?)$/gm, '<li>$1</li>')
     .replace(/^\d+\. (.*?)$/gm, '<li>$1</li>')
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>');
 
-  // Wrap lists
-  html = html.replace(/(<li>.*?<\/li>)+/gs, match => '<ul class="mb-2">' + match + '</ul>');
+  html = html.replace(/(<li>.*?<\/li>)+/gs, match => '<ul>' + match + '</ul>');
 
-  return '<div class="ai-insights"><p>' + html + '</p></div>';
+  return '<p>' + html + '</p>';
 }
 
 function refreshAnalytics() {
@@ -622,31 +921,26 @@ function exportAnalytics() {
     return;
   }
 
-  // Create CSV
   let csv = 'Analytics Report\n';
   csv += 'Generated: ' + new Date().toISOString() + '\n\n';
 
-  // KPIs
   csv += 'Key Metrics\n';
   csv += 'Total Findings,' + (analyticsData.workPapers?.total || 0) + '\n';
   csv += 'Total Action Plans,' + (analyticsData.actionPlans?.total || 0) + '\n';
   csv += 'Implementation Rate,' + (analyticsData.actionPlans?.implementationRate || 0) + '%\n';
   csv += 'Overdue Items,' + (analyticsData.actionPlans?.overdue || 0) + '\n\n';
 
-  // By Status
   csv += 'Findings by Status\n';
   Object.entries(analyticsData.workPapers?.byStatus || {}).forEach(([k, v]) => {
     csv += k + ',' + v + '\n';
   });
   csv += '\n';
 
-  // By Risk
   csv += 'Findings by Risk\n';
   Object.entries(analyticsData.workPapers?.byRisk || {}).forEach(([k, v]) => {
     csv += k + ',' + v + '\n';
   });
 
-  // Download
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -655,6 +949,6 @@ function exportAnalytics() {
   a.click();
   URL.revokeObjectURL(url);
 
-showToast('Analytics exported', 'success');
+  showToast('Analytics exported', 'success');
 }
 </script>
