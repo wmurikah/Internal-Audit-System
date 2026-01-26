@@ -1,4 +1,4 @@
-// 02_Config.gs - Configuration, Constants, and Database Helpers
+// 02_Config.gs - Configuration, Constants, and Database Helper
 
 const SHEETS = {
   CONFIG: '00_Config',
