@@ -102,7 +102,7 @@ function initApp() {
 
         // Update user info in sidebar and header
         document.getElementById('userName').textContent = result.user.full_name;
-        document.getElementById('userRole').textContent = result.user.role_name;
+        document.getElementById('userRole').style.display = 'none';
         if (document.getElementById('profileName')) {
           document.getElementById('profileName').textContent = result.user.full_name;
         }
