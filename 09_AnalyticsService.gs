@@ -219,7 +219,7 @@ function getAnalyticsData(year, user) {
     // Sort high risk by days open
     highRiskFindings.sort((a, b) => b.days_open - a.days_open);
 
-    return {
+    return sanitizeForClient({
       success: true,
       data: {
         workPapers: workPapers,
@@ -233,7 +233,7 @@ function getAnalyticsData(year, user) {
         overdueActionPlans: overdueActionPlans.slice(0, 20),
         auditorPerformance: auditorPerformance.slice(0, 15)
       }
-    };
+    });
 
   } catch (error) {
     console.error('Analytics error:', error);
@@ -259,7 +259,7 @@ function getUserStats() {
     if (lockedUntil && new Date(lockedUntil) > now) locked++;
   }
 
-  return { total, active, locked, inactive: total - active };
+  return sanitizeForClient({ total, active, locked, inactive: total - active });
 }
 
 /**
@@ -323,7 +323,7 @@ function getSystemConfigValues() {
     config[key] = getConfigValue(key);
   });
 
-  return config;
+  return sanitizeForClient(config);
 }
 
 /**
@@ -373,7 +373,7 @@ function getAuditLogs(actionFilter, page, pageSize) {
 
   // Paginate
   const start = (page - 1) * pageSize;
-  return logs.slice(start, start + pageSize);
+  return sanitizeForClient(logs.slice(start, start + pageSize));
 }
 
 /**
@@ -400,3 +400,22 @@ function getAuditLogCount(actionFilter) {
   return count;
 }
 
+/**
+ * Sanitize object for safe transport to browser via google.script.run
+ * Converts Date objects to ISO strings and removes undefined values
+ */
+function sanitizeForClient(obj) {
+  return JSON.parse(JSON.stringify(obj, function (key, value) {
+    // Convert Date objects to ISO strings (Dates break postMessage)
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    
+    // Replace undefined with null (undefined breaks transport)
+    if (value === undefined) {
+      return null;
+    }
+    
+    return value;
+  }));
+}
