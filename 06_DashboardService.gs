@@ -113,11 +113,15 @@ function getDashboardData(user) {
 
     // Add role-specific data with error handling
     try {
+      const permissions = getUserPermissions(roleCode);
+      
       if (roleCode === ROLES.AUDITEE) {
         dashboard.myActionPlans = getMyActionPlans(user);
-      } else if (roleCode === ROLES.JUNIOR_STAFF) {
+      } else if (permissions.canCreateWorkPaper && !permissions.canReviewWorkPaper) {
+        // Junior staff equivalent - can create but not review
         dashboard.myWorkPapers = getMyWorkPapers(user);
-      } else if ([ROLES.SENIOR_AUDITOR, ROLES.HEAD_OF_AUDIT, ROLES.SUPER_ADMIN].includes(roleCode)) {
+      } else if (permissions.canReviewWorkPaper) {
+        // Reviewers - senior auditors, HOA, super admin
         dashboard.pendingReviews = getPendingReviews(user);
         dashboard.teamStats = getTeamStats(user);
       }
@@ -307,6 +311,7 @@ function getMonthlyTrend(user) {
 function getAlerts(user) {
   const alerts = [];
   const roleCode = user.role_code;
+  const permissions = getUserPermissions(roleCode);
   
   // Overdue action plans
   const overdueCount = getActionPlanCounts({ overdue_only: true }, user).total;
@@ -332,8 +337,8 @@ function getAlerts(user) {
     });
   }
   
-  // Pending reviews (for reviewers)
-  if ([ROLES.SENIOR_AUDITOR, ROLES.HEAD_OF_AUDIT, ROLES.SUPER_ADMIN].includes(roleCode)) {
+  // Pending reviews - based on database permissions
+  if (permissions.canReviewWorkPaper) {
     const pendingReview = getWorkPaperCounts({ status: STATUS.WORK_PAPER.SUBMITTED }, user).total;
     if (pendingReview > 0) {
       alerts.push({
@@ -344,8 +349,10 @@ function getAlerts(user) {
         link: '#work-papers?filter=submitted'
       });
     }
-    
-    // Pending verification
+  }
+  
+  // Pending verification - based on database permissions
+  if (permissions.canVerifyActionPlan) {
     const pendingVerification = getActionPlanCounts({ status: STATUS.ACTION_PLAN.IMPLEMENTED }, user).total;
     if (pendingVerification > 0) {
       alerts.push({
@@ -362,12 +369,13 @@ function getAlerts(user) {
 }
 
 /**
- * Get quick links based on role
+ * Get quick links based on role - reads from database permissions
  */
 function getQuickLinks(roleCode) {
   const links = [];
+  const permissions = getUserPermissions(roleCode);
   
-  // Common links
+  // Dashboard - always visible
   links.push({
     icon: 'bi-speedometer2',
     title: 'Dashboard',
@@ -375,14 +383,18 @@ function getQuickLinks(roleCode) {
     color: '#1a365d'
   });
   
-  if ([ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF].includes(roleCode)) {
+  // New Work Paper - if can create
+  if (permissions.canCreateWorkPaper) {
     links.push({
       icon: 'bi-file-earmark-plus',
       title: 'New Work Paper',
       href: '#work-papers/new',
       color: '#28a745'
     });
-    
+  }
+  
+  // Work Papers list - if can view
+  if (permissions.canViewWorkPapers) {
     links.push({
       icon: 'bi-folder2-open',
       title: 'Work Papers',
@@ -391,26 +403,43 @@ function getQuickLinks(roleCode) {
     });
   }
   
-  links.push({
-    icon: 'bi-list-check',
-    title: 'Action Plans',
-    href: '#action-plans',
-    color: '#ffc107'
-  });
+  // Action Plans - if can view
+  if (permissions.canViewActionPlans) {
+    links.push({
+      icon: 'bi-list-check',
+      title: 'Action Plans',
+      href: '#action-plans',
+      color: '#ffc107'
+    });
+  }
   
-  if ([ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT].includes(roleCode)) {
+  // Reports - if can view
+  if (permissions.canViewReports) {
     links.push({
       icon: 'bi-bar-chart-fill',
       title: 'Reports',
       href: '#reports',
       color: '#6f42c1'
     });
-    
+  }
+  
+  // Users - if can manage
+  if (permissions.canManageUsers) {
     links.push({
       icon: 'bi-people-fill',
       title: 'Users',
       href: '#users',
       color: '#fd7e14'
+    });
+  }
+  
+  // Settings - if can manage
+  if (permissions.canManageSettings) {
+    links.push({
+      icon: 'bi-gear-fill',
+      title: 'Settings',
+      href: '#settings',
+      color: '#6c757d'
     });
   }
   
@@ -723,60 +752,87 @@ function getInitData(sessionToken) {
 }
 
 /**
- * Get permissions for a role
+ * Get permissions for a role - READS FROM DATABASE
+ * Maps database CRUD permissions to UI feature flags
  */
 function getUserPermissions(roleCode) {
+  // Default permissions - all false
   const permissions = {
+    // Work Paper permissions
     canCreateWorkPaper: false,
+    canViewWorkPapers: false,
+    canEditWorkPaper: false,
+    canDeleteWorkPaper: false,
     canReviewWorkPaper: false,
     canApproveWorkPaper: false,
+    
+    // Action Plan permissions
     canCreateActionPlan: false,
+    canViewActionPlans: false,
+    canEditActionPlan: false,
+    canDeleteActionPlan: false,
     canVerifyActionPlan: false,
+    
+    // User Management
     canManageUsers: false,
+    canCreateUser: false,
+    canEditUser: false,
+    canDeleteUser: false,
+    
+    // Reports
     canViewReports: false,
-    canExportData: false
+    canExportData: false,
+    
+    // Settings/Config
+    canManageSettings: false,
+    canManageRoles: false
   };
   
-  switch (roleCode) {
-    case ROLES.SUPER_ADMIN:
-      Object.keys(permissions).forEach(k => permissions[k] = true);
-      break;
-      
-    case ROLES.HEAD_OF_AUDIT:
-      permissions.canCreateWorkPaper = true;
-      permissions.canReviewWorkPaper = true;
-      permissions.canApproveWorkPaper = true;
-      permissions.canCreateActionPlan = true;
-      permissions.canVerifyActionPlan = true;
-      permissions.canViewReports = true;
-      permissions.canExportData = true;
-      break;
-      
-    case ROLES.SENIOR_AUDITOR:
-      permissions.canCreateWorkPaper = true;
-      permissions.canReviewWorkPaper = true;
-      permissions.canCreateActionPlan = true;
-      permissions.canVerifyActionPlan = true;
-      permissions.canViewReports = true;
-      break;
-      
-    case ROLES.JUNIOR_STAFF:
-      permissions.canCreateWorkPaper = true;
-      permissions.canCreateActionPlan = true;
-      break;
-      
-    case ROLES.AUDITEE:
-      // Auditees can only respond to action plans
-      break;
-      
-    case ROLES.MANAGEMENT:
-      permissions.canViewReports = true;
-      break;
-      
-    case ROLES.OBSERVER:
-      // View only
-      break;
+  // Load permissions from database
+  const dbPermissions = getPermissions(roleCode);
+  
+  // Map database permissions to UI feature flags
+  // WORK_PAPER module
+  if (dbPermissions.WORK_PAPER) {
+    permissions.canCreateWorkPaper = dbPermissions.WORK_PAPER.can_create === true;
+    permissions.canViewWorkPapers = dbPermissions.WORK_PAPER.can_read === true;
+    permissions.canEditWorkPaper = dbPermissions.WORK_PAPER.can_update === true;
+    permissions.canDeleteWorkPaper = dbPermissions.WORK_PAPER.can_delete === true;
+    permissions.canApproveWorkPaper = dbPermissions.WORK_PAPER.can_approve === true;
+    // Review permission = approve permission for work papers
+    permissions.canReviewWorkPaper = dbPermissions.WORK_PAPER.can_approve === true;
   }
+  
+  // ACTION_PLAN module
+  if (dbPermissions.ACTION_PLAN) {
+    permissions.canCreateActionPlan = dbPermissions.ACTION_PLAN.can_create === true;
+    permissions.canViewActionPlans = dbPermissions.ACTION_PLAN.can_read === true;
+    permissions.canEditActionPlan = dbPermissions.ACTION_PLAN.can_update === true;
+    permissions.canDeleteActionPlan = dbPermissions.ACTION_PLAN.can_delete === true;
+    permissions.canVerifyActionPlan = dbPermissions.ACTION_PLAN.can_approve === true;
+  }
+  
+  // USER module
+  if (dbPermissions.USER) {
+    permissions.canManageUsers = dbPermissions.USER.can_read === true;
+    permissions.canCreateUser = dbPermissions.USER.can_create === true;
+    permissions.canEditUser = dbPermissions.USER.can_update === true;
+    permissions.canDeleteUser = dbPermissions.USER.can_delete === true;
+  }
+  
+  // REPORT module
+  if (dbPermissions.REPORT) {
+    permissions.canViewReports = dbPermissions.REPORT.can_read === true;
+    permissions.canExportData = dbPermissions.REPORT.can_export === true;
+  }
+  
+  // CONFIG module
+  if (dbPermissions.CONFIG) {
+    permissions.canManageSettings = dbPermissions.CONFIG.can_update === true;
+    permissions.canManageRoles = dbPermissions.CONFIG.can_update === true;
+  }
+  
+  console.log('getUserPermissions for role', roleCode, '- loaded from database');
   
   return permissions;
 }
