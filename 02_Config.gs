@@ -1,4 +1,4 @@
-// 02_Config.gs - Configuration, Constants, and Database Helper
+// 02_Config.gs - Configuration, Constants, and Database Helpers
 
 const SHEETS = {
   CONFIG: '00_Config',
@@ -137,7 +137,11 @@ const ROLES = {
   JUNIOR_STAFF: 'JUNIOR_STAFF',
   AUDITEE: 'AUDITEE',
   MANAGEMENT: 'MANAGEMENT',
-  OBSERVER: 'OBSERVER'
+  OBSERVER: 'OBSERVER',
+  AUDITOR: 'AUDITOR',
+  UNIT_MANAGER: 'UNIT_MANAGER',
+  BOARD: 'BOARD',
+  EXTERNAL_AUDITOR: 'EXTERNAL_AUDITOR'
 };
 
 function generateId(entityType) {
@@ -516,13 +520,13 @@ function getUsersDropdown() {
 
 function getAuditorsDropdown() {
   const allUsers = getUsersDropdown();
-  const auditorRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF];
+  const auditorRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF, ROLES.AUDITOR];
   return allUsers.filter(u => auditorRoles.includes(u.roleCode));
 }
 
 function getAuditeesDropdown() {
   const allUsers = getUsersDropdown();
-  return allUsers.filter(u => u.roleCode === ROLES.AUDITEE || u.roleCode === ROLES.MANAGEMENT);
+  return allUsers.filter(u => u.roleCode === ROLES.AUDITEE || u.roleCode === ROLES.MANAGEMENT || u.roleCode === ROLES.UNIT_MANAGER);
 }
 
 function getRiskRatings() {
@@ -591,17 +595,14 @@ function invalidateUserCache(email) {
 function getUserById(userId) {
   if (!userId) return null;
 
-  // Try DB.getById first (uses index for fast lookup)
   if (typeof DB !== 'undefined' && DB.getById) {
     const user = DB.getById('USER', userId);
     if (user && user._rowIndex) {
       return user;
     }
-    // If DB.getById returned null or no _rowIndex, fall through to direct lookup
     console.log('getUserById: DB.getById returned null or no _rowIndex, using direct lookup');
   }
 
-  // Direct sheet lookup (slower but guaranteed to work)
   const sheet = getSheet(SHEETS.USERS);
   if (!sheet) {
     console.error('getUserById: Users sheet not found');
@@ -826,35 +827,48 @@ function getColumnIndex(schemaKey, columnName) {
   return idx;
 }
 
+/**
+ * Check if user can perform action - NOW USES DATABASE PERMISSIONS
+ * Removed hardcoded bypasses for roles
+ */
 function canUserPerform(user, action, entityType, entity) {
   if (!user) return false;
   
   const roleCode = user.role_code || user.roleCode;
   
-  if (roleCode === ROLES.SUPER_ADMIN) return true;
-  if (roleCode === ROLES.HEAD_OF_AUDIT) {
-    if (entityType === 'CONFIG') return false;
-    return true;
-  }
-  
+  // Check database permissions first
   if (typeof checkPermission === 'function') {
-    if (!checkPermission(roleCode, entityType, action)) return false;
+    if (!checkPermission(roleCode, entityType, action)) {
+      console.log('Permission denied by database:', roleCode, entityType, action);
+      return false;
+    }
   }
   
+  // Entity-level restrictions (these are business rules, not role bypasses)
   if (entity) {
+    // Work paper ownership check for update/delete
     if (entityType === 'WORK_PAPER' && (action === 'update' || action === 'delete')) {
-      if (roleCode === ROLES.JUNIOR_STAFF || roleCode === ROLES.SENIOR_AUDITOR) {
-        if (entity.prepared_by_id !== user.user_id) return false;
+      // Only enforce ownership for non-admin roles that don't have approve permission
+      const permissions = getUserPermissions(roleCode);
+      if (!permissions.canApproveWorkPaper) {
+        // Non-reviewers can only edit their own work papers
+        if (entity.prepared_by_id !== user.user_id) {
+          console.log('Ownership check failed: user', user.user_id, 'vs prepared_by', entity.prepared_by_id);
+          return false;
+        }
       }
     }
     
+    // Action plan ownership check for auditees
     if (entityType === 'ACTION_PLAN' && roleCode === ROLES.AUDITEE) {
       const ownerIds = String(entity.owner_ids || '').split(',').map(s => s.trim());
-      if (!ownerIds.includes(user.user_id)) return false;
+      if (!ownerIds.includes(user.user_id)) {
+        console.log('Auditee not owner of action plan');
+        return false;
+      }
+      // Auditees cannot delete action plans
       if (action === 'delete') return false;
     }
-    
-    if (roleCode === ROLES.OBSERVER && action !== 'view') return false;
   }
   
   return true;
