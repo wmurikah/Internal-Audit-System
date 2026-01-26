@@ -213,25 +213,25 @@ function routeAction(action, data, user) {
       
     // ========== ADMIN ==========
     case 'rebuildWorkPaperIndex':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, count: rebuildWorkPaperIndex() };
       
     case 'rebuildActionPlanIndex':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, count: rebuildActionPlanIndex() };
       
     case 'processEmailQueue':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, result: processEmailQueue() };
       
     case 'cleanupExpiredSessions':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, cleaned: cleanupExpiredSessions() };
@@ -241,7 +241,7 @@ function routeAction(action, data, user) {
       return { success: true, permissions: getPermissionsCached(data.roleCode) };
 
     case 'updatePermissions':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return updatePermissions(data.roleCode, data.permissions, user);
@@ -250,25 +250,25 @@ function routeAction(action, data, user) {
       return { success: true, stats: getUserStats() };
 
     case 'getSystemConfig':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, config: getSystemConfigValues() };
 
     case 'saveSystemConfig':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return saveSystemConfigValues(data.config, user);
 
     case 'getAuditLog':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, logs: getAuditLogs(data.action, data.page, data.pageSize), total: getAuditLogCount(data.action) };
 
     case 'rebuildAllIndexes':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       Index.rebuild('WORK_PAPER');
@@ -278,7 +278,7 @@ function routeAction(action, data, user) {
 
     // ========== AI SERVICE ==========
     case 'getAIConfigStatus':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, config: getAIConfigStatus() };
@@ -313,7 +313,7 @@ function routeAction(action, data, user) {
       return warmAllCaches();
 
     case 'clearCache':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return clearAllCaches();
@@ -386,7 +386,6 @@ function getDropdownDataCached() {
   const cache = CacheService.getScriptCache();
   const cacheKey = 'dropdown_data_all';
   
-  // Try cache first
   const cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -396,10 +395,8 @@ function getDropdownDataCached() {
     }
   }
   
-  // Fall back to database
   const dropdowns = getDropdownData();
   
-  // Cache for 30 minutes
   try {
     cache.put(cacheKey, JSON.stringify(dropdowns), 1800);
   } catch (e) {
@@ -428,7 +425,7 @@ function getPermissionsCached(roleCode) {
   const permissions = getPermissions(roleCode);
   
   try {
-    cache.put(cacheKey, JSON.stringify(permissions), 1800);
+    cache.put(cacheKey, JSON.stringify(permissions), CONFIG.CACHE_TTL.PERMISSIONS);
   } catch (e) {}
   
   return permissions;
@@ -452,11 +449,11 @@ function warmAllCaches() {
     console.log('Cached dropdowns');
     
     // 2. Cache all role permissions
-    const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR'];
+    const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
     roles.forEach(role => {
       try {
         const perms = getPermissions(role);
-        cache.put('perm_' + role, JSON.stringify(perms), 1800);
+        cache.put('perm_' + role, JSON.stringify(perms), CONFIG.CACHE_TTL.PERMISSIONS);
       } catch (e) {
         console.warn('Failed to cache permissions for role:', role);
       }
@@ -499,12 +496,11 @@ function warmAllCaches() {
 }
 
 /**
- * Clear all caches
+ * Clear all caches - including permission caches
  */
 function clearAllCaches() {
   const cache = CacheService.getScriptCache();
   
-  // Can't enumerate cache keys in Apps Script, so we clear known keys
   const keysToRemove = [
     'dropdown_data_all',
     'config_SYSTEM_NAME',
@@ -513,7 +509,8 @@ function clearAllCaches() {
     'role_names'
   ];
   
-  const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR'];
+  // Clear all role permission caches
+  const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
   roles.forEach(role => {
     keysToRemove.push('perm_' + role);
     keysToRemove.push('role_name_' + role);
@@ -738,6 +735,7 @@ function apiCall(action, data) {
 
 /**
  * Get init data - OPTIMIZED with batched operations and caching
+ * Uses database-backed permissions via getUserPermissions()
  */
 function getInitDataOptimized(user) {
   const startTime = new Date().getTime();
@@ -811,10 +809,10 @@ function getInitDataOptimized(user) {
     console.error('Error loading config:', e);
   }
 
-  // Get permissions (try cache first)
+  // Get permissions from database via getUserPermissions()
   try {
-    response.permissions = getPermissionsCached(user.role_code);
-    console.log('Permissions loaded in', new Date().getTime() - startTime, 'ms');
+    response.permissions = getUserPermissions(user.role_code);
+    console.log('Permissions loaded from database in', new Date().getTime() - startTime, 'ms');
   } catch (e) {
     console.error('Error loading permissions:', e);
     response.permissions = {};
@@ -889,7 +887,6 @@ function setupAllTriggers() {
     .atHour(8)
     .create();
   
-  // Add cache warm trigger - runs every 6 hours to keep caches fresh
   ScriptApp.newTrigger('warmAllCaches')
     .timeBased()
     .everyHours(6)
