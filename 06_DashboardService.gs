@@ -150,6 +150,73 @@ function getDashboardData(user) {
 }
 
 /**
+ * Get sidebar counts - lightweight API for updating badges
+ * Reads directly from DB sheets to get accurate counts
+ */
+function getSidebarCounts(user) {
+  try {
+    // Count work papers with status 'Submitted' (pending review)
+    const wpSheet = getSheet(SHEETS.WORK_PAPERS);
+    const wpData = wpSheet.getDataRange().getValues();
+    const wpHeaders = wpData[0];
+    const wpStatusIdx = wpHeaders.indexOf('status');
+    
+    let pendingReview = 0;
+    for (let i = 1; i < wpData.length; i++) {
+      if (wpData[i][wpStatusIdx] === 'Submitted') {
+        pendingReview++;
+      }
+    }
+    
+    // Count overdue action plans
+    const apSheet = getSheet(SHEETS.ACTION_PLANS);
+    const apData = apSheet.getDataRange().getValues();
+    const apHeaders = apData[0];
+    const apStatusIdx = apHeaders.indexOf('status');
+    const apDueDateIdx = apHeaders.indexOf('due_date');
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Statuses that are considered "closed" (no longer active)
+    const closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+    
+    let overdueActionPlans = 0;
+    for (let i = 1; i < apData.length; i++) {
+      const status = apData[i][apStatusIdx];
+      const dueDate = apData[i][apDueDateIdx];
+      
+      // Only count open items (not in closed statuses)
+      if (status && !closedStatuses.includes(status)) {
+        if (dueDate) {
+          const due = new Date(dueDate);
+          due.setHours(0, 0, 0, 0);
+          if (due < today) {
+            overdueActionPlans++;
+          }
+        }
+      }
+    }
+    
+    console.log('Sidebar counts - Pending Review:', pendingReview, 'Overdue APs:', overdueActionPlans);
+    
+    return {
+      success: true,
+      pendingReview: pendingReview,
+      overdueActionPlans: overdueActionPlans
+    };
+  } catch (e) {
+    console.error('Error getting sidebar counts:', e);
+    return {
+      success: false,
+      error: e.message,
+      pendingReview: 0,
+      overdueActionPlans: 0
+    };
+  }
+}
+
+/**
  * Get summary statistics
  */
 function getSummaryStats(user) {
@@ -788,8 +855,8 @@ function getUserPermissions(roleCode) {
     canManageRoles: false
   };
   
-  // Load permissions from database
-  const dbPermissions = getPermissions(roleCode);
+  // Load permissions FRESH from database (bypass cache for accurate permissions)
+  const dbPermissions = getPermissionsFresh ? getPermissionsFresh(roleCode) : getPermissions(roleCode, true);
   
   // Map database permissions to UI feature flags
   // WORK_PAPER module
