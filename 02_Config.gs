@@ -112,10 +112,13 @@ const STATUS = {
     NOT_DUE: 'Not Due',
     PENDING: 'Pending',
     IN_PROGRESS: 'In Progress',
-    IMPLEMENTED: 'Implemented',
-    VERIFIED: 'Verified',
+    IMPLEMENTED: 'Implemented',      // Auditee marks as done
+    PENDING_VERIFICATION: 'Pending Verification',  // Awaiting auditor verification
+    VERIFIED: 'Verified',            // Auditor verified implementation
+    REJECTED: 'Rejected',            // Auditor rejected/returned
     OVERDUE: 'Overdue',
-    NOT_IMPLEMENTED: 'Not Implemented'
+    NOT_IMPLEMENTED: 'Not Implemented',
+    CLOSED: 'Closed'                 // Final state after verification
   },
   REVIEW: {
     PENDING: 'Pending Review',
@@ -131,12 +134,12 @@ const STATUS = {
 };
 
 const ROLES = {
-  SUPER_ADMIN: 'SUPER_ADMIN',
-  HEAD_OF_AUDIT: 'HEAD_OF_AUDIT',
+  SUPER_ADMIN: 'SUPER_ADMIN',        // Head of Internal Audit - full system access
   SENIOR_AUDITOR: 'SENIOR_AUDITOR',
   JUNIOR_STAFF: 'JUNIOR_STAFF',
   AUDITEE: 'AUDITEE',
   MANAGEMENT: 'MANAGEMENT',
+  SENIOR_MGMT: 'SENIOR_MGMT',
   OBSERVER: 'OBSERVER',
   AUDITOR: 'AUDITOR',
   UNIT_MANAGER: 'UNIT_MANAGER',
@@ -326,6 +329,42 @@ function invalidateDropdownCache() {
   cache.remove('sub_areas_dropdown');
   cache.remove('users_dropdown');
   cache.remove('roles_dropdown');
+  console.log('All dropdown caches invalidated');
+}
+
+/**
+ * Force clear ALL caches - run this manually after updating user data
+ */
+function clearAllCaches() {
+  const cache = CacheService.getScriptCache();
+  // Clear all known cache keys
+  const keysToRemove = [
+    'dropdown_data_all',
+    'affiliates_dropdown', 
+    'audit_areas_dropdown',
+    'sub_areas_dropdown',
+    'users_dropdown',
+    'roles_dropdown',
+    'perm_SUPER_ADMIN',
+    'perm_SENIOR_AUDITOR',
+    'perm_AUDITOR',
+    'perm_JUNIOR_STAFF',
+    'perm_AUDITEE',
+    'perm_UNIT_MANAGER',
+    'perm_MANAGEMENT',
+    'perm_SENIOR_MGMT',
+    'perm_BOARD',
+    'perm_EXTERNAL_AUDITOR'
+  ];
+  
+  keysToRemove.forEach(key => {
+    try {
+      cache.remove(key);
+    } catch(e) {}
+  });
+  
+  console.log('All caches cleared successfully');
+  return { success: true, message: 'All caches cleared' };
 }
 
 function isActive(value) {
@@ -520,13 +559,21 @@ function getUsersDropdown() {
 
 function getAuditorsDropdown() {
   const allUsers = getUsersDropdown();
-  const auditorRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF, ROLES.AUDITOR];
+  const auditorRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF, ROLES.AUDITOR, 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITOR'];
   return allUsers.filter(u => auditorRoles.includes(u.roleCode));
 }
 
 function getAuditeesDropdown() {
   const allUsers = getUsersDropdown();
-  return allUsers.filter(u => u.roleCode === ROLES.AUDITEE || u.roleCode === ROLES.MANAGEMENT || u.roleCode === ROLES.UNIT_MANAGER);
+  // Include all non-auditor roles as potential auditees (responsible parties)
+  const auditeeRoles = [
+    'AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT', 'JUNIOR_STAFF',
+    ROLES.AUDITEE, ROLES.MANAGEMENT, ROLES.UNIT_MANAGER
+  ];
+  // Return all users that are potential auditees, or just return all active users if no matches
+  const auditees = allUsers.filter(u => auditeeRoles.includes(u.roleCode));
+  // If no auditees found, return all active users (fallback)
+  return auditees.length > 0 ? auditees : allUsers;
 }
 
 function getRiskRatings() {
@@ -584,10 +631,15 @@ function getUserByEmail(email) {
   return null;
 }
 
-function invalidateUserCache(email) {
-  if (!email) return;
+function invalidateUserCache(email, userId) {
+  if (!email && !userId) return;
   const cache = CacheService.getScriptCache();
-  cache.remove('user_email_' + email.toLowerCase().trim());
+  if (email) {
+    cache.remove('user_email_' + email.toLowerCase().trim());
+  }
+  if (userId) {
+    cache.remove('user_id_' + userId);
+  }
   cache.remove('users_dropdown');
   cache.remove('dropdown_data_all');
 }
@@ -829,12 +881,17 @@ function getColumnIndex(schemaKey, columnName) {
 
 /**
  * Check if user can perform action - NOW USES DATABASE PERMISSIONS
- * Removed hardcoded bypasses for roles
+ * SUPER_ADMIN has full access to everything
  */
 function canUserPerform(user, action, entityType, entity) {
   if (!user) return false;
   
   const roleCode = user.role_code || user.roleCode;
+  
+  // SUPER_ADMIN bypasses all permission checks - full system access
+  if (roleCode === 'SUPER_ADMIN') {
+    return true;
+  }
   
   // Check database permissions first
   if (typeof checkPermission === 'function') {
