@@ -2,6 +2,82 @@
 // Run warmAllCachesOnDeploy() after deploying or when performance degrades
 
 /**
+ * Main getPermissions function - called by other services
+ * Uses short cache TTL to ensure permission changes propagate quickly
+ */
+function getPermissions(roleCode, forceFresh) {
+  if (!roleCode) return {};
+  
+  // If forceFresh is true, skip cache entirely
+  if (forceFresh === true) {
+    return getPermissionsFresh(roleCode);
+  }
+  
+  // Try cache first with short TTL (5 minutes)
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'perm_' + roleCode;
+  
+  try {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Object.keys(parsed).length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Cache read failed for permissions:', e);
+  }
+  
+  // Cache miss - read fresh from database
+  const permissions = getPermissionsFresh(roleCode);
+  
+  // Cache for 5 minutes only (300 seconds) to ensure changes propagate
+  try {
+    if (Object.keys(permissions).length > 0) {
+      cache.put(cacheKey, JSON.stringify(permissions), 300);
+    }
+  } catch (e) {
+    console.warn('Failed to cache permissions:', e);
+  }
+  
+  return permissions;
+}
+
+/**
+ * Check if a role has permission for a specific action on a module
+ * @param {string} roleCode - The role code (e.g., 'SUPER_ADMIN')
+ * @param {string} module - The module name (e.g., 'WORK_PAPER', 'CONFIG', 'REPORT')
+ * @param {string} action - The action (e.g., 'create', 'read', 'update', 'delete', 'approve', 'export')
+ * @returns {boolean} - True if permission granted
+ */
+function checkPermission(roleCode, module, action) {
+  if (!roleCode || !module || !action) return false;
+  
+  const permissions = getPermissions(roleCode);
+  
+  // Map action to permission field
+  const actionMap = {
+    'create': 'can_create',
+    'read': 'can_read',
+    'update': 'can_update',
+    'delete': 'can_delete',
+    'approve': 'can_approve',
+    'export': 'can_export'
+  };
+  
+  const permField = actionMap[action.toLowerCase()];
+  if (!permField) return false;
+  
+  // Check module permissions
+  if (permissions[module] && permissions[module][permField] === true) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
  * Master cache warm function - call after deployment or when caches are cold
  * Can be run manually from Apps Script editor or via trigger
  */
@@ -35,7 +111,7 @@ function warmAllCachesOnDeploy() {
   
   // 2. Warm role permissions
   console.log('\n[2/6] Caching role permissions...');
-  const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT'];
+  const roles = ['SUPER_ADMIN', 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT'];
   try {
     const permStart = new Date().getTime();
     roles.forEach(role => {
@@ -420,7 +496,7 @@ function getCacheStatus() {
     'dropdown_data_all',
     'config_SYSTEM_NAME',
     'perm_SUPER_ADMIN',
-    'perm_HEAD_OF_AUDIT',
+    'perm_SUPER_ADMIN',
     'perm_SENIOR_AUDITOR',
     'perm_JUNIOR_STAFF',
     'perm_AUDITEE',
@@ -468,7 +544,7 @@ function clearAllCachesForced() {
   ];
   
   // Add role-based keys
-  const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT'];
+  const roles = ['SUPER_ADMIN', 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT'];
   roles.forEach(role => {
     allKeys.push('perm_' + role);
     allKeys.push('role_name_' + role);
