@@ -142,7 +142,6 @@
       </div>
     </div>
 
-    <!-- AI Configuration Tab -->
     <div class="tab-pane fade" id="aiConfig">
       <div class="row">
         <div class="col-lg-8">
@@ -277,7 +276,6 @@
       </div>
     </div>
 
-    <!-- System Config Tab -->
     <div class="tab-pane fade" id="systemConfig">
       <div class="card">
         <div class="card-header">
@@ -317,7 +315,6 @@
       </div>
     </div>
 
-    <!-- Audit Log Tab -->
     <div class="tab-pane fade" id="auditLog">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -448,6 +445,17 @@ let aiConfigStatus = null;
 let usersData = [];
 
 function loadSettings() {
+  // Restrict tabs based on role - only SUPER_ADMIN sees all tabs
+  const role = window.currentUser?.role_code;
+  if (role !== 'SUPER_ADMIN') {
+    const restrictedTabs = ['aiConfig', 'systemConfig', 'auditLog'];
+    restrictedTabs.forEach(tabId => {
+      // Hide the nav tab
+      const navLink = document.querySelector(`a[href="#${tabId}"]`);
+      if (navLink) navLink.closest('li').style.display = 'none';
+    });
+  }
+
   loadUsers();
   loadRoles();
   loadAIConfig();
@@ -514,9 +522,9 @@ function renderUsers() {
         <div class="dropdown">
           <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item" href="#" onclick="editUser('${u.user_id}')"><i class="bi bi-pencil me-2"></i>Edit</a></li>
-            <li><a class="dropdown-item" href="#" onclick="resetUserPassword('${u.user_id}')"><i class="bi bi-key me-2"></i>Reset Password</a></li>
-            ${u.is_active ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger" href="#" onclick="deactivateUser('${u.user_id}')"><i class="bi bi-person-x me-2"></i>Deactivate</a></li>` : ''}
+            <li><a class="dropdown-item" href="javascript:void(0)" onclick="editUser('${u.user_id}')"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+            <li><a class="dropdown-item" href="javascript:void(0)" onclick="resetUserPassword('${u.user_id}')"><i class="bi bi-key me-2"></i>Reset Password</a></li>
+            ${u.is_active ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger" href="javascript:void(0)" onclick="deactivateUser('${u.user_id}')"><i class="bi bi-person-x me-2"></i>Deactivate</a></li>` : ''}
           </ul>
         </div>
       </td>
@@ -572,11 +580,18 @@ function saveUser() {
 }
 
 function resetUserPassword(id) {
-  if (!confirm('Reset password for this user?')) return;
+  if (!confirm('Reset password for this user? They will be logged out and receive a temporary password by email.')) return;
   showLoading('Resetting...');
   apiCall('resetPassword', { userId: id }).then(r => {
     hideLoading();
-    if (r.success) showToast('Password reset. Temp: ' + r.tempPassword, 'success', 10000);
+    if (r.success) {
+      showToast('Password reset successfully. Temporary password sent to their email.', 'success', 8000);
+      // If admin just reset their own password, force logout
+      if (window.currentUser && window.currentUser.user_id === id) {
+        showToast('You reset your own password. Logging out...', 'warning', 3000);
+        setTimeout(function() { handleLogout(); }, 2000);
+      }
+    }
     else showToast(r.error || 'Error', 'danger');
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }
