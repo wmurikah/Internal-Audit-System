@@ -117,8 +117,8 @@
           <i class="bi bi-download me-1"></i>Export
         </button>
         <ul class="dropdown-menu">
-          <li><a class="dropdown-item" href="#" onclick="exportWPList('csv')"><i class="bi bi-filetype-csv me-2"></i>Export as CSV</a></li>
-          <li><a class="dropdown-item" href="#" onclick="exportWPList('excel')"><i class="bi bi-file-earmark-excel me-2"></i>Export as Excel</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportWPList('csv')"><i class="bi bi-filetype-csv me-2"></i>Export as CSV</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportWPList('excel')"><i class="bi bi-file-earmark-excel me-2"></i>Export as Excel</a></li>
         </ul>
       </div>
     </div>
@@ -535,7 +535,7 @@ function renderWPTable(data) {
     const riskClass = getRiskClass(wp.risk_rating);
     
     html += `
-      <tr onclick="viewWorkPaper('${wp.work_paper_id}')">
+      <tr onclick="viewWorkPaper('${wp.work_paper_id}')" style="cursor:pointer;">
         <td><code>${wp.work_paper_id}</code></td>
         <td>
           <div class="fw-medium">${escapeHtml(wp.observation_title || 'Untitled')}</div>
@@ -552,9 +552,9 @@ function renderWPTable(data) {
               <i class="bi bi-three-dots-vertical"></i>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="#" onclick="viewWorkPaper('${wp.work_paper_id}')"><i class="bi bi-eye me-2"></i>View</a></li>
-              <li><a class="dropdown-item" href="#" onclick="editWorkPaper('${wp.work_paper_id}')"><i class="bi bi-pencil me-2"></i>Edit</a></li>
-              ${wp.status === 'Draft' ? `<li><a class="dropdown-item text-danger" href="#" onclick="deleteWorkPaper('${wp.work_paper_id}')"><i class="bi bi-trash me-2"></i>Delete</a></li>` : ''}
+              <li><a class="dropdown-item" href="javascript:void(0)" onclick="viewWorkPaper('${wp.work_paper_id}')"><i class="bi bi-eye me-2"></i>View</a></li>
+              <li><a class="dropdown-item" href="javascript:void(0)" onclick="editWorkPaper('${wp.work_paper_id}')"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+              ${wp.status === 'Draft' ? `<li><a class="dropdown-item text-danger" href="javascript:void(0)" onclick="deleteWorkPaper('${wp.work_paper_id}')"><i class="bi bi-trash me-2"></i>Delete</a></li>` : ''}
             </ul>
           </div>
         </td>
@@ -623,7 +623,7 @@ function renderWPPagination(totalItems) {
   
   let html = `
     <li class="page-item ${wpCurrentPage === 1 ? 'disabled' : ''}">
-      <a class="page-link" href="#" onclick="goToWPPage(${wpCurrentPage - 1})"><i class="bi bi-chevron-left"></i></a>
+      <a class="page-link" href="javascript:void(0)" onclick="goToWPPage(${wpCurrentPage - 1})"><i class="bi bi-chevron-left"></i></a>
     </li>
   `;
   
@@ -631,7 +631,7 @@ function renderWPPagination(totalItems) {
     if (i === 1 || i === totalPages || (i >= wpCurrentPage - 2 && i <= wpCurrentPage + 2)) {
       html += `
         <li class="page-item ${i === wpCurrentPage ? 'active' : ''}">
-          <a class="page-link" href="#" onclick="goToWPPage(${i})">${i}</a>
+          <a class="page-link" href="javascript:void(0)" onclick="goToWPPage(${i})">${i}</a>
         </li>
       `;
     } else if (i === wpCurrentPage - 3 || i === wpCurrentPage + 3) {
@@ -641,7 +641,7 @@ function renderWPPagination(totalItems) {
   
   html += `
     <li class="page-item ${wpCurrentPage === totalPages ? 'disabled' : ''}">
-      <a class="page-link" href="#" onclick="goToWPPage(${wpCurrentPage + 1})"><i class="bi bi-chevron-right"></i></a>
+      <a class="page-link" href="javascript:void(0)" onclick="goToWPPage(${wpCurrentPage + 1})"><i class="bi bi-chevron-right"></i></a>
     </li>
   `;
   
