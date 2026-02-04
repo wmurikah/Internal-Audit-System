@@ -4,7 +4,7 @@ const AUTH_CONFIG = {
   SESSION_DURATION_HOURS: 24,
   MAX_LOGIN_ATTEMPTS: 5,
   LOCKOUT_DURATION_MINUTES: 30,
-  PBKDF2_ITERATIONS: 1000,  // REDUCED from 10000 - still secure, much faster
+  PBKDF2_ITERATIONS: 1000,  // Keep at 1000 - do NOT change without re-hashing all passwords
   SALT_LENGTH: 32,
   TOKEN_LENGTH: 64,
   TEMP_PASSWORD_LENGTH: 12
@@ -12,7 +12,7 @@ const AUTH_CONFIG = {
 
 function login(email, password) {
   const startTime = new Date().getTime();
-  console.log('Login attempt started for:', email);
+  console.log('Login attempt for:', email);
 
   if (!email || !password) {
     return { success: false, error: 'Email and password are required' };
@@ -20,12 +20,12 @@ function login(email, password) {
   
   const normalizedEmail = email.toLowerCase().trim();
   
-  // Use cached user lookup for speed
+  // 1. User lookup (cached - fast)
   const user = getUserByEmailCached(normalizedEmail);
-  console.log('User lookup took:', new Date().getTime() - startTime, 'ms');
+  console.log('User lookup:', new Date().getTime() - startTime, 'ms');
 
   if (!user) {
-    Utilities.sleep(200); // Reduced from 500ms - still prevents timing attacks
+    Utilities.sleep(200);
     return { success: false, error: 'Access denied. Contact administrator.' };
   }
 
@@ -37,40 +37,55 @@ function login(email, password) {
     const lockUntil = new Date(user.locked_until);
     if (lockUntil > new Date()) {
       const minutesLeft = Math.ceil((lockUntil - new Date()) / (1000 * 60));
-      return { 
-        success: false, 
-        error: `Account is locked. Try again in ${minutesLeft} minute(s).` 
-      };
+      return { success: false, error: `Account is locked. Try again in ${minutesLeft} minute(s).` };
     }
   }
   
-  // Password verification
+  // 2. Password verification (reduced iterations - still secure)
   const verifyStart = new Date().getTime();
   const passwordValid = verifyPassword(password, user.password_salt, user.password_hash);
-  console.log('Password verification took:', new Date().getTime() - verifyStart, 'ms');
+  console.log('Password verify:', new Date().getTime() - verifyStart, 'ms');
   
   if (!passwordValid) {
     incrementFailedAttempts(user);
     return { success: false, error: 'Invalid email or password' };
   }
   
-  // Reset failed attempts on successful login
-  resetFailedAttempts(user);
-  
-  // Create session
+  // 3. Create session (single sheet write - required)
   const session = createSession(user);
+  console.log('Session created:', new Date().getTime() - startTime, 'ms');
   
-  // Update last login (async-style - don't wait)
-  updateLastLoginAsync(user);
+  // 4. Get permissions + role name (from cache if warm, else fast lookup)
+  const cache = CacheService.getScriptCache();
+  let roleName = cache.get('role_name_' + user.role_code);
+  if (!roleName) {
+    roleName = getRoleName(user.role_code) || user.role_code;
+    cache.put('role_name_' + user.role_code, roleName, 3600);
+  }
   
-  // Pre-warm cache for faster subsequent requests
-  prewarmUserCache(user);
+  let permissions = {};
+  try {
+    const cachedPerm = cache.get('perm_' + user.role_code);
+    if (cachedPerm) {
+      permissions = JSON.parse(cachedPerm);
+    } else {
+      permissions = getUserPermissions(user.role_code);
+      cache.put('perm_' + user.role_code, JSON.stringify(permissions), 1800);
+    }
+  } catch(e) {}
   
-  // Log audit event
-  logAuditEvent('LOGIN', 'USER', user.user_id, null, { email: user.email }, user.user_id, user.email);
+  // 5. Get dropdowns from cache only (don't generate if missing - background will handle it)
+  let dropdowns = {};
+  try {
+    const cachedDropdowns = cache.get('dropdown_data_all');
+    if (cachedDropdowns) {
+      dropdowns = JSON.parse(cachedDropdowns);
+    }
+  } catch(e) {}
   
   console.log('Total login time:', new Date().getTime() - startTime, 'ms');
   
+  // Return EVERYTHING the app needs - no second round trip needed
   return sanitizeForClient({
     success: true,
     sessionToken: session.session_token,
@@ -79,11 +94,71 @@ function login(email, password) {
       email: user.email,
       full_name: user.full_name,
       role_code: user.role_code,
-      role_name: getRoleName(user.role_code),
-      affiliate_code: user.affiliate_code,
-      must_change_password: user.must_change_password
-    }
+      role_name: roleName,
+      affiliate_code: user.affiliate_code || '',
+      department: user.department || '',
+      must_change_password: user.must_change_password || false
+    },
+    permissions: permissions,
+    dropdowns: dropdowns,
+    config: {
+      systemName: 'Hass Petroleum Internal Audit System',
+      currentYear: new Date().getFullYear()
+    },
+    // Tell client to run post-login cleanup
+    _needsCleanup: true
   });
+}
+
+/**
+ * Post-login cleanup - called by client in background after app loads
+ * Handles all the non-critical work that used to block login
+ */
+function postLoginCleanup(data) {
+  try {
+    const userId = data.userId;
+    const userEmail = data.email;
+    const roleCode = data.roleCode;
+    
+    // Reset failed attempts (sheet writes)
+    try {
+      const user = getUserByEmailCached(userEmail);
+      if (user) {
+        const sheet = getSheet(SHEETS.USERS);
+        const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
+        if (rowIndex) {
+          const attemptsIdx = getColumnIndex('USERS', 'login_attempts');
+          const lockedIdx = getColumnIndex('USERS', 'locked_until');
+          const lastLoginIdx = getColumnIndex('USERS', 'last_login');
+          
+          // Batch write - all three at once
+          sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
+          sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
+          sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
+        }
+        invalidateUserCache(userEmail, user.user_id);
+      }
+    } catch(e) { console.warn('Cleanup: reset attempts failed:', e); }
+    
+    // Audit log
+    try {
+      logAuditEvent('LOGIN', 'USER', userId, null, { email: userEmail }, userId, userEmail);
+    } catch(e) { console.warn('Cleanup: audit log failed:', e); }
+    
+    // Warm dropdown cache if not already warm
+    try {
+      const cache = CacheService.getScriptCache();
+      if (!cache.get('dropdown_data_all')) {
+        const dropdowns = getDropdownData();
+        cache.put('dropdown_data_all', JSON.stringify(dropdowns), 1800);
+      }
+    } catch(e) { console.warn('Cleanup: dropdown warm failed:', e); }
+    
+    return { success: true };
+  } catch(e) {
+    console.error('postLoginCleanup error:', e);
+    return { success: false };
+  }
 }
 
 /**
@@ -150,16 +225,27 @@ function prewarmUserCache(user) {
     
     // Cache permissions
     const permissions = getUserPermissions(user.role_code);
-    cache.put('perm_' + user.role_code, JSON.stringify(permissions), 1800); // 30 min
+    cache.put('perm_' + user.role_code, JSON.stringify(permissions), 1800);
     
     // Cache role name
     const roleName = getRoleName(user.role_code);
-    cache.put('role_name_' + user.role_code, roleName, 3600); // 1 hour
+    cache.put('role_name_' + user.role_code, roleName, 3600);
+    
+    // Pre-warm dropdown cache so SSR can use it on next page load
+    try {
+      const existingDropdowns = cache.get('dropdown_data_all');
+      if (!existingDropdowns) {
+        const dropdowns = getDropdownData();
+        cache.put('dropdown_data_all', JSON.stringify(dropdowns), 1800);
+        console.log('Dropdown cache warmed during login');
+      }
+    } catch(e) {
+      console.warn('Dropdown pre-warm failed (non-fatal):', e);
+    }
     
     console.log('Cache pre-warmed for user:', user.email);
   } catch (e) {
     console.warn('Cache pre-warm failed:', e);
-    // Non-fatal - continue without pre-warming
   }
 }
 
@@ -177,7 +263,7 @@ function updateLastLoginAsync(user) {
     }
     
     // Invalidate cache
-    invalidateUserCache(user.email);
+    invalidateUserCache(user.email, user.user_id);
   } catch (e) {
     console.warn('updateLastLoginAsync failed:', e);
     // Non-fatal
@@ -467,11 +553,10 @@ function hashPassword(password, salt) {
 }
 
 /**
- * Verify password
+ * Verify password - simple direct comparison
  */
 function verifyPassword(password, salt, storedHash) {
   if (!password || !salt || !storedHash) return false;
-  
   const computedHash = hashPassword(password, salt);
   return computedHash === storedHash;
 }
@@ -567,7 +652,7 @@ function changePassword(userId, currentPassword, newPassword) {
   sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(false);
   sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
 
-  invalidateUserCache(user.email);
+  invalidateUserCache(user.email, user.user_id);
 
   logAuditEvent('CHANGE_PASSWORD', 'USER', userId, null, null, userId, user.email);
 
@@ -582,7 +667,7 @@ function resetPassword(userId, adminUser) {
     return { success: false, error: 'Admin user required' };
   }
   
-  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.HEAD_OF_AUDIT) {
+  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.SUPER_ADMIN) {
     return { success: false, error: 'Permission denied' };
   }
   
@@ -616,24 +701,29 @@ function resetPassword(userId, adminUser) {
   sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
   sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
   
-  invalidateUserCache(user.email);
+  invalidateUserCache(user.email, user.user_id);
   
-  queueEmail({
-    template_code: 'PASSWORD_RESET',
-    recipient_email: user.email,
-    recipient_user_id: user.user_id,
-    subject: 'Your Password Has Been Reset',
-    body: `Hello ${user.full_name},\n\nYour password has been reset by an administrator.\n\n` +
-          `Your temporary password is: ${tempPassword}\n\n` +
-          `Please log in and change your password immediately.\n\n` +
-          `If you did not request this reset, please contact your administrator.`,
-    module: 'AUTH',
-    record_id: userId
-  });
+  // Invalidate all active sessions for this user so they must re-login
+  invalidateUserSessions(userId);
+  
+  // Get the deployed app URL for the login link
+  const loginUrl = ScriptApp.getService().getUrl();
+  
+  // Send immediately - password resets are time-sensitive
+  const emailBody = `Hello ${user.full_name},\n\nYour password has been reset by an administrator.\n\n` +
+        `Your temporary password is: ${tempPassword}\n\n` +
+        `Please log in and change your password immediately.\n\n` +
+        `Login here: ${loginUrl}\n\n` +
+        `If you did not request this reset, please contact your administrator.`;
+  
+  const emailResult = sendImmediateEmail(user.email, 'Your Password Has Been Reset', emailBody);
+  if (!emailResult.success) {
+    console.error('Failed to send password reset email:', emailResult.error);
+  }
   
   logAuditEvent('RESET_PASSWORD', 'USER', userId, null, null, adminUser.user_id, adminUser.email);
   
-  return { success: true, tempPassword: tempPassword };
+  return { success: true };
 }
 
 /**
@@ -679,7 +769,7 @@ function incrementFailedAttempts(user) {
     logAuditEvent('ACCOUNT_LOCKED', 'USER', user.user_id, null, { attempts: attempts }, '', user.email);
   }
   
-  invalidateUserCache(user.email);
+  invalidateUserCache(user.email, user.user_id);
 }
 
 /**
@@ -697,7 +787,7 @@ function resetFailedAttempts(user) {
   sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
   sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
   
-  invalidateUserCache(user.email);
+  invalidateUserCache(user.email, user.user_id);
 }
 
 /**
@@ -712,7 +802,7 @@ function updateLastLogin(user) {
   const lastLoginIdx = getColumnIndex('USERS', 'last_login');
   sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
   
-  invalidateUserCache(user.email);
+  invalidateUserCache(user.email, user.user_id);
 }
 
 function createUser(userData, adminUser) {
@@ -720,7 +810,7 @@ function createUser(userData, adminUser) {
     return { success: false, error: 'Admin user required' };
   }
   
-  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.HEAD_OF_AUDIT) {
+  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.SUPER_ADMIN) {
     return { success: false, error: 'Permission denied' };
   }
   
@@ -775,20 +865,22 @@ function createUser(userData, adminUser) {
   
   invalidateDropdownCache();
   
-  queueEmail({
-    template_code: 'WELCOME_USER',
-    recipient_email: user.email,
-    recipient_user_id: userId,
-    subject: 'Welcome to Hass Petroleum Internal Audit System',
-    body: `Hello ${user.full_name},\n\n` +
-          `Your account has been created for the Hass Petroleum Internal Audit System.\n\n` +
-          `Email: ${user.email}\n` +
-          `Temporary Password: ${tempPassword}\n\n` +
-          `Please log in and change your password immediately.\n\n` +
-          `Best regards,\nAudit Team`,
-    module: 'AUTH',
-    record_id: userId
-  });
+  // Get the deployed app URL for the login link
+  const loginUrl = ScriptApp.getService().getUrl();
+  
+  // Send immediately - new users need their credentials right away
+  const welcomeBody = `Hello ${user.full_name},\n\n` +
+        `Your account has been created for the Internal Audit System.\n\n` +
+        `Email: ${user.email}\n` +
+        `Temporary Password: ${tempPassword}\n\n` +
+        `Please log in and change your password immediately.\n\n` +
+        `Login here: ${loginUrl}\n\n` +
+        `Best regards,\nAudit Team`;
+  
+  const emailResult = sendImmediateEmail(user.email, 'Welcome - Your Account Has Been Created', welcomeBody);
+  if (!emailResult.success) {
+    console.error('Failed to send welcome email:', emailResult.error);
+  }
   
   logAuditEvent('CREATE', 'USER', userId, null, user, adminUser.user_id, adminUser.email);
   
@@ -813,7 +905,7 @@ function updateUser(userId, userData, adminUser) {
   }
   
   const isSelf = adminUser.user_id === userId;
-  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.HEAD_OF_AUDIT;
+  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SUPER_ADMIN;
   
   if (!isSelf && !isAdmin) {
     return { success: false, error: 'Permission denied' };
@@ -852,7 +944,7 @@ function updateUser(userId, userData, adminUser) {
   const row = objectToRow('USERS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
   
-  invalidateUserCache(user.email);
+  invalidateUserCache(user.email, user.user_id);
   if (updates.email && updates.email !== user.email) {
     invalidateUserCache(updates.email);
   }
@@ -896,7 +988,7 @@ function deactivateUser(userId, adminUser) {
   
   invalidateUserSessions(userId);
   
-  invalidateUserCache(user.email);
+  invalidateUserCache(user.email, user.user_id);
   invalidateDropdownCache();
   
   logAuditEvent('DEACTIVATE', 'USER', userId, user, null, adminUser.user_id, adminUser.email);
@@ -907,6 +999,71 @@ function deactivateUser(userId, adminUser) {
 /**
  * Invalidate all sessions for a user
  */
+/**
+ * Forgot password - self-service, no auth required
+ * Sends temp password to the user's registered email
+ */
+function forgotPassword(email) {
+  if (!email) {
+    return { success: false, error: 'Email is required' };
+  }
+  
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = getUserByEmailCached(normalizedEmail);
+  
+  // Always return success to prevent email enumeration attacks
+  if (!user || !isActive(user.is_active)) {
+    Utilities.sleep(500); // Simulate processing time
+    return { success: true, message: 'If an account exists with that email, a temporary password has been sent.' };
+  }
+  
+  if (!user._rowIndex) {
+    user._rowIndex = findUserRowIndex(user.user_id);
+  }
+  
+  const tempPassword = generateTempPassword();
+  const salt = generateSalt();
+  const hash = hashPassword(tempPassword, salt);
+  
+  const sheet = getSheet(SHEETS.USERS);
+  const rowIndex = user._rowIndex;
+  
+  const hashIdx = getColumnIndex('USERS', 'password_hash');
+  const saltIdx = getColumnIndex('USERS', 'password_salt');
+  const mustChangeIdx = getColumnIndex('USERS', 'must_change_password');
+  const updatedIdx = getColumnIndex('USERS', 'updated_at');
+  const attemptsIdx = getColumnIndex('USERS', 'login_attempts');
+  const lockedIdx = getColumnIndex('USERS', 'locked_until');
+  
+  sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
+  sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
+  sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
+  sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
+  sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
+  sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
+  
+  invalidateUserCache(user.email, user.user_id);
+  invalidateUserSessions(user.user_id);
+  
+  const loginUrl = ScriptApp.getService().getUrl();
+  
+  const emailBody = `Hello ${user.full_name},\n\n` +
+        `A password reset was requested for your account.\n\n` +
+        `Your temporary password is: ${tempPassword}\n\n` +
+        `Please log in and change your password immediately.\n\n` +
+        `Login here: ${loginUrl}\n\n` +
+        `If you did not request this, please contact your administrator immediately.`;
+  
+  const emailResult = sendImmediateEmail(user.email, 'Password Reset Request', emailBody);
+  if (!emailResult.success) {
+    console.error('Failed to send forgot password email:', emailResult.error);
+  }
+  
+  logAuditEvent('FORGOT_PASSWORD', 'USER', user.user_id, null, null, user.user_id, user.email);
+  
+  return { success: true, message: 'If an account exists with that email, a temporary password has been sent.' };
+}
+
 function invalidateUserSessions(userId) {
   const sheet = getSheet(SHEETS.SESSIONS);
   const data = sheet.getDataRange().getValues();
@@ -929,7 +1086,7 @@ function getUsers(filters, adminUser) {
     return { success: false, error: 'Admin user required' };
   }
   
-  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.HEAD_OF_AUDIT;
+  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SUPER_ADMIN;
   if (!isAdmin) {
     return { success: false, error: 'Permission denied' };
   }
