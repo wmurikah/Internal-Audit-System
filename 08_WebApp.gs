@@ -13,7 +13,55 @@ function doGet(e) {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
-    return HtmlService.createTemplateFromFile('AuditorPortal')
+    // =========================================================
+    // SERVE APP PAGE
+    // Data comes from: sessionStorage (post-login) or localStorage (repeat visit)
+    // SSR is only a bonus if Google session + cache are both available
+    // =========================================================
+    const template = HtmlService.createTemplateFromFile('AuditorPortal');
+    
+    // Lightweight SSR attempt - ONLY reads from cache, never computes
+    let inlineData = null;
+    try {
+      const cache = CacheService.getScriptCache();
+      const user = getCurrentUser(); // Fast if Google-authed, null otherwise
+      
+      if (user && isActive(user.is_active)) {
+        const roleName = cache.get('role_name_' + user.role_code) || user.role_code;
+        const cachedPerm = cache.get('perm_' + user.role_code);
+        const cachedDropdowns = cache.get('dropdown_data_all');
+        
+        // Only build SSR data if permissions are already cached
+        if (cachedPerm) {
+          inlineData = {
+            success: true,
+            user: {
+              user_id: user.user_id,
+              email: user.email,
+              full_name: user.full_name,
+              role_code: user.role_code,
+              role_name: roleName,
+              affiliate_code: user.affiliate_code || '',
+              department: user.department || '',
+              must_change_password: user.must_change_password || false
+            },
+            permissions: JSON.parse(cachedPerm),
+            dropdowns: cachedDropdowns ? JSON.parse(cachedDropdowns) : {},
+            config: {
+              systemName: 'Hass Petroleum Internal Audit System',
+              currentYear: new Date().getFullYear()
+            }
+          };
+        }
+      }
+    } catch (ssrError) {
+      // Non-fatal - client will use sessionStorage or API fallback
+      console.error('SSR skip:', ssrError.message);
+    }
+
+    template.inlineInitData = inlineData ? JSON.stringify(inlineData) : 'null';
+
+    return template
       .evaluate()
       .setTitle('Hass Petroleum Internal Audit System')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -39,7 +87,7 @@ function doPost(e) {
     
     const user = getCurrentUser();
     
-    const publicActions = ['login', 'ping'];
+    const publicActions = ['login', 'ping', 'forgotPassword'];
     
     if (!publicActions.includes(action) && !user) {
       return jsonResponse({ success: false, error: 'Authentication required' }, 401);
@@ -76,6 +124,9 @@ function routeAction(action, data, user) {
     case 'login':
       return login(data.email, data.password);
       
+    case 'forgotPassword':
+      return forgotPassword(data.email);
+      
     case 'logout':
       return logout(data.sessionToken);
       
@@ -87,16 +138,28 @@ function routeAction(action, data, user) {
       
     case 'resetPassword':
       return resetPassword(data.userId, user);
+    
+    case 'postLoginCleanup':
+      return postLoginCleanup(data);
       
     // ========== INIT ==========
     case 'getInitData':
       return getInitData();
+    
+    case 'getInitDataLight':
+      return getInitDataLight(user);
+    
+    case 'getDropdowns':
+      return getDropdownDataCached();
       
     case 'getDashboardData':
       return getDashboardDataSafe(user);
       
     case 'getDropdownData':
       return { success: true, dropdowns: getDropdownDataCached() };
+      
+    case 'getSidebarCounts':
+      return getSidebarCounts(user);
       
     // ========== WORK PAPERS ==========
     case 'getWorkPapers':
@@ -449,7 +512,7 @@ function warmAllCaches() {
     console.log('Cached dropdowns');
     
     // 2. Cache all role permissions
-    const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
+    const roles = ['SUPER_ADMIN', 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
     roles.forEach(role => {
       try {
         const perms = getPermissions(role);
@@ -510,7 +573,7 @@ function clearAllCaches() {
   ];
   
   // Clear all role permission caches
-  const roles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
+  const roles = ['SUPER_ADMIN', 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
   roles.forEach(role => {
     keysToRemove.push('perm_' + role);
     keysToRemove.push('role_name_' + role);
@@ -664,7 +727,7 @@ function apiCall(action, data) {
 
     console.log('=== API Call: ' + action + ' ===');
 
-    const publicActions = ['login', 'ping', 'testConnection'];
+    const publicActions = ['login', 'ping', 'testConnection', 'validateSession', 'postLoginCleanup', 'forgotPassword'];
 
     let user = null;
 
@@ -819,6 +882,70 @@ function getInitDataOptimized(user) {
   }
 
   console.log('getInitDataOptimized completed in', new Date().getTime() - startTime, 'ms');
+  return sanitizeForClient(response);
+}
+
+/**
+ * LIGHTWEIGHT INIT - Fast first load
+ * Only loads: user info, permissions, minimal config
+ * Dropdowns loaded separately in background
+ */
+function getInitDataLight(user) {
+  const startTime = new Date().getTime();
+  console.log('getInitDataLight called for:', user ? user.email : 'null');
+
+  if (!user) {
+    return { success: false, error: 'User not found', requireLogin: true };
+  }
+
+  if (!isActive(user.is_active)) {
+    return { success: false, error: 'Account is inactive' };
+  }
+
+  const cache = CacheService.getScriptCache();
+  
+  // Build minimal response - NO dropdowns
+  const response = {
+    success: true,
+    user: {
+      user_id: user.user_id,
+      email: user.email,
+      full_name: user.full_name,
+      role_code: user.role_code,
+      role_name: '',
+      affiliate_code: user.affiliate_code || '',
+      department: user.department || '',
+      must_change_password: user.must_change_password || false
+    },
+    dropdowns: {}, // Empty - will be loaded in background
+    config: {
+      systemName: 'Hass Petroleum Internal Audit System',
+      currentYear: new Date().getFullYear()
+    },
+    permissions: {}
+  };
+
+  // Get role name (cached)
+  try {
+    let roleName = cache.get('role_name_' + user.role_code);
+    if (!roleName) {
+      roleName = getRoleName(user.role_code) || user.role_code;
+      cache.put('role_name_' + user.role_code, roleName, 3600);
+    }
+    response.user.role_name = roleName;
+  } catch (e) {
+    response.user.role_name = user.role_code;
+  }
+
+  // Get permissions (this is fast - single sheet lookup)
+  try {
+    response.permissions = getUserPermissions(user.role_code);
+  } catch (e) {
+    console.error('Error loading permissions:', e);
+    response.permissions = {};
+  }
+
+  console.log('getInitDataLight completed in', new Date().getTime() - startTime, 'ms');
   return sanitizeForClient(response);
 }
 
