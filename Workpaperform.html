@@ -770,18 +770,269 @@ let selectedCCRecipients = [];
 let uploadedEvidenceFiles = [];
 let actionPlanEvidenceFiles = {};
 
-// Tab Navigation Functions
+// =============================================
+// SIMPLIFIED AUTOCOMPLETE - FIXED VERSION
+// =============================================
+
+function setupAutocomplete(inputId, suggestionsId, tagsId, hiddenId, dataSource) {
+  const input = document.getElementById(inputId);
+  const suggestionsDiv = document.getElementById(suggestionsId);
+  const tagsDiv = document.getElementById(tagsId);
+  const hiddenInput = document.getElementById(hiddenId);
+  
+  if (!input || !suggestionsDiv) {
+    console.error('Autocomplete elements not found:', inputId, suggestionsId);
+    return;
+  }
+  
+  let selectedItems = (dataSource === 'auditees') ? selectedResponsible : selectedCCRecipients;
+  
+  console.log('Setting up autocomplete for:', inputId, 'with data source:', dataSource);
+  
+  // Input event - show suggestions
+  input.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    
+    if (query.length < 2) {
+      suggestionsDiv.classList.remove('show');
+      suggestionsDiv.style.display = 'none';
+      return;
+    }
+    
+    // Get data based on source
+    let data = [];
+    if (dataSource === 'auditees') {
+      data = window.appDropdowns?.auditees || [];
+    } else {
+      data = window.appDropdowns?.users || [];
+    }
+    
+    // Filter
+    const filtered = data.filter(u => {
+      const nameMatch = (u.name || '').toLowerCase().includes(query);
+      const emailMatch = (u.email || '').toLowerCase().includes(query);
+      // Exclude already selected
+      const alreadySelected = selectedItems.some(s => s.id === u.id);
+      return (nameMatch || emailMatch) && !alreadySelected;
+    }).slice(0, 10);
+    
+    // Add custom email option for CC recipients
+    if (dataSource === 'emails' && query.includes('@') && !filtered.some(f => f.email === query)) {
+      filtered.push({ id: 'custom_' + Date.now(), email: query, name: query, isCustom: true });
+    }
+    
+    if (filtered.length === 0) {
+      suggestionsDiv.classList.remove('show');
+      suggestionsDiv.style.display = 'none';
+      return;
+    }
+    
+    // Render suggestions
+    suggestionsDiv.innerHTML = filtered.map((s, i) => `
+      <div class="autocomplete-suggestion" data-index="${i}">
+        <div class="suggestion-name">${escapeHtml(s.name || s.email)}</div>
+        ${s.email && !s.isCustom ? `<div class="suggestion-email">${escapeHtml(s.email)}</div>` : ''}
+        ${s.isCustom ? '<div class="suggestion-email"><em>Add as custom email</em></div>' : ''}
+      </div>
+    `).join('');
+    
+    // Add click handlers to suggestions
+    suggestionsDiv.querySelectorAll('.autocomplete-suggestion').forEach((el, idx) => {
+      el.addEventListener('click', function() {
+        selectItem(filtered[idx]);
+      });
+    });
+    
+    suggestionsDiv.classList.add('show');
+    suggestionsDiv.style.display = 'block';
+  });
+  
+  // Hide on blur (with delay to allow click)
+  input.addEventListener('blur', function() {
+    setTimeout(() => {
+      suggestionsDiv.classList.remove('show');
+      suggestionsDiv.style.display = 'none';
+    }, 200);
+  });
+  
+  // Keyboard navigation
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      suggestionsDiv.classList.remove('show');
+      suggestionsDiv.style.display = 'none';
+    }
+  });
+  
+  // Select item function
+  function selectItem(item) {
+    if (!item) return;
+    
+    // Add to selected
+    selectedItems.push(item);
+    
+    // Update references
+    if (dataSource === 'auditees') {
+      selectedResponsible = selectedItems;
+    } else {
+      selectedCCRecipients = selectedItems;
+    }
+    
+    // Render tags
+    renderTags();
+    
+    // Update hidden input
+    updateHidden();
+    
+    // Clear input
+    input.value = '';
+    suggestionsDiv.classList.remove('show');
+    suggestionsDiv.style.display = 'none';
+  }
+  
+  // Render tags function
+  function renderTags() {
+    tagsDiv.innerHTML = selectedItems.map((s, i) => `
+      <span class="selected-tag">
+        ${escapeHtml(s.name || s.email)}
+        <span class="remove-tag" data-index="${i}">&times;</span>
+      </span>
+    `).join('');
+    
+    // Add remove handlers
+    tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
+      el.addEventListener('click', function() {
+        const idx = parseInt(this.dataset.index);
+        selectedItems.splice(idx, 1);
+        if (dataSource === 'auditees') {
+          selectedResponsible = selectedItems;
+        } else {
+          selectedCCRecipients = selectedItems;
+        }
+        renderTags();
+        updateHidden();
+      });
+    });
+  }
+  
+  // Update hidden input
+  function updateHidden() {
+    if (dataSource === 'auditees') {
+      hiddenInput.value = selectedItems.map(s => s.id).join(',');
+    } else {
+      hiddenInput.value = selectedItems.map(s => s.email).join('\n');
+    }
+  }
+}
+
+// Setup autocomplete for action plan owner fields
+function setupActionPlanOwnerAutocomplete(entry, index) {
+  const input = entry.querySelector('.ap-owner-input');
+  const suggestionsDiv = entry.querySelector('.ap-owner-suggestions');
+  const tagsDiv = entry.querySelector('.ap-owner-tags');
+  const idsInput = entry.querySelector('.ap-owner-ids');
+  const namesInput = entry.querySelector('.ap-owner-names');
+  
+  if (!input || !suggestionsDiv) return;
+  
+  let selectedOwners = [];
+  
+  input.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    
+    if (query.length < 2) {
+      suggestionsDiv.classList.remove('show');
+      suggestionsDiv.style.display = 'none';
+      return;
+    }
+    
+    const users = window.appDropdowns?.users || [];
+    const filtered = users.filter(u => {
+      const nameMatch = (u.name || '').toLowerCase().includes(query);
+      const emailMatch = (u.email || '').toLowerCase().includes(query);
+      const alreadySelected = selectedOwners.some(s => s.id === u.id);
+      return (nameMatch || emailMatch) && !alreadySelected;
+    }).slice(0, 10);
+    
+    if (filtered.length === 0) {
+      suggestionsDiv.classList.remove('show');
+      suggestionsDiv.style.display = 'none';
+      return;
+    }
+    
+    suggestionsDiv.innerHTML = filtered.map((s, i) => `
+      <div class="autocomplete-suggestion" data-index="${i}">
+        <div class="suggestion-name">${escapeHtml(s.name)}</div>
+        <div class="suggestion-email">${escapeHtml(s.email)}</div>
+      </div>
+    `).join('');
+    
+    suggestionsDiv.querySelectorAll('.autocomplete-suggestion').forEach((el, idx) => {
+      el.addEventListener('click', function() {
+        selectOwner(filtered[idx]);
+      });
+    });
+    
+    suggestionsDiv.classList.add('show');
+    suggestionsDiv.style.display = 'block';
+  });
+  
+  input.addEventListener('blur', function() {
+    setTimeout(() => {
+      suggestionsDiv.classList.remove('show');
+      suggestionsDiv.style.display = 'none';
+    }, 200);
+  });
+  
+  function selectOwner(user) {
+    selectedOwners.push(user);
+    renderOwnerTags();
+    updateOwnerInputs();
+    input.value = '';
+    suggestionsDiv.classList.remove('show');
+    suggestionsDiv.style.display = 'none';
+  }
+  
+  function renderOwnerTags() {
+    tagsDiv.innerHTML = selectedOwners.map((s, i) => `
+      <span class="selected-tag">
+        ${escapeHtml(s.name)}
+        <span class="remove-tag" data-index="${i}">&times;</span>
+      </span>
+    `).join('');
+    
+    tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
+      el.addEventListener('click', function() {
+        const idx = parseInt(this.dataset.index);
+        selectedOwners.splice(idx, 1);
+        renderOwnerTags();
+        updateOwnerInputs();
+      });
+    });
+  }
+  
+  function updateOwnerInputs() {
+    idsInput.value = selectedOwners.map(s => s.id).join(',');
+    namesInput.value = selectedOwners.map(s => s.name).join(', ');
+  }
+}
+
+// =============================================
+// TAB NAVIGATION
+// =============================================
+
 function goToTab(tabId) {
   const tabEl = document.getElementById(tabId);
   if (tabEl) {
     const tab = new bootstrap.Tab(tabEl);
     tab.show();
-    // Scroll to top of form
     document.querySelector('.work-paper-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 
-// Form Progress Tracking
+// =============================================
+// FORM PROGRESS
+// =============================================
+
 function updateFormProgress() {
   const requiredFields = [
     { id: 'wpYear', tab: 'basic' },
@@ -813,7 +1064,6 @@ function updateFormProgress() {
     }
   });
 
-  // Calculate progress percentage
   const progress = Math.round((filledCount / requiredFields.length) * 100);
   const progressBar = document.getElementById('formProgressBar');
   const progressText = document.getElementById('formProgressText');
@@ -821,7 +1071,6 @@ function updateFormProgress() {
   if (progressBar) progressBar.style.width = progress + '%';
   if (progressText) progressText.textContent = progress + '% complete';
 
-  // Update tab status indicators
   Object.keys(tabStatus).forEach(tab => {
     const statusEl = document.getElementById('status-' + tab);
     if (statusEl) {
@@ -836,33 +1085,8 @@ function updateFormProgress() {
       }
     }
   });
-
-  // Check evidence tab
-  if (uploadedEvidenceFiles.length > 0) {
-    const evidenceStatus = document.getElementById('status-evidence');
-    if (evidenceStatus) {
-      evidenceStatus.className = 'tab-status complete';
-    }
-  }
-
-  // Check action plans
-  if (document.querySelectorAll('.action-plan-entry').length > 0) {
-    const responseStatus = document.getElementById('status-response');
-    if (responseStatus) {
-      responseStatus.className = 'tab-status partial';
-    }
-  }
-
-  // Check responsible parties
-  if (selectedResponsible.length > 0) {
-    const partiesStatus = document.getElementById('status-parties');
-    if (partiesStatus) {
-      partiesStatus.className = 'tab-status complete';
-    }
-  }
 }
 
-// Risk Badge Preview
 function updateRiskBadge() {
   const rating = document.getElementById('wpRiskRating')?.value;
   const preview = document.getElementById('riskBadgePreview');
@@ -882,7 +1106,10 @@ function updateRiskBadge() {
   }
 }
 
-// Enhanced File Selection Handler
+// =============================================
+// FILE HANDLING
+// =============================================
+
 function handleFileSelect(input) {
   const file = input.files[0];
   if (file) {
@@ -890,7 +1117,6 @@ function handleFileSelect(input) {
   }
 }
 
-// Get File Icon Class
 function getFileIconClass(fileName) {
   const ext = fileName.split('.').pop().toLowerCase();
   if (['pdf'].includes(ext)) return 'pdf';
@@ -900,7 +1126,6 @@ function getFileIconClass(fileName) {
   return '';
 }
 
-// Get File Icon
 function getFileIcon(fileName) {
   const ext = fileName.split('.').pop().toLowerCase();
   if (['pdf'].includes(ext)) return 'bi-file-earmark-pdf';
@@ -910,410 +1135,6 @@ function getFileIcon(fileName) {
   return 'bi-file-earmark';
 }
 
-// Setup drag and drop for upload zone
-function setupUploadZoneDragDrop() {
-  const uploadZone = document.getElementById('wpUploadZone');
-  if (!uploadZone) return;
-
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    uploadZone.addEventListener(eventName, preventDefaults, false);
-  });
-
-  function preventDefaults(e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  ['dragenter', 'dragover'].forEach(eventName => {
-    uploadZone.addEventListener(eventName, () => uploadZone.classList.add('dragover'), false);
-  });
-
-  ['dragleave', 'drop'].forEach(eventName => {
-    uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('dragover'), false);
-  });
-
-  uploadZone.addEventListener('drop', (e) => {
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      document.getElementById('wpEvidenceFile').files = files;
-      uploadEvidenceFile();
-    }
-  }, false);
-}
-
-function initWorkPaperForm(params) {
-  // Initialize year dropdown
-  const yearSelect = document.getElementById('wpYear');
-  yearSelect.innerHTML = '<option value="">Select Year</option>';
-  const currentYear = new Date().getFullYear();
-  for (let y = currentYear + 1; y >= currentYear - 3; y--) {
-    yearSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
-  }
-
-  // Initialize dropdowns
-  populateDropdown('wpAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
-  populateDropdown('wpAuditArea', window.appDropdowns?.auditAreas || [], 'id', 'display', 'Select Audit Area');
-
-  // Set default date
-  document.getElementById('wpDate').value = new Date().toISOString().split('T')[0];
-
-  // Initialize autocomplete fields
-  initAutocomplete('wpResponsibleInput', 'wpResponsibleSuggestions', 'wpResponsibleTags', 'wpResponsibleIds', 'auditees');
-  initAutocomplete('wpCCRecipientsInput', 'wpCCRecipientsSuggestions', 'wpCCRecipientsTags', 'wpCCRecipients', 'emails');
-
-  // Setup drag and drop for upload zone
-  setupUploadZoneDragDrop();
-
-  // Initial progress update
-  setTimeout(updateFormProgress, 100);
-
-  // Reset state
-  selectedResponsible = [];
-  selectedCCRecipients = [];
-  uploadedEvidenceFiles = [];
-  actionPlanEvidenceFiles = {};
-  actionPlanCounter = 0;
-  document.getElementById('actionPlansContainer').innerHTML = '';
-  document.getElementById('noActionPlansMessage').style.display = 'block';
-  document.getElementById('wpEvidenceFilesList').innerHTML = '';
-
-  // Load existing work paper if editing
-  if (params && params.id) {
-    loadWorkPaperForEdit(params.id);
-  } else {
-    editingWorkPaper = null;
-    document.getElementById('wpFormId').value = '';
-  }
-}
-
-function initAutocomplete(inputId, suggestionsId, tagsId, hiddenId, type) {
-  const input = document.getElementById(inputId);
-  const suggestions = document.getElementById(suggestionsId);
-  const tagsContainer = document.getElementById(tagsId);
-
-  if (!input || !suggestions) return;
-
-  let selectedIndex = -1;
-  let currentSuggestions = [];
-
-  input.addEventListener('input', function() {
-    const query = this.value.toLowerCase().trim();
-    if (query.length < 2) {
-      suggestions.classList.remove('show');
-      return;
-    }
-
-    // Get users based on type
-    let users = [];
-    if (type === 'auditees') {
-      users = window.appDropdowns?.auditees || [];
-    } else {
-      users = window.appDropdowns?.users || [];
-    }
-
-    // Filter users
-    currentSuggestions = users.filter(u => {
-      const nameMatch = (u.name || '').toLowerCase().includes(query);
-      const emailMatch = (u.email || '').toLowerCase().includes(query);
-      return nameMatch || emailMatch;
-    }).slice(0, 10);
-
-    // If type is emails and query looks like email, add option to add as custom
-    if (type === 'emails' && query.includes('@') && !currentSuggestions.some(s => s.email === query)) {
-      currentSuggestions.push({ id: 'custom', email: query, name: query, isCustom: true });
-    }
-
-    renderSuggestions(suggestions, currentSuggestions, type);
-    selectedIndex = -1;
-  });
-
-  input.addEventListener('keydown', function(e) {
-    const items = suggestions.querySelectorAll('.autocomplete-suggestion');
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-      updateHighlight(items, selectedIndex);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      selectedIndex = Math.max(selectedIndex - 1, 0);
-      updateHighlight(items, selectedIndex);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
-        selectSuggestion(currentSuggestions[selectedIndex], inputId, suggestionsId, tagsId, hiddenId, type);
-      }
-    } else if (e.key === 'Escape') {
-      suggestions.classList.remove('show');
-    }
-  });
-
-  input.addEventListener('blur', function() {
-    setTimeout(() => suggestions.classList.remove('show'), 200);
-  });
-
-  suggestions.addEventListener('click', function(e) {
-    const item = e.target.closest('.autocomplete-suggestion');
-    if (item) {
-      const index = parseInt(item.dataset.index);
-      if (currentSuggestions[index]) {
-        selectSuggestion(currentSuggestions[index], inputId, suggestionsId, tagsId, hiddenId, type);
-      }
-    }
-  });
-}
-
-function renderSuggestions(container, suggestions, type) {
-  if (suggestions.length === 0) {
-    container.classList.remove('show');
-    return;
-  }
-
-  container.innerHTML = suggestions.map((s, i) => `
-    <div class="autocomplete-suggestion" data-index="${i}">
-      <div class="suggestion-name">${escapeHtml(s.name || s.email)}</div>
-      ${s.email && !s.isCustom ? `<div class="suggestion-email">${escapeHtml(s.email)}</div>` : ''}
-      ${s.isCustom ? '<div class="suggestion-email"><i>Add as custom email</i></div>' : ''}
-    </div>
-  `).join('');
-
-  container.classList.add('show');
-}
-
-function updateHighlight(items, index) {
-  items.forEach((item, i) => {
-    item.classList.toggle('highlighted', i === index);
-  });
-}
-
-function selectSuggestion(suggestion, inputId, suggestionsId, tagsId, hiddenId, type) {
-  const input = document.getElementById(inputId);
-  const suggestions = document.getElementById(suggestionsId);
-  const tagsContainer = document.getElementById(tagsId);
-  const hiddenInput = document.getElementById(hiddenId);
-
-  // Get current selected items
-  let selected = type === 'auditees' ? selectedResponsible : selectedCCRecipients;
-
-  // Check if already selected
-  const identifier = type === 'emails' ? (suggestion.email || suggestion.id) : suggestion.id;
-  if (selected.some(s => (type === 'emails' ? s.email : s.id) === identifier)) {
-    input.value = '';
-    suggestions.classList.remove('show');
-    return;
-  }
-
-  // Add to selected
-  selected.push(suggestion);
-
-  // Update display
-  renderSelectedTags(tagsContainer, selected, type, inputId, suggestionsId, tagsId, hiddenId);
-  updateHiddenValue(hiddenInput, selected, type);
-
-  input.value = '';
-  suggestions.classList.remove('show');
-}
-
-function renderSelectedTags(container, selected, type, inputId, suggestionsId, tagsId, hiddenId) {
-  container.innerHTML = selected.map((s, i) => `
-    <span class="selected-tag">
-      ${escapeHtml(s.name || s.email)}
-      <span class="remove-tag" onclick="removeSelectedTag(${i}, '${type}', '${inputId}', '${suggestionsId}', '${tagsId}', '${hiddenId}')">&times;</span>
-    </span>
-  `).join('');
-}
-
-function removeSelectedTag(index, type, inputId, suggestionsId, tagsId, hiddenId) {
-  let selected = type === 'auditees' ? selectedResponsible : selectedCCRecipients;
-  selected.splice(index, 1);
-
-  const tagsContainer = document.getElementById(tagsId);
-  const hiddenInput = document.getElementById(hiddenId);
-
-  renderSelectedTags(tagsContainer, selected, type, inputId, suggestionsId, tagsId, hiddenId);
-  updateHiddenValue(hiddenInput, selected, type);
-}
-
-function updateHiddenValue(hiddenInput, selected, type) {
-  if (type === 'auditees') {
-    hiddenInput.value = selected.map(s => s.id).join(',');
-  } else {
-    hiddenInput.value = selected.map(s => s.email).join('\n');
-  }
-}
-
-// Action Plan Functions
-function addActionPlanEntry() {
-  const container = document.getElementById('actionPlansContainer');
-  const template = document.getElementById('actionPlanEntryTemplate');
-  const noMessage = document.getElementById('noActionPlansMessage');
-
-  actionPlanCounter++;
-
-  let html = template.innerHTML
-    .replace(/{INDEX}/g, actionPlanCounter)
-    .replace(/{NUM}/g, actionPlanCounter);
-
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  const entry = div.firstElementChild;
-  container.appendChild(entry);
-
-  // Set max due date (5 months from today)
-  const dueDateInput = entry.querySelector('.ap-due-date');
-  const maxDate = new Date();
-  maxDate.setMonth(maxDate.getMonth() + 5);
-  dueDateInput.max = maxDate.toISOString().split('T')[0];
-  dueDateInput.min = new Date().toISOString().split('T')[0];
-
-  // Initialize autocomplete for owner field
-  initActionPlanAutocomplete(entry, actionPlanCounter);
-
-  // Initialize evidence files array
-  actionPlanEvidenceFiles[actionPlanCounter] = [];
-
-  noMessage.style.display = 'none';
-}
-
-function initActionPlanAutocomplete(entry, index) {
-  const input = entry.querySelector('.ap-owner-input');
-  const suggestions = entry.querySelector('.ap-owner-suggestions');
-  const tagsContainer = entry.querySelector('.ap-owner-tags');
-  const idsInput = entry.querySelector('.ap-owner-ids');
-  const namesInput = entry.querySelector('.ap-owner-names');
-
-  let selectedOwners = [];
-  let selectedIndex = -1;
-  let currentSuggestions = [];
-
-  input.addEventListener('input', function() {
-    const query = this.value.toLowerCase().trim();
-    if (query.length < 2) {
-      suggestions.classList.remove('show');
-      return;
-    }
-
-    const users = window.appDropdowns?.users || [];
-    currentSuggestions = users.filter(u => {
-      const nameMatch = (u.name || '').toLowerCase().includes(query);
-      const emailMatch = (u.email || '').toLowerCase().includes(query);
-      return nameMatch || emailMatch;
-    }).slice(0, 10);
-
-    renderSuggestionsAP(suggestions, currentSuggestions);
-    selectedIndex = -1;
-  });
-
-  input.addEventListener('keydown', function(e) {
-    const items = suggestions.querySelectorAll('.autocomplete-suggestion');
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-      updateHighlight(items, selectedIndex);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      selectedIndex = Math.max(selectedIndex - 1, 0);
-      updateHighlight(items, selectedIndex);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
-        selectOwner(currentSuggestions[selectedIndex]);
-      }
-    } else if (e.key === 'Escape') {
-      suggestions.classList.remove('show');
-    }
-  });
-
-  input.addEventListener('blur', function() {
-    setTimeout(() => suggestions.classList.remove('show'), 200);
-  });
-
-  suggestions.addEventListener('click', function(e) {
-    const item = e.target.closest('.autocomplete-suggestion');
-    if (item) {
-      const idx = parseInt(item.dataset.index);
-      if (currentSuggestions[idx]) {
-        selectOwner(currentSuggestions[idx]);
-      }
-    }
-  });
-
-  function selectOwner(user) {
-    if (selectedOwners.some(s => s.id === user.id)) {
-      input.value = '';
-      suggestions.classList.remove('show');
-      return;
-    }
-
-    selectedOwners.push(user);
-    renderOwnerTags();
-    updateOwnerInputs();
-    input.value = '';
-    suggestions.classList.remove('show');
-  }
-
-  function renderOwnerTags() {
-    tagsContainer.innerHTML = selectedOwners.map((s, i) => `
-      <span class="selected-tag">
-        ${escapeHtml(s.name || s.email)}
-        <span class="remove-tag" data-index="${i}">&times;</span>
-      </span>
-    `).join('');
-
-    tagsContainer.querySelectorAll('.remove-tag').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const idx = parseInt(this.dataset.index);
-        selectedOwners.splice(idx, 1);
-        renderOwnerTags();
-        updateOwnerInputs();
-      });
-    });
-  }
-
-  function updateOwnerInputs() {
-    idsInput.value = selectedOwners.map(s => s.id).join(',');
-    namesInput.value = selectedOwners.map(s => s.name).join(', ');
-  }
-}
-
-function renderSuggestionsAP(container, suggestions) {
-  if (suggestions.length === 0) {
-    container.classList.remove('show');
-    return;
-  }
-
-  container.innerHTML = suggestions.map((s, i) => `
-    <div class="autocomplete-suggestion" data-index="${i}">
-      <div class="suggestion-name">${escapeHtml(s.name || s.email)}</div>
-      ${s.email ? `<div class="suggestion-email">${escapeHtml(s.email)}</div>` : ''}
-    </div>
-  `).join('');
-
-  container.classList.add('show');
-}
-
-function removeActionPlanEntry(button) {
-  const entry = button.closest('.action-plan-entry');
-  const index = entry.dataset.index;
-
-  // Clean up evidence files
-  delete actionPlanEvidenceFiles[index];
-
-  entry.remove();
-
-  // Show no message if empty
-  if (document.querySelectorAll('.action-plan-entry').length === 0) {
-    document.getElementById('noActionPlansMessage').style.display = 'block';
-  }
-
-  // Renumber remaining entries
-  document.querySelectorAll('.action-plan-entry').forEach((e, i) => {
-    e.querySelector('.card-title').textContent = `Action Plan #${i + 1}`;
-  });
-}
-
-// File Upload Functions
 function uploadEvidenceFile() {
   const fileInput = document.getElementById('wpEvidenceFile');
   const file = fileInput.files[0];
@@ -1339,7 +1160,6 @@ function uploadEvidenceFile() {
       .withSuccessHandler(function(result) {
         hideLoading();
         if (result.success) {
-          // Store category with file
           result.file.category = category;
           uploadedEvidenceFiles.push(result.file);
           renderEvidenceFilesList();
@@ -1387,7 +1207,6 @@ function renderEvidenceFilesList() {
     `;
   }).join('');
 
-  // Update progress after file change
   updateFormProgress();
 }
 
@@ -1463,7 +1282,111 @@ function removeActionPlanEvidenceFile(apIndex, fileIndex) {
   }
 }
 
-// Form Functions
+// =============================================
+// ACTION PLANS
+// =============================================
+
+function addActionPlanEntry() {
+  const container = document.getElementById('actionPlansContainer');
+  const template = document.getElementById('actionPlanEntryTemplate');
+  const noMessage = document.getElementById('noActionPlansMessage');
+
+  actionPlanCounter++;
+
+  let html = template.innerHTML
+    .replace(/{INDEX}/g, actionPlanCounter)
+    .replace(/{NUM}/g, actionPlanCounter);
+
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  const entry = div.firstElementChild;
+  container.appendChild(entry);
+
+  // Set max due date (5 months from today)
+  const dueDateInput = entry.querySelector('.ap-due-date');
+  const maxDate = new Date();
+  maxDate.setMonth(maxDate.getMonth() + 5);
+  dueDateInput.max = maxDate.toISOString().split('T')[0];
+  dueDateInput.min = new Date().toISOString().split('T')[0];
+
+  // Initialize autocomplete for owner field
+  setupActionPlanOwnerAutocomplete(entry, actionPlanCounter);
+
+  // Initialize evidence files array
+  actionPlanEvidenceFiles[actionPlanCounter] = [];
+
+  noMessage.style.display = 'none';
+}
+
+function removeActionPlanEntry(button) {
+  const entry = button.closest('.action-plan-entry');
+  const index = entry.dataset.index;
+
+  delete actionPlanEvidenceFiles[index];
+  entry.remove();
+
+  if (document.querySelectorAll('.action-plan-entry').length === 0) {
+    document.getElementById('noActionPlansMessage').style.display = 'block';
+  }
+
+  document.querySelectorAll('.action-plan-entry').forEach((e, i) => {
+    e.querySelector('.card-title').textContent = `Action Plan #${i + 1}`;
+  });
+}
+
+// =============================================
+// FORM INITIALIZATION
+// =============================================
+
+function initWorkPaperForm(params) {
+  console.log('initWorkPaperForm called with params:', params);
+  
+  // Initialize year dropdown
+  const yearSelect = document.getElementById('wpYear');
+  yearSelect.innerHTML = '<option value="">Select Year</option>';
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear + 1; y >= currentYear - 3; y--) {
+    yearSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
+  }
+
+  // Initialize dropdowns
+  populateDropdown('wpAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
+  populateDropdown('wpAuditArea', window.appDropdowns?.auditAreas || [], 'id', 'display', 'Select Audit Area');
+
+  // Set default date
+  document.getElementById('wpDate').value = new Date().toISOString().split('T')[0];
+
+  // Setup autocomplete for Responsible and CC Recipients
+  console.log('Setting up autocomplete fields...');
+  setupAutocomplete('wpResponsibleInput', 'wpResponsibleSuggestions', 'wpResponsibleTags', 'wpResponsibleIds', 'auditees');
+  setupAutocomplete('wpCCRecipientsInput', 'wpCCRecipientsSuggestions', 'wpCCRecipientsTags', 'wpCCRecipients', 'emails');
+
+  // Initial progress update
+  setTimeout(updateFormProgress, 100);
+
+  // Reset state
+  selectedResponsible = [];
+  selectedCCRecipients = [];
+  uploadedEvidenceFiles = [];
+  actionPlanEvidenceFiles = {};
+  actionPlanCounter = 0;
+  document.getElementById('actionPlansContainer').innerHTML = '';
+  document.getElementById('noActionPlansMessage').style.display = 'block';
+  document.getElementById('wpEvidenceFilesList').innerHTML = '';
+
+  // Load existing work paper if editing
+  if (params && params.id) {
+    loadWorkPaperForEdit(params.id);
+  } else {
+    editingWorkPaper = null;
+    document.getElementById('wpFormId').value = '';
+  }
+}
+
+// =============================================
+// FORM DATA & SUBMISSION
+// =============================================
+
 function loadSubAreas() {
   const areaId = document.getElementById('wpAuditArea').value;
   const subAreaSelect = document.getElementById('wpSubArea');
@@ -1530,8 +1453,7 @@ function populateForm(wp) {
     const user = users.find(u => u.id === id);
     if (user) selectedResponsible.push(user);
   });
-  renderSelectedTags(document.getElementById('wpResponsibleTags'), selectedResponsible, 'auditees', 'wpResponsibleInput', 'wpResponsibleSuggestions', 'wpResponsibleTags', 'wpResponsibleIds');
-  updateHiddenValue(document.getElementById('wpResponsibleIds'), selectedResponsible, 'auditees');
+  renderResponsibleTags();
 
   // Populate CC recipients
   const ccEmails = (wp.cc_recipients || '').split('\n').map(s => s.trim()).filter(Boolean);
@@ -1539,8 +1461,7 @@ function populateForm(wp) {
     const user = users.find(u => u.email === email);
     return user || { email: email, name: email };
   });
-  renderSelectedTags(document.getElementById('wpCCRecipientsTags'), selectedCCRecipients, 'emails', 'wpCCRecipientsInput', 'wpCCRecipientsSuggestions', 'wpCCRecipientsTags', 'wpCCRecipients');
-  updateHiddenValue(document.getElementById('wpCCRecipients'), selectedCCRecipients, 'emails');
+  renderCCRecipientsTags();
 
   // Populate evidence files
   if (wp.files && wp.files.length > 0) {
@@ -1552,6 +1473,53 @@ function populateForm(wp) {
     }));
     renderEvidenceFilesList();
   }
+  
+  updateFormProgress();
+  updateRiskBadge();
+}
+
+function renderResponsibleTags() {
+  const tagsDiv = document.getElementById('wpResponsibleTags');
+  const hiddenInput = document.getElementById('wpResponsibleIds');
+  
+  tagsDiv.innerHTML = selectedResponsible.map((s, i) => `
+    <span class="selected-tag">
+      ${escapeHtml(s.name || s.email)}
+      <span class="remove-tag" data-index="${i}">&times;</span>
+    </span>
+  `).join('');
+  
+  tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
+    el.addEventListener('click', function() {
+      const idx = parseInt(this.dataset.index);
+      selectedResponsible.splice(idx, 1);
+      renderResponsibleTags();
+    });
+  });
+  
+  hiddenInput.value = selectedResponsible.map(s => s.id).join(',');
+}
+
+function renderCCRecipientsTags() {
+  const tagsDiv = document.getElementById('wpCCRecipientsTags');
+  const hiddenInput = document.getElementById('wpCCRecipients');
+  
+  tagsDiv.innerHTML = selectedCCRecipients.map((s, i) => `
+    <span class="selected-tag">
+      ${escapeHtml(s.name || s.email)}
+      <span class="remove-tag" data-index="${i}">&times;</span>
+    </span>
+  `).join('');
+  
+  tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
+    el.addEventListener('click', function() {
+      const idx = parseInt(this.dataset.index);
+      selectedCCRecipients.splice(idx, 1);
+      renderCCRecipientsTags();
+    });
+  });
+  
+  hiddenInput.value = selectedCCRecipients.map(s => s.email).join('\n');
 }
 
 function formatDateInput(d) {
@@ -1648,7 +1616,6 @@ function validateActionPlans() {
 async function saveWorkPaper(event) {
   event.preventDefault();
 
-  // Validate action plans if any exist
   if (document.querySelectorAll('.action-plan-entry').length > 0 && !validateActionPlans()) {
     showToast('Please fill in all required action plan fields', 'danger');
     return;
@@ -1661,7 +1628,6 @@ async function saveWorkPaper(event) {
   showLoading(isEdit ? 'Updating...' : 'Creating...');
 
   try {
-    // Save work paper
     const wpResult = await apiCall(isEdit ? 'updateWorkPaper' : 'createWorkPaper',
       isEdit ? { workPaperId: data.work_paper_id, ...data } : data);
 
@@ -1671,7 +1637,6 @@ async function saveWorkPaper(event) {
 
     const workPaperId = wpResult.workPaperId || wpResult.workPaper?.work_paper_id || data.work_paper_id;
 
-    // Save evidence files
     for (const file of uploadedEvidenceFiles) {
       if (!file.file_id) {
         await apiCall('addWorkPaperFile', {
@@ -1682,7 +1647,6 @@ async function saveWorkPaper(event) {
       }
     }
 
-    // Save action plans if any
     if (actionPlans.length > 0) {
       const apResult = await apiCall('createActionPlansBatch', {
         workPaperId: workPaperId,
@@ -1690,7 +1654,6 @@ async function saveWorkPaper(event) {
       });
 
       if (apResult.success && apResult.actionPlans) {
-        // Save action plan evidence
         for (let i = 0; i < apResult.actionPlans.length; i++) {
           const ap = apResult.actionPlans[i];
           const evidenceFiles = actionPlans[i].evidence_files || [];
@@ -1720,7 +1683,6 @@ async function saveAndSubmit() {
     return;
   }
 
-  // Validate action plans if any exist
   if (document.querySelectorAll('.action-plan-entry').length > 0 && !validateActionPlans()) {
     showToast('Please fill in all required action plan fields', 'danger');
     return;
@@ -1732,7 +1694,6 @@ async function saveAndSubmit() {
   showLoading('Saving...');
 
   try {
-    // Save work paper
     const wpResult = await apiCall(data.work_paper_id ? 'updateWorkPaper' : 'createWorkPaper',
       data.work_paper_id ? { workPaperId: data.work_paper_id, ...data } : data);
 
@@ -1742,7 +1703,6 @@ async function saveAndSubmit() {
 
     const workPaperId = wpResult.workPaperId || wpResult.workPaper?.work_paper_id || data.work_paper_id;
 
-    // Save evidence files
     for (const file of uploadedEvidenceFiles) {
       if (!file.file_id) {
         await apiCall('addWorkPaperFile', {
@@ -1753,7 +1713,6 @@ async function saveAndSubmit() {
       }
     }
 
-    // Save action plans if any
     if (actionPlans.length > 0) {
       const apResult = await apiCall('createActionPlansBatch', {
         workPaperId: workPaperId,
@@ -1774,7 +1733,6 @@ async function saveAndSubmit() {
       }
     }
 
-    // Submit
     const submitResult = await apiCall('submitWorkPaper', { workPaperId: workPaperId });
 
     if (!submitResult.success) {
