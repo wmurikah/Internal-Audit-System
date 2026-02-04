@@ -266,7 +266,7 @@ function getUserStats() {
  * Update role permissions
  */
 function updatePermissions(roleCode, permissions, user) {
-  if (user.role_code !== ROLES.SUPER_ADMIN) {
+  if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== 'SUPER_ADMIN') {
     return { success: false, error: 'Permission denied' };
   }
 
@@ -283,27 +283,60 @@ function updatePermissions(roleCode, permissions, user) {
   const approveIdx = headers.indexOf('can_approve');
   const exportIdx = headers.indexOf('can_export');
 
-  // Update each module's permissions
+  // Update or insert each module's permissions
   Object.entries(permissions).forEach(([module, perms]) => {
+    let found = false;
+    
+    // Try to find existing row
     for (let i = 1; i < data.length; i++) {
       if (data[i][roleIdx] === roleCode && data[i][moduleIdx] === module) {
-        if (createIdx >= 0) sheet.getRange(i + 1, createIdx + 1).setValue(perms.can_create || false);
-        if (readIdx >= 0) sheet.getRange(i + 1, readIdx + 1).setValue(perms.can_read || false);
-        if (updateIdx >= 0) sheet.getRange(i + 1, updateIdx + 1).setValue(perms.can_update || false);
-        if (deleteIdx >= 0) sheet.getRange(i + 1, deleteIdx + 1).setValue(perms.can_delete || false);
-        if (approveIdx >= 0) sheet.getRange(i + 1, approveIdx + 1).setValue(perms.can_approve || false);
-        if (exportIdx >= 0) sheet.getRange(i + 1, exportIdx + 1).setValue(perms.can_export || false);
+        // Update existing row
+        if (createIdx >= 0) sheet.getRange(i + 1, createIdx + 1).setValue(perms.can_create === true);
+        if (readIdx >= 0) sheet.getRange(i + 1, readIdx + 1).setValue(perms.can_read === true);
+        if (updateIdx >= 0) sheet.getRange(i + 1, updateIdx + 1).setValue(perms.can_update === true);
+        if (deleteIdx >= 0) sheet.getRange(i + 1, deleteIdx + 1).setValue(perms.can_delete === true);
+        if (approveIdx >= 0) sheet.getRange(i + 1, approveIdx + 1).setValue(perms.can_approve === true);
+        if (exportIdx >= 0) sheet.getRange(i + 1, exportIdx + 1).setValue(perms.can_export === true);
+        found = true;
+        console.log('Updated permissions for', roleCode, module);
         break;
       }
     }
+    
+    // If not found, insert new row
+    if (!found) {
+      const newRow = new Array(headers.length).fill('');
+      newRow[roleIdx] = roleCode;
+      newRow[moduleIdx] = module;
+      if (createIdx >= 0) newRow[createIdx] = perms.can_create === true;
+      if (readIdx >= 0) newRow[readIdx] = perms.can_read === true;
+      if (updateIdx >= 0) newRow[updateIdx] = perms.can_update === true;
+      if (deleteIdx >= 0) newRow[deleteIdx] = perms.can_delete === true;
+      if (approveIdx >= 0) newRow[approveIdx] = perms.can_approve === true;
+      if (exportIdx >= 0) newRow[exportIdx] = perms.can_export === true;
+      sheet.appendRow(newRow);
+      console.log('Inserted new permissions for', roleCode, module);
+    }
   });
 
-  // Invalidate cache
-  Cache.remove('perm_' + roleCode);
+  // Invalidate ALL permission caches to ensure changes take effect immediately
+  try {
+    const cache = CacheService.getScriptCache();
+    // Clear cache for this specific role
+    cache.remove('perm_' + roleCode);
+    // Clear caches for all common roles to be safe
+    const allRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER', 'SENIOR_MGMT'];
+    allRoles.forEach(r => {
+      cache.remove('perm_' + r);
+    });
+    console.log('All permission caches invalidated');
+  } catch (e) {
+    console.warn('Failed to invalidate cache:', e);
+  }
 
   logAuditEvent('UPDATE_PERMISSIONS', 'ROLE', roleCode, null, permissions, user.user_id, user.email);
 
-  return { success: true };
+  return { success: true, message: 'Permissions updated. Users must refresh or re-login to see changes.' };
 }
 
 /**
