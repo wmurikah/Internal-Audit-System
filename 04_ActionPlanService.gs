@@ -236,7 +236,7 @@ function updateActionPlan(actionPlanId, data, user) {
   
   // Determine which fields can be updated based on role
   const isAuditee = user.role_code === ROLES.AUDITEE;
-  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF].includes(user.role_code);
+  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF].includes(user.role_code);
   
   if (isAuditee) {
     // Auditees can only update implementation-related fields
@@ -588,10 +588,18 @@ function getActionPlanCounts(filters, user) {
 }
 
 /**
- * Check if status is implemented or verified
+ * Check if status is a closed/completed status (no longer active)
  */
 function isImplementedOrVerified(status) {
-  return status === STATUS.ACTION_PLAN.IMPLEMENTED || status === STATUS.ACTION_PLAN.VERIFIED;
+  const closedStatuses = [
+    STATUS.ACTION_PLAN.IMPLEMENTED,
+    STATUS.ACTION_PLAN.VERIFIED,
+    STATUS.ACTION_PLAN.NOT_IMPLEMENTED,
+    STATUS.ACTION_PLAN.CLOSED,
+    STATUS.ACTION_PLAN.REJECTED,
+    'Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'  // String fallbacks
+  ];
+  return closedStatuses.includes(status);
 }
 
 function markAsImplemented(actionPlanId, implementationNotes, user) {
@@ -603,7 +611,7 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   // Verify user is an owner or has permission
   const ownerIds = String(actionPlan.owner_ids || '').split(',').map(s => s.trim());
   const isOwner = ownerIds.includes(user.user_id);
-  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR].includes(user.role_code);
+  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
   
   if (!isOwner && !isAuditor) {
     throw new Error('Permission denied: Only owners can mark as implemented');
@@ -612,10 +620,13 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   const now = new Date();
   const previousStatus = actionPlan.status;
   
+  // Auditees mark as implemented -> goes to Pending Verification for auditor review
+  // Status flow: In Progress -> Implemented (by auditee) -> Verified/Rejected (by auditor)
   const updates = {
-    status: STATUS.ACTION_PLAN.IMPLEMENTED,
+    status: STATUS.ACTION_PLAN.IMPLEMENTED || 'Implemented',
     implementation_notes: sanitizeInput(implementationNotes || actionPlan.implementation_notes || ''),
     implemented_date: now,
+    implemented_by: user.user_id,
     updated_at: now,
     updated_by: user.user_id
   };
@@ -631,25 +642,26 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   updateActionPlanIndex(actionPlanId, updated, rowIndex);
   
   // Add history
-  addActionPlanHistory(actionPlanId, previousStatus, STATUS.ACTION_PLAN.IMPLEMENTED, implementationNotes, user);
+  addActionPlanHistory(actionPlanId, previousStatus, updates.status, implementationNotes, user);
   
-  // Queue notification to auditors
+  // Queue notification to auditors for verification
   queueImplementationNotification(actionPlanId, updated, user);
   
   // Log audit event
   logAuditEvent('IMPLEMENT', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
   
-  return sanitizeForClient({ success: true, actionPlan: updated });
+  return sanitizeForClient({ success: true, actionPlan: updated, message: 'Marked as implemented. Awaiting auditor verification.' });
 }
 
 /**
  * Verify implementation (by auditor)
+ * Action plan workflow: Implemented -> Verified (approved) / In Progress (rejected/returned)
  */
 function verifyImplementation(actionPlanId, action, comments, user) {
   if (!user) throw new Error('User required');
   
   // Only auditors can verify
-  const auditorRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR];
+  const auditorRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
   if (!auditorRoles.includes(user.role_code)) {
     throw new Error('Permission denied: Only auditors can verify implementation');
   }
@@ -657,7 +669,8 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   const actionPlan = getActionPlanRaw(actionPlanId);
   if (!actionPlan) throw new Error('Action plan not found');
   
-  if (actionPlan.status !== STATUS.ACTION_PLAN.IMPLEMENTED) {
+  // Can only verify if status is Implemented (awaiting verification)
+  if (actionPlan.status !== STATUS.ACTION_PLAN.IMPLEMENTED && actionPlan.status !== 'Implemented') {
     throw new Error('Action plan must be marked as implemented before verification');
   }
   
@@ -672,19 +685,22 @@ function verifyImplementation(actionPlanId, action, comments, user) {
     updated_by: user.user_id
   };
   
-  if (action === 'approve') {
+  if (action === 'approve' || action === 'verify') {
+    // Approved - mark as Verified (final positive status)
     updates.auditor_review_status = STATUS.REVIEW.APPROVED;
-    updates.status = STATUS.ACTION_PLAN.VERIFIED;
-    updates.final_status = STATUS.ACTION_PLAN.VERIFIED;
+    updates.status = STATUS.ACTION_PLAN.VERIFIED || 'Verified';
+    updates.verified_date = now;
+    updates.verified_by = user.user_id;
   } else if (action === 'reject') {
+    // Rejected - mark as Rejected (final negative status)
     updates.auditor_review_status = STATUS.REVIEW.REJECTED;
-    updates.status = STATUS.ACTION_PLAN.NOT_IMPLEMENTED;
-    updates.final_status = STATUS.ACTION_PLAN.NOT_IMPLEMENTED;
+    updates.status = STATUS.ACTION_PLAN.REJECTED || 'Rejected';
   } else if (action === 'return') {
+    // Returned for rework - back to In Progress
     updates.auditor_review_status = STATUS.REVIEW.RETURNED;
-    updates.status = STATUS.ACTION_PLAN.IN_PROGRESS;
+    updates.status = STATUS.ACTION_PLAN.IN_PROGRESS || 'In Progress';
   } else {
-    throw new Error('Invalid action: ' + action);
+    throw new Error('Invalid action: ' + action + '. Use approve, reject, or return.');
   }
   
   // Update sheet
@@ -716,7 +732,7 @@ function hoaReview(actionPlanId, action, comments, user) {
   if (!user) throw new Error('User required');
   
   // Only HOA can do final review
-  if (user.role_code !== ROLES.HEAD_OF_AUDIT && user.role_code !== ROLES.SUPER_ADMIN) {
+  if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Permission denied: Only Head of Audit can perform final review');
   }
   
@@ -817,7 +833,7 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   // Verify user can add evidence
   const ownerIds = String(actionPlan.owner_ids || '').split(',').map(s => s.trim());
   const isOwner = ownerIds.includes(user.user_id);
-  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR].includes(user.role_code);
+  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR].includes(user.role_code);
   
   if (!isOwner && !isAuditor) {
     throw new Error('Permission denied: Cannot add evidence');
@@ -978,7 +994,7 @@ function rebuildActionPlanIndex() {
 
 function queueImplementationNotification(actionPlanId, actionPlan, implementer) {
   const auditors = getUsersDropdown().filter(u => 
-    [ROLES.SENIOR_AUDITOR, ROLES.HEAD_OF_AUDIT, ROLES.SUPER_ADMIN].includes(u.roleCode)
+    [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN, ROLES.SUPER_ADMIN].includes(u.roleCode)
   );
   
   auditors.forEach(auditor => {
