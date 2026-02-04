@@ -112,7 +112,7 @@ function updateWorkPaper(workPaperId, data, user) {
   const editableStatuses = [STATUS.WORK_PAPER.DRAFT, STATUS.WORK_PAPER.REVISION_REQUIRED];
   if (!editableStatuses.includes(existing.status)) {
     // Allow specific fields for reviewers even in non-editable status
-    const isReviewer = user.role_code === ROLES.HEAD_OF_AUDIT || user.role_code === ROLES.SENIOR_AUDITOR;
+    const isReviewer = user.role_code === ROLES.SUPER_ADMIN || user.role_code === ROLES.SENIOR_AUDITOR;
     if (!isReviewer) {
       throw new Error('Work paper cannot be edited in current status: ' + existing.status);
     }
@@ -289,7 +289,7 @@ function getWorkPapers(filters, user) {
       }
       
       // Filter by user's affiliate if they have one
-      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.HEAD_OF_AUDIT) {
+      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.SUPER_ADMIN) {
         const userAffiliates = String(user.affiliate_code).split(',').map(s => s.trim());
         if (!userAffiliates.includes(row[colMap['affiliate_code']])) {
           match = false;
@@ -423,7 +423,7 @@ function getWorkPapersRaw(filters, user) {
         }
       }
       
-      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.HEAD_OF_AUDIT) {
+      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.SUPER_ADMIN) {
         const userAffiliates = String(user.affiliate_code).split(',').map(s => s.trim());
         if (!userAffiliates.includes(row[colMap['affiliate_code']])) {
           match = false;
@@ -509,7 +509,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   if (!user) throw new Error('User required');
   
   // Only reviewers can review
-  const reviewerRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR];
+  const reviewerRoles = [ROLES.SUPER_ADMIN, ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR];
   if (!reviewerRoles.includes(user.role_code)) {
     throw new Error('Permission denied: Only reviewers can review work papers');
   }
@@ -908,7 +908,7 @@ function queueReviewNotification(workPaperId, workPaper, submitter) {
   const users = getUsersDropdown();
   const reviewers = users.filter(u => 
     u.roleCode === ROLES.SENIOR_AUDITOR || 
-    u.roleCode === ROLES.HEAD_OF_AUDIT ||
+    u.roleCode === ROLES.SUPER_ADMIN ||
     u.roleCode === ROLES.SUPER_ADMIN
   );
   
