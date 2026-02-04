@@ -10,6 +10,7 @@ function queueEmail(data) {
       template_code: data.template_code || '',
       recipient_user_id: data.recipient_user_id || '',
       recipient_email: data.recipient_email || '',
+      cc_emails: data.cc_emails || '',
       subject: sanitizeInput(data.subject || ''),
       body: sanitizeInput(data.body || ''),
       module: data.module || '',
@@ -125,6 +126,16 @@ function getEmailTemplates() {
 
 // Process pending emails in queue (called by time-based trigger)
 function processEmailQueue() {
+  // Acquire lock to prevent concurrent trigger runs from sending duplicates
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // Wait up to 10 seconds
+  } catch (e) {
+    console.log('Email queue already being processed by another instance');
+    return { sent: 0, failed: 0, skipped: true };
+  }
+  
+  try {
   const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
@@ -133,7 +144,7 @@ function processEmailQueue() {
   headers.forEach((h, i) => colMap[h] = i);
   
   const now = new Date();
-  const fromName = getConfigValue('SYSTEM_NAME') || 'Hass Audit System';
+  const fromName = 'Internal Audit Notification';
   const maxRetries = 3;
   
   let sentCount = 0;
@@ -153,20 +164,27 @@ function processEmailQueue() {
     const recipientEmail = row[colMap['recipient_email']];
     const subject = row[colMap['subject']];
     const body = row[colMap['body']];
+    const ccEmails = row[colMap['cc_emails']] || '';
     
     if (!recipientEmail || !subject) continue;
     
     const rowIndex = i + 1;
+    const replyTo = 'audit@hasspetroleum.com';
     
     try {
       // Send email
-      MailApp.sendEmail({
+      const emailOptions = {
         to: recipientEmail,
         subject: subject,
         body: body,
         name: fromName,
+        replyTo: replyTo,
         htmlBody: formatEmailHtml(subject, body)
-      });
+      };
+      if (ccEmails) {
+        emailOptions.cc = ccEmails;
+      }
+      MailApp.sendEmail(emailOptions);
       
       // Update status to Sent
       sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.SENT);
@@ -192,15 +210,32 @@ function processEmailQueue() {
   
   console.log('Email queue processed. Sent:', sentCount, 'Failed:', failedCount);
   return { sent: sentCount, failed: failedCount };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Convert plain URLs in text to clickable HTML links
+ */
+function linkifyUrls(text) {
+  if (!text) return '';
+  return text.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" style="color: #1a365d; text-decoration: underline;">$1</a>'
+  );
 }
 
 /**
  * Format email body as HTML
  */
 function formatEmailHtml(subject, body) {
-  const systemName = getConfigValue('SYSTEM_NAME') || 'Hass Petroleum Internal Audit System';
+  const systemName = 'Internal Audit Notification';
   const primaryColor = '#1a365d';
   const accentColor = '#c9a227';
+  
+  // Convert \n to <br> for proper line breaks in HTML
+  const htmlBody = linkifyUrls(body).replace(/\n/g, '<br>');
   
   return `
 <!DOCTYPE html>
@@ -208,35 +243,44 @@ function formatEmailHtml(subject, body) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    @media only screen and (max-width: 620px) {
+      .email-outer { padding: 8px !important; }
+      .email-inner { width: 100% !important; min-width: 100% !important; }
+      .email-content { padding: 20px 16px !important; }
+      .email-header { padding: 16px !important; }
+      .email-footer { padding: 16px !important; }
+    }
+  </style>
 </head>
 <body style="margin:0; padding:0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;" class="email-outer">
     <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+      <td align="center" style="padding: 12px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 680px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" class="email-inner">
           <!-- Header -->
           <tr>
-            <td style="background-color: ${primaryColor}; padding: 20px 30px; text-align: center;">
-              <h1 style="color: #ffffff; margin: 0; font-size: 24px;">${systemName}</h1>
+            <td style="background-color: ${primaryColor}; padding: 18px 24px; text-align: center;" class="email-header">
+              <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 600;">${systemName}</h1>
             </td>
           </tr>
           <!-- Accent Bar -->
           <tr>
-            <td style="background-color: ${accentColor}; height: 4px;"></td>
+            <td style="background-color: ${accentColor}; height: 3px;"></td>
           </tr>
           <!-- Content -->
           <tr>
-            <td style="padding: 30px;">
-              <h2 style="color: ${primaryColor}; margin-top: 0;">${subject}</h2>
-              <div style="color: #333333; line-height: 1.6; white-space: pre-wrap;">${body}</div>
+            <td style="padding: 28px 32px;" class="email-content">
+              <h2 style="color: ${primaryColor}; margin: 0 0 16px 0; font-size: 18px;">${subject}</h2>
+              <div style="color: #333333; line-height: 1.7; font-size: 14px;">${htmlBody}</div>
             </td>
           </tr>
           <!-- Footer -->
           <tr>
-            <td style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #dee2e6;">
-              <p style="color: #6c757d; margin: 0; font-size: 12px;">
+            <td style="background-color: #f8f9fa; padding: 16px 24px; text-align: center; border-top: 1px solid #dee2e6;" class="email-footer">
+              <p style="color: #6c757d; margin: 0; font-size: 11px;">
                 This is an automated message from ${systemName}.<br>
-                Please do not reply directly to this email.
+                Replies go to the Internal Audit team.
               </p>
             </td>
           </tr>
@@ -326,7 +370,7 @@ function sendOverdueReminders() {
   
   // Also notify auditors of all overdue items
   const auditors = getUsersDropdown().filter(u => 
-    [ROLES.SENIOR_AUDITOR, ROLES.HEAD_OF_AUDIT].includes(u.roleCode)
+    [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].includes(u.roleCode)
   );
   
   if (actionPlans.length > 0 && auditors.length > 0) {
@@ -449,7 +493,7 @@ ${Object.entries(apCounts.byStatus).map(([k, v]) => `  - ${k}: ${v}`).join('\n')
 
   // Send to management and HOA
   const recipients = getUsersDropdown().filter(u => 
-    [ROLES.HEAD_OF_AUDIT, ROLES.MANAGEMENT, ROLES.SUPER_ADMIN].includes(u.roleCode)
+    [ROLES.SUPER_ADMIN, ROLES.MANAGEMENT, ROLES.SUPER_ADMIN].includes(u.roleCode)
   );
   
   let notificationCount = 0;
@@ -583,17 +627,23 @@ function cleanupOldNotifications(daysOld) {
 }
 
 // Send immediate email (bypass queue) - use sparingly for critical notifications
-function sendImmediateEmail(recipientEmail, subject, body) {
+function sendImmediateEmail(recipientEmail, subject, body, ccEmails) {
   try {
-    const fromName = getConfigValue('SYSTEM_NAME') || 'Hass Audit System';
+    const fromName = 'Internal Audit Notification';
+    const replyTo = 'audit@hasspetroleum.com';
     
-    MailApp.sendEmail({
+    const emailOptions = {
       to: recipientEmail,
       subject: subject,
       body: body,
       name: fromName,
+      replyTo: replyTo,
       htmlBody: formatEmailHtml(subject, body)
-    });
+    };
+    if (ccEmails) {
+      emailOptions.cc = ccEmails;
+    }
+    MailApp.sendEmail(emailOptions);
     
     return { success: true };
   } catch (e) {
