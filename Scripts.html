@@ -7,6 +7,14 @@ window.currentActionPlan = null;
 let currentPage = 'dashboard';
 let pageParams = {};
 
+// Loading state tracker
+window.loadingState = {
+  essential: false,      // User, permissions - MUST load first
+  dropdowns: false,      // Users, affiliates, areas - load in background
+  dashboardStats: false, // Dashboard numbers - load after UI ready
+  sidebarCounts: false   // Pending/overdue counts - load last
+};
+
 // Client-side cache for performance
 const ClientCache = {
   _cache: new Map(),
@@ -84,91 +92,347 @@ function throttle(func, limit) {
   };
 }
 
+// =============================================
+// INSTANT LOAD ENGINE
+// Three-tier init: SSR → localStorage → API fallback
+// =============================================
+
+// localStorage cache layer - survives page reloads
+const LocalStore = {
+  PREFIX: 'hpias_',
+  
+  set(key, value, ttlMinutes = 30) {
+    try {
+      const item = {
+        data: value,
+        expires: Date.now() + (ttlMinutes * 60 * 1000)
+      };
+      localStorage.setItem(this.PREFIX + key, JSON.stringify(item));
+    } catch(e) { /* quota exceeded - ignore */ }
+  },
+  
+  get(key) {
+    try {
+      const raw = localStorage.getItem(this.PREFIX + key);
+      if (!raw) return null;
+      const item = JSON.parse(raw);
+      if (Date.now() > item.expires) {
+        localStorage.removeItem(this.PREFIX + key);
+        return null;
+      }
+      return item.data;
+    } catch(e) { return null; }
+  },
+  
+  clear() {
+    const keys = Object.keys(localStorage).filter(k => k.startsWith(this.PREFIX));
+    keys.forEach(k => localStorage.removeItem(k));
+  }
+};
+
 // Initialization
 document.addEventListener('DOMContentLoaded', initApp);
 
 function initApp() {
-  showLoading('Initializing...');
-
-  // Include sessionToken for session-based authentication
+  const t0 = performance.now();
+  
+  // -----------------------------------------------
+  // TIER 0: Login-provided data (stored during login, used on redirect)
+  // This is the FASTEST path - data was already fetched during login
+  // -----------------------------------------------
+  const loginData = sessionStorage.getItem('loginInitData');
+  if (loginData) {
+    try {
+      const parsed = JSON.parse(loginData);
+      if (parsed && parsed.success) {
+        console.log('⚡ TIER 0: Login-provided data - zero wait');
+        sessionStorage.removeItem('loginInitData'); // One-time use
+        applyInitData(parsed);
+        LocalStore.set('initData', parsed, 15);
+        console.log('⚡ UI ready in', Math.round(performance.now() - t0), 'ms');
+        scheduleBackgroundLoads();
+        
+        // Run deferred login cleanup
+        if (parsed._needsCleanup) {
+          setTimeout(function() {
+            apiCall('postLoginCleanup', {
+              userId: parsed.user.user_id,
+              email: parsed.user.email,
+              roleCode: parsed.user.role_code
+            }).catch(function() {});
+          }, 2000);
+        }
+        return;
+      }
+    } catch(e) { sessionStorage.removeItem('loginInitData'); }
+  }
+  
+  // -----------------------------------------------
+  // TIER 1: SSR data (baked into HTML by the server)
+  // Available instantly - no network call at all
+  // -----------------------------------------------
+  if (window.__INIT_DATA__ && window.__INIT_DATA__.success) {
+    console.log('⚡ TIER 1: SSR init data found - instant load');
+    applyInitData(window.__INIT_DATA__);
+    LocalStore.set('initData', window.__INIT_DATA__, 15);
+    console.log('⚡ UI ready in', Math.round(performance.now() - t0), 'ms');
+    scheduleBackgroundLoads();
+    return;
+  }
+  
+  // -----------------------------------------------
+  // TIER 2: localStorage cache (from a previous visit)
+  // Available instantly - no network call
+  // -----------------------------------------------
+  const cached = LocalStore.get('initData');
+  if (cached && cached.success) {
+    console.log('⚡ TIER 2: localStorage cache hit - instant load');
+    applyInitData(cached);
+    console.log('⚡ UI ready in', Math.round(performance.now() - t0), 'ms');
+    scheduleBackgroundLoads();
+    silentRefreshInitData();
+    return;
+  }
+  
+  // -----------------------------------------------
+  // TIER 3: API fallback (first visit ever, or all caches empty)
+  // This is the slow path - should rarely happen
+  // -----------------------------------------------
+  console.log('TIER 3: No cache - falling back to API call');
+  showLoading('Loading...');
+  
   const sessionToken = sessionStorage.getItem('sessionToken') || '';
-
+  
   google.script.run
     .withSuccessHandler(function(result) {
       hideLoading();
       if (result && result.success) {
-        window.currentUser = result.user;
-        window.appDropdowns = result.dropdowns;
-
-        // Update user info in sidebar and header
-        document.getElementById('userName').textContent = result.user.full_name;
-        document.getElementById('userRole').style.display = 'none';
-        if (document.getElementById('profileName')) {
-          document.getElementById('profileName').textContent = result.user.full_name;
-        }
-        if (document.getElementById('profileEmail')) {
-          document.getElementById('profileEmail').textContent = result.user.email;
-        }
-
-        setupNavigation(result.permissions);
-        handleHashChange();
-        window.addEventListener('hashchange', handleHashChange);
-
-        if (result.user.must_change_password) {
-          showChangePassword();
-          showToast('Please change your password', 'warning');
-        }
+        applyInitData(result);
+        LocalStore.set('initData', result, 15);
+        scheduleBackgroundLoads();
+        console.log('UI ready in', Math.round(performance.now() - t0), 'ms (API fallback)');
       } else if (result && result.requireLogin) {
-        // Session expired or not authenticated - redirect to login
-        sessionStorage.removeItem('sessionToken');
-        window.top.location.href = window.top.location.pathname;
+        handleAuthFailure();
       } else {
         showToast(result?.error || 'Failed to initialize', 'danger');
-        setTimeout(() => {
-          sessionStorage.removeItem('sessionToken');
-          window.top.location.href = window.top.location.pathname;
-        }, 2000);
+        setTimeout(handleAuthFailure, 2000);
       }
     })
     .withFailureHandler(function(error) {
       hideLoading();
       console.error('Init error:', error);
-      showToast('Connection error', 'danger');
+      showToast('Connection error. Please refresh.', 'danger');
     })
-    .apiCall('getInitData', { sessionToken: sessionToken });
+    .apiCall('getInitDataLight', { sessionToken: sessionToken });
 }
+
+// =============================================
+// APPLY INIT DATA - Same logic regardless of source
+// =============================================
+function applyInitData(result) {
+  hideLoading();
+  
+  window.currentUser = result.user;
+  window.loadingState.essential = true;
+  
+  // Set dropdowns (may be empty from SSR/cache - filled later)
+  window.appDropdowns = result.dropdowns || {
+    affiliates: [], auditAreas: [], subAreas: [],
+    users: [], auditees: [], auditors: [], roles: []
+  };
+  
+  // Has dropdowns? Mark as loaded
+  if (result.dropdowns && Object.keys(result.dropdowns).length > 2) {
+    window.loadingState.dropdowns = true;
+  }
+
+  // Update UI
+  document.getElementById('userName').textContent = result.user.full_name;
+  document.getElementById('userRole').style.display = 'none';
+  
+  const profileName = document.getElementById('profileName');
+  const profileEmail = document.getElementById('profileEmail');
+  if (profileName) profileName.textContent = result.user.full_name;
+  if (profileEmail) profileEmail.textContent = result.user.email;
+
+  // Setup navigation
+  setupNavigation(result.permissions);
+  handleHashChange();
+  window.addEventListener('hashchange', handleHashChange);
+
+  // PATCHED: Block dashboard until password is changed
+  if (result.user.must_change_password) {
+    showForcePasswordChange();
+  }
+}
+
+// =============================================
+// BACKGROUND LOADS - Non-blocking, after UI is ready
+// =============================================
+function scheduleBackgroundLoads() {
+  // Dropdowns - only if not already loaded
+  if (!window.loadingState.dropdowns) {
+    setTimeout(loadDropdownsBackground, 300);
+  }
+  
+  // Sidebar counts - 1 second after UI
+  setTimeout(loadSidebarCountsBackground, 1000);
+  
+  // Periodic refresh every 60s
+  setInterval(refreshBackgroundData, 60000);
+}
+
+function loadDropdownsBackground() {
+  if (window.loadingState.dropdowns) return;
+  
+  apiCall('getDropdowns', {})
+    .then(result => {
+      if (result && result.success !== false) {
+        window.appDropdowns = { ...window.appDropdowns, ...result };
+        window.loadingState.dropdowns = true;
+        
+        // Update localStorage cache with dropdowns included
+        const cached = LocalStore.get('initData');
+        if (cached) {
+          cached.dropdowns = window.appDropdowns;
+          LocalStore.set('initData', cached, 15);
+        }
+        
+        console.log('Dropdowns loaded in background');
+      }
+    })
+    .catch(err => console.error('Dropdown load error:', err));
+}
+
+function loadSidebarCountsBackground() {
+  apiCall('getSidebarCounts', {})
+    .then(result => {
+      if (result && result.success) {
+        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0);
+        window.loadingState.sidebarCounts = true;
+      }
+    })
+    .catch(err => console.error('Sidebar counts error:', err));
+}
+
+function refreshBackgroundData() {
+  apiCall('getSidebarCounts', {})
+    .then(result => {
+      if (result && result.success) {
+        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0);
+      }
+    })
+    .catch(() => {});
+}
+
+// Silent refresh: update cached data without blocking UI
+function silentRefreshInitData() {
+  const sessionToken = sessionStorage.getItem('sessionToken') || '';
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) {
+        // Update in-memory state
+        window.currentUser = result.user;
+        if (result.permissions) {
+          setupNavigation(result.permissions);
+        }
+        // Update cache
+        const merged = { ...result, dropdowns: window.appDropdowns };
+        LocalStore.set('initData', merged, 15);
+      } else if (result && result.requireLogin) {
+        // Session expired - force re-auth
+        handleAuthFailure();
+      }
+    })
+    .withFailureHandler(function() {
+      // Silent fail - user already has cached UI
+    })
+    .apiCall('getInitDataLight', { sessionToken: sessionToken });
+}
+
+function handleAuthFailure() {
+  LocalStore.clear();
+  sessionStorage.removeItem('sessionToken');
+  window.top.location.href = window.top.location.pathname;
+}
+
+// Legacy alias
+function initAppProgressive() { initApp(); }
 
 function setupNavigation(p) {
   const role = window.currentUser?.role_code || '';
+  
+  // Debug log
+  console.log('Setting up navigation for role:', role);
+  console.log('Permissions object:', p);
 
-  // Hide elements based on permissions
-  if (!p.canCreateWorkPaper) {
+  // SUPER_ADMIN sees everything - no hiding needed
+  if (role === 'SUPER_ADMIN') {
+    console.log('SUPER_ADMIN detected - showing all navigation items');
+    // Explicitly show all admin items for SUPER_ADMIN
+    document.getElementById('navInsightsSection')?.classList.remove('d-none');
+    document.getElementById('navReports')?.classList.remove('d-none');
+    document.getElementById('navAnalytics')?.classList.remove('d-none');
+    document.getElementById('navAdminSection')?.classList.remove('d-none');
+    document.getElementById('navUsers')?.classList.remove('d-none');
+    document.getElementById('navSettings')?.classList.remove('d-none');
+    document.getElementById('navQuickStats')?.classList.remove('d-none');
+    document.getElementById('navNewWorkPaper')?.classList.remove('d-none');
+    document.getElementById('navMyWorkPapers')?.classList.remove('d-none');
+    document.getElementById('navPendingReview')?.classList.remove('d-none');
+    return; // Exit early - SUPER_ADMIN sees everything
+  }
+
+  // For other roles, apply permission-based visibility
+  
+  // Work Paper creation
+  if (!p || !p.canCreateWorkPaper) {
     document.getElementById('navNewWorkPaper')?.classList.add('d-none');
   }
 
-  if (!p.canViewReports) {
-    document.getElementById('navInsightsSection')?.classList.add('d-none');
+  // Reports - check canViewReports permission
+  if (!p || !p.canViewReports) {
     document.getElementById('navReports')?.classList.add('d-none');
   }
 
-  if (!p.canManageUsers) {
-    document.getElementById('navAdminSection')?.classList.add('d-none');
-    document.getElementById('navUsers')?.classList.add('d-none');
-    document.getElementById('navSettings')?.classList.add('d-none');
-  }
-
-  // Show analytics for auditors and management
-  const auditorRoles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'AUDITOR', 'MANAGEMENT', 'BOARD'];
-  if (!auditorRoles.includes(role)) {
+  // Analytics - show for auditor roles and management
+  const analyticsRoles = ['SENIOR_AUDITOR', 'AUDITOR', 'MANAGEMENT', 'BOARD'];
+  if (!analyticsRoles.includes(role)) {
     document.getElementById('navAnalytics')?.classList.add('d-none');
   }
 
-  // Hide quick stats for non-auditors
-  if (!['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'AUDITOR'].includes(role)) {
+  // Hide Insights section header if both Reports and Analytics are hidden
+  const reportsHidden = document.getElementById('navReports')?.classList.contains('d-none');
+  const analyticsHidden = document.getElementById('navAnalytics')?.classList.contains('d-none');
+  if (reportsHidden && analyticsHidden) {
+    document.getElementById('navInsightsSection')?.classList.add('d-none');
+  }
+
+  // User Management - check canManageUsers permission
+  if (!p || !p.canManageUsers) {
+    document.getElementById('navUsers')?.classList.add('d-none');
+  }
+
+  // Settings - check canManageSettings permission (separate from users!)
+  if (!p || !p.canManageSettings) {
+    document.getElementById('navSettings')?.classList.add('d-none');
+  }
+
+  // Hide Admin section header if both Users and Settings are hidden
+  const usersHidden = document.getElementById('navUsers')?.classList.contains('d-none');
+  const settingsHidden = document.getElementById('navSettings')?.classList.contains('d-none');
+  if (usersHidden && settingsHidden) {
+    document.getElementById('navAdminSection')?.classList.add('d-none');
+  }
+
+  // Quick stats - show for auditor roles
+  const auditorRoles = ['SENIOR_AUDITOR', 'AUDITOR'];
+  if (!auditorRoles.includes(role)) {
     document.getElementById('navQuickStats')?.classList.add('d-none');
   }
 
-  // Auditee-specific navigation
+  // Auditee-specific: hide work paper creation and review items
   if (['AUDITEE', 'UNIT_MANAGER', 'JUNIOR_STAFF'].includes(role)) {
     document.getElementById('navMyWorkPapers')?.classList.add('d-none');
     document.getElementById('navPendingReview')?.classList.add('d-none');
@@ -178,7 +442,10 @@ function setupNavigation(p) {
 
 // Navigation
 function handleHashChange() {
-  const hash = window.location.hash.slice(1) || 'dashboard';
+  const rawHash = window.location.hash;
+  const hash = rawHash.slice(1) || 'dashboard';
+  console.log('handleHashChange triggered - raw hash:', rawHash, 'parsed:', hash);
+  
   const parts = hash.split('?');
   const page = parts[0];
   const params = {};
@@ -188,11 +455,14 @@ function handleHashChange() {
       params[k] = decodeURIComponent(v);
     });
   }
+  console.log('handleHashChange calling navigateTo:', page, params);
   navigateTo(page, params, false);
 }
 
 function navigateTo(page, params, updateHash = true) {
   params = params || {};
+  
+  console.log('navigateTo called:', page, params, 'updateHash:', updateHash);
 
   if (updateHash) {
     const hashParams = Object.keys(params).length
@@ -223,8 +493,8 @@ function navigateTo(page, params, updateHash = true) {
   const pageMap = {
     'dashboard': { el: 'page-dashboard', title: 'Dashboard', init: loadDashboard },
     'work-papers': { el: 'page-work-papers', title: 'Work Papers', init: () => { if (typeof initWPFilters === 'function') initWPFilters(); if (typeof loadWorkPapers === 'function') loadWorkPapers(params); } },
-    'work-paper-form': { el: 'page-work-paper-form', title: params.id ? 'Edit Work Paper' : 'New Work Paper', init: () => { if (typeof initWorkPaperForm === 'function') initWorkPaperForm(params); } },
-    'work-paper-view': { el: 'page-work-paper-view', title: 'Work Paper Details', init: () => { if (typeof loadWorkPaperView === 'function') loadWorkPaperView(params); } },
+    'work-paper-form': { el: 'page-work-paper-form', title: params.id ? 'Edit Work Paper' : 'New Work Paper', init: () => { if (typeof initWorkPaperForm === 'function') initWorkPaperForm(params); else console.error('initWorkPaperForm not found!'); } },
+    'work-paper-view': { el: 'page-work-paper-view', title: 'Work Paper Details', init: () => { if (typeof loadWorkPaperView === 'function') loadWorkPaperView(params); else console.error('loadWorkPaperView not found!'); } },
     'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => { if (typeof loadActionPlans === 'function') loadActionPlans(params); } },
     'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: () => { if (typeof loadActionPlansOverdue === 'function') loadActionPlansOverdue(); else if (typeof loadActionPlans === 'function') loadActionPlans({ overdue: true }); } },
     'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => { if (typeof loadActionPlanView === 'function') loadActionPlanView(params); } },
@@ -234,12 +504,25 @@ function navigateTo(page, params, updateHash = true) {
     'analytics': { el: 'page-analytics', title: 'Analytics & Insights', init: () => { if (typeof initAnalyticsPage === 'function') initAnalyticsPage(); } }
   };
 
-  const config = pageMap[page] || pageMap['dashboard'];
-  const pageEl = document.getElementById(config.el);
-
-  if (pageEl) {
-    pageEl.style.display = 'block';
+  const config = pageMap[page];
+  
+  if (!config) {
+    console.error('Page not found in pageMap:', page, '- redirecting to dashboard');
+    navigateTo('dashboard', {}, false);
+    return;
   }
+  
+  const pageEl = document.getElementById(config.el);
+  
+  if (!pageEl) {
+    console.error('Page element not found:', config.el, '- check if the page HTML is included in AuditorPortal.html');
+    showToast('Page not found: ' + page, 'danger');
+    return;
+  }
+
+  // Show the page
+  pageEl.style.display = 'block';
+  console.log('Showing page element:', config.el);
 
   // Update page title and breadcrumb
   document.getElementById('pageTitle').textContent = config.title;
@@ -247,9 +530,15 @@ function navigateTo(page, params, updateHash = true) {
     updateBreadcrumb(page, config.title);
   }
 
-  // Initialize the page
+  // Initialize the page with error handling
   if (config.init) {
-    config.init();
+    try {
+      console.log('Calling init function for:', page);
+      config.init();
+    } catch (e) {
+      console.error('Error initializing page:', page, e);
+      showToast('Error loading page: ' + e.message, 'danger');
+    }
   }
 
   // Close sidebar on mobile
@@ -426,18 +715,33 @@ function populateMultiSelect(id, items, valueField, textField) {
 }
 
 // Auth functions
+// PATCHED: Use GAS sandbox-safe anchor redirect instead of window.top.location.reload()
 function handleLogout() {
   if (!confirm('Are you sure you want to sign out?')) return;
   showLoading('Signing out...');
 
+  // Clear all caches
+  LocalStore.clear();
+  
   apiCall('logout', {})
     .then(() => {
       sessionStorage.removeItem('sessionToken');
-      window.top.location.reload();
+      LocalStore.clear();
+      // GAS sandbox-safe redirect to login page
+      var a = document.createElement('a');
+      a.href = window.location.pathname.replace(/\/exec.*/, '/exec');
+      a.target = '_top';
+      document.body.appendChild(a);
+      a.click();
     })
     .catch(() => {
       sessionStorage.removeItem('sessionToken');
-      window.top.location.reload();
+      LocalStore.clear();
+      var a = document.createElement('a');
+      a.href = window.location.pathname.replace(/\/exec.*/, '/exec');
+      a.target = '_top';
+      document.body.appendChild(a);
+      a.click();
     });
 }
 
@@ -494,6 +798,76 @@ function submitChangePassword() {
     .catch(() => {
       hideLoading();
       showToast('Error changing password', 'danger');
+    });
+}
+
+// PATCHED: Force password change - blocks dashboard access
+function showForcePasswordChange() {
+  document.getElementById('sidebar').style.display = 'none';
+  document.querySelector('.main-content').style.display = 'none';
+  document.getElementById('forcePasswordOverlay').style.display = 'block';
+}
+
+function submitForcePasswordChange() {
+  var current = document.getElementById('forceCurrentPwd').value;
+  var newPwd = document.getElementById('forceNewPwd').value;
+  var confirmPwd = document.getElementById('forceConfirmPwd').value;
+  var errorEl = document.getElementById('forcePwdError');
+  var btn = document.getElementById('forcePwdBtn');
+
+  errorEl.style.display = 'none';
+
+  if (!current) {
+    errorEl.textContent = 'Enter your current/temporary password';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (newPwd.length < 8) {
+    errorEl.textContent = 'Password must be at least 8 characters';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!/[A-Z]/.test(newPwd) || !/[a-z]/.test(newPwd) || !/[0-9]/.test(newPwd)) {
+    errorEl.textContent = 'Password needs uppercase, lowercase, and a number';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (newPwd !== confirmPwd) {
+    errorEl.textContent = 'Passwords do not match';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Changing...';
+
+  apiCall('changePassword', { currentPassword: current, newPassword: newPwd })
+    .then(function(r) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg me-2"></i>Set New Password';
+      if (r.success) {
+        window.currentUser.must_change_password = false;
+        // Update cached data
+        var cached = LocalStore.get('initData');
+        if (cached && cached.user) {
+          cached.user.must_change_password = false;
+          LocalStore.set('initData', cached, 15);
+        }
+        // Reveal the app
+        document.getElementById('forcePasswordOverlay').style.display = 'none';
+        document.getElementById('sidebar').style.display = '';
+        document.querySelector('.main-content').style.display = '';
+        showToast('Password changed. Welcome!', 'success');
+      } else {
+        errorEl.textContent = r.error || 'Failed to change password';
+        errorEl.style.display = 'block';
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg me-2"></i>Set New Password';
+      errorEl.textContent = 'Connection error. Try again.';
+      errorEl.style.display = 'block';
     });
 }
 
@@ -757,6 +1131,30 @@ function exportToCSV(data, filename) {
   link.click();
 }
 
+// Update sidebar quick stats badges
+function updateQuickStats(pending, overdue) {
+  const pendingEl = document.getElementById('quickStatPending');
+  const overdueEl = document.getElementById('quickStatOverdue');
+  const pendingReviewCount = document.getElementById('pendingReviewCount');
+  const overdueCount = document.getElementById('overdueCount');
+  
+  if (pendingEl) pendingEl.textContent = pending || 0;
+  if (overdueEl) overdueEl.textContent = overdue || 0;
+  if (pendingReviewCount) pendingReviewCount.textContent = pending || 0;
+  if (overdueCount) overdueCount.textContent = overdue || 0;
+}
+
+// Refresh sidebar counts from API
+function refreshSidebarCounts() {
+  apiCall('getSidebarCounts', {})
+    .then(result => {
+      if (result.success) {
+        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0);
+      }
+    })
+    .catch(err => console.error('Error refreshing sidebar counts:', err));
+}
+
 // Print helper
 function printContent(elementId, title) {
   const content = document.getElementById(elementId);
@@ -784,4 +1182,86 @@ function printContent(elementId, title) {
   `);
   printWindow.document.close();
 }
+
+// =============================================
+// SIDEBAR COLLAPSE FUNCTIONALITY
+// =============================================
+
+/**
+ * Toggle sidebar collapsed state
+ */
+function toggleSidebarCollapse() {
+  const sidebar = document.getElementById('sidebar');
+  const mainContent = document.querySelector('.main-content');
+  const toggleBtn = document.getElementById('sidebarCollapseToggle');
+  const toggleIcon = toggleBtn?.querySelector('i');
+  
+  const isCollapsed = sidebar.classList.toggle('collapsed');
+  
+  // Update main content margin
+  if (mainContent) {
+    mainContent.classList.toggle('sidebar-collapsed', isCollapsed);
+  }
+  
+  // Update toggle icon direction
+  if (toggleIcon) {
+    toggleIcon.className = isCollapsed ? 'bi bi-chevron-right' : 'bi bi-chevron-left';
+  }
+  
+  // Save preference to localStorage
+  localStorage.setItem('sidebarCollapsed', isCollapsed ? 'true' : 'false');
+}
+
+/**
+ * Initialize sidebar state from saved preference
+ */
+function initSidebarState() {
+  const savedState = localStorage.getItem('sidebarCollapsed');
+  const sidebar = document.getElementById('sidebar');
+  const mainContent = document.querySelector('.main-content');
+  const toggleBtn = document.getElementById('sidebarCollapseToggle');
+  const toggleIcon = toggleBtn?.querySelector('i');
+  
+  // Default to collapsed on desktop for cleaner look
+  // Or restore saved preference
+  const shouldCollapse = savedState === 'true';
+  
+  if (shouldCollapse && sidebar) {
+    sidebar.classList.add('collapsed');
+    if (mainContent) mainContent.classList.add('sidebar-collapsed');
+    if (toggleIcon) toggleIcon.className = 'bi bi-chevron-right';
+  }
+}
+
+/**
+ * Expand sidebar (for hover or programmatic use)
+ */
+function expandSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const mainContent = document.querySelector('.main-content');
+  
+  if (sidebar) {
+    sidebar.classList.remove('collapsed');
+    if (mainContent) mainContent.classList.remove('sidebar-collapsed');
+  }
+}
+
+/**
+ * Collapse sidebar (for programmatic use)
+ */
+function collapseSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const mainContent = document.querySelector('.main-content');
+  
+  if (sidebar) {
+    sidebar.classList.add('collapsed');
+    if (mainContent) mainContent.classList.add('sidebar-collapsed');
+  }
+}
+
+// Initialize sidebar state on page load
+document.addEventListener('DOMContentLoaded', function() {
+  // Small delay to ensure DOM is ready
+  setTimeout(initSidebarState, 100);
+});
 </script>
