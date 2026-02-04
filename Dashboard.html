@@ -327,17 +327,20 @@ function renderDashboard(data) {
   const wp = summary.workPapers || data.workPaperStats || data.workPapers || {};
   const ap = summary.actionPlans || data.actionPlanStats || data.actionPlans || {};
 
+  // Calculate pending review count - only count 'Submitted' status (awaiting review)
+  // Don't double-count by adding multiple sources
+  const pendingReviewCount = wp.submitted || data.pendingReview || 0;
+  const overdueCount = ap.overdue || data.overdueCount || 0;
+
   // Update stats
   document.getElementById('statTotalWP').textContent = wp.total || data.totalWorkPapers || 0;
-  document.getElementById('statPendingReview').textContent = (wp.submitted || 0) + (wp.underReview || 0) + (data.pendingReview || 0);
+  document.getElementById('statPendingReview').textContent = pendingReviewCount;
   document.getElementById('statTotalAP').textContent = ap.total || data.totalActionPlans || 0;
-  document.getElementById('statOverdue').textContent = ap.overdue || data.overdueCount || 0;
+  document.getElementById('statOverdue').textContent = overdueCount;
 
   // Update sidebar quick stats
   if (typeof updateQuickStats === 'function') {
-    const pending = (wp.submitted || 0) + (wp.underReview || 0) + (data.pendingReview || 0);
-    const overdue = ap.overdue || data.overdueCount || 0;
-    updateQuickStats(pending, overdue);
+    updateQuickStats(pendingReviewCount, overdueCount);
   }
 
   // Update welcome section
