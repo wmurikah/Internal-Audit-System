@@ -13,15 +13,8 @@
       --bg-gradient: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
       --success-color: #28a745;
       --error-color: #dc3545;
-      --warning-color: #ffc107;
     }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       min-height: 100vh;
       display: flex;
@@ -30,92 +23,40 @@
       background: var(--bg-gradient);
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
-
-    /* Skip link for accessibility */
-    .skip-link {
-      position: absolute;
-      top: -40px;
-      left: 0;
-      background: var(--accent-color);
-      color: var(--primary-color);
-      padding: 8px 16px;
-      z-index: 100;
-      font-weight: 600;
-      text-decoration: none;
-      border-radius: 0 0 8px 0;
-    }
-
-    .skip-link:focus {
-      top: 0;
-    }
-
-    .login-container {
-      width: 100%;
-      max-width: 420px;
-      padding: 20px;
-    }
-    
+    .login-container { width: 100%; max-width: 420px; padding: 20px; }
     .login-card {
-      background: #ffffff;
+      background: #fff;
       border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
       overflow: hidden;
+      animation: fadeIn 0.5s ease;
     }
-    
     .login-header {
       background: var(--primary-color);
       padding: 30px;
       text-align: center;
       position: relative;
     }
-    
     .login-header::after {
       content: '';
       position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 0; left: 0; right: 0;
       height: 4px;
       background: var(--accent-color);
     }
-    
     .login-logo {
-      width: 80px;
-      height: 80px;
-      background: #ffffff;
+      width: 80px; height: 80px;
+      background: #fff;
       border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       margin: 0 auto 15px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
-    
-    .login-logo i {
-      font-size: 40px;
-      color: var(--primary-color);
-    }
-    
-    .login-header h1 {
-      color: #ffffff;
-      font-size: 1.5rem;
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-    
-    .login-header p {
-      color: rgba(255, 255, 255, 0.8);
-      font-size: 0.9rem;
-    }
-    
-    .login-body {
-      padding: 30px;
-    }
-    
-    .form-floating {
-      margin-bottom: 20px;
-    }
-    
+    .login-logo i { font-size: 40px; color: var(--primary-color); }
+    .login-header h1 { color: #fff; font-size: 1.5rem; font-weight: 600; margin-bottom: 5px; }
+    .login-header p { color: rgba(255,255,255,0.8); font-size: 0.9rem; }
+    .login-body { padding: 30px; }
+    .form-floating { margin-bottom: 20px; }
     .form-floating > .form-control {
       border: 2px solid #e9ecef;
       border-radius: 10px;
@@ -124,429 +65,125 @@
       font-size: 1rem;
       transition: all 0.3s ease;
     }
-    
     .form-floating > .form-control:focus {
       border-color: var(--primary-color);
-      box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.1);
+      box-shadow: 0 0 0 4px rgba(26,54,93,0.1);
     }
-    
-    .form-floating > label {
-      padding-left: 2.8rem;
-      color: #6c757d;
-    }
-    
+    .form-floating > label { padding-left: 2.8rem; color: #6c757d; }
     .form-floating .input-icon {
-      position: absolute;
-      left: 15px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #6c757d;
-      font-size: 1.2rem;
-      z-index: 5;
-      transition: color 0.3s ease;
+      position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+      color: #6c757d; font-size: 1.2rem; z-index: 5;
     }
-    
-    .form-floating:focus-within .input-icon {
-      color: var(--primary-color);
-    }
-    
+    .form-floating:focus-within .input-icon { color: var(--primary-color); }
     .password-toggle {
-      position: absolute;
-      right: 15px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      color: #6c757d;
-      cursor: pointer;
-      z-index: 5;
-      padding: 5px;
+      position: absolute; right: 15px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: #6c757d; cursor: pointer; z-index: 5; padding: 5px;
     }
-    
-    .password-toggle:hover {
-      color: var(--primary-color);
-    }
-    
+    .password-toggle:hover { color: var(--primary-color); }
     .btn-login {
-      width: 100%;
-      padding: 14px;
-      font-size: 1.1rem;
-      font-weight: 600;
-      border: none;
-      border-radius: 10px;
-      background: var(--primary-color);
-      color: #ffffff;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
+      width: 100%; padding: 14px; font-size: 1.1rem; font-weight: 600;
+      border: none; border-radius: 10px;
+      background: var(--primary-color); color: #fff;
+      cursor: pointer; transition: all 0.3s ease;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
     }
-    
     .btn-login:hover:not(:disabled) {
-      background: #2d4a7c;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(26, 54, 93, 0.3);
+      background: #2d4a7c; transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(26,54,93,0.3);
     }
-    
-    .btn-login:disabled {
-      opacity: 0.7;
-      cursor: not-allowed;
-    }
-    
-    .btn-login .spinner-border {
-      width: 20px;
-      height: 20px;
-      border-width: 2px;
-    }
-    
+    .btn-login:disabled { opacity: 0.7; cursor: not-allowed; }
+    .btn-login .spinner-border { width: 20px; height: 20px; border-width: 2px; }
     .alert {
-      border-radius: 10px;
-      padding: 12px 15px;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 0.9rem;
+      border-radius: 10px; padding: 12px 15px; margin-bottom: 20px;
+      display: flex; align-items: center; gap: 10px; font-size: 0.9rem;
     }
-    
-    .alert-danger {
-      background: #fff5f5;
-      border: 1px solid #feb2b2;
-      color: #c53030;
-    }
-    
-    .alert-success {
-      background: #f0fff4;
-      border: 1px solid #9ae6b4;
-      color: #276749;
-    }
-    
+    .alert-danger { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; }
     .login-footer {
-      text-align: center;
-      padding: 20px 30px 30px;
-      background: #f8f9fa;
-      border-top: 1px solid #e9ecef;
+      text-align: center; padding: 20px 30px 30px;
+      background: #f8f9fa; border-top: 1px solid #e9ecef;
     }
-    
-    .login-footer p {
-      color: #6c757d;
-      font-size: 0.85rem;
-      margin: 0;
-    }
-    
-    .login-footer a {
-      color: var(--primary-color);
-      text-decoration: none;
-      font-weight: 500;
-    }
-    
-    .login-footer a:hover {
-      text-decoration: underline;
-    }
-    
-    /* Loading overlay */
+    .login-footer p { color: #6c757d; font-size: 0.85rem; margin: 0; }
+    .login-footer a { color: var(--primary-color); text-decoration: none; font-weight: 500; }
     .loading-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(255, 255, 255, 0.9);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.9);
+      display: none; align-items: center; justify-content: center; z-index: 9999;
     }
-    
-    .loading-overlay.show {
-      display: flex;
-    }
-    
-    .loading-spinner {
-      text-align: center;
-    }
-    
-    .loading-spinner .spinner-border {
-      width: 50px;
-      height: 50px;
-      color: var(--primary-color);
-    }
-    
-    .loading-spinner p {
-      margin-top: 15px;
-      color: var(--primary-color);
-      font-weight: 500;
-    }
-    
-    /* Animations */
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .login-card {
-      animation: fadeIn 0.5s ease;
-    }
-    
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-10px); }
-      75% { transform: translateX(10px); }
-    }
-    
-    .shake {
-      animation: shake 0.4s ease;
-    }
-
-    /* Success view styles */
-    .success-view {
-      text-align: center;
-      padding: 20px 0;
-    }
-
-    .success-icon {
-      width: 80px;
-      height: 80px;
-      background: #d4edda;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 20px;
-    }
-
-    .success-icon i {
-      font-size: 40px;
-      color: #28a745;
-    }
-
-    .btn-continue {
-      width: 100%;
-      padding: 14px;
-      font-size: 1.1rem;
-      font-weight: 600;
-      border: none;
-      border-radius: 10px;
-      background: #28a745;
-      color: #ffffff;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      text-decoration: none;
-      margin-top: 20px;
-    }
-
-    .btn-continue:hover {
-      background: #218838;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-      color: #ffffff;
-    }
-
-    /* Remember me checkbox */
-    .form-options {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .remember-me {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-    }
-
-    .remember-me input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--primary-color);
-      cursor: pointer;
-    }
-
-    .remember-me label {
-      color: #6c757d;
-      font-size: 0.9rem;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .forgot-password {
-      color: var(--primary-color);
-      font-size: 0.9rem;
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.3s ease;
-    }
-
-    .forgot-password:hover {
-      color: var(--accent-color);
-      text-decoration: underline;
-    }
-
-    /* Form validation states */
-    .form-floating > .form-control.is-valid {
-      border-color: var(--success-color);
-    }
-
-    .form-floating > .form-control.is-invalid {
-      border-color: var(--error-color);
-    }
-
-    .validation-feedback {
-      font-size: 0.8rem;
-      margin-top: 4px;
-      display: none;
-    }
-
-    .validation-feedback.show {
-      display: block;
-    }
-
-    .validation-feedback.valid {
-      color: var(--success-color);
-    }
-
-    .validation-feedback.invalid {
-      color: var(--error-color);
-    }
-
-    /* Session checking overlay */
+    .loading-overlay.show { display: flex; }
+    .loading-spinner { text-align: center; }
+    .loading-spinner .spinner-border { width: 50px; height: 50px; color: var(--primary-color); }
+    .loading-spinner p { margin-top: 15px; color: var(--primary-color); font-weight: 500; }
     .session-check-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: var(--bg-gradient);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
+      display: flex; align-items: center; justify-content: center; z-index: 10000;
       transition: opacity 0.3s ease;
     }
-
-    .session-check-overlay.fade-out {
-      opacity: 0;
-      pointer-events: none;
+    .session-check-overlay.fade-out { opacity: 0; pointer-events: none; }
+    .session-check-content { text-align: center; color: #fff; }
+    .session-check-content .spinner-border { width: 50px; height: 50px; color: var(--accent-color); }
+    .session-check-content p { margin-top: 15px; font-size: 1rem; opacity: 0.9; }
+    .form-options {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
     }
-
-    .session-check-content {
-      text-align: center;
-      color: #ffffff;
-    }
-
-    .session-check-content .spinner-border {
-      width: 50px;
-      height: 50px;
-      color: var(--accent-color);
-    }
-
-    .session-check-content p {
-      margin-top: 15px;
-      font-size: 1rem;
-      opacity: 0.9;
-    }
-
-    /* Security info */
+    .remember-me { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .remember-me input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary-color); }
+    .remember-me label { color: #6c757d; font-size: 0.9rem; cursor: pointer; }
+    .forgot-password { color: var(--primary-color); font-size: 0.9rem; text-decoration: none; font-weight: 500; }
     .security-info {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 15px;
-      color: #6c757d;
-      font-size: 0.8rem;
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; margin-top: 15px; color: #6c757d; font-size: 0.8rem;
     }
-
-    .security-info i {
-      color: var(--success-color);
+    .security-info i { color: var(--success-color); }
+    .form-floating > .form-control.is-valid { border-color: var(--success-color); }
+    .form-floating > .form-control.is-invalid { border-color: var(--error-color); }
+    .validation-feedback { font-size: 0.8rem; margin-top: 4px; display: none; }
+    .validation-feedback.show { display: block; }
+    .validation-feedback.invalid { color: var(--error-color); }
+    .btn-continue {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 14px; font-size: 1.1rem; font-weight: 600;
+      border: none; border-radius: 10px; background: #28a745; color: #fff;
+      text-decoration: none; margin-top: 20px; cursor: pointer;
     }
-
-    /* Responsive adjustments */
+    .btn-continue:hover { background: #218838; color: #fff; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(40,167,69,0.3); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+    .shake { animation: shake 0.4s ease; }
     @media (max-width: 480px) {
-      .login-container {
-        padding: 10px;
-      }
-
-      .login-header {
-        padding: 25px 20px;
-      }
-
-      .login-body {
-        padding: 25px 20px;
-      }
-
-      .login-footer {
-        padding: 15px 20px 25px;
-      }
-
-      .form-options {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .login-header h1 {
-        font-size: 1.3rem;
-      }
+      .login-container { padding: 10px; }
+      .login-header { padding: 25px 20px; }
+      .login-body { padding: 25px 20px; }
+      .login-footer { padding: 15px 20px 25px; }
+      .form-options { flex-direction: column; align-items: flex-start; }
+      .login-header h1 { font-size: 1.3rem; }
     }
-
-    /* High contrast mode support */
-    @media (prefers-contrast: high) {
-      .form-floating > .form-control {
-        border-width: 3px;
-      }
-
-      .btn-login {
-        border: 2px solid #ffffff;
-      }
-    }
-
-    /* Reduced motion support */
     @media (prefers-reduced-motion: reduce) {
-      .login-card {
-        animation: none;
-      }
-
-      .shake {
-        animation: none;
-      }
-
-      * {
-        transition-duration: 0.01ms !important;
-      }
+      .login-card, .shake { animation: none; }
+      * { transition-duration: 0.01ms !important; }
     }
   </style>
 </head>
 <body>
-  <!-- Skip link for accessibility -->
-  <a href="#loginForm" class="skip-link">Skip to login form</a>
 
   <!-- Session Check Overlay -->
   <div class="session-check-overlay" id="sessionCheckOverlay">
     <div class="session-check-content">
       <div class="spinner-border" role="status">
-        <span class="visually-hidden">Checking session...</span>
+        <span class="visually-hidden">Loading...</span>
       </div>
-      <p>Checking your session...</p>
+      <p>Loading...</p>
     </div>
   </div>
 
   <!-- Loading Overlay -->
-  <div class="loading-overlay" id="loadingOverlay" role="alert" aria-live="polite">
+  <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner">
       <div class="spinner-border" role="status">
-        <span class="visually-hidden">Signing in...</span>
+        <span class="visually-hidden">Please wait...</span>
       </div>
-      <p>Signing in...</p>
+      <p id="loadingText">Signing in...</p>
     </div>
   </div>
 
@@ -561,339 +198,308 @@
       </div>
 
       <div class="login-body">
-        <!-- Alert -->
+        <!-- Error Alert -->
         <div class="alert alert-danger" id="errorAlert" style="display: none;">
           <i class="bi bi-exclamation-circle-fill"></i>
           <span id="errorMessage"></span>
         </div>
 
-        <!-- Login Form View -->
+        <!-- ========== LOGIN FORM VIEW ========== -->
         <div id="loginFormView">
-          <form id="loginForm" onsubmit="handleLogin(event)" aria-label="Login form">
+          <form id="loginForm" onsubmit="handleLogin(event)">
             <div class="form-floating position-relative">
-              <i class="bi bi-envelope input-icon" aria-hidden="true"></i>
-              <input type="email" class="form-control" id="email" placeholder="Email" required
-                     autocomplete="email" aria-describedby="emailHelp"
-                     onblur="validateEmail(this)">
+              <i class="bi bi-envelope input-icon"></i>
+              <input type="email" class="form-control" id="email" placeholder="Email" required autocomplete="email" onblur="validateEmail(this)">
               <label for="email">Email Address</label>
-              <div class="validation-feedback" id="emailFeedback" role="alert"></div>
+              <div class="validation-feedback" id="emailFeedback"></div>
             </div>
-
             <div class="form-floating position-relative">
-              <i class="bi bi-lock input-icon" aria-hidden="true"></i>
-              <input type="password" class="form-control" id="password" placeholder="Password" required
-                     autocomplete="current-password" aria-describedby="passwordHelp"
-                     minlength="6">
+              <i class="bi bi-lock input-icon"></i>
+              <input type="password" class="form-control" id="password" placeholder="Password" required autocomplete="current-password" minlength="6">
               <label for="password">Password</label>
-              <button type="button" class="password-toggle" onclick="togglePassword()"
-                      aria-label="Toggle password visibility" title="Show/hide password">
-                <i class="bi bi-eye" id="passwordToggleIcon" aria-hidden="true"></i>
+              <button type="button" class="password-toggle" onclick="togglePassword()" aria-label="Toggle password">
+                <i class="bi bi-eye" id="passwordToggleIcon"></i>
               </button>
             </div>
-
             <div class="form-options">
               <div class="remember-me">
-                <input type="checkbox" id="rememberMe" name="rememberMe">
+                <input type="checkbox" id="rememberMe">
                 <label for="rememberMe">Remember me</label>
               </div>
-              <a href="#" class="forgot-password" onclick="showForgotPassword(event)">Forgot password?</a>
+              <a href="javascript:void(0)" class="forgot-password" onclick="showForgotPassword()">Forgot password?</a>
             </div>
-
-            <button type="submit" class="btn-login" id="loginBtn" aria-describedby="loginHelp">
+            <button type="submit" class="btn-login" id="loginBtn">
               <span id="loginBtnText">Sign In</span>
-              <span id="loginBtnSpinner" style="display: none;" aria-hidden="true">
-                <span class="spinner-border spinner-border-sm" role="status"></span>
-                Signing in...
+              <span id="loginBtnSpinner" style="display: none;">
+                <span class="spinner-border spinner-border-sm"></span> Signing in...
               </span>
             </button>
-
             <div class="security-info">
-              <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
-              <span>Secure connection (256-bit encryption)</span>
+              <i class="bi bi-shield-lock-fill"></i>
+              <span>Secure connection</span>
             </div>
           </form>
         </div>
 
-        <!-- Success View (shown after login) -->
-        <div id="successView" style="display: none;">
-          <div class="success-view">
-            <div class="success-icon">
-              <i class="bi bi-check-lg"></i>
-            </div>
-            <h4 class="text-success mb-2">Login Successful!</h4>
-            <p class="text-muted mb-0">Welcome back, <strong id="welcomeName"></strong></p>
-            <a id="continueBtn" href="#" class="btn-continue">
-              <i class="bi bi-arrow-right-circle"></i>
-              Continue to Dashboard
+        <!-- ========== FORGOT PASSWORD VIEW ========== -->
+        <div id="forgotPasswordView" style="display: none;">
+          <div style="text-align:center; margin-bottom:20px;">
+            <i class="bi bi-envelope-check" style="font-size:40px; color:#1a365d;"></i>
+            <h5 style="margin-top:10px; color:#1a365d;">Reset Your Password</h5>
+            <p style="color:#6c757d; font-size:14px;">Enter your email and we'll send you a temporary password.</p>
+          </div>
+          <div class="form-floating position-relative" style="margin-bottom:16px;">
+            <i class="bi bi-envelope input-icon"></i>
+            <input type="email" class="form-control" id="forgotEmail" placeholder="Email" required autocomplete="email">
+            <label for="forgotEmail">Email Address</label>
+          </div>
+          <div id="forgotSuccessMsg" style="display:none;" class="alert alert-success py-2" style="font-size:14px;"></div>
+          <div id="forgotErrorMsg" style="display:none;" class="alert alert-danger py-2" style="font-size:14px;"></div>
+          <button type="button" class="btn-login" id="forgotBtn" onclick="handleForgotPassword()" style="margin-bottom:12px;">
+            <span id="forgotBtnText">Send Temporary Password</span>
+            <span id="forgotBtnSpinner" style="display:none;">
+              <span class="spinner-border spinner-border-sm"></span> Sending...
+            </span>
+          </button>
+          <div style="text-align:center;">
+            <a href="javascript:void(0)" onclick="showLoginForm()" style="color:#1a365d; font-size:14px; text-decoration:none;">
+              <i class="bi bi-arrow-left me-1"></i>Back to Sign In
             </a>
           </div>
         </div>
+
+        <!-- ========== SUCCESS VIEW (outside form) ========== -->
+        <div id="successView" style="display: none; text-align: center; padding: 20px 0;">
+          <div style="width:80px;height:80px;background:#d4edda;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+            <i class="bi bi-check-lg" style="font-size:40px;color:#28a745;"></i>
+          </div>
+          <h4 style="color:#28a745;margin-bottom:8px;">Login Successful!</h4>
+          <p style="color:#6c757d;">Welcome back, <strong id="welcomeName"></strong></p>
+          <a id="continueBtn" href="#" target="_top" class="btn-continue">
+            <i class="bi bi-arrow-right-circle"></i>
+            Go to Dashboard
+          </a>
+        </div>
+
       </div>
 
       <div class="login-footer">
-        <p>Having trouble? Contact <a href="mailto:audit@hasspetroleum.com">audit@hasspetroleum.com</a></p>
+        <p>Having trouble? Contact audit&#64;hasspetroleum.com</p>
       </div>
     </div>
   </div>
 
   <script>
-    // App URL for redirect
-    const APP_URL = '<?= ScriptApp.getService().getUrl() ?>?page=app';
-    const STORAGE_KEY_EMAIL = 'hass_audit_remembered_email';
+    var APP_URL = '<?= ScriptApp.getService().getUrl() ?>?page=app';
+    var STORAGE_KEY_EMAIL = 'hass_audit_remembered_email';
 
-    // Check for existing session on page load
+    // =============================================
+    // SESSION CHECK - no server call
+    // =============================================
     function checkExistingSession() {
-      const sessionToken = sessionStorage.getItem('sessionToken');
-      const user = sessionStorage.getItem('user');
+      var token = sessionStorage.getItem('sessionToken');
+      var data = sessionStorage.getItem('loginInitData');
 
-      if (sessionToken && user) {
-        // Validate the session with the server
-        google.script.run
-          .withSuccessHandler(function(result) {
-            if (result.success && result.valid) {
-              // Session is still valid, redirect to app
-              window.location.href = APP_URL;
-            } else {
-              // Session invalid, clear and show login
-              sessionStorage.removeItem('sessionToken');
-              sessionStorage.removeItem('user');
-              hideSessionCheckOverlay();
-            }
-          })
-          .withFailureHandler(function() {
-            // On error, just show login form
-            hideSessionCheckOverlay();
-          })
-          .apiCall('validateSession', { sessionToken: sessionToken });
-      } else {
-        // No session, show login form
-        hideSessionCheckOverlay();
+      if (token && data) {
+        var link = document.createElement('a');
+        link.href = APP_URL;
+        link.target = '_top';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(function() {
+          sessionStorage.removeItem('sessionToken');
+          sessionStorage.removeItem('loginInitData');
+          hideSessionCheck();
+        }, 2000);
+        return;
       }
+
+      if (token) sessionStorage.removeItem('sessionToken');
+      hideSessionCheck();
     }
 
-    // Hide session check overlay
-    function hideSessionCheckOverlay() {
-      const overlay = document.getElementById('sessionCheckOverlay');
-      overlay.classList.add('fade-out');
-      setTimeout(() => {
-        overlay.style.display = 'none';
-        // Load remembered email if exists
+    function hideSessionCheck() {
+      var el = document.getElementById('sessionCheckOverlay');
+      el.classList.add('fade-out');
+      setTimeout(function() {
+        el.style.display = 'none';
         loadRememberedEmail();
-        document.getElementById('email').focus();
+        var emailEl = document.getElementById('email');
+        if (emailEl) emailEl.focus();
       }, 300);
     }
 
-    // Load remembered email
+    // =============================================
+    // REMEMBER ME
+    // =============================================
     function loadRememberedEmail() {
-      const rememberedEmail = localStorage.getItem(STORAGE_KEY_EMAIL);
-      if (rememberedEmail) {
-        document.getElementById('email').value = rememberedEmail;
+      var saved = localStorage.getItem(STORAGE_KEY_EMAIL);
+      if (saved) {
+        document.getElementById('email').value = saved;
         document.getElementById('rememberMe').checked = true;
         document.getElementById('password').focus();
       }
     }
 
-    // Save remembered email
-    function saveRememberedEmail(email) {
-      localStorage.setItem(STORAGE_KEY_EMAIL, email);
-    }
-
-    // Clear remembered email
-    function clearRememberedEmail() {
-      localStorage.removeItem(STORAGE_KEY_EMAIL);
-    }
-
-    // Validate email format
+    // =============================================
+    // VALIDATION
+    // =============================================
     function validateEmail(input) {
-      const email = input.value.trim();
-      const feedback = document.getElementById('emailFeedback');
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-      if (!email) {
-        input.classList.remove('is-valid', 'is-invalid');
-        feedback.classList.remove('show', 'valid', 'invalid');
-        return false;
+      var val = input.value.trim();
+      var fb = document.getElementById('emailFeedback');
+      if (!val) { input.classList.remove('is-valid','is-invalid'); fb.classList.remove('show'); return false; }
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+        input.classList.remove('is-invalid'); input.classList.add('is-valid');
+        fb.classList.remove('show'); return true;
       }
-
-      if (emailRegex.test(email)) {
-        input.classList.remove('is-invalid');
-        input.classList.add('is-valid');
-        feedback.textContent = '';
-        feedback.classList.remove('show', 'invalid');
-        return true;
-      } else {
-        input.classList.remove('is-valid');
-        input.classList.add('is-invalid');
-        feedback.textContent = 'Please enter a valid email address';
-        feedback.classList.add('show', 'invalid');
-        feedback.classList.remove('valid');
-        return false;
-      }
+      input.classList.remove('is-valid'); input.classList.add('is-invalid');
+      fb.textContent = 'Please enter a valid email'; fb.classList.add('show','invalid'); return false;
     }
 
-    // Toggle password visibility
     function togglePassword() {
-      const passwordInput = document.getElementById('password');
-      const toggleIcon = document.getElementById('passwordToggleIcon');
-      const toggleBtn = document.querySelector('.password-toggle');
-
-      if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleIcon.classList.remove('bi-eye');
-        toggleIcon.classList.add('bi-eye-slash');
-        toggleBtn.setAttribute('aria-label', 'Hide password');
-      } else {
-        passwordInput.type = 'password';
-        toggleIcon.classList.remove('bi-eye-slash');
-        toggleIcon.classList.add('bi-eye');
-        toggleBtn.setAttribute('aria-label', 'Show password');
-      }
+      var pw = document.getElementById('password');
+      var ic = document.getElementById('passwordToggleIcon');
+      if (pw.type === 'password') { pw.type = 'text'; ic.classList.replace('bi-eye','bi-eye-slash'); }
+      else { pw.type = 'password'; ic.classList.replace('bi-eye-slash','bi-eye'); }
     }
 
-    // Show error
-    function showError(message) {
-      const errorAlert = document.getElementById('errorAlert');
-      const errorMessage = document.getElementById('errorMessage');
-      const loginCard = document.getElementById('loginCard');
-
-      errorMessage.textContent = message;
-      errorAlert.style.display = 'flex';
-      errorAlert.setAttribute('role', 'alert');
-
-      // Shake animation
-      loginCard.classList.add('shake');
-      setTimeout(() => loginCard.classList.remove('shake'), 400);
-
-      // Focus on alert for screen readers
-      errorAlert.focus();
+    // =============================================
+    // UI HELPERS
+    // =============================================
+    function showError(msg) {
+      document.getElementById('errorMessage').textContent = msg;
+      document.getElementById('errorAlert').style.display = 'flex';
+      var card = document.getElementById('loginCard');
+      card.classList.add('shake');
+      setTimeout(function() { card.classList.remove('shake'); }, 400);
     }
 
-    // Hide error
-    function hideError() {
-      document.getElementById('errorAlert').style.display = 'none';
+    function hideError() { document.getElementById('errorAlert').style.display = 'none'; }
+
+    function setLoading(on, text) {
+      document.getElementById('loginBtn').disabled = on;
+      document.getElementById('loginBtnText').style.display = on ? 'none' : 'inline';
+      document.getElementById('loginBtnSpinner').style.display = on ? 'inline' : 'none';
+      if (text) document.getElementById('loadingText').textContent = text;
+      var ov = document.getElementById('loadingOverlay');
+      if (on) ov.classList.add('show'); else ov.classList.remove('show');
     }
 
-    // Set loading state
-    function setLoading(loading) {
-      const loginBtn = document.getElementById('loginBtn');
-      const loginBtnText = document.getElementById('loginBtnText');
-      const loginBtnSpinner = document.getElementById('loginBtnSpinner');
-      const loadingOverlay = document.getElementById('loadingOverlay');
-
-      loginBtn.disabled = loading;
-      loginBtn.setAttribute('aria-busy', loading ? 'true' : 'false');
-      loginBtnText.style.display = loading ? 'none' : 'inline';
-      loginBtnSpinner.style.display = loading ? 'inline' : 'none';
-      loginBtnSpinner.setAttribute('aria-hidden', loading ? 'false' : 'true');
-
-      if (loading) {
-        loadingOverlay.classList.add('show');
-      } else {
-        loadingOverlay.classList.remove('show');
-      }
-    }
-
-    // Show success view with continue button
-    function showSuccessView(userName) {
+    function showForgotPassword() {
       document.getElementById('loginFormView').style.display = 'none';
-      document.getElementById('successView').style.display = 'block';
-      document.getElementById('welcomeName').textContent = userName || 'User';
-      document.getElementById('continueBtn').href = APP_URL;
-
-      // Focus on continue button for accessibility
-      setTimeout(() => document.getElementById('continueBtn').focus(), 100);
+      document.getElementById('forgotPasswordView').style.display = 'block';
+      document.getElementById('forgotEmail').value = document.getElementById('email').value || '';
+      document.getElementById('forgotSuccessMsg').style.display = 'none';
+      document.getElementById('forgotErrorMsg').style.display = 'none';
+      document.getElementById('errorAlert').style.display = 'none';
+      document.getElementById('forgotEmail').focus();
     }
 
-    // Show forgot password modal/message
-    function showForgotPassword(event) {
-      event.preventDefault();
-      alert('Please contact your system administrator at audit@hasspetroleum.com to reset your password.');
+    function showLoginForm() {
+      document.getElementById('forgotPasswordView').style.display = 'none';
+      document.getElementById('loginFormView').style.display = 'block';
     }
 
-    // Handle login
-    function handleLogin(event) {
-      event.preventDefault();
-
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      const rememberMe = document.getElementById('rememberMe').checked;
-
-      // Validate email format
-      if (!validateEmail(document.getElementById('email'))) {
-        showError('Please enter a valid email address.');
-        document.getElementById('email').focus();
+    function handleForgotPassword() {
+      var email = document.getElementById('forgotEmail').value.trim();
+      if (!email || !email.includes('@')) {
+        document.getElementById('forgotErrorMsg').textContent = 'Please enter a valid email address.';
+        document.getElementById('forgotErrorMsg').style.display = 'block';
         return;
       }
 
-      if (!password) {
-        showError('Please enter your password.');
-        document.getElementById('password').focus();
-        return;
-      }
+      document.getElementById('forgotBtnText').style.display = 'none';
+      document.getElementById('forgotBtnSpinner').style.display = 'inline';
+      document.getElementById('forgotBtn').disabled = true;
+      document.getElementById('forgotErrorMsg').style.display = 'none';
+      document.getElementById('forgotSuccessMsg').style.display = 'none';
 
-      if (password.length < 6) {
-        showError('Password must be at least 6 characters.');
-        document.getElementById('password').focus();
-        return;
-      }
-
-      hideError();
-      setLoading(true);
-
-      // Handle remember me
-      if (rememberMe) {
-        saveRememberedEmail(email);
-      } else {
-        clearRememberedEmail();
-      }
-
-      // Call server-side login
       google.script.run
         .withSuccessHandler(function(result) {
-          setLoading(false);
-
-          if (result.success) {
-            // Store session info
-            if (result.sessionToken) {
-              sessionStorage.setItem('sessionToken', result.sessionToken);
-            }
-            if (result.user) {
-              sessionStorage.setItem('user', JSON.stringify(result.user));
-            }
-
-            // Show success view with continue button
-            // User must click the button to navigate (sandbox requires user activation)
-            const userName = result.user?.full_name || result.user?.email || 'User';
-            showSuccessView(userName);
+          document.getElementById('forgotBtnText').style.display = 'inline';
+          document.getElementById('forgotBtnSpinner').style.display = 'none';
+          document.getElementById('forgotBtn').disabled = false;
+          if (result && result.success) {
+            document.getElementById('forgotSuccessMsg').textContent = result.message || 'A temporary password has been sent to your email.';
+            document.getElementById('forgotSuccessMsg').style.display = 'block';
           } else {
-            // Clear password on failed attempt
-            document.getElementById('password').value = '';
-            showError(result.error || 'Invalid email or password. Please try again.');
+            document.getElementById('forgotErrorMsg').textContent = result?.error || 'Something went wrong. Try again.';
+            document.getElementById('forgotErrorMsg').style.display = 'block';
           }
         })
         .withFailureHandler(function(error) {
-          setLoading(false);
-          showError('Connection error. Please check your internet and try again.');
-          console.error('Login error:', error);
+          document.getElementById('forgotBtnText').style.display = 'inline';
+          document.getElementById('forgotBtnSpinner').style.display = 'none';
+          document.getElementById('forgotBtn').disabled = false;
+          document.getElementById('forgotErrorMsg').textContent = 'Connection error. Please try again.';
+          document.getElementById('forgotErrorMsg').style.display = 'block';
         })
+        .apiCall('forgotPassword', { email: email });
+    }
+
+    // =============================================
+    // LOGIN
+    // =============================================
+    function handleLogin(event) {
+      event.preventDefault();
+      var email = document.getElementById('email').value.trim();
+      var password = document.getElementById('password').value;
+      var remember = document.getElementById('rememberMe').checked;
+
+      if (!validateEmail(document.getElementById('email'))) { showError('Please enter a valid email address.'); return; }
+      if (!password || password.length < 6) { showError('Password must be at least 6 characters.'); return; }
+
+      hideError();
+      setLoading(true, 'Signing in...');
+      if (remember) localStorage.setItem(STORAGE_KEY_EMAIL, email);
+      else localStorage.removeItem(STORAGE_KEY_EMAIL);
+
+      google.script.run
+        .withSuccessHandler(onLoginSuccess)
+        .withFailureHandler(onLoginFailure)
         .apiCall('login', { email: email, password: password });
     }
 
-    // Handle Enter key on form fields
-    function handleKeyPress(event) {
-      if (event.key === 'Enter') {
-        document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+    function onLoginSuccess(result) {
+      if (result && result.success) {
+        setLoading(true, 'Preparing your dashboard...');
+
+        if (result.sessionToken) sessionStorage.setItem('sessionToken', result.sessionToken);
+
+        sessionStorage.setItem('loginInitData', JSON.stringify({
+          success: true,
+          user: result.user,
+          permissions: result.permissions || {},
+          dropdowns: result.dropdowns || {},
+          config: result.config || {},
+          _needsCleanup: result._needsCleanup || false
+        }));
+
+        // Hide loading and form, show success view with clickable link
+        setLoading(false);
+        document.getElementById('loginFormView').style.display = 'none';
+        document.getElementById('successView').style.display = 'block';
+        document.getElementById('welcomeName').textContent = result.user ? result.user.full_name : 'User';
+        document.getElementById('continueBtn').href = APP_URL;
+        document.getElementById('continueBtn').focus();
+      } else {
+        setLoading(false);
+        document.getElementById('password').value = '';
+        showError(result ? result.error : 'Login failed. Please try again.');
       }
     }
 
-    // Initialize
-    document.addEventListener('DOMContentLoaded', function() {
-      // Check for existing session
-      checkExistingSession();
+    function onLoginFailure(err) {
+      setLoading(false);
+      showError('Connection error. Please check your internet and try again.');
+    }
 
-      // Add keyboard event listeners
-      document.getElementById('email').addEventListener('keypress', handleKeyPress);
-      document.getElementById('password').addEventListener('keypress', handleKeyPress);
+    // =============================================
+    // INIT
+    // =============================================
+    document.addEventListener('DOMContentLoaded', function() {
+      checkExistingSession();
     });
   </script>
 </body>
