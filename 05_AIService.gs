@@ -662,4 +662,3 @@ function routeAIAction(action, data, user) {
       return { success: false, error: 'Unknown AI action: ' + action };
   }
 }
-
