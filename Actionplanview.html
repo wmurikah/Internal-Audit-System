@@ -464,7 +464,7 @@ function verifyAP(action) {
 function showUploadEvidence() {
   document.getElementById('uploadEntityType').value = 'ACTION_PLAN';
   document.getElementById('uploadEntityId').value = currentActionPlan.action_plan_id;
-  new bootstrap.Modal(document.getElementById('uploadFileModal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadFileModal')).show();
 }
 
 function deleteEvidence(id) {

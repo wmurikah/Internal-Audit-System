@@ -212,11 +212,10 @@ function submitWP() {
 }
 
 function showReviewModal(action) {
-  const modal = new bootstrap.Modal(document.getElementById('reviewModal'));
   document.getElementById('reviewAction').value = action;
   document.getElementById('reviewModalLabel').textContent = action === 'approve' ? 'Approve Work Paper' : 'Return for Revision';
   document.getElementById('reviewComments').value = '';
-  modal.show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('reviewModal')).show();
 }
 
 function submitReview() {
@@ -245,7 +244,7 @@ function showAddActionPlan() {
   document.getElementById('apFormWorkPaperId').value = currentWorkPaper.work_paper_id;
   document.getElementById('apFormId').value = '';
   document.getElementById('actionPlanFormModal').querySelector('form').reset();
-  new bootstrap.Modal(document.getElementById('actionPlanFormModal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('actionPlanFormModal')).show();
 }
 
 // AI Insights

@@ -122,7 +122,10 @@
   }
 
   /* Performance optimizations */
-  .sidebar, .main-content, .card, .stat-card {
+  /* NOTE: .main-content excluded because transform: translateZ(0) creates a new
+     stacking context that breaks position:fixed on Bootstrap modals inside it,
+     causing the modal backdrop to render ON TOP of the modal dialog. */
+  .sidebar, .card, .stat-card {
     will-change: transform;
     transform: translateZ(0);
   }
