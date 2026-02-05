@@ -749,7 +749,7 @@ function showChangePassword() {
   document.getElementById('currentPassword').value = '';
   document.getElementById('newPassword').value = '';
   document.getElementById('confirmPassword').value = '';
-  new bootstrap.Modal(document.getElementById('changePasswordModal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('changePasswordModal')).show();
 }
 
 function submitChangePassword() {
@@ -926,7 +926,7 @@ function showUploadModal(entityType, entityId) {
   document.getElementById('uploadFileInput').value = '';
   if (document.getElementById('uploadFileDesc')) document.getElementById('uploadFileDesc').value = '';
   if (document.getElementById('uploadFileCategory')) document.getElementById('uploadFileCategory').value = 'Evidence';
-  new bootstrap.Modal(document.getElementById('uploadFileModal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadFileModal')).show();
 }
 
 function showUploadFile() {

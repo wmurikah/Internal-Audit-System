@@ -420,7 +420,7 @@
       document.getElementById('profileDepartment').value = window.currentUser.department || '';
       document.getElementById('profilePhone').value = window.currentUser.phone || '';
     }
-    new bootstrap.Modal(document.getElementById('profileSettingsModal')).show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('profileSettingsModal')).show();
   }
 
   function saveProfileSettings() {

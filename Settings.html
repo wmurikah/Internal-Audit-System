@@ -541,7 +541,7 @@ function showAddUser() {
   document.getElementById('userModalLabel').textContent = 'Add User';
   populateDropdown('userFormRole', window.appDropdowns?.roles || [], 'code', 'name', 'Select Role');
   populateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
-  new bootstrap.Modal(document.getElementById('userFormModal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('userFormModal')).show();
 }
 
 function editUser(id) {
@@ -556,7 +556,7 @@ function editUser(id) {
   document.getElementById('userFormRole').value = user.role_code || '';
   document.getElementById('userFormAffiliate').value = user.affiliate_code || '';
   document.getElementById('userModalLabel').textContent = 'Edit User';
-  new bootstrap.Modal(document.getElementById('userFormModal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('userFormModal')).show();
 }
 
 function saveUser() {
@@ -800,7 +800,7 @@ function configureProvider(provider) {
     document.getElementById('btnRemoveKey').style.display = 'none';
   }
 
-  new bootstrap.Modal(document.getElementById('apiKeyModal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('apiKeyModal')).show();
 }
 
 function saveApiKey() {
