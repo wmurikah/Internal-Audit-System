@@ -535,6 +535,7 @@ function renderUsers() {
 function filterUsers() { renderUsers(); }
 
 function showAddUser() {
+  hideLoading();
   document.getElementById('userFormId').value = '';
   document.getElementById('userForm').reset();
   document.getElementById('userModalLabel').textContent = 'Add User';
@@ -544,6 +545,7 @@ function showAddUser() {
 }
 
 function editUser(id) {
+  hideLoading();
   const user = usersData.find(u => u.user_id === id);
   if (!user) return;
   document.getElementById('userFormId').value = user.user_id;
