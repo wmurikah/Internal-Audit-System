@@ -823,18 +823,20 @@ function setConfig(key, value) {
 
 const Security = {
   hashPassword: function(password, salt) {
-    const iterations = parseInt(getConfig('PBKDF2_ITERATIONS')) || 10000;
-    let hash = password + salt;
-    
+    // Use 1000 iterations to match AUTH_CONFIG in 07_AuthService.gs
+    // All existing passwords in DB were hashed at 1000 iterations
+    const iterations = 1000;
+    let hash = password;
+
     for (let i = 0; i < iterations; i++) {
       const signature = Utilities.computeHmacSignature(
         Utilities.MacAlgorithm.HMAC_SHA_256,
-        hash,
+        hash + salt + i,
         salt
       );
       hash = Utilities.base64Encode(signature);
     }
-    
+
     return hash;
   },
 
@@ -928,22 +930,7 @@ function sanitizeValue(value) {
   return value;
 }
 
-function formatDate(date) {
-  if (!date) return '';
-  
-  try {
-    const d = date instanceof Date ? date : new Date(date);
-    if (isNaN(d.getTime())) return '';
-    
-    return d.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  } catch (e) {
-    return '';
-  }
-}
+// formatDate is defined in 02_Config.gs (supports optional format parameter)
 
 function formatDateISO(date) {
   if (!date) return '';
@@ -1059,4 +1046,92 @@ function getRoleName(roleCode) {
   }
   
   return roleMap[roleCode] || roleCode;
+}
+
+/**
+ * Sanitize object for safe transport to browser via google.script.run
+ * Converts Date objects to ISO strings and removes undefined values
+ * CANONICAL definition - all other files should use this one
+ */
+function sanitizeForClient(obj) {
+  return JSON.parse(JSON.stringify(obj, function (key, value) {
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (value === undefined) {
+      return null;
+    }
+    return value;
+  }));
+}
+
+/**
+ * Sanitize user input to prevent formula injection in Google Sheets
+ * CANONICAL definition - used by all service files
+ */
+function sanitizeInput(value) {
+  if (typeof value !== 'string') return value;
+
+  let sanitized = value;
+  const dangerousChars = ['=', '+', '-', '@', '\t', '\r', '\n'];
+
+  while (dangerousChars.includes(sanitized.charAt(0))) {
+    sanitized = sanitized.substring(1);
+  }
+
+  sanitized = sanitized.replace(/^=/, "'=");
+
+  return sanitized.trim();
+}
+
+/**
+ * Build a column-index map from a headers array
+ * Utility to replace 52+ inline colMap creation blocks
+ */
+function buildColumnMap(headers) {
+  var colMap = {};
+  headers.forEach(function(h, i) { colMap[h] = i; });
+  return colMap;
+}
+
+/**
+ * Parse comma-separated ID string into trimmed array
+ * Utility to replace 16+ inline split/trim/filter blocks
+ */
+function parseIdList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  return String(value).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+/**
+ * Apply field_restrictions: remove restricted fields from data object
+ * based on the role's permission configuration
+ */
+function applyFieldRestrictions(data, roleCode, module) {
+  if (!data || !roleCode || !module) return data;
+  var permissions = getPermissions(roleCode);
+  var modulePerm = permissions[module];
+  if (!modulePerm || !modulePerm.field_restrictions || modulePerm.field_restrictions.length === 0) {
+    return data;
+  }
+  var restricted = modulePerm.field_restrictions;
+  if (Array.isArray(data)) {
+    return data.map(function(item) {
+      var cleaned = {};
+      Object.keys(item).forEach(function(key) {
+        if (!restricted.includes(key)) {
+          cleaned[key] = item[key];
+        }
+      });
+      return cleaned;
+    });
+  }
+  var cleaned = {};
+  Object.keys(data).forEach(function(key) {
+    if (!restricted.includes(key)) {
+      cleaned[key] = data[key];
+    }
+  });
+  return cleaned;
 }

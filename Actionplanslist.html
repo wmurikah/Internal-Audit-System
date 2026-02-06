@@ -447,17 +447,21 @@ function initAPFilters() {
 // Export action plans
 function exportAPList(format) {
   showLoading('Exporting...');
-  apiCall('exportActionPlans', { format })
-    .then(result => {
+  apiCall('exportActionPlansCSV', { filters: {} })
+    .then(function(result) {
       hideLoading();
-      if (result.success && result.downloadUrl) {
-        window.open(result.downloadUrl, '_blank');
-        showToast('Export ready', 'success');
+      if (result.success && result.csv) {
+        var blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = result.filename || 'action_plans_export.csv';
+        link.click();
+        showToast('Export downloaded (' + result.count + ' records)', 'success');
       } else {
         showToast(result.error || 'Export failed', 'danger');
       }
     })
-    .catch(() => {
+    .catch(function() {
       hideLoading();
       showToast('Export failed', 'danger');
     });

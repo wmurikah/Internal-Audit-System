@@ -855,8 +855,8 @@ function getUserPermissions(roleCode) {
     canManageRoles: false
   };
   
-  // Load permissions FRESH from database (bypass cache for accurate permissions)
-  const dbPermissions = getPermissionsFresh ? getPermissionsFresh(roleCode) : getPermissions(roleCode, true);
+  // Load permissions fresh from database (bypass cache for accurate permissions)
+  const dbPermissions = getPermissionsFresh(roleCode);
   
   // Map database permissions to UI feature flags
   // WORK_PAPER module
@@ -904,22 +904,4 @@ function getUserPermissions(roleCode) {
   return permissions;
 }
 
-/**
- * Sanitize object for safe transport to browser via google.script.run
- * Converts Date objects to ISO strings and removes undefined values
- */
-function sanitizeForClient(obj) {
-  return JSON.parse(JSON.stringify(obj, function (key, value) {
-    // Convert Date objects to ISO strings (Dates break postMessage)
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-    
-    // Replace undefined with null (undefined breaks transport)
-    if (value === undefined) {
-      return null;
-    }
-    
-    return value;
-  }));
-}
+// sanitizeForClient() is defined in 01_Core.gs (canonical)

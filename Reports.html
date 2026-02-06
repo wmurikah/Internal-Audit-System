@@ -43,7 +43,10 @@
 </div>
 
 <script>
-function loadReports() {}
+function loadReports() {
+  // Auto-generate summary report on page load for quick overview
+  generateReport('summary');
+}
 
 function generateReport(type) {
   showLoading('Generating report...');
