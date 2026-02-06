@@ -600,9 +600,11 @@
     animation: fadeIn 0.15s ease-out;
   }
 
+  /* NOTE: Using opacity-only animation (no transform) to avoid creating a
+     stacking context that traps Bootstrap modals inside .page elements. */
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   /* Tab Navigation for Forms */
