@@ -17,7 +17,7 @@ function sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails) {
   var toList = [{ email: recipientEmail }];
 
   var payload = {
-    sender: { name: 'Hass Petroleum Audit System', email: 'hassaudit@outlook.com' },
+    sender: { name: 'Hass Audit', email: 'hassaudit@outlook.com' },
     to: toList,
     subject: subject,
     htmlContent: htmlBody
@@ -307,13 +307,13 @@ function processEmailQueue() {
 }
 
 /**
- * Convert plain URLs in text to clickable HTML links
+ * Convert plain URLs in text to styled button links (hides ugly raw URLs)
  */
 function linkifyUrls(text) {
   if (!text) return '';
   return text.replace(
     /(https?:\/\/[^\s<]+)/g,
-    '<a href="$1" style="color: #1a365d; text-decoration: underline;">$1</a>'
+    '<a href="$1" style="display:inline-block; background-color:#1a365d; color:#ffffff; padding:10px 24px; text-decoration:none; border-radius:5px; font-weight:600; margin:4px 0;">Click Here</a>'
   );
 }
 
