@@ -402,17 +402,21 @@ function exportWPList(format) {
     risk_rating: document.getElementById('wpFilterRisk')?.value || ''
   };
 
-  apiCall('exportWorkPapers', { filters, format })
+  apiCall('exportWorkPapersCSV', { filters: filters })
     .then(result => {
       hideLoading();
-      if (result.success && result.downloadUrl) {
-        window.open(result.downloadUrl, '_blank');
-        showToast('Export ready for download', 'success');
+      if (result.success && result.csv) {
+        var blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = result.filename || 'work_papers_export.csv';
+        link.click();
+        showToast('Export downloaded (' + result.count + ' records)', 'success');
       } else {
         showToast(result.error || 'Export failed', 'danger');
       }
     })
-    .catch(() => {
+    .catch(function() {
       hideLoading();
       showToast('Export failed', 'danger');
     });

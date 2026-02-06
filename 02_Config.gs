@@ -931,11 +931,7 @@ function canUserPerform(user, action, entityType, entity) {
   return true;
 }
 
-function getRoleName(roleCode) {
-  const roles = getRolesDropdown();
-  const role = roles.find(r => r.code === roleCode);
-  return role ? role.name : roleCode;
-}
+// getRoleName is defined in 01_Core.gs (canonical, with caching)
 
 function formatDate(date, format) {
   if (!date) return '';

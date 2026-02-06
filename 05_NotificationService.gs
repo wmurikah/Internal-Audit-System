@@ -193,12 +193,22 @@ function processEmailQueue() {
       sentCount++;
       
     } catch (e) {
-      // Update error info
-      sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
+      // Increment retry_count and set status based on retries remaining
+      const newRetryCount = retryCount + 1;
+      if (colMap['retry_count'] !== undefined) {
+        sheet.getRange(rowIndex, colMap['retry_count'] + 1).setValue(newRetryCount);
+      }
+      if (newRetryCount >= maxRetries) {
+        // Max retries exhausted — mark as permanently failed
+        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
+      } else {
+        // Keep as PENDING so it retries on next queue run
+        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.PENDING);
+      }
       sheet.getRange(rowIndex, colMap['error_message'] + 1).setValue(e.message);
-      
+
       failedCount++;
-      console.error('Failed to send email to', recipientEmail, ':', e.message);
+      console.error('Failed to send email to', recipientEmail, '(attempt ' + newRetryCount + '/' + maxRetries + '):', e.message);
     }
     
     // Rate limiting - don't send too many at once
@@ -493,7 +503,7 @@ ${Object.entries(apCounts.byStatus).map(([k, v]) => `  - ${k}: ${v}`).join('\n')
 
   // Send to management and HOA
   const recipients = getUsersDropdown().filter(u => 
-    [ROLES.SUPER_ADMIN, ROLES.MANAGEMENT, ROLES.SUPER_ADMIN].includes(u.roleCode)
+    [ROLES.SUPER_ADMIN, ROLES.MANAGEMENT, ROLES.SENIOR_MGMT].includes(u.roleCode)
   );
   
   let notificationCount = 0;
@@ -704,22 +714,4 @@ function getUserNotifications(userId, limit) {
   return sanitizeForClient(notifications);
 }
 
-/**
- * Sanitize object for safe transport to browser via google.script.run
- * Converts Date objects to ISO strings and removes undefined values
- */
-function sanitizeForClient(obj) {
-  return JSON.parse(JSON.stringify(obj, function (key, value) {
-    // Convert Date objects to ISO strings (Dates break postMessage)
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-    
-    // Replace undefined with null (undefined breaks transport)
-    if (value === undefined) {
-      return null;
-    }
-    
-    return value;
-  }));
-}
+// sanitizeForClient() is defined in 01_Core.gs (canonical)

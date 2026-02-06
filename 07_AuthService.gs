@@ -54,7 +54,10 @@ function login(email, password) {
   // 3. Create session (single sheet write - required)
   const session = createSession(user);
   console.log('Session created:', new Date().getTime() - startTime, 'ms');
-  
+
+  // 3b. Pre-warm caches for this user (permissions, role name, dropdowns)
+  prewarmUserCache(user);
+
   // 4. Get permissions + role name (from cache if warm, else fast lookup)
   const cache = CacheService.getScriptCache();
   let roleName = cache.get('role_name_' + user.role_code);
@@ -667,19 +670,19 @@ function resetPassword(userId, adminUser) {
     return { success: false, error: 'Admin user required' };
   }
   
-  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.SUPER_ADMIN) {
+  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.SENIOR_AUDITOR) {
     return { success: false, error: 'Permission denied' };
   }
-  
+
   const user = getUserByIdCached(userId);
   if (!user) {
     return { success: false, error: 'User not found' };
   }
-  
+
   if (!user._rowIndex) {
     user._rowIndex = findUserRowIndex(userId);
   }
-  
+
   const tempPassword = generateTempPassword();
   const salt = generateSalt();
   const hash = hashPassword(tempPassword, salt);
@@ -810,10 +813,10 @@ function createUser(userData, adminUser) {
     return { success: false, error: 'Admin user required' };
   }
   
-  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.SUPER_ADMIN) {
+  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.SENIOR_AUDITOR) {
     return { success: false, error: 'Permission denied' };
   }
-  
+
   if (!userData.email || !userData.full_name || !userData.role_code) {
     return { success: false, error: 'Email, full name, and role are required' };
   }
@@ -905,8 +908,8 @@ function updateUser(userId, userData, adminUser) {
   }
   
   const isSelf = adminUser.user_id === userId;
-  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SUPER_ADMIN;
-  
+  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SENIOR_AUDITOR;
+
   if (!isSelf && !isAdmin) {
     return { success: false, error: 'Permission denied' };
   }
@@ -1086,11 +1089,11 @@ function getUsers(filters, adminUser) {
     return { success: false, error: 'Admin user required' };
   }
   
-  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SUPER_ADMIN;
+  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SENIOR_AUDITOR;
   if (!isAdmin) {
     return { success: false, error: 'Permission denied' };
   }
-  
+
   filters = filters || {};
   
   const sheet = getSheet(SHEETS.USERS);
@@ -1156,17 +1159,4 @@ function updateUserIndex(userId, user, rowNumber) {
   indexSheet.appendRow(row);
 }
 
-/**
- * Sanitize object for safe transport to browser via google.script.run
- */
-function sanitizeForClient(obj) {
-  return JSON.parse(JSON.stringify(obj, function (key, value) {
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-    if (value === undefined) {
-      return null;
-    }
-    return value;
-  }));
-}
+// sanitizeForClient() is defined in 01_Core.gs (canonical)

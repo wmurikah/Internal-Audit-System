@@ -111,7 +111,7 @@ function warmAllCachesOnDeploy() {
   
   // 2. Warm role permissions
   console.log('\n[2/6] Caching role permissions...');
-  const roles = ['SUPER_ADMIN', 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT'];
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT'];
   try {
     const permStart = new Date().getTime();
     roles.forEach(role => {
@@ -406,6 +406,8 @@ function getPermissionsFresh(roleCode) {
       const approveIdx = headers.indexOf('can_approve');
       const exportIdx = headers.indexOf('can_export');
       
+      var fieldRestIdx = headers.indexOf('field_restrictions');
+
       for (let i = 1; i < data.length; i++) {
         if (data[i][roleIdx] === roleCode) {
           const module = data[i][moduleIdx];
@@ -415,7 +417,8 @@ function getPermissionsFresh(roleCode) {
             can_update: isActive(data[i][updateIdx]),
             can_delete: isActive(data[i][deleteIdx]),
             can_approve: isActive(data[i][approveIdx]),
-            can_export: isActive(data[i][exportIdx])
+            can_export: isActive(data[i][exportIdx]),
+            field_restrictions: fieldRestIdx >= 0 ? parseStringArray(data[i][fieldRestIdx]) : []
           };
         }
       }
@@ -496,7 +499,6 @@ function getCacheStatus() {
     'dropdown_data_all',
     'config_SYSTEM_NAME',
     'perm_SUPER_ADMIN',
-    'perm_SUPER_ADMIN',
     'perm_SENIOR_AUDITOR',
     'perm_JUNIOR_STAFF',
     'perm_AUDITEE',
@@ -544,7 +546,7 @@ function clearAllCachesForced() {
   ];
   
   // Add role-based keys
-  const roles = ['SUPER_ADMIN', 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT'];
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT'];
   roles.forEach(role => {
     allKeys.push('perm_' + role);
     allKeys.push('role_name_' + role);

@@ -266,7 +266,7 @@ function getUserStats() {
  * Update role permissions
  */
 function updatePermissions(roleCode, permissions, user) {
-  if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== 'SUPER_ADMIN') {
+  if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
     return { success: false, error: 'Permission denied' };
   }
 
@@ -433,22 +433,76 @@ function getAuditLogCount(actionFilter) {
   return count;
 }
 
+// sanitizeForClient() is defined in 01_Core.gs (canonical)
+
 /**
- * Sanitize object for safe transport to browser via google.script.run
- * Converts Date objects to ISO strings and removes undefined values
+ * Export work papers as CSV data
  */
-function sanitizeForClient(obj) {
-  return JSON.parse(JSON.stringify(obj, function (key, value) {
-    // Convert Date objects to ISO strings (Dates break postMessage)
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-    
-    // Replace undefined with null (undefined breaks transport)
-    if (value === undefined) {
-      return null;
-    }
-    
-    return value;
-  }));
+function exportWorkPapersCSV(filters, user) {
+  var workPapers = getWorkPapers(filters || {}, user);
+
+  var headers = [
+    'work_paper_id', 'year', 'affiliate_code', 'audit_area', 'sub_area',
+    'observation_title', 'observation_description', 'risk_rating', 'status',
+    'recommendation', 'management_response', 'prepared_by_name',
+    'submitted_date', 'approved_date', 'created_at'
+  ];
+
+  var rows = [headers.join(',')];
+
+  workPapers.forEach(function(wp) {
+    var row = headers.map(function(h) {
+      var val = wp[h];
+      if (val === null || val === undefined) return '';
+      var str = String(val).replace(/"/g, '""');
+      if (str.indexOf(',') >= 0 || str.indexOf('"') >= 0 || str.indexOf('\n') >= 0) {
+        return '"' + str + '"';
+      }
+      return str;
+    });
+    rows.push(row.join(','));
+  });
+
+  return sanitizeForClient({
+    success: true,
+    csv: rows.join('\n'),
+    filename: 'work_papers_export_' + formatDate(new Date(), 'YYYY-MM-DD') + '.csv',
+    count: workPapers.length
+  });
+}
+
+/**
+ * Export action plans as CSV data
+ */
+function exportActionPlansCSV(filters, user) {
+  var actionPlans = getActionPlans(filters || {}, user);
+
+  var headers = [
+    'action_plan_id', 'work_paper_id', 'action_description', 'owner_names',
+    'due_date', 'status', 'days_overdue', 'implementation_notes',
+    'implemented_date', 'verified_by_name', 'verified_date',
+    'hoa_review_status', 'created_at'
+  ];
+
+  var rows = [headers.join(',')];
+
+  actionPlans.forEach(function(ap) {
+    var row = headers.map(function(h) {
+      var val = ap[h];
+      if (val === null || val === undefined) return '';
+      var str = String(val).replace(/"/g, '""');
+      if (str.indexOf(',') >= 0 || str.indexOf('"') >= 0 || str.indexOf('\n') >= 0) {
+        return '"' + str + '"';
+      }
+      return str;
+    });
+    rows.push(row.join(','));
+  });
+
+  return sanitizeForClient({
+    success: true,
+    csv: rows.join('\n'),
+    filename: 'action_plans_export_' + formatDate(new Date(), 'YYYY-MM-DD') + '.csv',
+    count: actionPlans.length
+  });
 }

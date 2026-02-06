@@ -144,7 +144,7 @@ function routeAction(action, data, user) {
       
     // ========== INIT ==========
     case 'getInitData':
-      return getInitData();
+      return getInitData(data.sessionToken);
     
     case 'getInitDataLight':
       return getInitDataLight(user);
@@ -367,6 +367,19 @@ function routeAction(action, data, user) {
     case 'getAnalyticsInsights':
       return getAnalyticsInsights(data.analyticsData, user);
 
+    // ========== EXPORT ==========
+    case 'exportWorkPapersCSV':
+      if (!canUserPerform(user, 'export', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return exportWorkPapersCSV(data.filters, user);
+
+    case 'exportActionPlansCSV':
+      if (!canUserPerform(user, 'export', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return exportActionPlansCSV(data.filters, user);
+
     // ========== ANALYTICS ==========
     case 'getAnalyticsData':
       return getAnalyticsData(data.year, user);
@@ -512,7 +525,7 @@ function warmAllCaches() {
     console.log('Cached dropdowns');
     
     // 2. Cache all role permissions
-    const roles = ['SUPER_ADMIN', 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
+    const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
     roles.forEach(role => {
       try {
         const perms = getPermissions(role);
@@ -1039,20 +1052,7 @@ function listTriggers() {
   return triggerInfo;
 }
 
-/**
- * Sanitize object for safe transport to browser
- */
-function sanitizeForClient(obj) {
-  return JSON.parse(JSON.stringify(obj, function (key, value) {
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-    if (value === undefined) {
-      return null;
-    }
-    return value;
-  }));
-}
+// sanitizeForClient() is defined in 01_Core.gs (canonical)
 
 /**
  * DIAGNOSTIC FUNCTION

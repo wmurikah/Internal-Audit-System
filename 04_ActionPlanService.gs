@@ -236,7 +236,7 @@ function updateActionPlan(actionPlanId, data, user) {
   
   // Determine which fields can be updated based on role
   const isAuditee = user.role_code === ROLES.AUDITEE;
-  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF].includes(user.role_code);
+  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF].includes(user.role_code);
   
   if (isAuditee) {
     // Auditees can only update implementation-related fields
@@ -330,100 +330,8 @@ function deleteActionPlan(actionPlanId, user) {
 }
 
 function getActionPlans(filters, user) {
-  filters = filters || {};
-
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  if (!sheet) {
-    console.error('getActionPlans: Action Plans sheet not found:', SHEETS.ACTION_PLANS);
-    return [];
-  }
-
-  const data = sheet.getDataRange().getValues();
-  if (!data || data.length < 2) {
-    console.log('getActionPlans: No data in Action Plans sheet');
-    return [];
-  }
-
-  const headers = data[0];
-  
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
-  
-  let results = [];
-  
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    
-    if (!row[colMap['action_plan_id']]) continue;
-    
-    let match = true;
-    
-    // Apply filters
-    if (filters.work_paper_id && row[colMap['work_paper_id']] !== filters.work_paper_id) match = false;
-    if (filters.status && row[colMap['status']] !== filters.status) match = false;
-    if (filters.owner_id) {
-      const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
-      if (!ownerIds.includes(filters.owner_id)) match = false;
-    }
-    
-    // Overdue filter
-    if (filters.overdue_only) {
-      const dueDate = row[colMap['due_date']];
-      const status = row[colMap['status']];
-      const implementedStatuses = [STATUS.ACTION_PLAN.IMPLEMENTED, STATUS.ACTION_PLAN.VERIFIED];
-      
-      if (implementedStatuses.includes(status)) {
-        match = false;
-      } else if (!isPastDue(dueDate)) {
-        match = false;
-      }
-    }
-    
-    // Search
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      const desc = String(row[colMap['action_description']] || '').toLowerCase();
-      const notes = String(row[colMap['implementation_notes']] || '').toLowerCase();
-      if (!desc.includes(searchLower) && !notes.includes(searchLower)) {
-        match = false;
-      }
-    }
-    
-    // Role-based filtering
-    if (user) {
-      const roleCode = user.role_code;
-      
-      // Auditees only see their own action plans
-      if (roleCode === ROLES.AUDITEE) {
-        const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
-        if (!ownerIds.includes(user.user_id)) {
-          match = false;
-        }
-      }
-    }
-    
-    if (match) {
-      const ap = rowToObject(headers, row);
-      ap._rowIndex = i + 1;
-      ap.days_overdue = calculateDaysOverdue(ap.due_date);
-      results.push(ap);
-    }
-  }
-  
-  // Sort by due date ascending (nearest due first)
-  results.sort((a, b) => {
-    const dateA = a.due_date ? new Date(a.due_date) : new Date('9999-12-31');
-    const dateB = b.due_date ? new Date(b.due_date) : new Date('9999-12-31');
-    return dateA - dateB;
-  });
-  
-  // Pagination
-  if (filters.limit) {
-    const offset = filters.offset || 0;
-    results = results.slice(offset, offset + filters.limit);
-  }
-  
-  return sanitizeForClient(results);
+  var results = getActionPlansRaw(filters, user);
+  return sanitizeForClient(applyFieldRestrictions(results, user ? user.role_code : null, 'ACTION_PLAN'));
 }
 
 /**
@@ -732,8 +640,8 @@ function hoaReview(actionPlanId, action, comments, user) {
   if (!user) throw new Error('User required');
   
   // Only HOA can do final review
-  if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SUPER_ADMIN) {
-    throw new Error('Permission denied: Only Head of Audit can perform final review');
+  if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
+    throw new Error('Permission denied: Only Head of Audit or Senior Auditor can perform final review');
   }
   
   const actionPlan = getActionPlanRaw(actionPlanId);
@@ -749,22 +657,35 @@ function hoaReview(actionPlanId, action, comments, user) {
     updated_by: user.user_id
   };
   
+  const previousStatus = actionPlan.status;
+
   if (action === 'approve') {
     updates.hoa_review_status = STATUS.REVIEW.APPROVED;
+    // HOA approval is the final gate — mark as Closed
+    if (actionPlan.status === STATUS.ACTION_PLAN.VERIFIED) {
+      updates.status = 'Closed';
+    }
   } else if (action === 'reject') {
     updates.hoa_review_status = STATUS.REVIEW.REJECTED;
+    // HOA rejection returns the plan for rework
+    updates.status = STATUS.ACTION_PLAN.IN_PROGRESS;
   }
-  
+
   // Update sheet
   const sheet = getSheet(SHEETS.ACTION_PLANS);
   const rowIndex = actionPlan._rowIndex;
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+
+  // Update index if status changed
+  if (updates.status && updates.status !== previousStatus) {
+    updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  }
+
   // Add history
-  addActionPlanHistory(actionPlanId, actionPlan.status, updated.status, comments, user);
-  
+  addActionPlanHistory(actionPlanId, previousStatus, updated.status, comments, user);
+
   // Log audit event
   logAuditEvent('HOA_REVIEW', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
   
@@ -833,7 +754,7 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   // Verify user can add evidence
   const ownerIds = String(actionPlan.owner_ids || '').split(',').map(s => s.trim());
   const isOwner = ownerIds.includes(user.user_id);
-  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR].includes(user.role_code);
+  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR].includes(user.role_code);
   
   if (!isOwner && !isAuditor) {
     throw new Error('Permission denied: Cannot add evidence');
@@ -994,19 +915,15 @@ function rebuildActionPlanIndex() {
 
 function queueImplementationNotification(actionPlanId, actionPlan, implementer) {
   const auditors = getUsersDropdown().filter(u => 
-    [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN, ROLES.SUPER_ADMIN].includes(u.roleCode)
+    [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].includes(u.roleCode)
   );
   
   auditors.forEach(auditor => {
-    queueNotification({
-      template_code: 'AP_IMPLEMENTED',
-      recipient_user_id: auditor.id,
-      recipient_email: auditor.email,
-      subject: 'Action Plan Marked as Implemented',
-      body: `Action plan ${actionPlanId} has been marked as implemented by ${implementer.full_name} and requires verification.`,
-      module: 'ACTION_PLAN',
-      record_id: actionPlanId
-    });
+    queueTemplatedEmail('AP_IMPLEMENTED', auditor.email, auditor.id, {
+      action_plan_id: actionPlanId,
+      implementer_name: implementer.full_name || '',
+      action_description: actionPlan.action_description || ''
+    }, 'ACTION_PLAN', actionPlanId);
   });
 }
 
@@ -1018,15 +935,12 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
   ownerIds.forEach(ownerId => {
     const owner = getUserById(ownerId);
     if (owner) {
-      queueNotification({
-        template_code: 'AP_VERIFIED',
-        recipient_user_id: owner.user_id,
-        recipient_email: owner.email,
-        subject: 'Action Plan Verification Update',
-        body: `Your action plan ${actionPlanId} has been ${actionText} by ${verifier.full_name}.`,
-        module: 'ACTION_PLAN',
-        record_id: actionPlanId
-      });
+      queueTemplatedEmail('AP_VERIFIED', owner.email, owner.user_id, {
+        action_plan_id: actionPlanId,
+        action_text: actionText,
+        verifier_name: verifier.full_name || '',
+        action_description: actionPlan.action_description || ''
+      }, 'ACTION_PLAN', actionPlanId);
     }
   });
 }
@@ -1045,22 +959,4 @@ function deleteRelatedRows(sheetName, foreignKeyColumn, foreignKeyValue) {
   }
 }
 
-/**
- * Sanitize object for safe transport to browser via google.script.run
- * Converts Date objects to ISO strings and removes undefined values
- */
-function sanitizeForClient(obj) {
-  return JSON.parse(JSON.stringify(obj, function (key, value) {
-    // Convert Date objects to ISO strings (Dates break postMessage)
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-    
-    // Replace undefined with null (undefined breaks transport)
-    if (value === undefined) {
-      return null;
-    }
-    
-    return value;
-  }));
-}
+// sanitizeForClient() is defined in 01_Core.gs (canonical)

@@ -217,103 +217,8 @@ function getWorkPaperRaw(workPaperId) {
 }
 
 function getWorkPapers(filters, user) {
-  filters = filters || {};
-
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  if (!sheet) {
-    console.error('getWorkPapers: Work Papers sheet not found:', SHEETS.WORK_PAPERS);
-    return [];
-  }
-
-  const data = sheet.getDataRange().getValues();
-  if (!data || data.length < 2) {
-    console.log('getWorkPapers: No data in Work Papers sheet');
-    return [];
-  }
-
-  const headers = data[0];
-  
-  // Build column index map
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
-  
-  let results = [];
-  
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    
-    // Skip empty rows
-    if (!row[colMap['work_paper_id']]) continue;
-    
-    // Apply filters
-    let match = true;
-    
-    if (filters.year && row[colMap['year']] != filters.year) match = false;
-    if (filters.affiliate_code && row[colMap['affiliate_code']] !== filters.affiliate_code) match = false;
-    if (filters.audit_area_id && row[colMap['audit_area_id']] !== filters.audit_area_id) match = false;
-    if (filters.status && row[colMap['status']] !== filters.status) match = false;
-    if (filters.risk_rating && row[colMap['risk_rating']] !== filters.risk_rating) match = false;
-    if (filters.prepared_by_id && row[colMap['prepared_by_id']] !== filters.prepared_by_id) match = false;
-    
-    // Search in observation title
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      const title = String(row[colMap['observation_title']] || '').toLowerCase();
-      const desc = String(row[colMap['observation_description']] || '').toLowerCase();
-      if (!title.includes(searchLower) && !desc.includes(searchLower)) {
-        match = false;
-      }
-    }
-    
-    // Role-based filtering
-    if (user) {
-      const roleCode = user.role_code;
-      
-      // Auditees only see work papers sent to them
-      if (roleCode === ROLES.AUDITEE) {
-        if (row[colMap['status']] !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
-          match = false;
-        }
-        // Check if user is in responsible_ids
-        const responsibleIds = String(row[colMap['responsible_ids']] || '').split(',').map(s => s.trim());
-        if (!responsibleIds.includes(user.user_id)) {
-          match = false;
-        }
-      }
-      
-      // Junior staff only see their own work papers
-      if (roleCode === ROLES.JUNIOR_STAFF) {
-        if (row[colMap['prepared_by_id']] !== user.user_id) {
-          match = false;
-        }
-      }
-      
-      // Filter by user's affiliate if they have one
-      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.SUPER_ADMIN) {
-        const userAffiliates = String(user.affiliate_code).split(',').map(s => s.trim());
-        if (!userAffiliates.includes(row[colMap['affiliate_code']])) {
-          match = false;
-        }
-      }
-    }
-    
-    if (match) {
-      const wp = rowToObject(headers, row);
-      wp._rowIndex = i + 1;
-      results.push(wp);
-    }
-  }
-  
-  // Sort by date descending
-  results.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-  
-  // Pagination
-  if (filters.limit) {
-    const offset = filters.offset || 0;
-    results = results.slice(offset, offset + filters.limit);
-  }
-  
-  return sanitizeForClient(results);
+  var results = getWorkPapersRaw(filters, user);
+  return sanitizeForClient(applyFieldRestrictions(results, user ? user.role_code : null, 'WORK_PAPER'));
 }
 
 /**
@@ -423,8 +328,8 @@ function getWorkPapersRaw(filters, user) {
         }
       }
       
-      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.SUPER_ADMIN) {
-        const userAffiliates = String(user.affiliate_code).split(',').map(s => s.trim());
+      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.SENIOR_AUDITOR) {
+        const userAffiliates = parseIdList(user.affiliate_code);
         if (!userAffiliates.includes(row[colMap['affiliate_code']])) {
           match = false;
         }
@@ -509,7 +414,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   if (!user) throw new Error('User required');
   
   // Only reviewers can review
-  const reviewerRoles = [ROLES.SUPER_ADMIN, ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR];
+  const reviewerRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR];
   if (!reviewerRoles.includes(user.role_code)) {
     throw new Error('Permission denied: Only reviewers can review work papers');
   }
@@ -906,22 +811,18 @@ function rebuildWorkPaperIndex() {
 function queueReviewNotification(workPaperId, workPaper, submitter) {
   // Get reviewers (Senior Auditors and Head of Audit)
   const users = getUsersDropdown();
-  const reviewers = users.filter(u => 
-    u.roleCode === ROLES.SENIOR_AUDITOR || 
-    u.roleCode === ROLES.SUPER_ADMIN ||
+  const reviewers = users.filter(u =>
+    u.roleCode === ROLES.SENIOR_AUDITOR ||
     u.roleCode === ROLES.SUPER_ADMIN
   );
   
   reviewers.forEach(reviewer => {
-    queueNotification({
-      template_code: 'WP_SUBMITTED',
-      recipient_user_id: reviewer.id,
-      recipient_email: reviewer.email,
-      subject: 'Work Paper Submitted for Review: ' + workPaper.observation_title,
-      body: `Work paper ${workPaperId} has been submitted by ${submitter.full_name} and is ready for your review.`,
-      module: 'WORK_PAPER',
-      record_id: workPaperId
-    });
+    queueTemplatedEmail('WP_SUBMITTED', reviewer.email, reviewer.id, {
+      work_paper_id: workPaperId,
+      observation_title: workPaper.observation_title || '',
+      submitter_name: submitter.full_name || '',
+      status: workPaper.status || ''
+    }, 'WORK_PAPER', workPaperId);
   });
 }
 
@@ -932,15 +833,13 @@ function queueStatusNotification(workPaperId, workPaper, previousStatus, reviewe
   const preparer = getUserById(workPaper.prepared_by_id);
   if (!preparer) return;
   
-  queueNotification({
-    template_code: 'WP_STATUS_CHANGE',
-    recipient_user_id: preparer.user_id,
-    recipient_email: preparer.email,
-    subject: 'Work Paper Status Updated: ' + workPaper.observation_title,
-    body: `Your work paper ${workPaperId} status has been changed from ${previousStatus} to ${workPaper.status} by ${reviewer.full_name}.`,
-    module: 'WORK_PAPER',
-    record_id: workPaperId
-  });
+  queueTemplatedEmail('WP_STATUS_CHANGE', preparer.email, preparer.user_id, {
+    work_paper_id: workPaperId,
+    observation_title: workPaper.observation_title || '',
+    previous_status: previousStatus || '',
+    new_status: workPaper.status || '',
+    reviewer_name: reviewer.full_name || ''
+  }, 'WORK_PAPER', workPaperId);
 }
 
 /**
@@ -1000,40 +899,5 @@ function queueNotification(data) {
   }
 }
 
-// Sanitize user input to prevent formula injection
-function sanitizeInput(value) {
-  if (typeof value !== 'string') return value;
-  
-  // Remove leading characters that could trigger formula execution
-  let sanitized = value;
-  const dangerousChars = ['=', '+', '-', '@', '\t', '\r', '\n'];
-  
-  while (dangerousChars.includes(sanitized.charAt(0))) {
-    sanitized = sanitized.substring(1);
-  }
-  
-  // Also escape any remaining formula-like patterns
-  sanitized = sanitized.replace(/^=/, "'=");
-  
-  return sanitized.trim();
-}
-
-/**
- * Sanitize object for safe transport to browser via google.script.run
- * Converts Date objects to ISO strings and removes undefined values
- */
-function sanitizeForClient(obj) {
-  return JSON.parse(JSON.stringify(obj, function (key, value) {
-    // Convert Date objects to ISO strings (Dates break postMessage)
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-    
-    // Replace undefined with null (undefined breaks transport)
-    if (value === undefined) {
-      return null;
-    }
-    
-    return value;
-  }));
-}
+// sanitizeInput() is defined in 01_Core.gs (canonical)
+// sanitizeForClient() is defined in 01_Core.gs (canonical)
