@@ -1,5 +1,93 @@
 // 05_NotificationService.gs - Email Queue, Templates, Reminders, Alerts
 
+/**
+ * Send email via Brevo (formerly Sendinblue) transactional API.
+ * Sends from hassaudit@outlook.com using UrlFetchApp.
+ * Falls back to MailApp.sendEmail() if Brevo is not configured.
+ */
+function sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('BREVO_API_KEY');
+
+  if (!apiKey) {
+    // Brevo not configured — fall back to GAS MailApp
+    console.log('BREVO_API_KEY not set, falling back to MailApp');
+    return { success: false, fallback: true };
+  }
+
+  var toList = [{ email: recipientEmail }];
+
+  var payload = {
+    sender: { name: 'Hass Petroleum Audit System', email: 'hassaudit@outlook.com' },
+    to: toList,
+    subject: subject,
+    htmlContent: htmlBody
+  };
+
+  if (ccEmails) {
+    var ccList = String(ccEmails).split(',').map(function(e) { return { email: e.trim() }; }).filter(function(e) { return e.email; });
+    if (ccList.length > 0) {
+      payload.cc = ccList;
+    }
+  }
+
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'api-key': apiKey },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    var response = UrlFetchApp.fetch('https://api.brevo.com/v3/smtp/email', options);
+    var code = response.getResponseCode();
+    var result = JSON.parse(response.getContentText());
+
+    if (code === 201) {
+      return { success: true, messageId: result.messageId };
+    } else {
+      console.error('Brevo API error (HTTP ' + code + '):', JSON.stringify(result));
+      return { success: false, error: result.message || 'Brevo send failed (HTTP ' + code + ')' };
+    }
+  } catch (e) {
+    console.error('Brevo fetch error:', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Unified email sending function.
+ * Tries Brevo first, falls back to MailApp if Brevo is not configured.
+ */
+function sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo) {
+  // Try Brevo first
+  var brevoResult = sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails);
+
+  if (brevoResult.success) {
+    return brevoResult;
+  }
+
+  if (!brevoResult.fallback) {
+    // Brevo was configured but failed — don't silently fall back, propagate error
+    return brevoResult;
+  }
+
+  // Fallback: MailApp (sends from the Google account running the script)
+  var emailOptions = {
+    to: recipientEmail,
+    subject: subject,
+    body: body,
+    name: fromName || 'Internal Audit Notification',
+    replyTo: replyTo || 'audit@hasspetroleum.com',
+    htmlBody: htmlBody
+  };
+  if (ccEmails) {
+    emailOptions.cc = ccEmails;
+  }
+  MailApp.sendEmail(emailOptions);
+  return { success: true, via: 'mailapp' };
+}
+
 function queueEmail(data) {
   try {
     const notificationId = generateId('NOTIFICATION');
@@ -172,19 +260,12 @@ function processEmailQueue() {
     const replyTo = 'audit@hasspetroleum.com';
     
     try {
-      // Send email
-      const emailOptions = {
-        to: recipientEmail,
-        subject: subject,
-        body: body,
-        name: fromName,
-        replyTo: replyTo,
-        htmlBody: formatEmailHtml(subject, body)
-      };
-      if (ccEmails) {
-        emailOptions.cc = ccEmails;
+      // Send email via unified sender (Brevo with MailApp fallback)
+      const htmlBody = formatEmailHtml(subject, body);
+      const result = sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo);
+      if (!result.success) {
+        throw new Error(result.error || 'Email send failed');
       }
-      MailApp.sendEmail(emailOptions);
       
       // Update status to Sent
       sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.SENT);
@@ -641,20 +722,13 @@ function sendImmediateEmail(recipientEmail, subject, body, ccEmails) {
   try {
     const fromName = 'Internal Audit Notification';
     const replyTo = 'audit@hasspetroleum.com';
-    
-    const emailOptions = {
-      to: recipientEmail,
-      subject: subject,
-      body: body,
-      name: fromName,
-      replyTo: replyTo,
-      htmlBody: formatEmailHtml(subject, body)
-    };
-    if (ccEmails) {
-      emailOptions.cc = ccEmails;
+    const htmlBody = formatEmailHtml(subject, body);
+
+    const result = sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo);
+    if (!result.success) {
+      throw new Error(result.error || 'Email send failed');
     }
-    MailApp.sendEmail(emailOptions);
-    
+
     return { success: true };
   } catch (e) {
     console.error('Failed to send immediate email:', e);
@@ -712,6 +786,71 @@ function getUserNotifications(userId, limit) {
   }
   
   return sanitizeForClient(notifications);
+}
+
+/**
+ * Get Brevo configuration status (for Settings UI)
+ */
+function getBrevoStatus() {
+  var props = PropertiesService.getScriptProperties();
+  var key = props.getProperty('BREVO_API_KEY');
+
+  if (key) {
+    var masked = key.substring(0, 8) + '...' + key.substring(key.length - 4);
+    return { configured: true, keyMasked: masked };
+  }
+  return { configured: false };
+}
+
+/**
+ * Save Brevo API key (requires SUPER_ADMIN)
+ */
+function saveBrevoKey(apiKey, user) {
+  if (!apiKey || apiKey.trim().length < 10) {
+    return { success: false, error: 'Invalid API key' };
+  }
+
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('BREVO_API_KEY', apiKey.trim());
+
+  logAuditEvent('SET_BREVO_KEY', 'CONFIG', 'EMAIL', null, { provider: 'brevo' }, user.user_id, user.email);
+
+  return { success: true };
+}
+
+/**
+ * Remove Brevo API key (requires SUPER_ADMIN)
+ */
+function removeBrevoKeyAction(user) {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('BREVO_API_KEY');
+
+  logAuditEvent('REMOVE_BREVO_KEY', 'CONFIG', 'EMAIL', null, null, user.user_id, user.email);
+
+  return { success: true };
+}
+
+/**
+ * Send a test email via Brevo to verify configuration
+ */
+function testBrevoEmailAction(recipientEmail, user) {
+  if (!recipientEmail) {
+    return { success: false, error: 'No recipient email provided' };
+  }
+
+  var subject = 'Test Email - Hass Petroleum Audit System';
+  var body = 'This is a test email from the Internal Audit System.\n\nIf you received this, your Brevo email integration is working correctly.\n\nSent at: ' + new Date().toISOString();
+  var htmlBody = formatEmailHtml(subject, body);
+
+  var result = sendEmailViaBrevo(recipientEmail, subject, htmlBody, null);
+
+  if (result.success) {
+    return { success: true };
+  } else if (result.fallback) {
+    return { success: false, error: 'Brevo API key not configured. Please save a key first.' };
+  } else {
+    return { success: false, error: result.error || 'Test email failed' };
+  }
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)

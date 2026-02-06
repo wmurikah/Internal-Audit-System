@@ -367,6 +367,31 @@ function routeAction(action, data, user) {
     case 'getAnalyticsInsights':
       return getAnalyticsInsights(data.analyticsData, user);
 
+    // ========== EMAIL (BREVO) ==========
+    case 'getBrevoStatus':
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return getBrevoStatus();
+
+    case 'saveBrevoKey':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can configure email settings' };
+      }
+      return saveBrevoKey(data.apiKey, user);
+
+    case 'removeBrevoKey':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can configure email settings' };
+      }
+      return removeBrevoKeyAction(user);
+
+    case 'testBrevoEmail':
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return testBrevoEmailAction(data.recipientEmail, user);
+
     // ========== EXPORT ==========
     case 'exportWorkPapersCSV':
       if (!canUserPerform(user, 'export', 'REPORT', null)) {
