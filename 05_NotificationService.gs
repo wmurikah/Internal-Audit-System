@@ -18,9 +18,14 @@ function sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails) {
 
   var payload = {
     sender: { name: 'Hass Audit', email: 'hassaudit@outlook.com' },
+    replyTo: { name: 'Hass Audit Team', email: 'hassaudit@outlook.com' },
     to: toList,
     subject: subject,
-    htmlContent: htmlBody
+    htmlContent: htmlBody,
+    headers: {
+      'X-Mailer': 'Hass Petroleum Audit System',
+      'Organization': 'Hass Petroleum - Internal Audit'
+    }
   };
 
   if (ccEmails) {
@@ -318,66 +323,104 @@ function linkifyUrls(text) {
 }
 
 /**
- * Format email body as HTML
+ * Format email body as professional branded HTML
  */
 function formatEmailHtml(subject, body) {
-  const systemName = 'Internal Audit Notification';
-  const primaryColor = '#1a365d';
-  const accentColor = '#c9a227';
-  
+  const brandName = 'HASS PETROLEUM';
+  const deptName = 'Internal Audit Department';
+  const navy = '#1a365d';
+  const gold = '#c9a227';
+  const year = new Date().getFullYear();
+
   // Convert \n to <br> for proper line breaks in HTML
   const htmlBody = linkifyUrls(body).replace(/\n/g, '<br>');
-  
-  return `
-<!DOCTYPE html>
-<html>
+
+  return `<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
   <style>
     @media only screen and (max-width: 620px) {
-      .email-outer { padding: 8px !important; }
+      .email-outer { padding: 4px !important; }
       .email-inner { width: 100% !important; min-width: 100% !important; }
       .email-content { padding: 20px 16px !important; }
-      .email-header { padding: 16px !important; }
+      .email-header { padding: 20px 16px !important; }
       .email-footer { padding: 16px !important; }
     }
   </style>
 </head>
-<body style="margin:0; padding:0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;" class="email-outer">
-    <tr>
-      <td align="center" style="padding: 12px;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 680px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" class="email-inner">
-          <!-- Header -->
-          <tr>
-            <td style="background-color: ${primaryColor}; padding: 18px 24px; text-align: center;" class="email-header">
-              <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 600;">${systemName}</h1>
-            </td>
-          </tr>
-          <!-- Accent Bar -->
-          <tr>
-            <td style="background-color: ${accentColor}; height: 3px;"></td>
-          </tr>
-          <!-- Content -->
-          <tr>
-            <td style="padding: 28px 32px;" class="email-content">
-              <h2 style="color: ${primaryColor}; margin: 0 0 16px 0; font-size: 18px;">${subject}</h2>
-              <div style="color: #333333; line-height: 1.7; font-size: 14px;">${htmlBody}</div>
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f8f9fa; padding: 16px 24px; text-align: center; border-top: 1px solid #dee2e6;" class="email-footer">
-              <p style="color: #6c757d; margin: 0; font-size: 11px;">
-                This is an automated message from ${systemName}.<br>
-                Replies go to the Internal Audit team.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
+<body style="margin:0; padding:0; font-family: 'Segoe UI', Arial, Helvetica, sans-serif; background-color:#edf0f5; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+  <!-- Preheader (shows as preview text in inbox, hidden in body) -->
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+    ${subject} &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+  </div>
+
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#edf0f5;" class="email-outer">
+    <tr><td align="center" style="padding:20px 8px;">
+
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px; background-color:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);" class="email-inner">
+
+        <!-- TOP BRAND BAR -->
+        <tr>
+          <td style="background-color:${navy}; padding:24px 32px;" class="email-header">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="left" valign="middle" style="width:52px;">
+                  <!-- Shield Icon -->
+                  <table cellpadding="0" cellspacing="0" border="0" style="background-color:${gold}; border-radius:8px; width:46px; height:46px;">
+                    <tr><td align="center" valign="middle" style="color:${navy}; font-size:22px; font-weight:800; font-family:'Segoe UI',Arial,sans-serif; line-height:46px;">HP</td></tr>
+                  </table>
+                </td>
+                <td align="left" valign="middle" style="padding-left:14px;">
+                  <p style="margin:0; color:#ffffff; font-size:18px; font-weight:700; letter-spacing:1.5px; line-height:1.2;">${brandName}</p>
+                  <p style="margin:2px 0 0 0; color:${gold}; font-size:12px; font-weight:500; letter-spacing:0.5px;">${deptName}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- GOLD ACCENT LINE -->
+        <tr>
+          <td style="background: linear-gradient(90deg, ${gold}, ${navy}); height:4px; font-size:0; line-height:0;">
+            <!--[if mso]><table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background-color:${gold}; height:4px; font-size:0; line-height:0;">&nbsp;</td></tr></table><![endif]-->
+          </td>
+        </tr>
+
+        <!-- SUBJECT BANNER -->
+        <tr>
+          <td style="background-color:#f8f9fb; padding:18px 32px; border-bottom:1px solid #e5e7eb;">
+            <p style="margin:0; color:${navy}; font-size:17px; font-weight:600;">${subject}</p>
+          </td>
+        </tr>
+
+        <!-- MAIN CONTENT -->
+        <tr>
+          <td style="padding:28px 32px 32px 32px;" class="email-content">
+            <div style="color:#374151; line-height:1.75; font-size:14px;">${htmlBody}</div>
+          </td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+          <td style="background-color:${navy}; padding:20px 32px;" class="email-footer">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center">
+                  <p style="margin:0 0 6px 0; color:${gold}; font-size:12px; font-weight:600; letter-spacing:1px;">${brandName}</p>
+                  <p style="margin:0 0 4px 0; color:#94a3b8; font-size:11px;">Internal Audit Department &bull; Automated Notification</p>
+                  <p style="margin:0; color:#64748b; font-size:10px;">&copy; ${year} Hass Petroleum. All rights reserved.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+      </table>
+
+    </td></tr>
   </table>
 </body>
 </html>`;
