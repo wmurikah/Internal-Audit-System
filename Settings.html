@@ -277,7 +277,7 @@
     </div>
 
     <div class="tab-pane fade" id="systemConfig">
-      <div class="card">
+      <div class="card mb-4">
         <div class="card-header">
           <i class="bi bi-sliders me-2"></i>System Configuration
         </div>
@@ -311,6 +311,44 @@
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- Email Configuration (Brevo) -->
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-envelope me-2"></i>Email Configuration (Brevo)
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            Emails are sent from <strong>hassaudit@outlook.com</strong> via Brevo (formerly Sendinblue).
+            If no Brevo API key is configured, the system falls back to Gmail via MailApp.
+          </p>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label">Brevo API Key</label>
+              <input type="password" class="form-control" id="cfgBrevoApiKey" placeholder="Enter Brevo API key">
+            </div>
+            <div class="col-md-3">
+              <span class="badge" id="brevoStatus">Checking...</span>
+            </div>
+            <div class="col-md-3">
+              <button type="button" class="btn btn-primary w-100" onclick="saveBrevoKey()">
+                <i class="bi bi-save me-1"></i>Save Key
+              </button>
+            </div>
+          </div>
+          <div class="mt-3" id="brevoCurrentKeyInfo" style="display:none;">
+            <small class="text-muted">Current key: <code id="brevoCurrentKeyMasked"></code></small>
+            <button class="btn btn-sm btn-outline-danger ms-2" onclick="removeBrevoKey()">
+              <i class="bi bi-trash me-1"></i>Remove
+            </button>
+          </div>
+          <div class="mt-3">
+            <button class="btn btn-outline-secondary btn-sm" onclick="testBrevoEmail()">
+              <i class="bi bi-send me-1"></i>Send Test Email
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -382,6 +420,7 @@ function loadSettings() {
   loadRoles();
   loadAIConfig();
   loadSystemConfig();
+  loadBrevoConfig();
   loadAuditLog();
 }
 
@@ -816,6 +855,90 @@ function testCurrentProvider() {
     const resultEl = document.getElementById('testResultContent');
     resultEl.innerHTML = '<i class="bi bi-x-circle text-danger me-2"></i>Connection error: ' + escapeHtml(e.message);
     resultEl.className = 'alert alert-danger mb-0';
+  });
+}
+
+// Brevo email config
+function loadBrevoConfig() {
+  apiCall('getBrevoStatus', {}).then(r => {
+    const badge = document.getElementById('brevoStatus');
+    const keyInfo = document.getElementById('brevoCurrentKeyInfo');
+
+    if (r.configured) {
+      badge.textContent = 'Configured';
+      badge.className = 'badge bg-success';
+      keyInfo.style.display = 'block';
+      document.getElementById('brevoCurrentKeyMasked').textContent = r.keyMasked || '****';
+    } else {
+      badge.textContent = 'Not Configured (using Gmail fallback)';
+      badge.className = 'badge bg-warning text-dark';
+      keyInfo.style.display = 'none';
+    }
+  }).catch(() => {
+    document.getElementById('brevoStatus').textContent = 'Error';
+    document.getElementById('brevoStatus').className = 'badge bg-danger';
+  });
+}
+
+function saveBrevoKey() {
+  const key = document.getElementById('cfgBrevoApiKey').value.trim();
+  if (!key) {
+    showToast('Please enter a Brevo API key', 'warning');
+    return;
+  }
+
+  showLoading('Saving Brevo API key...');
+  apiCall('saveBrevoKey', { apiKey: key }).then(r => {
+    hideLoading();
+    if (r.success) {
+      showToast('Brevo API key saved. Emails will now send from hassaudit@outlook.com', 'success');
+      document.getElementById('cfgBrevoApiKey').value = '';
+      loadBrevoConfig();
+    } else {
+      showToast(r.error || 'Error saving key', 'danger');
+    }
+  }).catch(() => {
+    hideLoading();
+    showToast('Error saving Brevo key', 'danger');
+  });
+}
+
+function removeBrevoKey() {
+  if (!confirm('Remove Brevo API key? Emails will fall back to Gmail.')) return;
+
+  showLoading('Removing...');
+  apiCall('removeBrevoKey', {}).then(r => {
+    hideLoading();
+    if (r.success) {
+      showToast('Brevo key removed. Falling back to Gmail.', 'success');
+      loadBrevoConfig();
+    } else {
+      showToast(r.error || 'Error', 'danger');
+    }
+  }).catch(() => {
+    hideLoading();
+    showToast('Error removing key', 'danger');
+  });
+}
+
+function testBrevoEmail() {
+  const userEmail = window.currentUser?.email;
+  if (!userEmail) {
+    showToast('Cannot determine your email address', 'warning');
+    return;
+  }
+
+  showLoading('Sending test email to ' + userEmail + '...');
+  apiCall('testBrevoEmail', { recipientEmail: userEmail }).then(r => {
+    hideLoading();
+    if (r.success) {
+      showToast('Test email sent to ' + userEmail + '. Check your inbox!', 'success');
+    } else {
+      showToast('Test failed: ' + (r.error || 'Unknown error'), 'danger');
+    }
+  }).catch(() => {
+    hideLoading();
+    showToast('Error sending test email', 'danger');
   });
 }
 
