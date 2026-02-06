@@ -713,10 +713,11 @@ function resetPassword(userId, adminUser) {
   const loginUrl = ScriptApp.getService().getUrl();
   
   // Send immediately - password resets are time-sensitive
-  const emailBody = `Hello ${user.full_name},\n\nYour password has been reset by an administrator.\n\n` +
+  const emailBody = `Hello ${user.full_name},\n\n` +
+        `Your password has been reset by an administrator.\n\n` +
         `Your temporary password is: ${tempPassword}\n\n` +
         `Please log in and change your password immediately.\n\n` +
-        `Login here: ${loginUrl}\n\n` +
+        `${loginUrl}\n\n` +
         `If you did not request this reset, please contact your administrator.`;
   
   const emailResult = sendImmediateEmail(user.email, 'Your Password Has Been Reset', emailBody);
@@ -877,7 +878,7 @@ function createUser(userData, adminUser) {
         `Email: ${user.email}\n` +
         `Temporary Password: ${tempPassword}\n\n` +
         `Please log in and change your password immediately.\n\n` +
-        `Login here: ${loginUrl}\n\n` +
+        `${loginUrl}\n\n` +
         `Best regards,\nAudit Team`;
   
   const emailResult = sendImmediateEmail(user.email, 'Welcome - Your Account Has Been Created', welcomeBody);
@@ -1054,7 +1055,7 @@ function forgotPassword(email) {
         `A password reset was requested for your account.\n\n` +
         `Your temporary password is: ${tempPassword}\n\n` +
         `Please log in and change your password immediately.\n\n` +
-        `Login here: ${loginUrl}\n\n` +
+        `${loginUrl}\n\n` +
         `If you did not request this, please contact your administrator immediately.`;
   
   const emailResult = sendImmediateEmail(user.email, 'Password Reset Request', emailBody);
