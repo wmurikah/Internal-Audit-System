@@ -520,26 +520,84 @@ function retryFailedEmails() {
 }
 
 /**
+ * Resolve affiliate name and audit area name from work papers for email context.
+ * Uses the first work paper in the batch to determine context.
+ * @param {Object[]} workPapers - Array of work paper objects
+ * @returns {{ affiliateName: string, auditAreaName: string }}
+ */
+function resolveAuditContext(workPapers) {
+  var result = { affiliateName: '', auditAreaName: '' };
+  if (!workPapers || workPapers.length === 0) return result;
+
+  var wp = workPapers[0];
+
+  // Resolve affiliate name from affiliate_code
+  if (wp.affiliate_code) {
+    try {
+      var affiliates = getAffiliatesDropdown();
+      for (var i = 0; i < affiliates.length; i++) {
+        if (affiliates[i].code === wp.affiliate_code) {
+          result.affiliateName = affiliates[i].name;
+          break;
+        }
+      }
+    } catch (e) { console.log('resolveAuditContext affiliate error:', e); }
+  }
+
+  // Resolve audit area name from audit_area_id
+  if (wp.audit_area_id) {
+    try {
+      var areas = getAuditAreasDropdown();
+      for (var i = 0; i < areas.length; i++) {
+        if (areas[i].id === wp.audit_area_id || areas[i].code === wp.audit_area_id) {
+          result.auditAreaName = areas[i].name;
+          break;
+        }
+      }
+    } catch (e) { console.log('resolveAuditContext area error:', e); }
+  }
+
+  return result;
+}
+
+/**
  * Send batched auditee notification with professional table.
  * Called when work papers are sent to auditees — groups by auditee and sends ONE email per person.
  * @param {Object[]} workPapers - Array of work paper objects sent to this auditee
  * @param {string} auditeeEmail - Recipient email
  * @param {string} auditeeUserId - Recipient user ID
- * @param {string} auditeeName - Recipient name
+ * @param {string} auditeeName - Recipient full name
+ * @param {string} auditeeFirstName - Recipient first name for greeting
  * @param {string} [ccEmails] - Optional comma-separated CC emails from work paper cc_recipients
  */
-function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId, auditeeName, ccEmails) {
+function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId, auditeeName, auditeeFirstName, ccEmails) {
   if (!workPapers || workPapers.length === 0 || !auditeeEmail) return;
 
   var loginUrl = ScriptApp.getService().getUrl();
+
+  // Resolve affiliate and audit area for context line
+  var ctx = resolveAuditContext(workPapers);
+  var contextLine = '';
+  if (ctx.affiliateName && ctx.auditAreaName) {
+    contextLine = 'Below are audit observations from <strong>' + ctx.affiliateName + ' \u2013 ' + ctx.auditAreaName + '</strong> audit.';
+  } else if (ctx.affiliateName) {
+    contextLine = 'Below are audit observations from <strong>' + ctx.affiliateName + '</strong> audit.';
+  } else if (ctx.auditAreaName) {
+    contextLine = 'Below are audit observations from <strong>' + ctx.auditAreaName + '</strong> audit.';
+  } else {
+    contextLine = 'The following audit finding' + (workPapers.length > 1 ? 's have' : ' has') +
+      ' been reviewed and approved.';
+  }
+
+  // Use first name only for greeting
+  var firstName = auditeeFirstName || (auditeeName || '').split(' ')[0] || 'Auditee';
 
   var subject = workPapers.length === 1
     ? 'Audit Finding Requires Your Response'
     : workPapers.length + ' Audit Findings Require Your Response';
 
-  var intro = 'Dear ' + (auditeeName || 'Auditee') + ',<br><br>' +
-    'The following audit finding' + (workPapers.length > 1 ? 's have' : ' has') +
-    ' been reviewed and approved. Please respond with your action plan' + (workPapers.length > 1 ? 's.' : '.');
+  var intro = 'Dear ' + firstName + ',<br><br>' +
+    contextLine + ' Please respond with your action plan' + (workPapers.length > 1 ? 's.' : '.');
 
   var headers = ['Observation', 'Details', 'Rating'];
   var rows = workPapers.map(function(wp) {
@@ -550,8 +608,13 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
     ];
   });
 
-  var outro = 'Please log in to the Audit System and submit your action plans at your earliest convenience.<br><br>' +
-    loginUrl;
+  // Branded login button instead of plain URL
+  var outro = '<div style="text-align:center; margin:20px 0;">' +
+    '<a href="' + loginUrl + '" style="display:inline-block; background-color:#1a365d; color:#ffffff; ' +
+    'padding:12px 28px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px;">' +
+    'Open Audit System</a></div>' +
+    '<p style="color:#6b7280; font-size:12px; text-align:center;">Please log in and submit your action plans at your earliest convenience.</p>';
+
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
 
   sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'wmurikah@gmail.com');
@@ -604,7 +667,8 @@ function sendOverdueReminders() {
 
     const plans = byOwner[ownerId];
     const subject = 'Action Required: ' + plans.length + ' Overdue Action Plan(s)';
-    const intro = 'Dear ' + (owner.full_name || 'Colleague') + ',<br><br>' +
+    const ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
+    const intro = 'Dear ' + ownerFirstName + ',<br><br>' +
       'You have <strong>' + plans.length + '</strong> overdue action plan(s) that require your immediate attention:';
 
     const rows = plans.map(function(ap) {
@@ -727,7 +791,8 @@ function sendUpcomingDueReminders() {
 
     var plans = byOwner[ownerId];
     var subject = 'Reminder: ' + plans.length + ' Action Plan(s) Due Soon';
-    var intro = 'Dear ' + (owner.full_name || 'Colleague') + ',<br><br>' +
+    var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
+    var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
       'You have <strong>' + plans.length + '</strong> action plan(s) due within the next two weeks:';
 
     var rows = plans.map(function(ap) {
