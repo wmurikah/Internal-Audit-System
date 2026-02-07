@@ -9,13 +9,24 @@ function createActionPlan(data, user) {
   if (!data.work_paper_id) {
     throw new Error('Work paper ID is required');
   }
-  
+
+  // Validate due date: must not be more than 6 months from today
+  if (data.due_date) {
+    var dueDateCheck = new Date(data.due_date);
+    var maxDueDate = new Date();
+    maxDueDate.setMonth(maxDueDate.getMonth() + 6);
+    if (dueDateCheck > maxDueDate) {
+      throw new Error('Due date cannot be more than 6 months from today. Maximum allowed: ' +
+        maxDueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+    }
+  }
+
   // Verify work paper exists and is sent to auditee
   const workPaper = getWorkPaperById(data.work_paper_id);
   if (!workPaper) {
     throw new Error('Work paper not found: ' + data.work_paper_id);
   }
-  
+
   const actionPlanId = generateId('ACTION_PLAN');
   const now = new Date();
   
@@ -89,9 +100,21 @@ function createActionPlansBatch(workPaperId, plansData, user) {
     throw new Error('Plans data array is required');
   }
   
+  // Validate all due dates: must not be more than 6 months from today
+  var maxDueDateBatch = new Date();
+  maxDueDateBatch.setMonth(maxDueDateBatch.getMonth() + 6);
+  plansData.forEach(function(pd, idx) {
+    if (pd.due_date) {
+      var dd = new Date(pd.due_date);
+      if (dd > maxDueDateBatch) {
+        throw new Error('Action plan #' + (idx + 1) + ': Due date cannot be more than 6 months from today.');
+      }
+    }
+  });
+
   const results = [];
   const ids = generateIds('ACTION_PLAN', plansData.length);
-  
+
   const existingPlans = getActionPlansByWorkPaperRaw(workPaperId);
   let nextNum = existingPlans.length > 0 ? Math.max(...existingPlans.map(p => p.action_number || 0)) + 1 : 1;
   
@@ -240,9 +263,20 @@ function updateActionPlan(actionPlanId, data, user) {
     }
   }
 
+  // Validate due date if being updated: must not be more than 6 months from today
+  if (data.due_date) {
+    var dueDateCheck = new Date(data.due_date);
+    var maxDueDate = new Date();
+    maxDueDate.setMonth(maxDueDate.getMonth() + 6);
+    if (dueDateCheck > maxDueDate) {
+      throw new Error('Due date cannot be more than 6 months from today. Maximum allowed: ' +
+        maxDueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+    }
+  }
+
   const now = new Date();
   const updates = { updated_at: now, updated_by: user.user_id };
-  
+
   // Determine which fields can be updated based on role
   const isAuditee = user.role_code === ROLES.AUDITEE;
   const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF].includes(user.role_code);
@@ -936,21 +970,55 @@ function queueImplementationNotification(actionPlanId, actionPlan, implementer) 
   });
 }
 
+/**
+ * Send verification notification to action plan owners using table format.
+ * Includes the action plan details + parent observation context.
+ */
 function queueVerificationNotification(actionPlanId, actionPlan, action, verifier) {
-  const ownerIds = String(actionPlan.owner_ids || '').split(',').map(s => s.trim()).filter(Boolean);
-  
-  const actionText = action === 'approve' ? 'verified' : action === 'reject' ? 'rejected' : 'returned for revision';
-  
-  ownerIds.forEach(ownerId => {
-    const owner = getUserById(ownerId);
-    if (owner) {
-      queueTemplatedEmail('AP_VERIFIED', owner.email, owner.user_id, {
-        action_plan_id: actionPlanId,
-        action_text: actionText,
-        verifier_name: verifier.full_name || '',
-        action_description: actionPlan.action_description || ''
-      }, 'ACTION_PLAN', actionPlanId);
+  var ownerIds = String(actionPlan.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var actionText = action === 'approve' ? 'Verified' : action === 'reject' ? 'Rejected' : 'Returned for Revision';
+
+  // Get parent work paper for observation context
+  var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
+  var observationTitle = parentWp ? parentWp.observation_title : '';
+  var riskRating = actionPlan.risk_rating || (parentWp ? parentWp.risk_rating : '');
+
+  var loginUrl = ScriptApp.getService().getUrl();
+
+  ownerIds.forEach(function(ownerId) {
+    var owner = getUserById(ownerId);
+    if (!owner || !owner.email) return;
+
+    var subject = 'Action Plan ' + actionText + ' by Auditor';
+    var intro = 'Dear ' + (owner.full_name || 'Colleague') + ',<br><br>' +
+      'The following action plan has been <strong>' + actionText.toLowerCase() + '</strong> by ' +
+      (verifier.full_name || 'an auditor') + ':';
+
+    var headers = ['Field', 'Details'];
+    var rows = [
+      ['Observation', String(observationTitle || '-')],
+      ['Action Plan', truncateWords(actionPlan.action_description || '-', 15)],
+      ['Rating', ratingBadge(riskRating)],
+      ['Status', '<strong>' + actionText + '</strong>'],
+      ['Reviewed By', String(verifier.full_name || '-')],
+      ['Review Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })]
+    ];
+
+    if (actionPlan.auditor_review_comments) {
+      rows.push(['Comments', String(actionPlan.auditor_review_comments)]);
     }
+
+    var outro = '';
+    if (action === 'return') {
+      outro = 'Please log in, review the auditor\'s comments, and update your action plan accordingly.<br><br>' + loginUrl;
+    } else if (action === 'reject') {
+      outro = 'The action plan has been rejected. Please log in to review the feedback.<br><br>' + loginUrl;
+    } else {
+      outro = 'Your action plan has been verified. No further action is required.<br><br>' + loginUrl;
+    }
+
+    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
   });
 }
 

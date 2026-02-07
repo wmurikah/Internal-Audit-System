@@ -854,15 +854,19 @@ function queueStatusNotification(workPaperId, workPaper, previousStatus, reviewe
 /**
  * Queue notification for auditees — groups by auditee to avoid spam.
  * Collects work papers per auditee and sends ONE batched table email.
+ * CC recipients from the work paper's cc_recipients field are included.
  */
 function queueAuditeeNotification(workPaperId, workPaper, sender) {
   var responsibleIds = String(workPaper.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
+  // Collect CC emails from work paper's cc_recipients field
+  var ccEmails = String(workPaper.cc_recipients || '').trim() || null;
+
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
     if (auditee && auditee.email) {
-      // Send immediately using the batched table format (single work paper)
-      sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name);
+      // Send immediately using the batched table format with CC
+      sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name, ccEmails);
     }
   });
 }
@@ -871,24 +875,32 @@ function queueAuditeeNotification(workPaperId, workPaper, sender) {
  * Batch send auditee notifications for multiple work papers at once.
  * Call this when approving/sending multiple WPs to avoid spamming auditees.
  * Groups by auditee and sends ONE email per person with a table of all findings.
+ * Collects all unique CC recipients across the batch.
  */
 function sendBatchedAuditeeNotifications(workPapers) {
   if (!workPapers || workPapers.length === 0) return;
 
-  // Group by auditee user ID
+  // Group by auditee user ID + collect all CC emails
   var byAuditee = {};
+  var allCcEmails = {};
   workPapers.forEach(function(wp) {
     var ids = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
     ids.forEach(function(userId) {
       if (!byAuditee[userId]) byAuditee[userId] = [];
       byAuditee[userId].push(wp);
     });
+    // Collect CC emails from each work paper
+    String(wp.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean).forEach(function(email) {
+      allCcEmails[email] = true;
+    });
   });
+
+  var ccString = Object.keys(allCcEmails).join(',') || null;
 
   Object.keys(byAuditee).forEach(function(userId) {
     var auditee = getUserById(userId);
     if (auditee && auditee.email) {
-      sendBatchedAuditeeNotification(byAuditee[userId], auditee.email, auditee.user_id, auditee.full_name);
+      sendBatchedAuditeeNotification(byAuditee[userId], auditee.email, auditee.user_id, auditee.full_name, ccString);
     }
   });
 }
