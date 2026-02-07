@@ -600,9 +600,10 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   // Use first name only for greeting
   var firstName = auditeeFirstName || (auditeeName || '').split(' ')[0] || 'Auditee';
 
+  var subjectSuffix = ctx.auditAreaName ? ' - ' + ctx.auditAreaName : '';
   var subject = workPapers.length === 1
-    ? 'Audit Finding Requires Your Response'
-    : workPapers.length + ' Audit Findings Require Your Response';
+    ? 'Audit Finding Requires Your Response' + subjectSuffix
+    : workPapers.length + ' Audit Findings Require Your Response' + subjectSuffix;
 
   var intro = 'Dear ' + firstName + ',<br><br>' +
     contextLine + ' Please respond with your action plan' + (workPapers.length > 1 ? 's.' : '.');
