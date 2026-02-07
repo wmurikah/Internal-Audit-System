@@ -541,32 +541,9 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
 
   var loginUrl = ScriptApp.getService().getUrl();
 
-  // Extract first name from full name
+  // Extract first name only from full name
   var firstName = String(auditeeName || 'Auditee').split(/\s+/)[0];
-
-  // Build greeting with CC party names if available
-  var ccNames = [];
-  if (ccEmails) {
-    var ccList = String(ccEmails).split(',').map(function(e) { return e.trim(); }).filter(Boolean);
-    ccList.forEach(function(email) {
-      // Try to look up the user by email for their first name
-      try {
-        var ccUser = getUserByEmailCached(email);
-        if (ccUser && ccUser.full_name) {
-          ccNames.push(String(ccUser.full_name).split(/\s+/)[0]);
-        }
-      } catch (e) {
-        // Ignore lookup failures — just won't appear in greeting
-      }
-    });
-  }
-
-  // Build "Dear First, Party1, Party2,"
-  var greeting = 'Dear ' + firstName;
-  if (ccNames.length > 0) {
-    greeting += ', ' + ccNames.join(', ');
-  }
-  greeting += ',';
+  var greeting = 'Dear ' + firstName + ',';
 
   // Resolve affiliate and audit area names from work papers for context line
   var contextParts = resolveAuditContext(workPapers);
