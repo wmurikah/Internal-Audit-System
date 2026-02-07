@@ -4,7 +4,7 @@ window.currentUser = null;
 window.appDropdowns = null;
 window.currentWorkPaper = null;
 window.currentActionPlan = null;
-let currentPage = 'dashboard';
+let currentPage = 'reports';
 let pageParams = {};
 
 // Loading state tracker
@@ -370,9 +370,9 @@ function setupNavigation(p) {
   // SUPER_ADMIN sees everything - no hiding needed
   if (role === 'SUPER_ADMIN') {
     console.log('SUPER_ADMIN detected - showing all navigation items');
-    // Explicitly show all admin items for SUPER_ADMIN
-    document.getElementById('navInsightsSection')?.classList.remove('d-none');
     document.getElementById('navReports')?.classList.remove('d-none');
+    document.getElementById('navAuditWorkbench')?.classList.remove('d-none');
+    document.getElementById('navInsightsSection')?.classList.remove('d-none');
     document.getElementById('navAnalytics')?.classList.remove('d-none');
     document.getElementById('navAdminSection')?.classList.remove('d-none');
     document.getElementById('navUsers')?.classList.remove('d-none');
@@ -386,14 +386,15 @@ function setupNavigation(p) {
 
   // For other roles, apply permission-based visibility
   
+  // Audit Workbench - auditor roles only
+  const auditorWorkbenchRoles = ['SENIOR_AUDITOR', 'AUDITOR'];
+  if (!auditorWorkbenchRoles.includes(role)) {
+    document.getElementById('navAuditWorkbench')?.classList.add('d-none');
+  }
+
   // Work Paper creation
   if (!p || !p.canCreateWorkPaper) {
     document.getElementById('navNewWorkPaper')?.classList.add('d-none');
-  }
-
-  // Reports - check canViewReports permission
-  if (!p || !p.canViewReports) {
-    document.getElementById('navReports')?.classList.add('d-none');
   }
 
   // Analytics - show for auditor roles and management
@@ -402,10 +403,9 @@ function setupNavigation(p) {
     document.getElementById('navAnalytics')?.classList.add('d-none');
   }
 
-  // Hide Insights section header if both Reports and Analytics are hidden
-  const reportsHidden = document.getElementById('navReports')?.classList.contains('d-none');
+  // Hide Insights section header if Analytics is hidden (Reports is now top-level)
   const analyticsHidden = document.getElementById('navAnalytics')?.classList.contains('d-none');
-  if (reportsHidden && analyticsHidden) {
+  if (analyticsHidden) {
     document.getElementById('navInsightsSection')?.classList.add('d-none');
   }
 
@@ -426,9 +426,8 @@ function setupNavigation(p) {
     document.getElementById('navAdminSection')?.classList.add('d-none');
   }
 
-  // Quick stats - show for auditor roles
-  const auditorRoles = ['SENIOR_AUDITOR', 'AUDITOR'];
-  if (!auditorRoles.includes(role)) {
+  // Quick stats - show for auditor roles only
+  if (!auditorWorkbenchRoles.includes(role)) {
     document.getElementById('navQuickStats')?.classList.add('d-none');
   }
 
@@ -440,10 +439,17 @@ function setupNavigation(p) {
   }
 }
 
+// Determine default landing page based on role
+function getDefaultPage() {
+  const role = window.currentUser?.role_code || '';
+  const auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+  return auditorRoles.includes(role) ? 'audit-workbench' : 'reports';
+}
+
 // Navigation
 function handleHashChange() {
   const rawHash = window.location.hash;
-  const hash = rawHash.slice(1) || 'dashboard';
+  const hash = rawHash.slice(1) || getDefaultPage();
   console.log('handleHashChange triggered - raw hash:', rawHash, 'parsed:', hash);
   
   const parts = hash.split('?');
@@ -461,7 +467,10 @@ function handleHashChange() {
 
 function navigateTo(page, params, updateHash = true) {
   params = params || {};
-  
+
+  // Backward compatibility: redirect old #dashboard to #audit-workbench
+  if (page === 'dashboard') page = 'audit-workbench';
+
   console.log('navigateTo called:', page, params, 'updateHash:', updateHash);
 
   if (updateHash) {
@@ -491,7 +500,7 @@ function navigateTo(page, params, updateHash = true) {
 
   // Page configuration
   const pageMap = {
-    'dashboard': { el: 'page-dashboard', title: 'Dashboard', init: loadDashboard },
+    'audit-workbench': { el: 'page-audit-workbench', title: 'Audit Workbench', init: loadAuditWorkbench },
     'work-papers': { el: 'page-work-papers', title: 'Work Papers', init: () => { if (typeof initWPFilters === 'function') initWPFilters(); if (typeof loadWorkPapers === 'function') loadWorkPapers(params); } },
     'work-paper-form': { el: 'page-work-paper-form', title: params.id ? 'Edit Work Paper' : 'New Work Paper', init: () => { if (typeof initWorkPaperForm === 'function') initWorkPaperForm(params); else console.error('initWorkPaperForm not found!'); } },
     'work-paper-view': { el: 'page-work-paper-view', title: 'Work Paper Details', init: () => { if (typeof loadWorkPaperView === 'function') loadWorkPaperView(params); else console.error('loadWorkPaperView not found!'); } },
@@ -507,8 +516,8 @@ function navigateTo(page, params, updateHash = true) {
   const config = pageMap[page];
   
   if (!config) {
-    console.error('Page not found in pageMap:', page, '- redirecting to dashboard');
-    navigateTo('dashboard', {}, false);
+    console.error('Page not found in pageMap:', page, '- redirecting to default page');
+    navigateTo(getDefaultPage(), {}, false);
     return;
   }
   

@@ -80,15 +80,26 @@
       </div>
 
       <ul class="sidebar-nav">
-        <!-- Dashboard Section -->
-        <li class="nav-item">
-          <a href="#dashboard" class="nav-link active" data-page="dashboard">
-            <i class="bi bi-speedometer2"></i>
-            <span>Dashboard</span>
+        <!-- Reports - Primary Overview Page -->
+        <li class="nav-item" id="navReports">
+          <a href="#reports" class="nav-link" data-page="reports">
+            <i class="bi bi-file-earmark-bar-graph"></i>
+            <span>Reports</span>
           </a>
         </li>
 
-        <!-- Quick Stats (Role-based, shown inline) -->
+        <!-- Audit Management Section -->
+        <li class="nav-item nav-section" id="navAuditSection">Audit Management</li>
+
+        <!-- Audit Workbench (Auditor roles only) -->
+        <li class="nav-item" id="navAuditWorkbench">
+          <a href="#audit-workbench" class="nav-link" data-page="audit-workbench">
+            <i class="bi bi-speedometer2"></i>
+            <span>Audit Workbench</span>
+          </a>
+        </li>
+
+        <!-- Quick Stats (Auditor roles, shown inline) -->
         <li class="nav-item nav-quick-stats" id="navQuickStats">
           <div class="quick-stats-container">
             <div class="quick-stat" onclick="navigateTo('work-papers', {status: 'Submitted'})" title="Pending Reviews">
@@ -101,9 +112,6 @@
             </div>
           </div>
         </li>
-
-        <!-- Audit Management Section -->
-        <li class="nav-item nav-section">Audit Management</li>
 
         <!-- Work Papers with Submenu -->
         <li class="nav-item nav-has-submenu">
@@ -152,12 +160,6 @@
 
         <!-- Insights Section -->
         <li class="nav-item nav-section" id="navInsightsSection">Insights</li>
-        <li class="nav-item" id="navReports">
-          <a href="#reports" class="nav-link" data-page="reports">
-            <i class="bi bi-file-earmark-bar-graph"></i>
-            <span>Reports</span>
-          </a>
-        </li>
         <li class="nav-item" id="navAnalytics">
           <a href="#analytics" class="nav-link" data-page="analytics">
             <i class="bi bi-graph-up-arrow"></i>
@@ -202,13 +204,13 @@
         <!-- Breadcrumb -->
         <nav class="breadcrumb-nav" id="breadcrumbNav">
           <ol class="breadcrumb mb-0">
-            <li class="breadcrumb-item"><a href="#dashboard" onclick="navigateTo('dashboard')">Home</a></li>
-            <li class="breadcrumb-item active" id="breadcrumbCurrent">Dashboard</li>
+            <li class="breadcrumb-item"><a href="#reports" onclick="navigateTo('reports')">Home</a></li>
+            <li class="breadcrumb-item active" id="breadcrumbCurrent">Reports</li>
           </ol>
         </nav>
 
         <div class="top-bar-title">
-          <h4 id="pageTitle">Dashboard</h4>
+          <h4 id="pageTitle">Reports</h4>
         </div>
 
         <div class="top-bar-actions">
@@ -262,8 +264,8 @@
 
       <!-- Page Content -->
       <div class="page-content" id="pageContent">
-        <!-- Dashboard Page -->
-        <div class="page" id="page-dashboard">
+        <!-- Audit Workbench Page (Auditor roles) -->
+        <div class="page" id="page-audit-workbench" style="display:none;">
           <?!= include('Dashboard'); ?>
         </div>
 
