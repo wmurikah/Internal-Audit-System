@@ -900,7 +900,7 @@ function sendBatchedAuditeeNotifications(workPapers) {
   Object.keys(byAuditee).forEach(function(userId) {
     var auditee = getUserById(userId);
     if (auditee && auditee.email) {
-      sendBatchedAuditeeNotification(byAuditee[userId], auditee.email, auditee.user_id, auditee.full_name, ccString);
+      sendBatchedAuditeeNotification(byAuditee[userId], auditee.email, auditee.user_id, auditee.full_name, auditee.first_name, ccString);
     }
   });
 }

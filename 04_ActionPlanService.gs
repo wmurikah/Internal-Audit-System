@@ -990,7 +990,8 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
     if (!owner || !owner.email) return;
 
     var subject = 'Action Plan ' + actionText + ' by Auditor';
-    var intro = 'Dear ' + (owner.full_name || 'Colleague') + ',<br><br>' +
+    var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
+    var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
       'The following action plan has been <strong>' + actionText.toLowerCase() + '</strong> by ' +
       (verifier.full_name || 'an auditor') + ':';
 
