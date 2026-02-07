@@ -103,11 +103,20 @@ function updateWorkPaper(workPaperId, data, user) {
   
   const existing = getWorkPaperRaw(workPaperId);
   if (!existing) throw new Error('Work paper not found: ' + workPaperId);
-  
+
   if (!canUserPerform(user, 'update', 'WORK_PAPER', existing)) {
     throw new Error('Permission denied: Cannot update this work paper');
   }
-  
+
+  // Optimistic locking: reject if record was modified by another user since it was loaded
+  if (data._loadedAt && existing.updated_at) {
+    var loadedTime = new Date(data._loadedAt).getTime();
+    var serverTime = new Date(existing.updated_at).getTime();
+    if (serverTime > loadedTime) {
+      throw new Error('This record was modified by another user. Please refresh and try again.');
+    }
+  }
+
   // Check status - can only edit draft or revision required
   const editableStatuses = [STATUS.WORK_PAPER.DRAFT, STATUS.WORK_PAPER.REVISION_REQUIRED];
   if (!editableStatuses.includes(existing.status)) {
@@ -117,7 +126,7 @@ function updateWorkPaper(workPaperId, data, user) {
       throw new Error('Work paper cannot be edited in current status: ' + existing.status);
     }
   }
-  
+
   const now = new Date();
   
   // Build update object (only update provided fields)
@@ -843,23 +852,43 @@ function queueStatusNotification(workPaperId, workPaper, previousStatus, reviewe
 }
 
 /**
- * Queue notification for auditees
+ * Queue notification for auditees — groups by auditee to avoid spam.
+ * Collects work papers per auditee and sends ONE batched table email.
  */
 function queueAuditeeNotification(workPaperId, workPaper, sender) {
-  const responsibleIds = String(workPaper.responsible_ids || '').split(',').map(s => s.trim()).filter(Boolean);
-  
-  responsibleIds.forEach(userId => {
-    const auditee = getUserById(userId);
-    if (auditee) {
-      queueNotification({
-        template_code: 'WP_SENT_TO_AUDITEE',
-        recipient_user_id: auditee.user_id,
-        recipient_email: auditee.email,
-        subject: 'Audit Finding Requires Your Response: ' + workPaper.observation_title,
-        body: `An audit finding has been assigned to you. Please review and respond with action plans.`,
-        module: 'WORK_PAPER',
-        record_id: workPaperId
-      });
+  var responsibleIds = String(workPaper.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+
+  responsibleIds.forEach(function(userId) {
+    var auditee = getUserById(userId);
+    if (auditee && auditee.email) {
+      // Send immediately using the batched table format (single work paper)
+      sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name);
+    }
+  });
+}
+
+/**
+ * Batch send auditee notifications for multiple work papers at once.
+ * Call this when approving/sending multiple WPs to avoid spamming auditees.
+ * Groups by auditee and sends ONE email per person with a table of all findings.
+ */
+function sendBatchedAuditeeNotifications(workPapers) {
+  if (!workPapers || workPapers.length === 0) return;
+
+  // Group by auditee user ID
+  var byAuditee = {};
+  workPapers.forEach(function(wp) {
+    var ids = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    ids.forEach(function(userId) {
+      if (!byAuditee[userId]) byAuditee[userId] = [];
+      byAuditee[userId].push(wp);
+    });
+  });
+
+  Object.keys(byAuditee).forEach(function(userId) {
+    var auditee = getUserById(userId);
+    if (auditee && auditee.email) {
+      sendBatchedAuditeeNotification(byAuditee[userId], auditee.email, auditee.user_id, auditee.full_name);
     }
   });
 }

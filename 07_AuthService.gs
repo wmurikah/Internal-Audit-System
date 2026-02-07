@@ -333,11 +333,7 @@ function getUserByIdCached(userId) {
   
   if (cached) {
     try {
-      const user = JSON.parse(cached);
-      if (!user._rowIndex) {
-        user._rowIndex = findUserRowIndex(userId);
-      }
-      return user;
+      return JSON.parse(cached);
     } catch (e) {}
   }
   

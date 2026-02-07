@@ -317,16 +317,13 @@ function linkifyUrls(text) {
 }
 
 /**
- * Format email body as professional branded HTML
+ * Format email body as clean branded HTML (no top header bar)
  */
 function formatEmailHtml(subject, body) {
-  const brandName = 'HASS PETROLEUM';
-  const deptName = 'Internal Audit Department';
   const navy = '#1a365d';
   const gold = '#c9a227';
   const year = new Date().getFullYear();
 
-  // Convert \n to <br> for proper line breaks in HTML
   const htmlBody = linkifyUrls(body).replace(/\n/g, '<br>');
 
   return `<!DOCTYPE html>
@@ -340,84 +337,158 @@ function formatEmailHtml(subject, body) {
       .email-outer { padding: 4px !important; }
       .email-inner { width: 100% !important; min-width: 100% !important; }
       .email-content { padding: 20px 16px !important; }
-      .email-header { padding: 20px 16px !important; }
       .email-footer { padding: 16px !important; }
     }
   </style>
 </head>
 <body style="margin:0; padding:0; font-family: 'Segoe UI', Arial, Helvetica, sans-serif; background-color:#edf0f5; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
-  <!-- Preheader (shows as preview text in inbox, hidden in body) -->
   <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
     ${subject} &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
   </div>
-
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#edf0f5;" class="email-outer">
     <tr><td align="center" style="padding:20px 8px;">
-
       <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px; background-color:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);" class="email-inner">
-
-        <!-- TOP BRAND BAR -->
-        <tr>
-          <td style="background-color:${navy}; padding:24px 32px;" class="email-header">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td align="left" valign="middle" style="width:52px;">
-                  <!-- Shield Icon -->
-                  <table cellpadding="0" cellspacing="0" border="0" style="background-color:${gold}; border-radius:8px; width:46px; height:46px;">
-                    <tr><td align="center" valign="middle" style="color:${navy}; font-size:22px; font-weight:800; font-family:'Segoe UI',Arial,sans-serif; line-height:46px;">HP</td></tr>
-                  </table>
-                </td>
-                <td align="left" valign="middle" style="padding-left:14px;">
-                  <p style="margin:0; color:#ffffff; font-size:18px; font-weight:700; letter-spacing:1.5px; line-height:1.2;">${brandName}</p>
-                  <p style="margin:2px 0 0 0; color:${gold}; font-size:12px; font-weight:500; letter-spacing:0.5px;">${deptName}</p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- GOLD ACCENT LINE -->
-        <tr>
-          <td style="background: linear-gradient(90deg, ${gold}, ${navy}); height:4px; font-size:0; line-height:0;">
-            <!--[if mso]><table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background-color:${gold}; height:4px; font-size:0; line-height:0;">&nbsp;</td></tr></table><![endif]-->
-          </td>
-        </tr>
-
         <!-- SUBJECT BANNER -->
         <tr>
           <td style="background-color:#f8f9fb; padding:18px 32px; border-bottom:1px solid #e5e7eb;">
             <p style="margin:0; color:${navy}; font-size:17px; font-weight:600;">${subject}</p>
           </td>
         </tr>
-
         <!-- MAIN CONTENT -->
         <tr>
           <td style="padding:28px 32px 32px 32px;" class="email-content">
             <div style="color:#374151; line-height:1.75; font-size:14px;">${htmlBody}</div>
           </td>
         </tr>
-
         <!-- FOOTER -->
         <tr>
-          <td style="background-color:${navy}; padding:20px 32px;" class="email-footer">
+          <td style="background-color:${navy}; padding:16px 32px;" class="email-footer">
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td align="center">
-                  <p style="margin:0 0 6px 0; color:${gold}; font-size:12px; font-weight:600; letter-spacing:1px;">${brandName}</p>
-                  <p style="margin:0 0 4px 0; color:#94a3b8; font-size:11px;">Internal Audit Department &bull; Automated Notification</p>
-                  <p style="margin:0; color:#64748b; font-size:10px;">&copy; ${year} Hass Petroleum. All rights reserved.</p>
+                  <p style="margin:0 0 4px 0; color:${gold}; font-size:11px; font-weight:600; letter-spacing:1px;">HASS PETROLEUM</p>
+                  <p style="margin:0; color:#64748b; font-size:10px;">Internal Audit &bull; &copy; ${year}</p>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
-
       </table>
-
     </td></tr>
   </table>
 </body>
 </html>`;
+}
+
+/**
+ * Format email with a professional data table
+ * @param {string} subject - Email subject
+ * @param {string} intro - Intro paragraph text
+ * @param {string[]} headers - Table column headers
+ * @param {string[][]} rows - Table data rows
+ * @param {string} [outro] - Optional closing paragraph
+ */
+function formatTableEmailHtml(subject, intro, headers, rows, outro) {
+  const navy = '#1a365d';
+  const gold = '#c9a227';
+  const year = new Date().getFullYear();
+
+  // Build table header cells
+  const thCells = headers.map(h =>
+    `<th style="background-color:${navy}; color:#ffffff; padding:10px 12px; text-align:left; font-size:12px; font-weight:600; letter-spacing:0.5px; border-bottom:2px solid ${gold};">${h}</th>`
+  ).join('');
+
+  // Build table body rows
+  const trRows = rows.map((row, idx) => {
+    const bg = idx % 2 === 0 ? '#ffffff' : '#f8f9fb';
+    const cells = row.map(cell =>
+      `<td style="padding:9px 12px; font-size:13px; color:#374151; border-bottom:1px solid #e5e7eb;">${cell}</td>`
+    ).join('');
+    return `<tr style="background-color:${bg};">${cells}</tr>`;
+  }).join('');
+
+  const outroHtml = outro ? `<div style="color:#374151; line-height:1.6; font-size:14px; margin-top:20px;">${linkifyUrls(outro).replace(/\n/g, '<br>')}</div>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+  <style>
+    @media only screen and (max-width: 620px) {
+      .email-outer { padding: 4px !important; }
+      .email-inner { width: 100% !important; min-width: 100% !important; }
+      .email-content { padding: 16px 12px !important; }
+      .email-footer { padding: 12px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0; padding:0; font-family: 'Segoe UI', Arial, Helvetica, sans-serif; background-color:#edf0f5;">
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+    ${subject} &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#edf0f5;" class="email-outer">
+    <tr><td align="center" style="padding:20px 8px;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:700px; background-color:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);" class="email-inner">
+        <!-- SUBJECT -->
+        <tr>
+          <td style="background-color:#f8f9fb; padding:18px 28px; border-bottom:1px solid #e5e7eb;">
+            <p style="margin:0; color:${navy}; font-size:17px; font-weight:600;">${subject}</p>
+          </td>
+        </tr>
+        <!-- CONTENT + TABLE -->
+        <tr>
+          <td style="padding:24px 28px;" class="email-content">
+            <div style="color:#374151; line-height:1.6; font-size:14px; margin-bottom:18px;">${intro}</div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e5e7eb; border-radius:6px; border-collapse:separate; overflow:hidden;">
+              <thead><tr>${thCells}</tr></thead>
+              <tbody>${trRows}</tbody>
+            </table>
+            ${outroHtml}
+          </td>
+        </tr>
+        <!-- FOOTER -->
+        <tr>
+          <td style="background-color:${navy}; padding:16px 28px;" class="email-footer">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center">
+                  <p style="margin:0 0 4px 0; color:${gold}; font-size:11px; font-weight:600; letter-spacing:1px;">HASS PETROLEUM</p>
+                  <p style="margin:0; color:#64748b; font-size:10px;">Internal Audit &bull; &copy; ${year}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Helper: truncate text to N words
+ */
+function truncateWords(text, maxWords) {
+  if (!text) return '';
+  var words = String(text).split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '...';
+}
+
+/**
+ * Rating badge HTML for email tables
+ */
+function ratingBadge(rating) {
+  if (!rating) return '<span style="color:#9ca3af;">-</span>';
+  var r = String(rating).toUpperCase();
+  var bg = '#6b7280'; var color = '#ffffff';
+  if (r === 'HIGH' || r === 'CRITICAL') { bg = '#dc2626'; }
+  else if (r === 'MEDIUM') { bg = '#f59e0b'; color = '#1a1a1a'; }
+  else if (r === 'LOW') { bg = '#16a34a'; }
+  return '<span style="display:inline-block; background-color:' + bg + '; color:' + color + '; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600;">' + r + '</span>';
 }
 
 /**
@@ -448,80 +519,118 @@ function retryFailedEmails() {
   return resetCount;
 }
 
-// Send daily overdue reminders (called by daily trigger)
+/**
+ * Send batched auditee notification with professional table.
+ * Called when work papers are sent to auditees — groups by auditee and sends ONE email per person.
+ * @param {Object[]} workPapers - Array of work paper objects sent to this auditee
+ * @param {string} auditeeEmail - Recipient email
+ * @param {string} auditeeUserId - Recipient user ID
+ * @param {string} auditeeName - Recipient name
+ */
+function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId, auditeeName) {
+  if (!workPapers || workPapers.length === 0 || !auditeeEmail) return;
+
+  var subject = workPapers.length === 1
+    ? 'Audit Finding Requires Your Response'
+    : workPapers.length + ' Audit Findings Require Your Response';
+
+  var intro = 'Dear ' + (auditeeName || 'Auditee') + ',<br><br>' +
+    'The following audit finding' + (workPapers.length > 1 ? 's have' : ' has') +
+    ' been reviewed and approved. Please respond with your action plan' + (workPapers.length > 1 ? 's.' : '.');
+
+  var headers = ['Observation', 'Details', 'Rating'];
+  var rows = workPapers.map(function(wp) {
+    return [
+      String(wp.observation_title || wp.work_paper_id || '-'),
+      truncateWords(wp.observation_description || wp.risk_description || '', 10),
+      ratingBadge(wp.risk_rating)
+    ];
+  });
+
+  var outro = 'Please log in to the system and submit your action plans at your earliest convenience.';
+  var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+
+  sendEmail(auditeeEmail, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
+}
+
+// Send daily overdue reminders with professional table (called by daily trigger)
 function sendOverdueReminders() {
   const actionPlans = getActionPlansRaw({ overdue_only: true }, null);
-  
+
   if (actionPlans.length === 0) {
     console.log('No overdue action plans');
     return 0;
   }
-  
+
   // Group by owner
   const byOwner = {};
-  
-  actionPlans.forEach(ap => {
-    const ownerIds = String(ap.owner_ids || '').split(',').map(s => s.trim()).filter(Boolean);
-    
-    ownerIds.forEach(ownerId => {
-      if (!byOwner[ownerId]) {
-        byOwner[ownerId] = [];
-      }
+  actionPlans.forEach(function(ap) {
+    var ownerIds = String(ap.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    ownerIds.forEach(function(ownerId) {
+      if (!byOwner[ownerId]) byOwner[ownerId] = [];
       byOwner[ownerId].push(ap);
     });
   });
-  
+
   let notificationCount = 0;
-  
-  // Send one email per owner with all their overdue items
-  Object.keys(byOwner).forEach(ownerId => {
+  const tableHeaders = ['Observation', 'Summary', 'Rating', 'Due', 'Days Overdue'];
+
+  // Send one table-formatted email per owner
+  Object.keys(byOwner).forEach(function(ownerId) {
     const owner = getUserById(ownerId);
     if (!owner || !owner.email) return;
-    
+
     const plans = byOwner[ownerId];
-    const plansList = plans.map(ap => 
-      `- ${ap.action_plan_id}: ${ap.action_description.substring(0, 50)}... (${ap.days_overdue} days overdue)`
-    ).join('\n');
-    
-    queueEmail({
-      template_code: 'OVERDUE_REMINDER',
-      recipient_email: owner.email,
-      recipient_user_id: ownerId,
-      subject: `Action Required: ${plans.length} Overdue Action Plan(s)`,
-      body: `You have ${plans.length} overdue action plan(s) that require your attention:\n\n${plansList}\n\nPlease log in to the system and update the status of these items.`,
-      module: 'ACTION_PLAN',
-      record_id: ''
+    const subject = 'Action Required: ' + plans.length + ' Overdue Action Plan(s)';
+    const intro = 'Dear ' + (owner.full_name || 'Colleague') + ',<br><br>' +
+      'You have <strong>' + plans.length + '</strong> overdue action plan(s) that require your immediate attention:';
+
+    const rows = plans.map(function(ap) {
+      var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+      var daysOver = ap.days_overdue ? '<span style="color:#dc2626; font-weight:600;">' + ap.days_overdue + '</span>' : '-';
+      return [
+        String(ap.action_description || ap.action_plan_id || '-').substring(0, 40),
+        truncateWords(ap.action_description || '', 8),
+        ratingBadge(ap.risk_rating || ''),
+        dueStr,
+        daysOver
+      ];
     });
-    
+
+    const outro = 'Please log in and update the status of these items immediately.';
+    const htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
+    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
     notificationCount++;
   });
-  
-  // Also notify auditors of all overdue items
-  const auditors = getUsersDropdown().filter(u => 
-    [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].includes(u.roleCode)
-  );
-  
+
+  // Auditor summary with full table
+  const auditors = getUsersDropdown().filter(function(u) {
+    return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].includes(u.roleCode);
+  });
+
   if (actionPlans.length > 0 && auditors.length > 0) {
-    const summary = `Total overdue action plans: ${actionPlans.length}\n\n` +
-      actionPlans.slice(0, 20).map(ap => 
-        `- ${ap.action_plan_id}: ${ap.days_overdue} days overdue`
-      ).join('\n') +
-      (actionPlans.length > 20 ? `\n... and ${actionPlans.length - 20} more` : '');
-    
-    auditors.forEach(auditor => {
-      queueEmail({
-        template_code: 'AUDITOR_OVERDUE_SUMMARY',
-        recipient_email: auditor.email,
-        recipient_user_id: auditor.id,
-        subject: `Daily Summary: ${actionPlans.length} Overdue Action Plans`,
-        body: summary,
-        module: 'ACTION_PLAN',
-        record_id: ''
-      });
+    const summarySubject = 'Daily Summary: ' + actionPlans.length + ' Overdue Action Plans';
+    const summaryIntro = 'The following action plans are currently overdue across all owners:';
+    const summaryRows = actionPlans.slice(0, 50).map(function(ap) {
+      var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+      var daysOver = ap.days_overdue ? '<span style="color:#dc2626; font-weight:600;">' + ap.days_overdue + '</span>' : '-';
+      return [
+        String(ap.action_description || ap.action_plan_id || '-').substring(0, 40),
+        truncateWords(ap.action_description || '', 8),
+        ratingBadge(ap.risk_rating || ''),
+        dueStr,
+        daysOver
+      ];
+    });
+    var summaryOutro = actionPlans.length > 50 ? '... and ' + (actionPlans.length - 50) + ' more overdue items.' : '';
+    var summaryHtml = formatTableEmailHtml(summarySubject, summaryIntro, tableHeaders, summaryRows, summaryOutro);
+
+    auditors.forEach(function(auditor) {
+      sendEmail(auditor.email, summarySubject, summarySubject, summaryHtml, null, 'Hass Audit', 'wmurikah@gmail.com');
       notificationCount++;
     });
   }
-  
+
   console.log('Queued overdue reminders:', notificationCount);
   return notificationCount;
 }
