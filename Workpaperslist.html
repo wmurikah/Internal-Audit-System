@@ -181,6 +181,13 @@
     </div>
   </div>
 
+  <!-- Bulk Actions Toolbar -->
+  <div class="bulk-toolbar" id="wpBulkToolbar">
+    <span class="bulk-count"><span id="wpBulkCount">0</span> selected</span>
+    <button class="btn btn-sm btn-outline-light" onclick="bulkExportSelected()"><i class="bi bi-download me-1"></i>Export Selected</button>
+    <span class="btn-close-bulk" onclick="clearWPSelection()" title="Clear selection">&times;</span>
+  </div>
+
   <!-- Cards View -->
   <div class="row g-3" id="wpCardsView" style="display: none;"></div>
 
@@ -547,6 +554,7 @@ function renderWPTable(data) {
         </td>
       </tr>
     `;
+    updateBulkToolbar();
     return;
   }
 

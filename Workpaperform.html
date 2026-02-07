@@ -1540,6 +1540,12 @@ function initWorkPaperForm(params) {
   // Initial progress update
   setTimeout(updateFormProgress, 100);
 
+  // Setup inline validation on blur
+  initInlineValidation();
+
+  // Start auto-save for drafts
+  startAutoSave();
+
   // Reset state
   selectedResponsible = [];
   selectedCCRecipients = [];
@@ -1615,6 +1621,33 @@ function loadWorkPaperForEdit(id) {
       navigateTo('work-papers');
     }
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function populateFormFromDraft(data) {
+  if (data.year) document.getElementById('wpYear').value = data.year;
+  if (data.affiliate_code) document.getElementById('wpAffiliate').value = data.affiliate_code;
+  if (data.audit_area_id) { document.getElementById('wpAuditArea').value = data.audit_area_id; loadSubAreas(); }
+  if (data.work_paper_date) document.getElementById('wpDate').value = data.work_paper_date;
+  if (data.audit_period_from) document.getElementById('wpPeriodFrom').value = data.audit_period_from;
+  if (data.audit_period_to) document.getElementById('wpPeriodTo').value = data.audit_period_to;
+  if (data.observation_title) document.getElementById('wpObsTitle').value = data.observation_title;
+  if (data.observation_description) document.getElementById('wpObsDesc').value = data.observation_description;
+  if (data.risk_rating) { document.getElementById('wpRiskRating').value = data.risk_rating; updateRiskBadge(); }
+  if (data.risk_summary) document.getElementById('wpRiskSummary').value = data.risk_summary;
+  if (data.recommendation) document.getElementById('wpRecommendation').value = data.recommendation;
+  if (data.management_response) document.getElementById('wpManagementResponse').value = data.management_response;
+  if (data.control_objectives) document.getElementById('wpControlObjectives').value = data.control_objectives;
+  if (data.risk_description) document.getElementById('wpRiskDesc').value = data.risk_description;
+  if (data.test_objective) document.getElementById('wpTestObj').value = data.test_objective;
+  if (data.testing_steps) document.getElementById('wpTestSteps').value = data.testing_steps;
+  if (data.work_paper_ref) document.getElementById('wpWorkPaperRef').value = data.work_paper_ref;
+  updateFormProgress();
+  // Update char counters
+  ['wpObsDesc', 'wpRecommendation', 'wpManagementResponse'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && el.value) updateCharCounter(el, 2000);
+  });
+  showToast('Draft restored', 'info');
 }
 
 function populateForm(wp) {
