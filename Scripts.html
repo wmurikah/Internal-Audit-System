@@ -592,29 +592,58 @@ function hideLoading() {
   document.getElementById('loadingOverlay').classList.remove('show');
 }
 
-function showToast(message, type, duration) {
+/**
+ * Show a toast notification.
+ * @param {string} message - Text message
+ * @param {string} [type='info'] - 'success'|'danger'|'warning'|'info'
+ * @param {number|object} [options] - Duration in ms, OR options object { duration, undoCallback, undoLabel }
+ */
+function showToast(message, type, options) {
   type = type || 'info';
-  duration = duration || 5000;
+  var duration = 5000;
+  var undoCallback = null;
+  var undoLabel = 'Undo';
+
+  if (typeof options === 'number') {
+    duration = options;
+  } else if (options && typeof options === 'object') {
+    duration = options.duration || 5000;
+    undoCallback = options.undoCallback || null;
+    undoLabel = options.undoLabel || 'Undo';
+  }
+
   const toastId = 'toast-' + Date.now();
   const bgClass = type === 'danger' ? 'bg-danger' :
                   type === 'success' ? 'bg-success' :
                   type === 'warning' ? 'bg-warning text-dark' : 'bg-info';
 
+  var undoBtn = undoCallback ? ' <button class="btn-undo" data-toast-undo="' + toastId + '">' + escapeHtml(undoLabel) + '</button>' : '';
+
   const html = `
     <div id="${toastId}" class="toast ${bgClass} text-white" role="alert">
       <div class="d-flex">
-        <div class="toast-body">${escapeHtml(message)}</div>
+        <div class="toast-body">${escapeHtml(message)}${undoBtn}</div>
         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
       </div>
     </div>
   `;
 
   document.getElementById('toastContainer').insertAdjacentHTML('beforeend', html);
-  const toast = new bootstrap.Toast(document.getElementById(toastId), { delay: duration });
+  const toastEl = document.getElementById(toastId);
+  const toast = new bootstrap.Toast(toastEl, { delay: duration });
   toast.show();
-  document.getElementById(toastId).addEventListener('hidden.bs.toast', function() {
-    this.remove();
-  });
+  toastEl.addEventListener('hidden.bs.toast', function() { this.remove(); });
+
+  // Wire undo button
+  if (undoCallback) {
+    var btn = toastEl.querySelector('.btn-undo');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        undoCallback();
+        toast.hide();
+      });
+    }
+  }
 }
 
 function toggleSidebar(show) {

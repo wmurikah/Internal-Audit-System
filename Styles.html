@@ -1446,4 +1446,250 @@
     background: var(--primary-color);
     color: #fff;
   }
+
+  /* ======================================================
+     UX ENHANCEMENTS — Sticky Headers, Validation, Skeletons,
+     Bulk Actions, Auto-Save, Char Counters, Empty States
+     ====================================================== */
+
+  /* ---- Sticky Table Headers ---- */
+  .table-responsive { max-height: calc(100vh - 280px); overflow-y: auto; }
+  .table-responsive thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8f9fa;
+    box-shadow: inset 0 -2px 0 var(--border-color);
+  }
+
+  /* ---- Skeleton Table Rows ---- */
+  .skeleton-row td { padding: 14px 12px !important; }
+  .skeleton-cell {
+    height: 14px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  .skeleton-cell.w-sm  { width: 40px; }
+  .skeleton-cell.w-md  { width: 120px; }
+  .skeleton-cell.w-lg  { width: 200px; }
+  .skeleton-cell.w-badge { width: 60px; height: 22px; border-radius: 12px; }
+
+  /* ---- Inline Validation ---- */
+  .form-control.is-valid,
+  .form-select.is-valid {
+    border-color: #198754;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='M2.3 6.73.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+    padding-right: calc(1.5em + .75rem);
+  }
+  .form-control.is-invalid,
+  .form-select.is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+    padding-right: calc(1.5em + .75rem);
+  }
+  .validation-feedback {
+    font-size: 0.8rem;
+    margin-top: 4px;
+  }
+  .validation-feedback.valid { color: #198754; }
+  .validation-feedback.invalid { color: #dc3545; }
+
+  /* ---- Auto-Save Indicator ---- */
+  .autosave-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: #6b7280;
+    transition: opacity 0.3s;
+  }
+  .autosave-indicator .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #9ca3af;
+    transition: background 0.3s;
+  }
+  .autosave-indicator.saving .dot { background: #f59e0b; }
+  .autosave-indicator.saved .dot  { background: #10b981; }
+  .autosave-indicator.error .dot  { background: #ef4444; }
+
+  /* ---- Character Counter ---- */
+  .char-counter {
+    display: flex;
+    justify-content: flex-end;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 4px;
+    transition: color 0.2s;
+  }
+  .char-counter.warn  { color: #f59e0b; }
+  .char-counter.limit { color: #ef4444; font-weight: 600; }
+
+  /* ---- Bulk Action Toolbar ---- */
+  .bulk-toolbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    background: var(--primary-color);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px 8px 0 0;
+    display: none;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.15);
+    animation: slideUp 0.2s ease;
+  }
+  .bulk-toolbar.show { display: flex; }
+  .bulk-toolbar .bulk-count {
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+  .bulk-toolbar .btn {
+    color: #fff;
+    border-color: rgba(255,255,255,0.4);
+    font-size: 0.85rem;
+  }
+  .bulk-toolbar .btn:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: #fff;
+  }
+  .bulk-toolbar .btn-close-bulk {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+    font-size: 1.1rem;
+  }
+  .bulk-toolbar .btn-close-bulk:hover { color: #fff; }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+
+  /* ---- Row selection highlight ---- */
+  tr.row-selected { background: #e7f1ff !important; }
+  tr.row-selected:hover { background: #dbe9ff !important; }
+
+  /* ---- Color-coded Stat Cards ---- */
+  .stat-card-border-primary { border-left: 4px solid var(--primary-color) !important; }
+  .stat-card-border-info    { border-left: 4px solid #0dcaf0 !important; }
+  .stat-card-border-warning { border-left: 4px solid #ffc107 !important; }
+  .stat-card-border-danger  { border-left: 4px solid #dc3545 !important; }
+  .stat-card-border-success { border-left: 4px solid #198754 !important; }
+
+  /* ---- Needs Attention Section ---- */
+  .attention-section {
+    background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  .attention-section .attention-title {
+    font-weight: 700;
+    color: #92400e;
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .attention-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border-left: 3px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .attention-item:last-child { margin-bottom: 0; }
+  .attention-item.danger  { border-left-color: #dc3545; }
+  .attention-item.warning { border-left-color: #ffc107; }
+  .attention-item.info    { border-left-color: #0dcaf0; }
+  .attention-item .att-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+  }
+  .attention-item .att-count {
+    font-weight: 700;
+    min-width: 24px;
+    text-align: center;
+  }
+  .attention-item .btn {
+    font-size: 0.8rem;
+    padding: 4px 12px;
+    white-space: nowrap;
+  }
+
+  /* ---- Enhanced Empty States ---- */
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+  }
+  .empty-state i {
+    font-size: 56px;
+    color: #d1d5db;
+    display: block;
+    margin-bottom: 16px;
+  }
+  .empty-state h5 {
+    color: #374151;
+    margin-bottom: 8px;
+  }
+  .empty-state p {
+    color: #6b7280;
+    max-width: 360px;
+    margin: 0 auto 16px;
+  }
+
+  /* ---- Toast with Undo ---- */
+  .toast .btn-undo {
+    color: #fff;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    font-weight: 600;
+    padding: 0 4px;
+    cursor: pointer;
+    margin-left: 8px;
+  }
+  .toast .btn-undo:hover { opacity: 0.85; }
+
+  /* ---- Row hover expand preview ---- */
+  .row-expand-preview {
+    background: #f8f9fa;
+    padding: 12px 20px;
+    font-size: 0.85rem;
+    border-top: 1px dashed #dee2e6;
+    color: #4b5563;
+    animation: fadeIn 0.15s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- Checkbox in tables ---- */
+  .table .form-check-input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+  th .form-check-input { margin-top: 0; }
 </style>

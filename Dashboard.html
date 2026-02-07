@@ -18,10 +18,20 @@
     </div>
   </div>
 
+  <!-- Needs Your Attention Section (populated dynamically) -->
+  <div class="attention-section" id="attentionSection" style="display:none;">
+    <div class="attention-title">
+      <i class="bi bi-bell-fill"></i> Needs Your Attention
+    </div>
+    <div id="attentionItems">
+      <!-- Items populated by loadDashboard -->
+    </div>
+  </div>
+
   <!-- Stats Row -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable" onclick="navigateTo('work-papers')">
+      <div class="stat-card clickable stat-card-border-primary" onclick="navigateTo('work-papers')">
         <div class="stat-icon primary">
           <i class="bi bi-file-earmark-text"></i>
         </div>
@@ -32,7 +42,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable" onclick="navigateTo('work-papers', {status: 'Submitted'})">
+      <div class="stat-card clickable stat-card-border-info" onclick="navigateTo('work-papers', {status: 'Submitted'})">
         <div class="stat-icon info">
           <i class="bi bi-hourglass-split"></i>
         </div>
@@ -43,7 +53,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable" onclick="navigateTo('action-plans')">
+      <div class="stat-card clickable stat-card-border-warning" onclick="navigateTo('action-plans')">
         <div class="stat-icon warning">
           <i class="bi bi-list-check"></i>
         </div>
@@ -54,7 +64,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable" onclick="navigateTo('action-plans-overdue')">
+      <div class="stat-card clickable stat-card-border-danger" onclick="navigateTo('action-plans-overdue')">
         <div class="stat-icon danger">
           <i class="bi bi-exclamation-circle"></i>
         </div>
@@ -360,6 +370,9 @@ function renderDashboard(data) {
 
   // Due this week
   renderDueThisWeek(ap.dueThisWeek || data.dueThisWeek || 0);
+
+  // Render "Needs Your Attention" section
+  renderAttentionSection(pendingReviewCount, overdueCount, ap.dueThisWeek || data.dueThisWeek || 0, data);
 }
 
 function setRoleBasedMessage(roleCode) {
@@ -813,6 +826,81 @@ function renderDueThisWeek(count) {
     .catch(() => {
       list.innerHTML = '<li class="list-group-item text-center text-muted py-3">Could not load items</li>';
     });
+}
+
+function renderAttentionSection(pendingReview, overdue, dueThisWeek, data) {
+  var section = document.getElementById('attentionSection');
+  var container = document.getElementById('attentionItems');
+  if (!section || !container) return;
+
+  var items = [];
+  var role = window.currentUser?.role_code || '';
+
+  // Overdue action plans — everyone with overdue items should see this
+  if (overdue > 0) {
+    items.push({
+      level: 'danger',
+      icon: 'bi-exclamation-triangle-fill',
+      text: overdue + ' overdue action plan' + (overdue > 1 ? 's' : ''),
+      action: 'Review Now',
+      onclick: "navigateTo('action-plans-overdue')"
+    });
+  }
+
+  // Pending reviews — auditors + admin
+  if (pendingReview > 0 && ['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(role)) {
+    items.push({
+      level: 'warning',
+      icon: 'bi-hourglass-split',
+      text: pendingReview + ' work paper' + (pendingReview > 1 ? 's' : '') + ' pending your review',
+      action: 'Review',
+      onclick: "navigateTo('work-papers', {status: 'Submitted'})"
+    });
+  }
+
+  // Due this week
+  if (dueThisWeek > 0) {
+    items.push({
+      level: 'info',
+      icon: 'bi-calendar-event',
+      text: dueThisWeek + ' action plan' + (dueThisWeek > 1 ? 's' : '') + ' due this week',
+      action: 'View',
+      onclick: "navigateTo('action-plans')"
+    });
+  }
+
+  // My pending action plans — auditees
+  if (['AUDITEE', 'UNIT_MANAGER', 'JUNIOR_STAFF'].includes(role)) {
+    var myAP = data.myActionPlans || [];
+    var myPending = myAP.filter(function(ap) { return ap.status === 'Pending' || ap.status === 'Not Due'; });
+    if (myPending.length > 0) {
+      items.push({
+        level: 'warning',
+        icon: 'bi-clipboard2-check',
+        text: myPending.length + ' action plan' + (myPending.length > 1 ? 's' : '') + ' awaiting your response',
+        action: 'Respond',
+        onclick: "navigateTo('action-plans', {mine: true})"
+      });
+    }
+  }
+
+  if (items.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  container.innerHTML = items.map(function(item) {
+    return '<div class="attention-item ' + item.level + '">' +
+      '<div class="att-text">' +
+        '<i class="bi ' + item.icon + '"></i>' +
+        '<span>' + item.text + '</span>' +
+      '</div>' +
+      '<button class="btn btn-sm btn-outline-' + item.level + '" onclick="' + item.onclick + '">' +
+        item.action + ' <i class="bi bi-arrow-right ms-1"></i>' +
+      '</button>' +
+    '</div>';
+  }).join('');
 }
 
 function viewItem(type, id) {

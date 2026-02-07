@@ -131,9 +131,12 @@
             </div>
             <div class="col-12">
               <label class="form-label">Observation Description <span class="text-danger">*</span></label>
-              <textarea class="form-control" id="wpObsDesc" rows="4" required onchange="updateFormProgress()"
-                        placeholder="Describe the observation in detail, including what was found and why it matters..."></textarea>
-              <div class="form-text">Provide a comprehensive description of the audit finding.</div>
+              <textarea class="form-control" id="wpObsDesc" rows="4" required onchange="updateFormProgress()" oninput="updateCharCounter(this, 2000)"
+                        placeholder="Describe the observation in detail, including what was found and why it matters..." maxlength="2000"></textarea>
+              <div class="d-flex justify-content-between">
+                <div class="form-text">Provide a comprehensive description of the audit finding.</div>
+                <div class="char-counter" id="wpObsDesc-counter">0 / 2,000</div>
+              </div>
             </div>
             <div class="col-md-4">
               <label class="form-label">Risk Rating <span class="text-danger">*</span></label>
@@ -153,9 +156,12 @@
             </div>
             <div class="col-12">
               <label class="form-label">Recommendation <span class="text-danger">*</span></label>
-              <textarea class="form-control" id="wpRecommendation" rows="4" required onchange="updateFormProgress()"
-                        placeholder="Provide clear, actionable recommendations to address this observation..."></textarea>
-              <div class="form-text">Specify what actions should be taken to resolve this finding.</div>
+              <textarea class="form-control" id="wpRecommendation" rows="4" required onchange="updateFormProgress()" oninput="updateCharCounter(this, 2000)"
+                        placeholder="Provide clear, actionable recommendations to address this observation..." maxlength="2000"></textarea>
+              <div class="d-flex justify-content-between">
+                <div class="form-text">Specify what actions should be taken to resolve this finding.</div>
+                <div class="char-counter" id="wpRecommendation-counter">0 / 2,000</div>
+              </div>
             </div>
           </div>
 
@@ -277,8 +283,9 @@
           <!-- Management Response Section -->
           <div class="mb-4">
             <label class="form-label">Management Response</label>
-            <textarea class="form-control" id="wpManagementResponse" rows="4"
-                      placeholder="Enter management's response to the audit finding..."></textarea>
+            <textarea class="form-control" id="wpManagementResponse" rows="4" oninput="updateCharCounter(this, 2000)"
+                      placeholder="Enter management's response to the audit finding..." maxlength="2000"></textarea>
+            <div class="char-counter" id="wpManagementResponse-counter">0 / 2,000</div>
           </div>
 
           <!-- Action Plans Section -->
@@ -357,6 +364,10 @@
       <div class="d-flex gap-2 justify-content-between align-items-center">
         <div class="form-status">
           <span class="badge bg-secondary" id="formStatusBadge">Draft</span>
+          <span class="autosave-indicator" id="autosaveIndicator" style="display:none;">
+            <span class="dot"></span>
+            <span class="autosave-text">Draft saved</span>
+          </span>
           <span class="text-muted small ms-2" id="lastSavedText"></span>
         </div>
         <div class="d-flex gap-2">
@@ -1335,6 +1346,140 @@ function removeActionPlanEntry(button) {
 }
 
 // =============================================
+// CHARACTER COUNTER
+// =============================================
+
+function updateCharCounter(textarea, maxChars) {
+  var counter = document.getElementById(textarea.id + '-counter');
+  if (!counter) return;
+  var len = textarea.value.length;
+  counter.textContent = len.toLocaleString() + ' / ' + maxChars.toLocaleString();
+  counter.className = 'char-counter';
+  if (len >= maxChars) counter.classList.add('limit');
+  else if (len >= maxChars * 0.85) counter.classList.add('warn');
+}
+
+// =============================================
+// AUTO-SAVE DRAFTS (localStorage)
+// =============================================
+
+var autoSaveInterval = null;
+var autoSaveKey = 'wp_draft';
+
+function startAutoSave() {
+  if (autoSaveInterval) clearInterval(autoSaveInterval);
+  autoSaveInterval = setInterval(function() {
+    autoSaveDraft();
+  }, 30000); // Every 30 seconds
+}
+
+function stopAutoSave() {
+  if (autoSaveInterval) clearInterval(autoSaveInterval);
+  autoSaveInterval = null;
+}
+
+function autoSaveDraft() {
+  var formId = document.getElementById('wpFormId').value;
+  // Only auto-save new drafts or existing drafts, not already-submitted papers
+  var statusBadge = document.getElementById('formStatusBadge');
+  if (statusBadge && statusBadge.textContent !== 'Draft') return;
+
+  var key = autoSaveKey + (formId ? '_' + formId : '_new');
+  var data = getFormData();
+  data._savedAt = new Date().toISOString();
+
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    showAutoSaveStatus('saved');
+  } catch (e) {
+    showAutoSaveStatus('error');
+  }
+}
+
+function restoreDraft(formId) {
+  var key = autoSaveKey + (formId ? '_' + formId : '_new');
+  try {
+    var saved = localStorage.getItem(key);
+    if (!saved) return false;
+
+    var data = JSON.parse(saved);
+    var savedAt = data._savedAt ? new Date(data._savedAt) : null;
+    if (!savedAt) return false;
+
+    // Only restore if saved within last 24 hours
+    if (Date.now() - savedAt.getTime() > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(key);
+      return false;
+    }
+
+    return data;
+  } catch (e) {
+    return false;
+  }
+}
+
+function clearDraft(formId) {
+  var key = autoSaveKey + (formId ? '_' + formId : '_new');
+  localStorage.removeItem(key);
+}
+
+function showAutoSaveStatus(status) {
+  var indicator = document.getElementById('autosaveIndicator');
+  if (!indicator) return;
+  indicator.style.display = 'inline-flex';
+  indicator.className = 'autosave-indicator ' + status;
+  var textEl = indicator.querySelector('.autosave-text');
+  if (status === 'saving') textEl.textContent = 'Saving draft...';
+  else if (status === 'saved') textEl.textContent = 'Draft saved ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  else if (status === 'error') textEl.textContent = 'Auto-save failed';
+
+  // Fade after 5 seconds
+  setTimeout(function() {
+    indicator.style.opacity = '0.5';
+  }, 5000);
+  indicator.style.opacity = '1';
+}
+
+// =============================================
+// INLINE VALIDATION ON BLUR
+// =============================================
+
+function initInlineValidation() {
+  var requiredFields = ['wpYear', 'wpAffiliate', 'wpAuditArea', 'wpObsTitle', 'wpObsDesc', 'wpRiskRating', 'wpRecommendation'];
+  requiredFields.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('blur', function() {
+      validateFieldInline(this);
+    });
+    // Clear validation state on focus
+    el.addEventListener('focus', function() {
+      this.classList.remove('is-valid', 'is-invalid');
+      var fb = this.parentElement.querySelector('.validation-feedback');
+      if (fb) fb.remove();
+    });
+  });
+}
+
+function validateFieldInline(field) {
+  // Remove old feedback
+  var oldFb = field.parentElement.querySelector('.validation-feedback');
+  if (oldFb) oldFb.remove();
+
+  if (field.value && field.value.trim() !== '') {
+    field.classList.remove('is-invalid');
+    field.classList.add('is-valid');
+  } else if (field.hasAttribute('required')) {
+    field.classList.remove('is-valid');
+    field.classList.add('is-invalid');
+    var fb = document.createElement('div');
+    fb.className = 'validation-feedback invalid';
+    fb.textContent = 'This field is required';
+    field.parentElement.appendChild(fb);
+  }
+}
+
+// =============================================
 // FORM INITIALIZATION
 // =============================================
 
@@ -1364,6 +1509,12 @@ function initWorkPaperForm(params) {
   // Initial progress update
   setTimeout(updateFormProgress, 100);
 
+  // Setup inline validation on blur
+  initInlineValidation();
+
+  // Start auto-save for drafts
+  startAutoSave();
+
   // Reset state
   selectedResponsible = [];
   selectedCCRecipients = [];
@@ -1380,6 +1531,16 @@ function initWorkPaperForm(params) {
   } else {
     editingWorkPaper = null;
     document.getElementById('wpFormId').value = '';
+
+    // Check for auto-saved draft
+    var draft = restoreDraft(null);
+    if (draft && draft.observation_title) {
+      if (confirm('A previously auto-saved draft was found. Restore it?')) {
+        populateFormFromDraft(draft);
+      } else {
+        clearDraft(null);
+      }
+    }
   }
 }
 
@@ -1421,6 +1582,33 @@ function loadWorkPaperForEdit(id) {
       navigateTo('work-papers');
     }
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+}
+
+function populateFormFromDraft(data) {
+  if (data.year) document.getElementById('wpYear').value = data.year;
+  if (data.affiliate_code) document.getElementById('wpAffiliate').value = data.affiliate_code;
+  if (data.audit_area_id) { document.getElementById('wpAuditArea').value = data.audit_area_id; loadSubAreas(); }
+  if (data.work_paper_date) document.getElementById('wpDate').value = data.work_paper_date;
+  if (data.audit_period_from) document.getElementById('wpPeriodFrom').value = data.audit_period_from;
+  if (data.audit_period_to) document.getElementById('wpPeriodTo').value = data.audit_period_to;
+  if (data.observation_title) document.getElementById('wpObsTitle').value = data.observation_title;
+  if (data.observation_description) document.getElementById('wpObsDesc').value = data.observation_description;
+  if (data.risk_rating) { document.getElementById('wpRiskRating').value = data.risk_rating; updateRiskBadge(); }
+  if (data.risk_summary) document.getElementById('wpRiskSummary').value = data.risk_summary;
+  if (data.recommendation) document.getElementById('wpRecommendation').value = data.recommendation;
+  if (data.management_response) document.getElementById('wpManagementResponse').value = data.management_response;
+  if (data.control_objectives) document.getElementById('wpControlObjectives').value = data.control_objectives;
+  if (data.risk_description) document.getElementById('wpRiskDesc').value = data.risk_description;
+  if (data.test_objective) document.getElementById('wpTestObj').value = data.test_objective;
+  if (data.testing_steps) document.getElementById('wpTestSteps').value = data.testing_steps;
+  if (data.work_paper_ref) document.getElementById('wpWorkPaperRef').value = data.work_paper_ref;
+  updateFormProgress();
+  // Update char counters
+  ['wpObsDesc', 'wpRecommendation', 'wpManagementResponse'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && el.value) updateCharCounter(el, 2000);
+  });
+  showToast('Draft restored', 'info');
 }
 
 function populateForm(wp) {
@@ -1668,6 +1856,8 @@ async function saveWorkPaper(event) {
     }
 
     hideLoading();
+    stopAutoSave();
+    clearDraft(data.work_paper_id || null);
     showToast('Saved successfully', 'success');
     navigateTo('work-paper-view', { id: workPaperId });
 
@@ -1740,6 +1930,8 @@ async function saveAndSubmit() {
     }
 
     hideLoading();
+    stopAutoSave();
+    clearDraft(data.work_paper_id || null);
     showToast('Submitted successfully', 'success');
     navigateTo('work-papers');
 

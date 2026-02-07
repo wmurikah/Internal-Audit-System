@@ -467,6 +467,23 @@ function exportAPList(format) {
     });
 }
 
+function showAPSkeletonRows() {
+  var tbody = document.getElementById('apTableBody');
+  var html = '';
+  for (var i = 0; i < 6; i++) {
+    html += '<tr class="skeleton-row">' +
+      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
+      '<td><div class="skeleton-cell w-lg">&nbsp;</div></td>' +
+      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
+      '<td><div class="skeleton-cell w-md">&nbsp;</div></td>' +
+      '<td><div class="skeleton-cell w-md">&nbsp;</div></td>' +
+      '<td><div class="skeleton-cell w-badge">&nbsp;</div></td>' +
+      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
+    '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
 function loadActionPlans(filters) {
   filters = filters || {};
   const search = document.getElementById('apSearchInput')?.value || '';
@@ -474,10 +491,9 @@ function loadActionPlans(filters) {
   const owner = document.getElementById('apFilterOwner')?.value || '';
   const overdueOnly = document.getElementById('apFilterOverdue')?.checked || false;
 
-  showLoading('Loading action plans...');
+  showAPSkeletonRows();
   apiCall('getActionPlans', { filters: { ...filters, search, status, owner_id: owner, overdue_only: overdueOnly } })
     .then(r => {
-      hideLoading();
       if (r && r.success !== false && r.actionPlans) {
         actionPlansData = r.actionPlans;
         updateAPStats();
@@ -499,7 +515,6 @@ function loadActionPlans(filters) {
       }
     })
     .catch(err => {
-      hideLoading();
       console.error('Action plans error:', err);
       actionPlansData = [];
       updateAPStats();
@@ -524,7 +539,12 @@ function renderActionPlans() {
 
   const tbody = document.getElementById('apTableBody');
   if (!pageData.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5"><div class="empty-state"><i class="bi bi-list-check"></i><h5>No action plans found</h5></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5">' +
+      '<div class="empty-state">' +
+      '<i class="bi bi-clipboard2-check"></i>' +
+      '<h5>No action plans found</h5>' +
+      '<p>Try adjusting your filters or check back later for new assignments</p>' +
+      '</div></td></tr>';
     return;
   }
 
