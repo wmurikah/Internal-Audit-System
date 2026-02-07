@@ -140,13 +140,26 @@
     </div>
   </div>
 
+  <!-- Bulk Actions Toolbar -->
+  <div class="bulk-toolbar" id="wpBulkToolbar">
+    <div class="d-flex align-items-center gap-3">
+      <span class="bulk-count"><span id="wpSelectedCount">0</span> selected</span>
+      <button class="btn btn-sm btn-outline-light" onclick="exportSelectedWP()">
+        <i class="bi bi-download me-1"></i>Export Selected
+      </button>
+    </div>
+    <button class="btn btn-sm btn-outline-light" onclick="clearWPSelection()">
+      <i class="bi bi-x-circle me-1"></i>Clear
+    </button>
+  </div>
+
   <!-- Table View -->
   <div class="table-container" id="wpTableView">
     <div class="table-responsive">
       <table class="table table-hover table-clickable">
         <thead>
           <tr>
-            <th style="width:40px;"><input type="checkbox" class="form-check-input" id="wpSelectAll" onclick="toggleWPSelectAll(this)"></th>
+            <th style="width:40px;"><input type="checkbox" class="form-check-input" id="wpSelectAll" onchange="toggleWPSelectAll(this)"></th>
             <th onclick="sortWorkPapers('work_paper_id')" style="cursor:pointer;">ID <i class="bi bi-arrow-down-up ms-1 opacity-50"></i></th>
             <th onclick="sortWorkPapers('observation_title')" style="cursor:pointer;">Title <i class="bi bi-arrow-down-up ms-1 opacity-50"></i></th>
             <th>Affiliate</th>
@@ -158,12 +171,11 @@
           </tr>
         </thead>
         <tbody id="wpTableBody">
-          <tr>
-            <td colspan="9" class="text-center py-5">
-              <div class="spinner-border text-primary" role="status"></div>
-              <p class="mt-2 mb-0 text-muted">Loading work papers...</p>
-            </td>
-          </tr>
+          <tr class="skeleton-row"><td></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td></td></tr>
+          <tr class="skeleton-row"><td></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td></td></tr>
+          <tr class="skeleton-row"><td></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td></td></tr>
+          <tr class="skeleton-row"><td></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td></td></tr>
+          <tr class="skeleton-row"><td></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td></td></tr>
         </tbody>
       </table>
     </div>
@@ -462,7 +474,11 @@ function loadWorkPapers(filters) {
   // Update filter chips display
   updateFilterChips();
 
-  showWPSkeletonRows();
+  // Show skeleton loading rows
+  const tbody = document.getElementById('wpTableBody');
+  tbody.innerHTML = Array(5).fill(0).map(() =>
+    '<tr class="skeleton-row"><td></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td></td></tr>'
+  ).join('');
 
   apiCall('getWorkPapers', { filters: requestFilters })
     .then(result => {
@@ -527,11 +543,11 @@ function renderWPTable(data) {
     tbody.innerHTML = `
       <tr>
         <td colspan="9" class="text-center py-5">
-          <div class="empty-state">
-            <i class="bi bi-folder2-open"></i>
+          <div class="empty-state-enhanced">
+            <div class="empty-icon"><i class="bi bi-folder2-open"></i></div>
             <h5>No work papers found</h5>
-            <p class="text-muted">Try adjusting your filters or create a new work paper</p>
-            <button class="btn btn-primary mt-2" onclick="navigateTo('work-paper-form')">
+            <p>Try adjusting your filters or create a new work paper</p>
+            <button class="btn btn-primary" onclick="navigateTo('work-paper-form')">
               <i class="bi bi-plus-circle me-2"></i>New Work Paper
             </button>
           </div>
@@ -546,13 +562,12 @@ function renderWPTable(data) {
   data.forEach(wp => {
     const statusClass = getStatusClass(wp.status);
     const riskClass = getRiskClass(wp.risk_rating);
-    const isSelected = wpSelectedIds.has(wp.work_paper_id);
+    const isChecked = wpSelectedIds.has(wp.work_paper_id);
 
     html += `
-      <tr class="${isSelected ? 'row-selected' : ''}" onclick="viewWorkPaper('${wp.work_paper_id}')" style="cursor:pointer;">
+      <tr class="${isChecked ? 'row-selected' : ''}" onclick="viewWorkPaper('${wp.work_paper_id}')" style="cursor:pointer;">
         <td onclick="event.stopPropagation();">
-          <input type="checkbox" class="form-check-input wp-row-check" value="${wp.work_paper_id}"
-                 ${isSelected ? 'checked' : ''} onchange="toggleWPRowSelect(this)">
+          <input type="checkbox" class="form-check-input wp-row-check" value="${wp.work_paper_id}" ${isChecked ? 'checked' : ''} onchange="toggleWPRowSelect(this)">
         </td>
         <td><code>${wp.work_paper_id}</code></td>
         <td>
@@ -581,50 +596,44 @@ function renderWPTable(data) {
   });
 
   tbody.innerHTML = html;
-  updateBulkToolbar();
+  updateWPBulkToolbar();
 }
 
-// ---- Bulk Selection ----
-function toggleWPSelectAll(masterCheckbox) {
-  var checks = document.querySelectorAll('.wp-row-check');
-  checks.forEach(function(cb) {
-    cb.checked = masterCheckbox.checked;
-    var id = cb.value;
-    if (masterCheckbox.checked) wpSelectedIds.add(id);
-    else wpSelectedIds.delete(id);
-    cb.closest('tr').classList.toggle('row-selected', masterCheckbox.checked);
+function toggleWPSelectAll(checkbox) {
+  const checkboxes = document.querySelectorAll('.wp-row-check');
+  checkboxes.forEach(cb => {
+    cb.checked = checkbox.checked;
+    const id = cb.value;
+    if (checkbox.checked) {
+      wpSelectedIds.add(id);
+      cb.closest('tr').classList.add('row-selected');
+    } else {
+      wpSelectedIds.delete(id);
+      cb.closest('tr').classList.remove('row-selected');
+    }
   });
-  updateBulkToolbar();
+  updateWPBulkToolbar();
 }
 
 function toggleWPRowSelect(checkbox) {
-  var id = checkbox.value;
-  if (checkbox.checked) wpSelectedIds.add(id);
-  else wpSelectedIds.delete(id);
-  checkbox.closest('tr').classList.toggle('row-selected', checkbox.checked);
-
-  // Update master checkbox
-  var allChecks = document.querySelectorAll('.wp-row-check');
-  var master = document.getElementById('wpSelectAll');
-  if (master) master.checked = allChecks.length > 0 && wpSelectedIds.size >= allChecks.length;
-  updateBulkToolbar();
+  const id = checkbox.value;
+  if (checkbox.checked) {
+    wpSelectedIds.add(id);
+    checkbox.closest('tr').classList.add('row-selected');
+  } else {
+    wpSelectedIds.delete(id);
+    checkbox.closest('tr').classList.remove('row-selected');
+  }
+  // Update select all checkbox
+  const allChecks = document.querySelectorAll('.wp-row-check');
+  const selectAll = document.getElementById('wpSelectAll');
+  if (selectAll) selectAll.checked = allChecks.length > 0 && wpSelectedIds.size >= allChecks.length;
+  updateWPBulkToolbar();
 }
 
-function clearWPSelection() {
-  wpSelectedIds.clear();
-  document.querySelectorAll('.wp-row-check').forEach(function(cb) {
-    cb.checked = false;
-    cb.closest('tr').classList.remove('row-selected');
-  });
-  var master = document.getElementById('wpSelectAll');
-  if (master) master.checked = false;
-  updateBulkToolbar();
-}
-
-function updateBulkToolbar() {
-  var toolbar = document.getElementById('wpBulkToolbar');
-  var countEl = document.getElementById('wpBulkCount');
-  if (!toolbar) return;
+function updateWPBulkToolbar() {
+  const toolbar = document.getElementById('wpBulkToolbar');
+  const countEl = document.getElementById('wpSelectedCount');
   if (wpSelectedIds.size > 0) {
     toolbar.classList.add('show');
     countEl.textContent = wpSelectedIds.size;
@@ -633,45 +642,31 @@ function updateBulkToolbar() {
   }
 }
 
-function bulkExportSelected() {
-  if (wpSelectedIds.size === 0) return;
-  var selectedWPs = workPapersData.filter(function(wp) { return wpSelectedIds.has(wp.work_paper_id); });
-  // Build CSV from selected items
-  var headers = ['ID', 'Title', 'Affiliate', 'Risk Rating', 'Status', 'Prepared By', 'Date'];
-  var rows = selectedWPs.map(function(wp) {
-    return [wp.work_paper_id, wp.observation_title || '', wp.affiliate_code || '', wp.risk_rating || '',
-            wp.status || '', wp.prepared_by_name || '', wp.created_at || ''];
+function clearWPSelection() {
+  wpSelectedIds.clear();
+  document.querySelectorAll('.wp-row-check').forEach(cb => {
+    cb.checked = false;
+    cb.closest('tr').classList.remove('row-selected');
   });
-  var csv = headers.join(',') + '\n' + rows.map(function(r) {
-    return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
-  }).join('\n');
-
-  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  var link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = 'selected_work_papers.csv';
-  link.click();
-  showToast(selectedWPs.length + ' work papers exported', 'success');
+  const selectAll = document.getElementById('wpSelectAll');
+  if (selectAll) selectAll.checked = false;
+  updateWPBulkToolbar();
 }
 
-// ---- Skeleton Loading Rows ----
-function showWPSkeletonRows() {
-  var tbody = document.getElementById('wpTableBody');
-  var html = '';
-  for (var i = 0; i < 8; i++) {
-    html += '<tr class="skeleton-row">' +
-      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-lg">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-md">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-badge">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-badge">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-md">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-md">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
-    '</tr>';
-  }
-  tbody.innerHTML = html;
+function exportSelectedWP() {
+  if (wpSelectedIds.size === 0) return;
+  const selected = workPapersData.filter(wp => wpSelectedIds.has(wp.work_paper_id));
+  const csvData = selected.map(wp => ({
+    'ID': wp.work_paper_id,
+    'Title': wp.observation_title || '',
+    'Affiliate': wp.affiliate_code || '',
+    'Risk': wp.risk_rating || '',
+    'Status': wp.status || '',
+    'Prepared By': wp.prepared_by_name || '',
+    'Date': formatDate(wp.created_at)
+  }));
+  exportToCSV(csvData, 'work_papers_selected.csv');
+  showToast('Exported ' + selected.length + ' work papers', 'success');
 }
 
 function renderWPCards(data) {
@@ -826,26 +821,50 @@ function editWorkPaper(id) {
 }
 
 function deleteWorkPaper(id) {
-  if (!confirm('Are you sure you want to delete this work paper?')) {
-    return;
-  }
+  if (!confirm('Are you sure you want to delete this work paper?')) return;
 
-  showLoading('Deleting...');
+  // Optimistic removal from UI
+  const deletedWP = workPapersData.find(wp => wp.work_paper_id === id);
+  workPapersData = workPapersData.filter(wp => wp.work_paper_id !== id);
+  renderWorkPapers();
 
-  apiCall('deleteWorkPaper', { workPaperId: id })
-    .then(result => {
-      hideLoading();
-      if (result.success) {
-        showToast('Work paper deleted', 'success');
-        loadWorkPapers();
-      } else {
-        showToast(result.error || 'Failed to delete', 'danger');
+  let undone = false;
+
+  showToast('Work paper deleted', 'success', {
+    duration: 5000,
+    undoCallback: function() {
+      undone = true;
+      // Restore the item
+      if (deletedWP) {
+        workPapersData.push(deletedWP);
+        renderWorkPapers();
       }
-    })
-    .catch(err => {
-      hideLoading();
-      showToast('Error deleting work paper', 'danger');
-    });
+      showToast('Delete cancelled', 'info');
+    }
+  });
+
+  // Delay actual deletion to allow undo
+  setTimeout(function() {
+    if (undone) return;
+    apiCall('deleteWorkPaper', { workPaperId: id })
+      .then(result => {
+        if (!result.success) {
+          // Restore on failure
+          if (deletedWP) {
+            workPapersData.push(deletedWP);
+            renderWorkPapers();
+          }
+          showToast(result.error || 'Failed to delete', 'danger');
+        }
+      })
+      .catch(() => {
+        if (deletedWP) {
+          workPapersData.push(deletedWP);
+          renderWorkPapers();
+        }
+        showToast('Error deleting work paper', 'danger');
+      });
+  }, 5500);
 }
 
 function initWPFilters() {

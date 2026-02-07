@@ -131,12 +131,14 @@
             </div>
             <div class="col-12">
               <label class="form-label">Observation Description <span class="text-danger">*</span></label>
-              <textarea class="form-control" id="wpObsDesc" rows="4" required onchange="updateFormProgress()" oninput="updateCharCounter(this, 2000)"
-                        placeholder="Describe the observation in detail, including what was found and why it matters..." maxlength="2000"></textarea>
-              <div class="d-flex justify-content-between">
-                <div class="form-text">Provide a comprehensive description of the audit finding.</div>
-                <div class="char-counter" id="wpObsDesc-counter">0 / 2,000</div>
+              <div class="char-counter-wrap">
+                <textarea class="form-control" id="wpObsDesc" rows="4" required onchange="updateFormProgress()"
+                          oninput="updateCharCounter(this, 2000)"
+                          maxlength="2000"
+                          placeholder="Describe the observation in detail, including what was found and why it matters..."></textarea>
+                <div class="char-counter" id="wpObsDescCounter">0 / 2,000</div>
               </div>
+              <div class="form-text">Provide a comprehensive description of the audit finding.</div>
             </div>
             <div class="col-md-4">
               <label class="form-label">Risk Rating <span class="text-danger">*</span></label>
@@ -156,12 +158,14 @@
             </div>
             <div class="col-12">
               <label class="form-label">Recommendation <span class="text-danger">*</span></label>
-              <textarea class="form-control" id="wpRecommendation" rows="4" required onchange="updateFormProgress()" oninput="updateCharCounter(this, 2000)"
-                        placeholder="Provide clear, actionable recommendations to address this observation..." maxlength="2000"></textarea>
-              <div class="d-flex justify-content-between">
-                <div class="form-text">Specify what actions should be taken to resolve this finding.</div>
-                <div class="char-counter" id="wpRecommendation-counter">0 / 2,000</div>
+              <div class="char-counter-wrap">
+                <textarea class="form-control" id="wpRecommendation" rows="4" required onchange="updateFormProgress()"
+                          oninput="updateCharCounter(this, 2000)"
+                          maxlength="2000"
+                          placeholder="Provide clear, actionable recommendations to address this observation..."></textarea>
+                <div class="char-counter" id="wpRecommendationCounter">0 / 2,000</div>
               </div>
+              <div class="form-text">Specify what actions should be taken to resolve this finding.</div>
             </div>
           </div>
 
@@ -283,9 +287,13 @@
           <!-- Management Response Section -->
           <div class="mb-4">
             <label class="form-label">Management Response</label>
-            <textarea class="form-control" id="wpManagementResponse" rows="4" oninput="updateCharCounter(this, 2000)"
-                      placeholder="Enter management's response to the audit finding..." maxlength="2000"></textarea>
-            <div class="char-counter" id="wpManagementResponse-counter">0 / 2,000</div>
+            <div class="char-counter-wrap">
+              <textarea class="form-control" id="wpManagementResponse" rows="4"
+                        oninput="updateCharCounter(this, 2000)"
+                        maxlength="2000"
+                        placeholder="Enter management's response to the audit finding..."></textarea>
+              <div class="char-counter" id="wpManagementResponseCounter">0 / 2,000</div>
+            </div>
           </div>
 
           <!-- Action Plans Section -->
@@ -362,13 +370,13 @@
     <!-- Form Actions (Fixed at bottom) -->
     <div class="form-actions-bar">
       <div class="d-flex gap-2 justify-content-between align-items-center">
-        <div class="form-status">
+        <div class="form-status d-flex align-items-center gap-3">
           <span class="badge bg-secondary" id="formStatusBadge">Draft</span>
-          <span class="autosave-indicator" id="autosaveIndicator" style="display:none;">
+          <span class="text-muted small" id="lastSavedText"></span>
+          <span class="auto-save-indicator" id="autoSaveIndicator" style="display:none;">
             <span class="dot"></span>
-            <span class="autosave-text">Draft saved</span>
+            <span class="auto-save-text">Draft saved</span>
           </span>
-          <span class="text-muted small ms-2" id="lastSavedText"></span>
         </div>
         <div class="d-flex gap-2">
           <button type="button" class="btn btn-outline-secondary" onclick="navigateTo('work-papers')">
@@ -1346,137 +1354,160 @@ function removeActionPlanEntry(button) {
 }
 
 // =============================================
-// CHARACTER COUNTER
+// AUTO-SAVE, INLINE VALIDATION, CHARACTER COUNTERS
 // =============================================
 
-function updateCharCounter(textarea, maxChars) {
-  var counter = document.getElementById(textarea.id + '-counter');
+let autoSaveTimer = null;
+const DRAFT_KEY = 'hpias_wp_draft';
+
+function updateCharCounter(textarea, maxLen) {
+  const counter = document.getElementById(textarea.id + 'Counter');
   if (!counter) return;
-  var len = textarea.value.length;
-  counter.textContent = len.toLocaleString() + ' / ' + maxChars.toLocaleString();
+  const len = textarea.value.length;
+  counter.textContent = len.toLocaleString() + ' / ' + maxLen.toLocaleString();
   counter.className = 'char-counter';
-  if (len >= maxChars) counter.classList.add('limit');
-  else if (len >= maxChars * 0.85) counter.classList.add('warn');
-}
-
-// =============================================
-// AUTO-SAVE DRAFTS (localStorage)
-// =============================================
-
-var autoSaveInterval = null;
-var autoSaveKey = 'wp_draft';
-
-function startAutoSave() {
-  if (autoSaveInterval) clearInterval(autoSaveInterval);
-  autoSaveInterval = setInterval(function() {
-    autoSaveDraft();
-  }, 30000); // Every 30 seconds
-}
-
-function stopAutoSave() {
-  if (autoSaveInterval) clearInterval(autoSaveInterval);
-  autoSaveInterval = null;
-}
-
-function autoSaveDraft() {
-  var formId = document.getElementById('wpFormId').value;
-  // Only auto-save new drafts or existing drafts, not already-submitted papers
-  var statusBadge = document.getElementById('formStatusBadge');
-  if (statusBadge && statusBadge.textContent !== 'Draft') return;
-
-  var key = autoSaveKey + (formId ? '_' + formId : '_new');
-  var data = getFormData();
-  data._savedAt = new Date().toISOString();
-
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-    showAutoSaveStatus('saved');
-  } catch (e) {
-    showAutoSaveStatus('error');
+  if (len >= maxLen) {
+    counter.classList.add('over');
+  } else if (len >= maxLen * 0.85) {
+    counter.classList.add('warn');
   }
 }
 
-function restoreDraft(formId) {
-  var key = autoSaveKey + (formId ? '_' + formId : '_new');
-  try {
-    var saved = localStorage.getItem(key);
-    if (!saved) return false;
-
-    var data = JSON.parse(saved);
-    var savedAt = data._savedAt ? new Date(data._savedAt) : null;
-    if (!savedAt) return false;
-
-    // Only restore if saved within last 24 hours
-    if (Date.now() - savedAt.getTime() > 24 * 60 * 60 * 1000) {
-      localStorage.removeItem(key);
-      return false;
-    }
-
-    return data;
-  } catch (e) {
-    return false;
-  }
-}
-
-function clearDraft(formId) {
-  var key = autoSaveKey + (formId ? '_' + formId : '_new');
-  localStorage.removeItem(key);
-}
-
-function showAutoSaveStatus(status) {
-  var indicator = document.getElementById('autosaveIndicator');
-  if (!indicator) return;
-  indicator.style.display = 'inline-flex';
-  indicator.className = 'autosave-indicator ' + status;
-  var textEl = indicator.querySelector('.autosave-text');
-  if (status === 'saving') textEl.textContent = 'Saving draft...';
-  else if (status === 'saved') textEl.textContent = 'Draft saved ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-  else if (status === 'error') textEl.textContent = 'Auto-save failed';
-
-  // Fade after 5 seconds
-  setTimeout(function() {
-    indicator.style.opacity = '0.5';
-  }, 5000);
-  indicator.style.opacity = '1';
-}
-
-// =============================================
-// INLINE VALIDATION ON BLUR
-// =============================================
-
-function initInlineValidation() {
-  var requiredFields = ['wpYear', 'wpAffiliate', 'wpAuditArea', 'wpObsTitle', 'wpObsDesc', 'wpRiskRating', 'wpRecommendation'];
-  requiredFields.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('blur', function() {
+function setupInlineValidation() {
+  const requiredFields = document.querySelectorAll('#workPaperForm [required]');
+  requiredFields.forEach(field => {
+    field.addEventListener('blur', function() {
       validateFieldInline(this);
     });
-    // Clear validation state on focus
-    el.addEventListener('focus', function() {
-      this.classList.remove('is-valid', 'is-invalid');
-      var fb = this.parentElement.querySelector('.validation-feedback');
-      if (fb) fb.remove();
+    field.addEventListener('input', function() {
+      // Clear invalid state on typing
+      if (this.classList.contains('is-invalid-inline') && this.value.trim()) {
+        this.classList.remove('is-invalid-inline');
+        this.classList.add('is-valid-inline');
+        const fb = this.parentElement.querySelector('.validation-feedback');
+        if (fb) fb.remove();
+      }
     });
   });
 }
 
 function validateFieldInline(field) {
-  // Remove old feedback
-  var oldFb = field.parentElement.querySelector('.validation-feedback');
-  if (oldFb) oldFb.remove();
+  // Remove existing feedback
+  const existing = field.parentElement.querySelector('.validation-feedback');
+  if (existing) existing.remove();
 
-  if (field.value && field.value.trim() !== '') {
-    field.classList.remove('is-invalid');
-    field.classList.add('is-valid');
-  } else if (field.hasAttribute('required')) {
-    field.classList.remove('is-valid');
-    field.classList.add('is-invalid');
-    var fb = document.createElement('div');
+  if (!field.value || !field.value.trim()) {
+    field.classList.remove('is-valid-inline');
+    field.classList.add('is-invalid-inline');
+    const fb = document.createElement('div');
     fb.className = 'validation-feedback invalid';
     fb.textContent = 'This field is required';
     field.parentElement.appendChild(fb);
+  } else {
+    field.classList.remove('is-invalid-inline');
+    field.classList.add('is-valid-inline');
   }
+}
+
+function startAutoSave() {
+  if (autoSaveTimer) clearInterval(autoSaveTimer);
+  autoSaveTimer = setInterval(saveDraft, 30000);
+}
+
+function stopAutoSave() {
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer);
+    autoSaveTimer = null;
+  }
+}
+
+function saveDraft() {
+  // Don't auto-save if editing an existing work paper
+  if (document.getElementById('wpFormId').value) return;
+
+  const indicator = document.getElementById('autoSaveIndicator');
+  const dot = indicator?.querySelector('.dot');
+  const text = indicator?.querySelector('.auto-save-text');
+
+  // Show saving state
+  if (indicator) indicator.style.display = 'inline-flex';
+  if (dot) dot.classList.add('saving');
+  if (text) text.textContent = 'Saving draft...';
+
+  try {
+    const data = getFormData();
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      data: data,
+      savedAt: new Date().toISOString()
+    }));
+
+    // Show saved state
+    if (dot) dot.classList.remove('saving');
+    const now = new Date();
+    if (text) text.textContent = 'Draft saved ' + now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  } catch(e) {
+    if (dot) dot.classList.remove('saving');
+    if (text) text.textContent = 'Auto-save failed';
+  }
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+  const indicator = document.getElementById('autoSaveIndicator');
+  if (indicator) indicator.style.display = 'none';
+}
+
+function restoreDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return false;
+    const draft = JSON.parse(raw);
+    if (!draft || !draft.data) return false;
+
+    const savedAt = new Date(draft.savedAt);
+    const age = Date.now() - savedAt.getTime();
+    // Discard drafts older than 24 hours
+    if (age > 24 * 60 * 60 * 1000) {
+      clearDraft();
+      return false;
+    }
+    return draft;
+  } catch(e) {
+    return false;
+  }
+}
+
+function populateFormFromDraft(data) {
+  if (data.year) document.getElementById('wpYear').value = data.year;
+  if (data.affiliate_code) document.getElementById('wpAffiliate').value = data.affiliate_code;
+  if (data.audit_area_id) {
+    document.getElementById('wpAuditArea').value = data.audit_area_id;
+    loadSubAreas();
+    if (data.sub_area_id) setTimeout(() => document.getElementById('wpSubArea').value = data.sub_area_id, 100);
+  }
+  if (data.work_paper_date) document.getElementById('wpDate').value = data.work_paper_date;
+  if (data.audit_period_from) document.getElementById('wpPeriodFrom').value = data.audit_period_from;
+  if (data.audit_period_to) document.getElementById('wpPeriodTo').value = data.audit_period_to;
+  if (data.observation_title) document.getElementById('wpObsTitle').value = data.observation_title;
+  if (data.observation_description) document.getElementById('wpObsDesc').value = data.observation_description;
+  if (data.risk_rating) document.getElementById('wpRiskRating').value = data.risk_rating;
+  if (data.risk_summary) document.getElementById('wpRiskSummary').value = data.risk_summary;
+  if (data.recommendation) document.getElementById('wpRecommendation').value = data.recommendation;
+  if (data.management_response) document.getElementById('wpManagementResponse').value = data.management_response;
+  if (data.control_objectives) document.getElementById('wpControlObjectives').value = data.control_objectives;
+  if (data.risk_description) document.getElementById('wpRiskDesc').value = data.risk_description;
+  if (data.test_objective) document.getElementById('wpTestObj').value = data.test_objective;
+  if (data.testing_steps) document.getElementById('wpTestSteps').value = data.testing_steps;
+  if (data.work_paper_ref) document.getElementById('wpWorkPaperRef').value = data.work_paper_ref;
+
+  // Update char counters
+  ['wpObsDesc', 'wpRecommendation', 'wpManagementResponse'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.value) updateCharCounter(el, 2000);
+  });
+
+  updateFormProgress();
+  updateRiskBadge();
 }
 
 // =============================================
@@ -1525,6 +1556,10 @@ function initWorkPaperForm(params) {
   document.getElementById('noActionPlansMessage').style.display = 'block';
   document.getElementById('wpEvidenceFilesList').innerHTML = '';
 
+  // Setup inline validation and auto-save
+  setupInlineValidation();
+  startAutoSave();
+
   // Load existing work paper if editing
   if (params && params.id) {
     loadWorkPaperForEdit(params.id);
@@ -1532,13 +1567,17 @@ function initWorkPaperForm(params) {
     editingWorkPaper = null;
     document.getElementById('wpFormId').value = '';
 
-    // Check for auto-saved draft
-    var draft = restoreDraft(null);
-    if (draft && draft.observation_title) {
-      if (confirm('A previously auto-saved draft was found. Restore it?')) {
-        populateFormFromDraft(draft);
+    // Check for saved draft
+    const draft = restoreDraft();
+    if (draft && draft.data) {
+      const savedAt = new Date(draft.savedAt);
+      const timeStr = savedAt.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+      const dateStr = savedAt.toLocaleDateString();
+      if (confirm('A draft was saved on ' + dateStr + ' at ' + timeStr + '. Would you like to restore it?')) {
+        populateFormFromDraft(draft.data);
+        showToast('Draft restored', 'success');
       } else {
-        clearDraft(null);
+        clearDraft();
       }
     }
   }
@@ -1856,8 +1895,8 @@ async function saveWorkPaper(event) {
     }
 
     hideLoading();
+    clearDraft();
     stopAutoSave();
-    clearDraft(data.work_paper_id || null);
     showToast('Saved successfully', 'success');
     navigateTo('work-paper-view', { id: workPaperId });
 
@@ -1930,8 +1969,8 @@ async function saveAndSubmit() {
     }
 
     hideLoading();
+    clearDraft();
     stopAutoSave();
-    clearDraft(data.work_paper_id || null);
     showToast('Submitted successfully', 'success');
     navigateTo('work-papers');
 

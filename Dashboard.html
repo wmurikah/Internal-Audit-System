@@ -19,19 +19,12 @@
   </div>
 
   <!-- Needs Your Attention Section (populated dynamically) -->
-  <div class="attention-section" id="attentionSection" style="display:none;">
-    <div class="attention-title">
-      <i class="bi bi-bell-fill"></i> Needs Your Attention
-    </div>
-    <div id="attentionItems">
-      <!-- Items populated by loadDashboard -->
-    </div>
-  </div>
+  <div id="attentionSection"></div>
 
   <!-- Stats Row -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable stat-card-border-primary" onclick="navigateTo('work-papers')">
+      <div class="stat-card clickable border-primary" onclick="navigateTo('work-papers')">
         <div class="stat-icon primary">
           <i class="bi bi-file-earmark-text"></i>
         </div>
@@ -42,7 +35,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable stat-card-border-info" onclick="navigateTo('work-papers', {status: 'Submitted'})">
+      <div class="stat-card clickable border-info" onclick="navigateTo('work-papers', {status: 'Submitted'})">
         <div class="stat-icon info">
           <i class="bi bi-hourglass-split"></i>
         </div>
@@ -53,7 +46,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable stat-card-border-warning" onclick="navigateTo('action-plans')">
+      <div class="stat-card clickable border-warning" onclick="navigateTo('action-plans')">
         <div class="stat-icon warning">
           <i class="bi bi-list-check"></i>
         </div>
@@ -64,7 +57,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable stat-card-border-danger" onclick="navigateTo('action-plans-overdue')">
+      <div class="stat-card clickable border-danger" onclick="navigateTo('action-plans-overdue')">
         <div class="stat-icon danger">
           <i class="bi bi-exclamation-circle"></i>
         </div>
@@ -371,8 +364,8 @@ function renderDashboard(data) {
   // Due this week
   renderDueThisWeek(ap.dueThisWeek || data.dueThisWeek || 0);
 
-  // Render "Needs Your Attention" section
-  renderAttentionSection(pendingReviewCount, overdueCount, ap.dueThisWeek || data.dueThisWeek || 0, data);
+  // Needs Your Attention section
+  renderAttentionSection(data, wp, ap);
 }
 
 function setRoleBasedMessage(roleCode) {
@@ -828,56 +821,62 @@ function renderDueThisWeek(count) {
     });
 }
 
-function renderAttentionSection(pendingReview, overdue, dueThisWeek, data) {
-  var section = document.getElementById('attentionSection');
-  var container = document.getElementById('attentionItems');
-  if (!section || !container) return;
+function renderAttentionSection(data, wp, ap) {
+  const container = document.getElementById('attentionSection');
+  if (!container) return;
 
-  var items = [];
-  var role = window.currentUser?.role_code || '';
+  const role = window.currentUser?.role_code || '';
+  const items = [];
+  const overdueCount = ap.overdue || data.overdueCount || 0;
+  const pendingReviewCount = wp.submitted || data.pendingReview || 0;
+  const dueThisWeek = ap.dueThisWeek || data.dueThisWeek || 0;
 
-  // Overdue action plans — everyone with overdue items should see this
-  if (overdue > 0) {
+  // Overdue action plans - all roles
+  if (overdueCount > 0) {
     items.push({
-      level: 'danger',
+      type: 'danger',
       icon: 'bi-exclamation-triangle-fill',
-      text: overdue + ' overdue action plan' + (overdue > 1 ? 's' : ''),
-      action: 'Review Now',
+      title: overdueCount + ' overdue action plan' + (overdueCount > 1 ? 's' : ''),
+      subtitle: 'Require immediate attention',
+      action: 'View Overdue',
       onclick: "navigateTo('action-plans-overdue')"
     });
   }
 
-  // Pending reviews — auditors + admin
-  if (pendingReview > 0 && ['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(role)) {
+  // Pending reviews - auditor roles
+  if (['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(role) && pendingReviewCount > 0) {
     items.push({
-      level: 'warning',
+      type: 'info',
       icon: 'bi-hourglass-split',
-      text: pendingReview + ' work paper' + (pendingReview > 1 ? 's' : '') + ' pending your review',
-      action: 'Review',
+      title: pendingReviewCount + ' work paper' + (pendingReviewCount > 1 ? 's' : '') + ' awaiting review',
+      subtitle: 'Submitted and pending your review',
+      action: 'Review Now',
       onclick: "navigateTo('work-papers', {status: 'Submitted'})"
     });
   }
 
-  // Due this week
+  // Due this week - all roles
   if (dueThisWeek > 0) {
     items.push({
-      level: 'info',
+      type: 'warning',
       icon: 'bi-calendar-event',
-      text: dueThisWeek + ' action plan' + (dueThisWeek > 1 ? 's' : '') + ' due this week',
+      title: dueThisWeek + ' action plan' + (dueThisWeek > 1 ? 's' : '') + ' due this week',
+      subtitle: 'Coming up in the next 7 days',
       action: 'View',
       onclick: "navigateTo('action-plans')"
     });
   }
 
-  // My pending action plans — auditees
+  // Auditee pending responses
   if (['AUDITEE', 'UNIT_MANAGER', 'JUNIOR_STAFF'].includes(role)) {
-    var myAP = data.myActionPlans || [];
-    var myPending = myAP.filter(function(ap) { return ap.status === 'Pending' || ap.status === 'Not Due'; });
-    if (myPending.length > 0) {
+    const myPlans = data.myActionPlans || [];
+    const pendingResponse = myPlans.filter(p => p.status === 'Pending' || p.status === 'Not Due').length;
+    if (pendingResponse > 0) {
       items.push({
-        level: 'warning',
-        icon: 'bi-clipboard2-check',
-        text: myPending.length + ' action plan' + (myPending.length > 1 ? 's' : '') + ' awaiting your response',
+        type: 'info',
+        icon: 'bi-chat-left-dots',
+        title: pendingResponse + ' action plan' + (pendingResponse > 1 ? 's' : '') + ' awaiting your response',
+        subtitle: 'Update your implementation progress',
         action: 'Respond',
         onclick: "navigateTo('action-plans', {mine: true})"
       });
@@ -885,22 +884,29 @@ function renderAttentionSection(pendingReview, overdue, dueThisWeek, data) {
   }
 
   if (items.length === 0) {
-    section.style.display = 'none';
+    container.innerHTML = '';
     return;
   }
 
-  section.style.display = 'block';
-  container.innerHTML = items.map(function(item) {
-    return '<div class="attention-item ' + item.level + '">' +
-      '<div class="att-text">' +
-        '<i class="bi ' + item.icon + '"></i>' +
-        '<span>' + item.text + '</span>' +
-      '</div>' +
-      '<button class="btn btn-sm btn-outline-' + item.level + '" onclick="' + item.onclick + '">' +
-        item.action + ' <i class="bi bi-arrow-right ms-1"></i>' +
-      '</button>' +
-    '</div>';
-  }).join('');
+  let html = '<div class="attention-section">';
+  html += '<div class="attention-title"><i class="bi bi-bell-fill text-warning"></i> Needs Your Attention</div>';
+  items.forEach(item => {
+    html += `
+      <div class="attention-item ${item.type}">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi ${item.icon}" style="font-size:1.25rem;"></i>
+          <div class="attention-text">
+            <strong>${item.title}</strong>
+            <small>${item.subtitle}</small>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-outline-${item.type === 'danger' ? 'danger' : item.type === 'warning' ? 'warning' : 'primary'}" onclick="${item.onclick}">
+          ${item.action}
+        </button>
+      </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 function viewItem(type, id) {
