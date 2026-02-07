@@ -226,11 +226,20 @@ function updateActionPlan(actionPlanId, data, user) {
   
   const existing = getActionPlanRaw(actionPlanId);
   if (!existing) throw new Error('Action plan not found: ' + actionPlanId);
-  
+
   if (!canUserPerform(user, 'update', 'ACTION_PLAN', existing)) {
     throw new Error('Permission denied: Cannot update this action plan');
   }
-  
+
+  // Optimistic locking: reject if record was modified since user loaded it
+  if (data._loadedAt && existing.updated_at) {
+    var loadedTime = new Date(data._loadedAt).getTime();
+    var serverTime = new Date(existing.updated_at).getTime();
+    if (serverTime > loadedTime) {
+      throw new Error('This record was modified by another user. Please refresh and try again.');
+    }
+  }
+
   const now = new Date();
   const updates = { updated_at: now, updated_by: user.user_id };
   

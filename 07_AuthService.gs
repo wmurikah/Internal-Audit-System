@@ -55,9 +55,6 @@ function login(email, password) {
   const session = createSession(user);
   console.log('Session created:', new Date().getTime() - startTime, 'ms');
 
-  // 3b. Pre-warm caches for this user (permissions, role name, dropdowns)
-  prewarmUserCache(user);
-
   // 4. Get permissions + role name (from cache if warm, else fast lookup)
   const cache = CacheService.getScriptCache();
   let roleName = cache.get('role_name_' + user.role_code);
@@ -174,16 +171,12 @@ function getUserByEmailCached(email) {
   const cacheKey = 'user_email_' + normalizedEmail;
   const cache = CacheService.getScriptCache();
   
-  // Try cache first
+  // Try cache first — return WITHOUT _rowIndex (saves full sheet scan)
+  // _rowIndex is resolved lazily only when updates need it
   const cached = cache.get(cacheKey);
   if (cached) {
     try {
-      const user = JSON.parse(cached);
-      // Still need to get _rowIndex for updates
-      if (!user._rowIndex) {
-        user._rowIndex = findUserRowIndex(user.user_id);
-      }
-      return user;
+      return JSON.parse(cached);
     } catch (e) {
       console.warn('Cache parse error:', e);
     }
@@ -387,14 +380,10 @@ function getUserByIdCached(userId) {
   
   if (cached) {
     try {
-      const user = JSON.parse(cached);
-      if (!user._rowIndex) {
-        user._rowIndex = findUserRowIndex(userId);
-      }
-      return user;
+      return JSON.parse(cached);
     } catch (e) {}
   }
-  
+
   // Fall back to database
   const user = getUserById(userId);
   

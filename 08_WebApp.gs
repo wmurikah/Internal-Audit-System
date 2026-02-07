@@ -769,38 +769,41 @@ function apiCall(action, data) {
 
     let user = null;
 
-    // FIXED: Try session token FIRST, then fall back to Google session
-    if (data.sessionToken) {
-      const sessionResult = validateSession(data.sessionToken);
+    // SPEED: Skip all auth lookups for public actions that don't need a user
+    if (!publicActions.includes(action)) {
+      // Try session token FIRST, then fall back to Google session
+      if (data.sessionToken) {
+        const sessionResult = validateSession(data.sessionToken);
 
-      if (sessionResult.valid) {
-        user = getUserByIdCached(sessionResult.user.user_id);
+        if (sessionResult.valid) {
+          user = getUserByIdCached(sessionResult.user.user_id);
 
-        if (!user) {
-          user = getUserByEmailCached(sessionResult.user.email);
+          if (!user) {
+            user = getUserByEmailCached(sessionResult.user.email);
+          }
+
+          if (!user) {
+            user = sessionResult.user;
+            user._fromSession = true;
+          }
+
+          console.log('User from session token:', user.email, 'role:', user.role_code);
+        } else {
+          console.log('Session token invalid:', sessionResult.error);
         }
+      }
 
-        if (!user) {
-          user = sessionResult.user;
-          user._fromSession = true;
+      // Only fall back to Google session if no valid session token
+      if (!user) {
+        user = getCurrentUser();
+        if (user) {
+          console.log('User from Google session:', user.email, 'role:', user.role_code);
         }
-        
-        console.log('User from session token:', user.email, 'role:', user.role_code);
-      } else {
-        console.log('Session token invalid:', sessionResult.error);
       }
-    }
-    
-    // Only fall back to Google session if no valid session token
-    if (!user) {
-      user = getCurrentUser();
-      if (user) {
-        console.log('User from Google session:', user.email, 'role:', user.role_code);
-      }
-    }
 
-    if (!publicActions.includes(action) && !user) {
-      return { success: false, error: 'Authentication required', requireLogin: true };
+      if (!user) {
+        return { success: false, error: 'Authentication required', requireLogin: true };
+      }
     }
 
     if (action === 'testConnection') {
