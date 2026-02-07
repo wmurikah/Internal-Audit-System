@@ -105,6 +105,27 @@
     --font-size-code: 0.8rem;
   }
 
+  /* ============================================
+     GOOGLE APPS SCRIPT BANNER SUPPRESSION
+     Hides the "Created by Google Apps Script user" banner
+     injected by Google at deployment time.
+     ============================================ */
+  body > div#docs-editor-container,
+  body > div[style*="background-color: rgb(255, 255, 224)"],
+  body > div[style*="background-color:#ffe0"],
+  body > div.apps-script-banner,
+  #docs-notice,
+  body > div:first-child:not(.app-container):not(.loading-overlay):not(#forcePasswordOverlay):not(#toastContainer):not(.sidebar-overlay) {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    top: -9999px !important;
+  }
+
   * {
     margin: 0;
     padding: 0;

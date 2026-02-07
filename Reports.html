@@ -1,106 +1,984 @@
-<!-- Reports Page -->
+<!-- Reports Page - Comprehensive Internal Audit Reporting Module -->
 <div class="reports-page">
-  <div class="row g-4">
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body text-center">
-          <i class="bi bi-file-earmark-bar-graph display-4 text-primary mb-3"></i>
-          <h5>Audit Summary Report</h5>
-          <p class="text-muted">Overview of work papers and action plans by affiliate</p>
-          <button class="btn btn-primary" onclick="generateReport('summary')">Generate</button>
+
+  <!-- Report Header & Filters -->
+  <div class="card mb-3">
+    <div class="card-body py-3">
+      <div class="d-flex flex-wrap align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+          <i class="bi bi-funnel text-primary"></i>
+          <strong class="small text-uppercase text-muted">Filters</strong>
         </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body text-center">
-          <i class="bi bi-clock-history display-4 text-warning mb-3"></i>
-          <h5>Action Plan Aging</h5>
-          <p class="text-muted">Action plans grouped by overdue status</p>
-          <button class="btn btn-warning" onclick="generateReport('aging')">Generate</button>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body text-center">
-          <i class="bi bi-shield-exclamation display-4 text-danger mb-3"></i>
-          <h5>Risk Summary</h5>
-          <p class="text-muted">Findings grouped by risk rating</p>
-          <button class="btn btn-danger" onclick="generateReport('risk')">Generate</button>
+        <select class="form-select form-select-sm" id="rptFilterYear" style="max-width:120px;" onchange="loadReportData()">
+          <option value="">All Years</option>
+        </select>
+        <select class="form-select form-select-sm" id="rptFilterAffiliate" style="max-width:180px;" onchange="loadReportData()">
+          <option value="">All Affiliates</option>
+        </select>
+        <select class="form-select form-select-sm" id="rptFilterAuditArea" style="max-width:200px;" onchange="loadReportData()">
+          <option value="">All Audit Areas</option>
+        </select>
+        <div class="ms-auto d-flex gap-2 flex-shrink-0">
+          <div class="dropdown">
+            <button class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown">
+              <i class="bi bi-download me-1"></i>Export
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#" onclick="exportReportPDF()"><i class="bi bi-file-earmark-pdf me-2 text-danger"></i>Export as PDF</a></li>
+              <li><a class="dropdown-item" href="#" onclick="exportReportWord()"><i class="bi bi-file-earmark-word me-2 text-primary"></i>Export as Word</a></li>
+              <li><a class="dropdown-item" href="#" onclick="exportReportExcel()"><i class="bi bi-file-earmark-excel me-2 text-success"></i>Export as Excel</a></li>
+            </ul>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadReportData()" title="Refresh">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card mt-4" id="reportResults" style="display:none;">
-    <div class="card-header d-flex justify-content-between">
-      <span id="reportTitle">Report</span>
-      <button class="btn btn-sm btn-outline-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+  <!-- Report Tabs -->
+  <ul class="nav nav-tabs nav-tabs-custom mb-0" id="reportTabs">
+    <li class="nav-item">
+      <a class="nav-link active" href="#" data-tab="executive" onclick="switchReportTab(event, 'executive')">
+        <i class="bi bi-speedometer2 me-1"></i>Executive Summary
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-tab="findings" onclick="switchReportTab(event, 'findings')">
+        <i class="bi bi-search me-1"></i>Findings
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-tab="actionplans" onclick="switchReportTab(event, 'actionplans')">
+        <i class="bi bi-list-check me-1"></i>Action Plans
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-tab="risk" onclick="switchReportTab(event, 'risk')">
+        <i class="bi bi-shield-exclamation me-1"></i>Risk Assessment
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-tab="scorecard" onclick="switchReportTab(event, 'scorecard')">
+        <i class="bi bi-graph-up me-1"></i>Performance Scorecard
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-tab="aging" onclick="switchReportTab(event, 'aging')">
+        <i class="bi bi-clock-history me-1"></i>Aging Analysis
+      </a>
+    </li>
+  </ul>
+
+  <!-- Report Content Area -->
+  <div class="card card-tabs-report" id="reportContentArea">
+    <div class="card-body" id="reportBody">
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-3 text-muted">Loading report data...</p>
+      </div>
     </div>
-    <div class="card-body" id="reportContent"></div>
   </div>
 </div>
 
-<script>
-function loadReports() {
-  // Auto-generate summary report on page load for quick overview
-  generateReport('summary');
+<!-- Print-only report header (hidden in normal view) -->
+<div id="printReportHeader" class="d-none">
+  <div style="text-align:center; margin-bottom:24px; border-bottom:3px solid #1a365d; padding-bottom:16px;">
+    <h2 style="color:#1a365d; margin:0;">Hass Petroleum Internal Audit System</h2>
+    <h4 style="color:#6b7280; margin:4px 0 0;" id="printReportTitle">Audit Report</h4>
+    <p style="color:#9ca3af; font-size:12px; margin:4px 0 0;" id="printReportDate"></p>
+  </div>
+</div>
+
+<style>
+/* Report-specific styles */
+.card-tabs-report {
+  border-radius: 0 0 12px 12px;
+  border-top: none;
 }
 
-function generateReport(type) {
-  showLoading('Generating report...');
-  let action = type === 'summary' ? 'getAuditSummaryReport' : type === 'aging' ? 'getActionPlanAgingReport' : 'getRiskSummaryReport';
-  let reportTitle = type === 'summary' ? 'Audit Summary Report' : type === 'aging' ? 'Action Plan Aging Report' : 'Risk Summary Report';
+/* Score gauge */
+.score-gauge {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto;
+}
+.score-gauge svg { width: 100%; height: 100%; }
+.score-gauge-label {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+.score-gauge-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.score-gauge-text {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
 
-  apiCall(action, { filters: {} })
-    .then(r => {
+/* KPI cards */
+.kpi-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  transition: transform 0.15s ease;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: var(--box-shadow-hover); }
+.kpi-value { font-size: 1.75rem; font-weight: 700; color: var(--primary-color); }
+.kpi-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+.kpi-sublabel { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+
+/* Progress bars */
+.progress-bar-labeled { position: relative; height: 24px; border-radius: 6px; overflow: hidden; background: #e9ecef; }
+.progress-bar-fill { height: 100%; border-radius: 6px; transition: width 0.6s ease; display: flex; align-items: center; padding: 0 8px; }
+.progress-bar-fill span { font-size: 0.7rem; font-weight: 600; color: #fff; white-space: nowrap; }
+
+/* Score badge */
+.score-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+.score-badge.effective { background: #dcfce7; color: #166534; }
+.score-badge.needs-improvement { background: #fef3c7; color: #92400e; }
+.score-badge.ineffective { background: #fee2e2; color: #991b1b; }
+
+/* Risk heat cell */
+.risk-heat { padding: 8px; text-align: center; font-weight: 600; font-size: 0.85rem; border-radius: 4px; }
+.risk-heat.extreme { background: rgba(220,53,69,0.15); color: #dc3545; }
+.risk-heat.high { background: rgba(253,126,20,0.15); color: #fd7e14; }
+.risk-heat.medium { background: rgba(255,193,7,0.15); color: #b45309; }
+.risk-heat.low { background: rgba(40,167,69,0.15); color: #28a745; }
+.risk-heat.zero { background: #f9fafb; color: #d1d5db; }
+
+/* Aging bucket */
+.aging-bucket { border-radius: 10px; padding: 16px; text-align: center; cursor: pointer; transition: var(--transition); border: 1px solid var(--border-color); }
+.aging-bucket:hover { transform: translateY(-2px); box-shadow: var(--box-shadow-hover); }
+.aging-bucket .bucket-count { font-size: 1.5rem; font-weight: 700; }
+.aging-bucket .bucket-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Report methodology */
+.methodology-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.methodology-box h6 { color: var(--primary-color); font-size: 0.85rem; margin-bottom: 8px; }
+.methodology-box ul { margin: 0; padding-left: 16px; }
+.methodology-box li { margin-bottom: 2px; }
+
+/* Chart containers for reports */
+.report-chart { position: relative; height: 260px; width: 100%; }
+.report-chart-sm { position: relative; height: 200px; width: 100%; }
+
+/* Print styles */
+@media print {
+  .reports-page .card:first-child,
+  .nav-tabs-custom,
+  .no-print { display: none !important; }
+  #printReportHeader { display: block !important; }
+  .card-tabs-report { border: none; box-shadow: none; }
+  .kpi-card { border: 1px solid #ddd; break-inside: avoid; }
+  .card { break-inside: avoid; box-shadow: none !important; }
+  .report-chart, .report-chart-sm { height: 200px; }
+}
+</style>
+
+<script>
+// ============================================================
+// REPORTS MODULE - Professional Internal Audit Reporting
+// ============================================================
+
+let reportData = null;
+let reportCharts = {};
+let currentReportTab = 'executive';
+
+function loadReports() {
+  initReportFilters();
+  loadReportData();
+}
+
+function initReportFilters() {
+  // Year filter
+  var yearSelect = document.getElementById('rptFilterYear');
+  yearSelect.innerHTML = '<option value="">All Years</option>';
+  var currentYear = new Date().getFullYear();
+  for (var y = currentYear; y >= currentYear - 4; y--) {
+    yearSelect.innerHTML += '<option value="' + y + '">' + y + '</option>';
+  }
+
+  // Affiliate filter
+  var affSelect = document.getElementById('rptFilterAffiliate');
+  affSelect.innerHTML = '<option value="">All Affiliates</option>';
+  (window.appDropdowns?.affiliates || []).forEach(function(a) {
+    affSelect.innerHTML += '<option value="' + a.code + '">' + escapeHtml(a.display || a.code) + '</option>';
+  });
+
+  // Audit Area filter
+  var areaSelect = document.getElementById('rptFilterAuditArea');
+  areaSelect.innerHTML = '<option value="">All Audit Areas</option>';
+  (window.appDropdowns?.auditAreas || []).forEach(function(a) {
+    areaSelect.innerHTML += '<option value="' + a.id + '">' + escapeHtml(a.display || a.name) + '</option>';
+  });
+}
+
+function getReportFilters() {
+  var filters = {};
+  var year = document.getElementById('rptFilterYear')?.value;
+  var affiliate = document.getElementById('rptFilterAffiliate')?.value;
+  var auditArea = document.getElementById('rptFilterAuditArea')?.value;
+  if (year) filters.year = year;
+  if (affiliate) filters.affiliate_code = affiliate;
+  if (auditArea) filters.audit_area_id = auditArea;
+  return filters;
+}
+
+function loadReportData() {
+  showLoading('Generating comprehensive report...');
+  var filters = getReportFilters();
+  apiCall('getComprehensiveReportData', { filters: filters })
+    .then(function(r) {
       hideLoading();
-      if (r && r.success !== false && r.report) {
-        document.getElementById('reportResults').style.display = 'block';
-        document.getElementById('reportTitle').textContent = reportTitle;
-        renderReport(type, r.report);
+      if (r && r.success !== false && r.generatedAt) {
+        reportData = r;
+        renderCurrentTab();
       } else {
-        console.error('Report error:', r?.error);
-        // Show empty report with error message
-        document.getElementById('reportResults').style.display = 'block';
-        document.getElementById('reportTitle').textContent = reportTitle;
-        document.getElementById('reportContent').innerHTML = `
-          <div class="text-center py-4">
-            <i class="bi bi-exclamation-circle text-warning display-4"></i>
-            <p class="mt-3">${r?.error || 'Unable to generate report. Please try again.'}</p>
-          </div>
-        `;
-        if (r?.error) showToast(r.error, 'warning');
+        document.getElementById('reportBody').innerHTML =
+          '<div class="text-center py-5"><i class="bi bi-exclamation-circle text-warning" style="font-size:3rem;"></i>' +
+          '<p class="mt-3">' + escapeHtml(r?.error || 'Unable to generate report. Please try again.') + '</p></div>';
       }
     })
-    .catch(err => {
+    .catch(function(err) {
       hideLoading();
       console.error('Report error:', err);
       showToast('Error generating report', 'danger');
     });
 }
 
-function renderReport(type, data) {
-  const content = document.getElementById('reportContent');
-  let html = `<p class="text-muted">Generated: ${formatDate(data.generatedAt)}</p>`;
-  
-  if (type === 'summary') {
-    html += `<h5>Summary</h5><p>Total Work Papers: ${data.summary?.totalWorkPapers || 0} | Total Action Plans: ${data.summary?.totalActionPlans || 0}</p>`;
-    html += '<h5>By Affiliate</h5><table class="table"><thead><tr><th>Affiliate</th><th>Work Papers</th><th>Action Plans</th><th>Overdue</th></tr></thead><tbody>';
-    (data.byAffiliate || []).forEach(a => {
-      html += `<tr><td>${a.affiliate_code}</td><td>${a.workPapers?.total || 0}</td><td>${a.actionPlans?.total || 0}</td><td>${a.actionPlans?.overdue || 0}</td></tr>`;
-    });
-    html += '</tbody></table>';
-  } else if (type === 'aging') {
-    html += `<h5>Summary</h5><p>Current: ${data.summary?.current || 0} | Overdue 1-30: ${data.summary?.overdue1to30 || 0} | 31-60: ${data.summary?.overdue31to60 || 0} | 61-90: ${data.summary?.overdue61to90 || 0} | 90+: ${data.summary?.overdue90plus || 0}</p>`;
-  } else {
-    html += '<h5>By Risk Level</h5><table class="table"><thead><tr><th>Risk</th><th>Work Papers</th><th>Open APs</th><th>Closed APs</th></tr></thead><tbody>';
-    (data.byRisk || []).forEach(r => {
-      html += `<tr><td><span class="badge ${getRiskClass(r.level)}">${r.level}</span></td><td>${r.count}</td><td>${r.openActionPlans}</td><td>${r.closedActionPlans}</td></tr>`;
-    });
-    html += '</tbody></table>';
+function switchReportTab(event, tab) {
+  event.preventDefault();
+  currentReportTab = tab;
+  document.querySelectorAll('#reportTabs .nav-link').forEach(function(l) {
+    l.classList.toggle('active', l.dataset.tab === tab);
+  });
+  renderCurrentTab();
+}
+
+function renderCurrentTab() {
+  if (!reportData) return;
+  // Destroy existing charts before rendering new content
+  Object.keys(reportCharts).forEach(function(k) {
+    if (reportCharts[k]) { reportCharts[k].destroy(); delete reportCharts[k]; }
+  });
+
+  var body = document.getElementById('reportBody');
+  switch (currentReportTab) {
+    case 'executive':  renderExecutiveSummary(body); break;
+    case 'findings':   renderFindings(body); break;
+    case 'actionplans':renderActionPlans(body); break;
+    case 'risk':       renderRiskAssessment(body); break;
+    case 'scorecard':  renderPerformanceScorecard(body); break;
+    case 'aging':      renderAgingAnalysis(body); break;
+    default:           renderExecutiveSummary(body);
   }
-  content.innerHTML = html;
+}
+
+// ============================================================
+// EXECUTIVE SUMMARY
+// ============================================================
+function renderExecutiveSummary(container) {
+  var e = reportData.executive;
+  var scoreColor = e.overallScore >= 80 ? '#10b981' : e.overallScore >= 60 ? '#f59e0b' : '#ef4444';
+  var scoreLabel = e.overallScore >= 80 ? 'Good' : e.overallScore >= 60 ? 'Fair' : 'Attention Needed';
+
+  var html = '<div class="row g-3 mb-4">';
+  // Overall score gauge
+  html += '<div class="col-lg-3 col-md-6"><div class="kpi-card h-100">' +
+    buildScoreGauge(e.overallScore, scoreColor) +
+    '<div class="kpi-label mt-2">Overall Audit Health</div>' +
+    '<div class="kpi-sublabel">' + escapeHtml(scoreLabel) + '</div></div></div>';
+  // KPIs
+  html += buildKPI('col-lg-3 col-md-6', e.totalFindings, 'Total Findings', '', 'bi-search');
+  html += buildKPI('col-lg-3 col-md-6', e.totalActionPlans, 'Action Plans', e.closedActionPlans + ' closed', 'bi-list-check');
+  html += buildKPI('col-lg-3 col-md-6', e.overdueActionPlans, 'Overdue Items', '', 'bi-exclamation-triangle', e.overdueActionPlans > 0 ? 'var(--danger-color)' : 'var(--success-color)');
+  html += '</div>';
+
+  // Second row: rates
+  html += '<div class="row g-3 mb-4">';
+  html += buildKPI('col-md-3', e.implementationRate + '%', 'Implementation Rate', '', 'bi-check-circle');
+  html += buildKPI('col-md-3', e.onTimeClosureRate + '%', 'On-Time Closure', '', 'bi-clock');
+  html += buildKPI('col-md-3', e.avgRiskScore + '/100', 'Avg Risk Score', riskScoreLabel(e.avgRiskScore), 'bi-shield');
+  var riskHigh = (e.riskDistribution.Extreme || 0) + (e.riskDistribution.High || 0);
+  html += buildKPI('col-md-3', riskHigh, 'High/Extreme Findings', 'of ' + e.totalFindings + ' total', 'bi-exclamation-circle', riskHigh > 0 ? '#fd7e14' : '#10b981');
+  html += '</div>';
+
+  // Charts row
+  html += '<div class="row g-3 mb-4">';
+  html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Risk Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptRiskPie"></canvas></div></div></div></div>';
+  html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Action Plan Status</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAPStatus"></canvas></div></div></div></div>';
+  html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Findings by Affiliate</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAffBar"></canvas></div></div></div></div>';
+  html += '</div>';
+
+  // Trend chart
+  html += '<div class="card mb-4"><div class="card-header">12-Month Trend</div><div class="card-body"><div class="report-chart"><canvas id="rptTrendLine"></canvas></div></div></div>';
+
+  // Affiliate summary table
+  html += '<div class="card"><div class="card-header">Performance by Affiliate</div><div class="card-body p-0">' +
+    '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
+    '<th>Affiliate</th><th class="text-center">Findings</th><th class="text-center">Action Plans</th><th class="text-center">Closed</th><th class="text-center">Overdue</th><th class="text-center">Impl. Rate</th><th class="text-center">Score</th></tr></thead><tbody>';
+  (reportData.byAffiliate || []).sort(function(a,b){ return b.score - a.score; }).forEach(function(a) {
+    html += '<tr><td><strong>' + escapeHtml(a.name || a.code) + '</strong></td>' +
+      '<td class="text-center">' + a.findings + '</td>' +
+      '<td class="text-center">' + a.actionPlans + '</td>' +
+      '<td class="text-center">' + a.closedAPs + '</td>' +
+      '<td class="text-center">' + (a.overdueAPs > 0 ? '<span class="text-danger fw-bold">' + a.overdueAPs + '</span>' : '0') + '</td>' +
+      '<td class="text-center">' + buildMiniProgress(a.implementationRate) + '</td>' +
+      '<td class="text-center">' + buildScoreBadge(a.score) + '</td></tr>';
+  });
+  html += '</tbody></table></div></div></div>';
+
+  // Methodology
+  html += buildMethodologyBox();
+
+  container.innerHTML = html;
+
+  // Render charts
+  setTimeout(function() {
+    renderRiskPieChart('rptRiskPie', e.riskDistribution);
+    renderAPStatusChart('rptAPStatus', reportData.apStatusDistribution);
+    renderAffiliateBarChart('rptAffBar', reportData.byAffiliate);
+    renderTrendChart('rptTrendLine', reportData.trends);
+  }, 50);
+}
+
+// ============================================================
+// DETAILED FINDINGS
+// ============================================================
+function renderFindings(container) {
+  var findings = reportData.findings || [];
+  var html = '<div class="d-flex justify-content-between align-items-center mb-3">' +
+    '<h6 class="mb-0"><i class="bi bi-search me-2 text-primary"></i>Detailed Findings (' + findings.length + ')</h6></div>';
+
+  if (findings.length === 0) {
+    html += '<div class="text-center py-5 text-muted"><i class="bi bi-check-circle" style="font-size:3rem;"></i><p class="mt-2">No findings match the current filters.</p></div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  html += '<div class="table-responsive"><table class="table table-sm" id="findingsTable"><thead><tr>' +
+    '<th style="width:60px;">Risk</th><th>Finding</th><th>Affiliate</th><th>Audit Area</th><th>Status</th><th class="text-center">APs</th><th class="text-center">Overdue</th></tr></thead><tbody>';
+
+  findings.forEach(function(f) {
+    var apProgress = f.actionPlansTotal > 0 ? Math.round((f.actionPlansClosed / f.actionPlansTotal) * 100) : 0;
+    html += '<tr onclick="navigateTo(\'work-paper-view\', {id:\'' + f.id + '\'})" style="cursor:pointer;">' +
+      '<td><span class="badge ' + getRiskClass(f.riskRating) + '">' + escapeHtml(f.riskRating || 'N/A') + '</span></td>' +
+      '<td><strong>' + escapeHtml(f.title) + '</strong><br><small class="text-muted">' + escapeHtml(f.description) + '</small></td>' +
+      '<td>' + escapeHtml(f.affiliate) + '</td>' +
+      '<td>' + escapeHtml(f.auditArea) + '</td>' +
+      '<td><span class="badge ' + getStatusClass(f.status) + '">' + escapeHtml(f.status) + '</span></td>' +
+      '<td class="text-center"><span title="' + f.actionPlansClosed + '/' + f.actionPlansTotal + ' closed">' + f.actionPlansClosed + '/' + f.actionPlansTotal + '</span></td>' +
+      '<td class="text-center">' + (f.actionPlansOverdue > 0 ? '<span class="text-danger fw-bold">' + f.actionPlansOverdue + '</span>' : '-') + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  container.innerHTML = html;
+}
+
+// ============================================================
+// ACTION PLAN TRACKER
+// ============================================================
+function renderActionPlans(container) {
+  var e = reportData.executive;
+  var apDist = reportData.apStatusDistribution || {};
+
+  var html = '<div class="row g-3 mb-4">';
+  html += buildKPI('col-md-3', e.totalActionPlans, 'Total Action Plans', '', 'bi-list-check');
+  html += buildKPI('col-md-3', e.closedActionPlans, 'Closed / Verified', '', 'bi-check-circle-fill', '#10b981');
+  html += buildKPI('col-md-3', e.overdueActionPlans, 'Overdue', '', 'bi-exclamation-triangle-fill', e.overdueActionPlans > 0 ? '#ef4444' : '#10b981');
+  html += buildKPI('col-md-3', e.implementationRate + '%', 'Implementation Rate', '', 'bi-graph-up');
+  html += '</div>';
+
+  // Status breakdown chart
+  html += '<div class="row g-3 mb-4">';
+  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Status Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAPStatusFull"></canvas></div></div></div></div>';
+  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Implementation by Affiliate</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAPImplBar"></canvas></div></div></div></div>';
+  html += '</div>';
+
+  // Status breakdown table
+  html += '<div class="card"><div class="card-header">Status Breakdown</div><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Status</th><th class="text-center">Count</th><th>Distribution</th></tr></thead><tbody>';
+  var statusOrder = ['Not Due', 'Pending', 'In Progress', 'Overdue', 'Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+  statusOrder.forEach(function(s) {
+    var count = apDist[s] || 0;
+    if (count === 0) return;
+    var pct = e.totalActionPlans > 0 ? Math.round((count / e.totalActionPlans) * 100) : 0;
+    html += '<tr><td><span class="badge ' + getStatusClass(s) + '">' + s + '</span></td>' +
+      '<td class="text-center">' + count + '</td>' +
+      '<td>' + buildMiniProgress(pct) + '</td></tr>';
+  });
+  // Show any statuses not in the predefined order
+  Object.keys(apDist).forEach(function(s) {
+    if (statusOrder.indexOf(s) === -1 && apDist[s] > 0) {
+      var count = apDist[s];
+      var pct = e.totalActionPlans > 0 ? Math.round((count / e.totalActionPlans) * 100) : 0;
+      html += '<tr><td><span class="badge bg-secondary">' + escapeHtml(s) + '</span></td>' +
+        '<td class="text-center">' + count + '</td>' +
+        '<td>' + buildMiniProgress(pct) + '</td></tr>';
+    }
+  });
+  html += '</tbody></table></div></div></div>';
+
+  container.innerHTML = html;
+
+  setTimeout(function() {
+    renderAPStatusChart('rptAPStatusFull', apDist);
+    renderImplByAffiliateChart('rptAPImplBar', reportData.byAffiliate);
+  }, 50);
+}
+
+// ============================================================
+// RISK ASSESSMENT
+// ============================================================
+function renderRiskAssessment(container) {
+  var e = reportData.executive;
+  var rd = e.riskDistribution;
+
+  var html = '<div class="row g-3 mb-4">';
+  html += '<div class="col-md-3"><div class="kpi-card h-100 text-center" style="border-left:4px solid #dc3545;"><div class="kpi-value" style="color:#dc3545;">' + (rd.Extreme || 0) + '</div><div class="kpi-label">Extreme Risk</div></div></div>';
+  html += '<div class="col-md-3"><div class="kpi-card h-100 text-center" style="border-left:4px solid #fd7e14;"><div class="kpi-value" style="color:#fd7e14;">' + (rd.High || 0) + '</div><div class="kpi-label">High Risk</div></div></div>';
+  html += '<div class="col-md-3"><div class="kpi-card h-100 text-center" style="border-left:4px solid #ffc107;"><div class="kpi-value" style="color:#b45309;">' + (rd.Medium || 0) + '</div><div class="kpi-label">Medium Risk</div></div></div>';
+  html += '<div class="col-md-3"><div class="kpi-card h-100 text-center" style="border-left:4px solid #28a745;"><div class="kpi-value" style="color:#28a745;">' + (rd.Low || 0) + '</div><div class="kpi-label">Low Risk</div></div></div>';
+  html += '</div>';
+
+  // Risk chart
+  html += '<div class="row g-3 mb-4">';
+  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Risk Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptRiskDoughnut"></canvas></div></div></div></div>';
+  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Risk by Audit Area</div><div class="card-body"><div class="report-chart"><canvas id="rptRiskByArea"></canvas></div></div></div></div>';
+  html += '</div>';
+
+  // Risk heat map: Affiliate x Risk
+  html += '<div class="card mb-4"><div class="card-header"><i class="bi bi-grid-3x3 me-2"></i>Risk Heat Map (Affiliate x Severity)</div><div class="card-body p-0">' +
+    '<div class="table-responsive"><table class="table table-sm mb-0 text-center"><thead><tr><th class="text-start">Affiliate</th><th>Extreme</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead><tbody>';
+  (reportData.byAffiliate || []).forEach(function(a) {
+    var r = a.riskDistribution || {};
+    html += '<tr><td class="text-start"><strong>' + escapeHtml(a.name || a.code) + '</strong></td>' +
+      '<td><div class="risk-heat ' + (r.Extreme ? 'extreme' : 'zero') + '">' + (r.Extreme || 0) + '</div></td>' +
+      '<td><div class="risk-heat ' + (r.High ? 'high' : 'zero') + '">' + (r.High || 0) + '</div></td>' +
+      '<td><div class="risk-heat ' + (r.Medium ? 'medium' : 'zero') + '">' + (r.Medium || 0) + '</div></td>' +
+      '<td><div class="risk-heat ' + (r.Low ? 'low' : 'zero') + '">' + (r.Low || 0) + '</div></td>' +
+      '<td><strong>' + a.findings + '</strong></td></tr>';
+  });
+  html += '</tbody></table></div></div></div>';
+
+  container.innerHTML = html;
+
+  setTimeout(function() {
+    renderRiskPieChart('rptRiskDoughnut', rd);
+    renderRiskByAreaChart('rptRiskByArea', reportData.byAuditArea);
+  }, 50);
+}
+
+// ============================================================
+// PERFORMANCE SCORECARD
+// ============================================================
+function renderPerformanceScorecard(container) {
+  var areas = (reportData.byAuditArea || []).sort(function(a,b){ return a.score - b.score; });
+
+  var html = '<div class="d-flex justify-content-between align-items-center mb-3">' +
+    '<h6 class="mb-0"><i class="bi bi-graph-up me-2 text-primary"></i>Audit Area Performance Scores</h6></div>';
+
+  // Score chart
+  html += '<div class="card mb-4"><div class="card-header">Control Effectiveness by Audit Area</div><div class="card-body"><div class="report-chart"><canvas id="rptScoreBar"></canvas></div></div></div>';
+
+  // Score table
+  html += '<div class="card mb-4"><div class="card-header">Detailed Scorecard</div><div class="card-body p-0">' +
+    '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
+    '<th>Audit Area</th><th class="text-center">Findings</th><th class="text-center">Action Plans</th>' +
+    '<th class="text-center">Impl. Rate</th><th class="text-center">Overdue</th>' +
+    '<th class="text-center">Score</th><th class="text-center">Rating</th></tr></thead><tbody>';
+  areas.forEach(function(a) {
+    var ratingClass = a.rating === 'Effective' ? 'effective' : a.rating === 'Needs Improvement' ? 'needs-improvement' : 'ineffective';
+    html += '<tr><td><strong>' + escapeHtml(a.name) + '</strong></td>' +
+      '<td class="text-center">' + a.findings + '</td>' +
+      '<td class="text-center">' + a.actionPlans + '</td>' +
+      '<td class="text-center">' + buildMiniProgress(a.implementationRate) + '</td>' +
+      '<td class="text-center">' + (a.overdueAPs > 0 ? '<span class="text-danger fw-bold">' + a.overdueAPs + '</span>' : '0') + '</td>' +
+      '<td class="text-center">' + buildScoreBadge(a.score) + '</td>' +
+      '<td class="text-center"><span class="score-badge ' + ratingClass + '">' + a.rating + '</span></td></tr>';
+  });
+  html += '</tbody></table></div></div></div>';
+
+  // Methodology
+  html += buildMethodologyBox();
+
+  container.innerHTML = html;
+
+  setTimeout(function() {
+    renderScoreBarChart('rptScoreBar', areas);
+  }, 50);
+}
+
+// ============================================================
+// AGING ANALYSIS
+// ============================================================
+function renderAgingAnalysis(container) {
+  var ag = reportData.aging;
+  var totalOpen = ag.current.count + ag.overdue1to30.count + ag.overdue31to60.count + ag.overdue61to90.count + ag.overdue90plus.count;
+  var totalOverdue = ag.overdue1to30.count + ag.overdue31to60.count + ag.overdue61to90.count + ag.overdue90plus.count;
+
+  // Bucket cards
+  var html = '<div class="row g-3 mb-4">';
+  html += buildAgingBucket('col', 'Current', ag.current.count, '#10b981', 'Not yet due');
+  html += buildAgingBucket('col', '1-30 Days', ag.overdue1to30.count, '#f59e0b', 'Overdue');
+  html += buildAgingBucket('col', '31-60 Days', ag.overdue31to60.count, '#f97316', 'Overdue');
+  html += buildAgingBucket('col', '61-90 Days', ag.overdue61to90.count, '#ef4444', 'Overdue');
+  html += buildAgingBucket('col', '90+ Days', ag.overdue90plus.count, '#991b1b', 'Critical');
+  html += '</div>';
+
+  // Chart
+  html += '<div class="row g-3 mb-4">';
+  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Aging Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAgingPie"></canvas></div></div></div></div>';
+  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Summary</div><div class="card-body">' +
+    '<div class="mb-3"><strong>Total Open Action Plans:</strong> ' + totalOpen + '</div>' +
+    '<div class="mb-3"><strong>Total Overdue:</strong> <span class="text-danger fw-bold">' + totalOverdue + '</span></div>' +
+    '<div class="mb-3"><strong>Overdue Rate:</strong> ' + (totalOpen > 0 ? Math.round((totalOverdue / totalOpen) * 100) : 0) + '%</div>' +
+    buildMiniProgress(totalOpen > 0 ? Math.round(((totalOpen - totalOverdue) / totalOpen) * 100) : 100, 'Current vs Overdue') +
+    '</div></div></div>';
+  html += '</div>';
+
+  // Detailed overdue items
+  var overdueItems = [].concat(ag.overdue90plus.items, ag.overdue61to90.items, ag.overdue31to60.items, ag.overdue1to30.items);
+  if (overdueItems.length > 0) {
+    html += '<div class="card"><div class="card-header"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Overdue Action Plans (' + overdueItems.length + ')</div>' +
+      '<div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
+      '<th>Description</th><th>Owner</th><th>Affiliate</th><th>Risk</th><th class="text-center">Days Overdue</th><th>Status</th></tr></thead><tbody>';
+    overdueItems.forEach(function(item) {
+      var urgency = item.daysOverdue > 90 ? 'table-danger' : item.daysOverdue > 60 ? 'table-warning' : '';
+      html += '<tr class="' + urgency + '">' +
+        '<td>' + escapeHtml(item.description) + '</td>' +
+        '<td>' + escapeHtml(item.owner) + '</td>' +
+        '<td>' + escapeHtml(item.affiliate) + '</td>' +
+        '<td><span class="badge ' + getRiskClass(item.riskRating) + '">' + escapeHtml(item.riskRating || 'N/A') + '</span></td>' +
+        '<td class="text-center fw-bold text-danger">' + item.daysOverdue + '</td>' +
+        '<td><span class="badge ' + getStatusClass(item.status) + '">' + escapeHtml(item.status) + '</span></td></tr>';
+    });
+    html += '</tbody></table></div></div></div>';
+  }
+
+  container.innerHTML = html;
+
+  setTimeout(function() {
+    renderAgingChart('rptAgingPie', ag);
+  }, 50);
+}
+
+// ============================================================
+// CHART RENDERERS
+// ============================================================
+function renderRiskPieChart(canvasId, rd) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  reportCharts[canvasId] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Extreme', 'High', 'Medium', 'Low'],
+      datasets: [{ data: [rd.Extreme||0, rd.High||0, rd.Medium||0, rd.Low||0],
+        backgroundColor: ['#dc3545','#fd7e14','#ffc107','#28a745'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  });
+}
+
+function renderAPStatusChart(canvasId, dist) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  var labels = Object.keys(dist);
+  var data = Object.values(dist);
+  var colors = labels.map(function(s) { return getStatusChartColor(s); });
+  reportCharts[canvasId] = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  });
+}
+
+function renderAffiliateBarChart(canvasId, byAff) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  var labels = byAff.map(function(a) { return a.code; });
+  var data = byAff.map(function(a) { return a.findings; });
+  reportCharts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: 'Findings', data: data, backgroundColor: '#1a365d', borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+}
+
+function renderTrendChart(canvasId, trends) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  reportCharts[canvasId] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: trends.labels,
+      datasets: [
+        { label: 'Findings Created', data: trends.findingsCreated, borderColor: '#1a365d', backgroundColor: 'rgba(26,54,93,0.1)', fill: true, tension: 0.3, pointRadius: 3 },
+        { label: 'APs Created', data: trends.actionPlansCreated, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 3 },
+        { label: 'APs Closed', data: trends.actionPlansClosed, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 3 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+}
+
+function renderRiskByAreaChart(canvasId, areas) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  var labels = areas.map(function(a) { return a.name; });
+  reportCharts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Extreme', data: areas.map(function(a) { return (a.riskDistribution||{}).Extreme||0; }), backgroundColor: '#dc3545', borderRadius: 2 },
+        { label: 'High', data: areas.map(function(a) { return (a.riskDistribution||{}).High||0; }), backgroundColor: '#fd7e14', borderRadius: 2 },
+        { label: 'Medium', data: areas.map(function(a) { return (a.riskDistribution||{}).Medium||0; }), backgroundColor: '#ffc107', borderRadius: 2 },
+        { label: 'Low', data: areas.map(function(a) { return (a.riskDistribution||{}).Low||0; }), backgroundColor: '#28a745', borderRadius: 2 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+}
+
+function renderImplByAffiliateChart(canvasId, byAff) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  var sorted = byAff.slice().sort(function(a,b) { return b.implementationRate - a.implementationRate; });
+  reportCharts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(function(a) { return a.code; }),
+      datasets: [{ label: 'Implementation Rate %', data: sorted.map(function(a) { return a.implementationRate; }),
+        backgroundColor: sorted.map(function(a) { return a.implementationRate >= 80 ? '#10b981' : a.implementationRate >= 60 ? '#f59e0b' : '#ef4444'; }),
+        borderRadius: 4 }]
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, max: 100 } } }
+  });
+}
+
+function renderScoreBarChart(canvasId, areas) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  var sorted = areas.slice().sort(function(a,b) { return a.score - b.score; });
+  reportCharts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(function(a) { return a.name; }),
+      datasets: [{ label: 'Score', data: sorted.map(function(a) { return a.score; }),
+        backgroundColor: sorted.map(function(a) { return a.score >= 80 ? '#10b981' : a.score >= 60 ? '#f59e0b' : '#ef4444'; }),
+        borderRadius: 4 }]
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        annotation: { annotations: {
+          threshold80: { type: 'line', xMin: 80, xMax: 80, borderColor: '#10b981', borderDash: [5,5], borderWidth: 1, label: { content: 'Effective', enabled: true, position: 'end' } },
+          threshold60: { type: 'line', xMin: 60, xMax: 60, borderColor: '#f59e0b', borderDash: [5,5], borderWidth: 1 }
+        }}
+      },
+      scales: { x: { beginAtZero: true, max: 100 } } }
+  });
+}
+
+function renderAgingChart(canvasId, ag) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  reportCharts[canvasId] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Current', '1-30 Days', '31-60 Days', '61-90 Days', '90+ Days'],
+      datasets: [{ data: [ag.current.count, ag.overdue1to30.count, ag.overdue31to60.count, ag.overdue61to90.count, ag.overdue90plus.count],
+        backgroundColor: ['#10b981','#f59e0b','#f97316','#ef4444','#991b1b'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  });
+}
+
+function getStatusChartColor(status) {
+  var map = {
+    'Draft':'#6c757d','Submitted':'#17a2b8','Under Review':'#ffc107','Revision Required':'#fd7e14',
+    'Approved':'#28a745','Sent to Auditee':'#1a365d',
+    'Not Due':'#6c757d','Pending':'#17a2b8','In Progress':'#ffc107','Overdue':'#dc3545',
+    'Implemented':'#28a745','Verified':'#1a365d','Not Implemented':'#dc3545','Closed':'#198754','Rejected':'#6f42c1'
+  };
+  return map[status] || '#adb5bd';
+}
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function buildKPI(colClass, value, label, sublabel, icon, color) {
+  color = color || 'var(--primary-color)';
+  return '<div class="' + colClass + '"><div class="kpi-card h-100">' +
+    (icon ? '<i class="bi ' + icon + '" style="font-size:1.25rem; color:' + color + '; margin-bottom:8px;"></i>' : '') +
+    '<div class="kpi-value" style="color:' + color + ';">' + value + '</div>' +
+    '<div class="kpi-label">' + label + '</div>' +
+    (sublabel ? '<div class="kpi-sublabel">' + escapeHtml(sublabel) + '</div>' : '') +
+    '</div></div>';
+}
+
+function buildScoreGauge(score, color) {
+  var pct = Math.min(100, Math.max(0, score));
+  var angle = (pct / 100) * 360;
+  var r = 54; var cx = 70; var cy = 70;
+  var rad = (angle - 90) * (Math.PI / 180);
+  var x = cx + r * Math.cos(rad);
+  var y = cy + r * Math.sin(rad);
+  var largeArc = angle > 180 ? 1 : 0;
+  var d = 'M ' + cx + ' ' + (cy - r) + ' A ' + r + ' ' + r + ' 0 ' + largeArc + ' 1 ' + x.toFixed(1) + ' ' + y.toFixed(1);
+  return '<div class="score-gauge">' +
+    '<svg viewBox="0 0 140 140"><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#e9ecef" stroke-width="10"/>' +
+    '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="10" stroke-linecap="round"/></svg>' +
+    '<div class="score-gauge-label"><div class="score-gauge-value" style="color:' + color + ';">' + score + '</div>' +
+    '<div class="score-gauge-text">/ 100</div></div></div>';
+}
+
+function buildScoreBadge(score) {
+  var color = score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
+  var bg = score >= 80 ? '#dcfce7' : score >= 60 ? '#fef3c7' : '#fee2e2';
+  return '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;background:' + bg + ';color:' + color + ';">' + score + '</span>';
+}
+
+function buildMiniProgress(pct, label) {
+  pct = Math.min(100, Math.max(0, pct || 0));
+  var color = pct >= 80 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444';
+  return '<div class="progress-bar-labeled" title="' + pct + '%">' +
+    '<div class="progress-bar-fill" style="width:' + Math.max(pct, 8) + '%;background:' + color + ';"><span>' + pct + '%</span></div></div>';
+}
+
+function buildAgingBucket(colClass, label, count, color, sublabel) {
+  return '<div class="' + colClass + '"><div class="aging-bucket" style="background:' + color + '10;">' +
+    '<div class="bucket-count" style="color:' + color + ';">' + count + '</div>' +
+    '<div class="bucket-label" style="color:' + color + ';">' + label + '</div>' +
+    '<div style="font-size:0.65rem;color:var(--text-muted);">' + sublabel + '</div></div></div>';
+}
+
+function riskScoreLabel(score) {
+  if (score >= 75) return 'High risk posture';
+  if (score >= 50) return 'Moderate risk';
+  if (score >= 25) return 'Acceptable risk';
+  return 'Low risk';
+}
+
+function buildMethodologyBox() {
+  return '<div class="methodology-box mt-4">' +
+    '<h6><i class="bi bi-info-circle me-1"></i>Scoring Methodology</h6>' +
+    '<p>Audit area scores are calculated using a weighted composite of three factors aligned with IIA standards:</p>' +
+    '<ul>' +
+    '<li><strong>Implementation Rate (40%)</strong> &mdash; Percentage of action plans that have been closed (Implemented or Verified status).</li>' +
+    '<li><strong>Timeliness (35%)</strong> &mdash; Inverse of the overdue rate. Fewer overdue action plans result in a higher timeliness score.</li>' +
+    '<li><strong>Risk Profile (25%)</strong> &mdash; Penalty applied proportional to the volume of findings. Areas with fewer findings score higher.</li>' +
+    '</ul>' +
+    '<p><strong>Ratings:</strong> Effective (&ge;80) | Needs Improvement (60&ndash;79) | Ineffective (&lt;60)</p>' +
+    '</div>';
+}
+
+// ============================================================
+// EXPORT FUNCTIONS
+// ============================================================
+function exportReportPDF() {
+  if (!reportData) { showToast('No report data to export', 'warning'); return; }
+  // Show print header, trigger print, then hide
+  var header = document.getElementById('printReportHeader');
+  var title = document.getElementById('printReportTitle');
+  var dateEl = document.getElementById('printReportDate');
+  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Findings', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
+  if (title) title.textContent = tabNames[currentReportTab] || 'Audit Report';
+  if (dateEl) dateEl.textContent = 'Generated: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  if (header) header.classList.remove('d-none');
+  setTimeout(function() {
+    window.print();
+    setTimeout(function() { if (header) header.classList.add('d-none'); }, 1000);
+  }, 200);
+}
+
+function exportReportWord() {
+  if (!reportData) { showToast('No report data to export', 'warning'); return; }
+
+  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Findings', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
+  var reportTitle = tabNames[currentReportTab] || 'Audit Report';
+
+  // Build Word-compatible HTML
+  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
+    '<head><meta charset="utf-8"><title>' + reportTitle + '</title>' +
+    '<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#333;margin:40px;}' +
+    'h1{color:#1a365d;font-size:18pt;border-bottom:3px solid #1a365d;padding-bottom:8px;}' +
+    'h2{color:#1a365d;font-size:14pt;margin-top:20px;}' +
+    'h3{color:#2d4a7c;font-size:12pt;}' +
+    'table{border-collapse:collapse;width:100%;margin:12px 0;}' +
+    'th{background:#1a365d;color:#fff;padding:8px 12px;text-align:left;font-size:10pt;}' +
+    'td{border:1px solid #ddd;padding:6px 12px;font-size:10pt;}' +
+    'tr:nth-child(even){background:#f9fafb;}' +
+    '.badge{padding:3px 8px;border-radius:4px;font-size:9pt;font-weight:bold;color:#fff;}' +
+    '.extreme{background:#dc3545;}.high{background:#fd7e14;}.medium{background:#ffc107;color:#333;}.low{background:#28a745;}' +
+    '.score{font-size:16pt;font-weight:bold;}.effective{color:#10b981;}.needs-improvement{color:#f59e0b;}.ineffective{color:#ef4444;}' +
+    '</style></head><body>';
+
+  html += '<h1>Hass Petroleum - ' + reportTitle + '</h1>';
+  html += '<p style="color:#666;">Generated: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) + '</p>';
+
+  var e = reportData.executive;
+  html += '<h2>Executive Summary</h2>';
+  html += '<table><tr><th>Metric</th><th>Value</th></tr>' +
+    '<tr><td>Overall Audit Health Score</td><td class="score ' + (e.overallScore >= 80 ? 'effective' : e.overallScore >= 60 ? 'needs-improvement' : 'ineffective') + '">' + e.overallScore + ' / 100</td></tr>' +
+    '<tr><td>Total Findings</td><td>' + e.totalFindings + '</td></tr>' +
+    '<tr><td>Total Action Plans</td><td>' + e.totalActionPlans + '</td></tr>' +
+    '<tr><td>Closed Action Plans</td><td>' + e.closedActionPlans + '</td></tr>' +
+    '<tr><td>Overdue Action Plans</td><td>' + e.overdueActionPlans + '</td></tr>' +
+    '<tr><td>Implementation Rate</td><td>' + e.implementationRate + '%</td></tr>' +
+    '<tr><td>On-Time Closure Rate</td><td>' + e.onTimeClosureRate + '%</td></tr>' +
+    '</table>';
+
+  html += '<h2>Risk Distribution</h2>';
+  html += '<table><tr><th>Risk Level</th><th>Count</th></tr>' +
+    '<tr><td><span class="badge extreme">Extreme</span></td><td>' + (e.riskDistribution.Extreme||0) + '</td></tr>' +
+    '<tr><td><span class="badge high">High</span></td><td>' + (e.riskDistribution.High||0) + '</td></tr>' +
+    '<tr><td><span class="badge medium">Medium</span></td><td>' + (e.riskDistribution.Medium||0) + '</td></tr>' +
+    '<tr><td><span class="badge low">Low</span></td><td>' + (e.riskDistribution.Low||0) + '</td></tr></table>';
+
+  html += '<h2>Performance by Affiliate</h2>';
+  html += '<table><tr><th>Affiliate</th><th>Findings</th><th>Action Plans</th><th>Closed</th><th>Overdue</th><th>Impl. Rate</th><th>Score</th></tr>';
+  (reportData.byAffiliate||[]).forEach(function(a) {
+    html += '<tr><td>' + (a.name||a.code) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td></tr>';
+  });
+  html += '</table>';
+
+  if (currentReportTab === 'scorecard' || currentReportTab === 'executive') {
+    html += '<h2>Audit Area Scorecard</h2>';
+    html += '<table><tr><th>Audit Area</th><th>Findings</th><th>Action Plans</th><th>Impl. Rate</th><th>Score</th><th>Rating</th></tr>';
+    (reportData.byAuditArea||[]).forEach(function(a) {
+      html += '<tr><td>' + a.name + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + a.rating + '</td></tr>';
+    });
+    html += '</table>';
+  }
+
+  html += '</body></html>';
+
+  var blob = new Blob([html], { type: 'application/msword' });
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'Audit_Report_' + reportTitle.replace(/\s+/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.doc';
+  link.click();
+  URL.revokeObjectURL(link.href);
+  showToast('Word document downloaded', 'success');
+}
+
+function exportReportExcel() {
+  if (!reportData) { showToast('No report data to export', 'warning'); return; }
+
+  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Findings', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
+  var reportTitle = tabNames[currentReportTab] || 'Audit Report';
+
+  // Build Excel-compatible HTML table
+  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
+    '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>';
+
+  var sheets = [];
+
+  // Sheet 1: Executive Summary
+  sheets.push({ name: 'Executive Summary', content: buildExcelSummarySheet() });
+  // Sheet 2: Findings
+  sheets.push({ name: 'Findings', content: buildExcelFindingsSheet() });
+  // Sheet 3: Affiliate Performance
+  sheets.push({ name: 'By Affiliate', content: buildExcelAffiliateSheet() });
+  // Sheet 4: Audit Area Scores
+  sheets.push({ name: 'Scorecard', content: buildExcelScorecardSheet() });
+  // Sheet 5: Aging
+  sheets.push({ name: 'Aging', content: buildExcelAgingSheet() });
+
+  sheets.forEach(function(s) {
+    html += '<x:ExcelWorksheet><x:Name>' + s.name + '</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>';
+  });
+  html += '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>';
+  sheets.forEach(function(s) { html += s.content; });
+  html += '</body></html>';
+
+  var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'Audit_Report_' + new Date().toISOString().split('T')[0] + '.xls';
+  link.click();
+  URL.revokeObjectURL(link.href);
+  showToast('Excel file downloaded', 'success');
+}
+
+function buildExcelSummarySheet() {
+  var e = reportData.executive;
+  return '<div id="Executive Summary"><table border="1">' +
+    '<tr><th colspan="2" style="background:#1a365d;color:#fff;font-size:14pt;">Executive Summary</th></tr>' +
+    '<tr><td>Generated</td><td>' + new Date().toLocaleDateString() + '</td></tr>' +
+    '<tr><td>Overall Score</td><td>' + e.overallScore + ' / 100</td></tr>' +
+    '<tr><td>Total Findings</td><td>' + e.totalFindings + '</td></tr>' +
+    '<tr><td>Total Action Plans</td><td>' + e.totalActionPlans + '</td></tr>' +
+    '<tr><td>Closed Action Plans</td><td>' + e.closedActionPlans + '</td></tr>' +
+    '<tr><td>Overdue Action Plans</td><td>' + e.overdueActionPlans + '</td></tr>' +
+    '<tr><td>Implementation Rate</td><td>' + e.implementationRate + '%</td></tr>' +
+    '<tr><td>On-Time Closure Rate</td><td>' + e.onTimeClosureRate + '%</td></tr>' +
+    '<tr><td>Extreme Risk Findings</td><td>' + (e.riskDistribution.Extreme||0) + '</td></tr>' +
+    '<tr><td>High Risk Findings</td><td>' + (e.riskDistribution.High||0) + '</td></tr>' +
+    '<tr><td>Medium Risk Findings</td><td>' + (e.riskDistribution.Medium||0) + '</td></tr>' +
+    '<tr><td>Low Risk Findings</td><td>' + (e.riskDistribution.Low||0) + '</td></tr>' +
+    '</table></div>';
+}
+
+function buildExcelFindingsSheet() {
+  var html = '<div id="Findings"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
+    '<th>ID</th><th>Title</th><th>Affiliate</th><th>Audit Area</th><th>Risk Rating</th><th>Status</th><th>Date</th><th>Prepared By</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th></tr>';
+  (reportData.findings||[]).forEach(function(f) {
+    html += '<tr><td>' + f.id + '</td><td>' + escapeHtml(f.title) + '</td><td>' + escapeHtml(f.affiliate) + '</td><td>' + escapeHtml(f.auditArea) + '</td><td>' + escapeHtml(f.riskRating) + '</td><td>' + escapeHtml(f.status) + '</td><td>' + (f.date ? formatDate(f.date) : '') + '</td><td>' + escapeHtml(f.preparedBy) + '</td><td>' + f.actionPlansTotal + '</td><td>' + f.actionPlansClosed + '</td><td>' + f.actionPlansOverdue + '</td></tr>';
+  });
+  return html + '</table></div>';
+}
+
+function buildExcelAffiliateSheet() {
+  var html = '<div id="By Affiliate"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
+    '<th>Affiliate</th><th>Findings</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th><th>Implementation Rate</th><th>Score</th><th>Extreme</th><th>High</th><th>Medium</th><th>Low</th></tr>';
+  (reportData.byAffiliate||[]).forEach(function(a) {
+    var r = a.riskDistribution||{};
+    html += '<tr><td>' + escapeHtml(a.name||a.code) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + (r.Extreme||0) + '</td><td>' + (r.High||0) + '</td><td>' + (r.Medium||0) + '</td><td>' + (r.Low||0) + '</td></tr>';
+  });
+  return html + '</table></div>';
+}
+
+function buildExcelScorecardSheet() {
+  var html = '<div id="Scorecard"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
+    '<th>Audit Area</th><th>Findings</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th><th>Implementation Rate</th><th>Score</th><th>Rating</th></tr>';
+  (reportData.byAuditArea||[]).forEach(function(a) {
+    html += '<tr><td>' + escapeHtml(a.name) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + a.rating + '</td></tr>';
+  });
+  return html + '</table></div>';
+}
+
+function buildExcelAgingSheet() {
+  var ag = reportData.aging;
+  var allItems = [].concat(ag.current.items, ag.overdue1to30.items, ag.overdue31to60.items, ag.overdue61to90.items, ag.overdue90plus.items);
+  var html = '<div id="Aging"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
+    '<th>ID</th><th>Description</th><th>Owner</th><th>Affiliate</th><th>Risk Rating</th><th>Due Date</th><th>Days Overdue</th><th>Status</th><th>Aging Bucket</th></tr>';
+  allItems.forEach(function(item) {
+    var bucket = item.daysOverdue <= 0 ? 'Current' : item.daysOverdue <= 30 ? '1-30 Days' : item.daysOverdue <= 60 ? '31-60 Days' : item.daysOverdue <= 90 ? '61-90 Days' : '90+ Days';
+    html += '<tr><td>' + item.id + '</td><td>' + escapeHtml(item.description) + '</td><td>' + escapeHtml(item.owner) + '</td><td>' + escapeHtml(item.affiliate) + '</td><td>' + escapeHtml(item.riskRating) + '</td><td>' + (item.dueDate ? formatDate(item.dueDate) : '') + '</td><td>' + item.daysOverdue + '</td><td>' + escapeHtml(item.status) + '</td><td>' + bucket + '</td></tr>';
+  });
+  return html + '</table></div>';
 }
 </script>

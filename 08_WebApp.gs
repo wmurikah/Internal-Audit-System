@@ -266,7 +266,10 @@ function routeAction(action, data, user) {
       
     case 'getRiskSummaryReport':
       return { success: true, report: getRiskSummaryReport(data.filters) };
-      
+
+    case 'getComprehensiveReportData':
+      return { success: true, ...getComprehensiveReportData(data.filters) };
+
     // ========== NOTIFICATIONS ==========
     case 'getNotificationQueueStatus':
       return { success: true, status: getNotificationQueueStatus() };
