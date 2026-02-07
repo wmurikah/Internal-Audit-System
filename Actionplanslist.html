@@ -88,7 +88,10 @@
           </tr>
         </thead>
         <tbody id="apTableBody">
-          <tr><td colspan="7" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+          <tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>
+          <tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>
+          <tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>
+          <tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>
         </tbody>
       </table>
     </div>
@@ -474,10 +477,14 @@ function loadActionPlans(filters) {
   const owner = document.getElementById('apFilterOwner')?.value || '';
   const overdueOnly = document.getElementById('apFilterOverdue')?.checked || false;
 
-  showLoading('Loading action plans...');
+  // Show skeleton loading rows
+  const tbody = document.getElementById('apTableBody');
+  tbody.innerHTML = Array(4).fill(0).map(() =>
+    '<tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>'
+  ).join('');
+
   apiCall('getActionPlans', { filters: { ...filters, search, status, owner_id: owner, overdue_only: overdueOnly } })
     .then(r => {
-      hideLoading();
       if (r && r.success !== false && r.actionPlans) {
         actionPlansData = r.actionPlans;
         updateAPStats();
@@ -522,13 +529,20 @@ function renderActionPlans() {
   const pageData = actionPlansData.slice(start, start + apPageSize);
   document.getElementById('apResultsInfo').textContent = `Showing ${start + 1}-${Math.min(start + apPageSize, actionPlansData.length)} of ${actionPlansData.length}`;
 
-  const tbody = document.getElementById('apTableBody');
+  const apTbody = document.getElementById('apTableBody');
   if (!pageData.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5"><div class="empty-state"><i class="bi bi-list-check"></i><h5>No action plans found</h5></div></td></tr>';
+    apTbody.innerHTML = `<tr><td colspan="7" class="text-center py-5">
+      <div class="empty-state-enhanced">
+        <div class="empty-icon"><i class="bi bi-list-check"></i></div>
+        <h5>No action plans found</h5>
+        <p>Try adjusting your filters or check back later</p>
+        <button class="btn btn-outline-primary" onclick="clearAPFilters()"><i class="bi bi-arrow-counterclockwise me-1"></i>Clear Filters</button>
+      </div>
+    </td></tr>`;
     return;
   }
 
-  tbody.innerHTML = pageData.map(ap => `
+  apTbody.innerHTML = pageData.map(ap => `
     <tr onclick="navigateTo('action-plan-view', {id:'${ap.action_plan_id}'})" style="cursor:pointer;">
       <td><code>${ap.action_plan_id}</code></td>
       <td>${escapeHtml((ap.action_description || '').substring(0, 60))}${(ap.action_description || '').length > 60 ? '...' : ''}</td>
