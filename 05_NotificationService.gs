@@ -563,6 +563,14 @@ function resolveAuditContext(workPapers) {
 /**
  * Send batched auditee notification with professional table.
  * Called when work papers are sent to auditees — groups by auditee and sends ONE email per person.
+ *
+ * Email format:
+ *   Dear [First Name], [CC Party 1], [CC Party 2],
+ *   Below are audit observations from [Affiliate] – [Audit Area] audit.
+ *   Please respond with your action plans.
+ *   [Table: Observation | Details | Rating]
+ *   Please log in and submit your action plans...
+ *
  * @param {Object[]} workPapers - Array of work paper objects sent to this auditee
  * @param {string} auditeeEmail - Recipient email
  * @param {string} auditeeUserId - Recipient user ID
@@ -618,6 +626,39 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
 
   sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'wmurikah@gmail.com');
+}
+
+/**
+ * Resolve affiliate name and audit area name from a batch of work papers.
+ * Uses the first work paper's affiliate_code and audit_area_id to look up display names from dropdowns.
+ * @param {Object[]} workPapers
+ * @returns {{ affiliate: string, auditArea: string }}
+ */
+function resolveAuditContext(workPapers) {
+  var result = { affiliate: '', auditArea: '' };
+  if (!workPapers || workPapers.length === 0) return result;
+
+  var wp = workPapers[0]; // use first work paper for context
+
+  // Resolve affiliate name
+  if (wp.affiliate_code) {
+    try {
+      var affiliates = getAffiliatesDropdown();
+      var match = affiliates.find(function(a) { return a.code === wp.affiliate_code; });
+      if (match) result.affiliate = match.name || match.code;
+    } catch (e) { result.affiliate = wp.affiliate_code; }
+  }
+
+  // Resolve audit area name (audit_area_id stores the area code/id)
+  if (wp.audit_area_id) {
+    try {
+      var areas = getAuditAreasDropdown();
+      var areaMatch = areas.find(function(a) { return a.id === wp.audit_area_id || a.code === wp.audit_area_id; });
+      if (areaMatch) result.auditArea = areaMatch.name || areaMatch.code;
+    } catch (e) { result.auditArea = wp.audit_area_id; }
+  }
+
+  return result;
 }
 
 /**
