@@ -18,10 +18,13 @@
     </div>
   </div>
 
+  <!-- Needs Your Attention Section (populated dynamically) -->
+  <div id="attentionSection"></div>
+
   <!-- Stats Row -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable" onclick="navigateTo('work-papers')">
+      <div class="stat-card clickable border-primary" onclick="navigateTo('work-papers')">
         <div class="stat-icon primary">
           <i class="bi bi-file-earmark-text"></i>
         </div>
@@ -32,7 +35,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable" onclick="navigateTo('work-papers', {status: 'Submitted'})">
+      <div class="stat-card clickable border-info" onclick="navigateTo('work-papers', {status: 'Submitted'})">
         <div class="stat-icon info">
           <i class="bi bi-hourglass-split"></i>
         </div>
@@ -43,7 +46,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable" onclick="navigateTo('action-plans')">
+      <div class="stat-card clickable border-warning" onclick="navigateTo('action-plans')">
         <div class="stat-icon warning">
           <i class="bi bi-list-check"></i>
         </div>
@@ -54,7 +57,7 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-card clickable" onclick="navigateTo('action-plans-overdue')">
+      <div class="stat-card clickable border-danger" onclick="navigateTo('action-plans-overdue')">
         <div class="stat-icon danger">
           <i class="bi bi-exclamation-circle"></i>
         </div>
@@ -360,6 +363,9 @@ function renderDashboard(data) {
 
   // Due this week
   renderDueThisWeek(ap.dueThisWeek || data.dueThisWeek || 0);
+
+  // Needs Your Attention section
+  renderAttentionSection(data, wp, ap);
 }
 
 function setRoleBasedMessage(roleCode) {
@@ -813,6 +819,94 @@ function renderDueThisWeek(count) {
     .catch(() => {
       list.innerHTML = '<li class="list-group-item text-center text-muted py-3">Could not load items</li>';
     });
+}
+
+function renderAttentionSection(data, wp, ap) {
+  const container = document.getElementById('attentionSection');
+  if (!container) return;
+
+  const role = window.currentUser?.role_code || '';
+  const items = [];
+  const overdueCount = ap.overdue || data.overdueCount || 0;
+  const pendingReviewCount = wp.submitted || data.pendingReview || 0;
+  const dueThisWeek = ap.dueThisWeek || data.dueThisWeek || 0;
+
+  // Overdue action plans - all roles
+  if (overdueCount > 0) {
+    items.push({
+      type: 'danger',
+      icon: 'bi-exclamation-triangle-fill',
+      title: overdueCount + ' overdue action plan' + (overdueCount > 1 ? 's' : ''),
+      subtitle: 'Require immediate attention',
+      action: 'View Overdue',
+      onclick: "navigateTo('action-plans-overdue')"
+    });
+  }
+
+  // Pending reviews - auditor roles
+  if (['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(role) && pendingReviewCount > 0) {
+    items.push({
+      type: 'info',
+      icon: 'bi-hourglass-split',
+      title: pendingReviewCount + ' work paper' + (pendingReviewCount > 1 ? 's' : '') + ' awaiting review',
+      subtitle: 'Submitted and pending your review',
+      action: 'Review Now',
+      onclick: "navigateTo('work-papers', {status: 'Submitted'})"
+    });
+  }
+
+  // Due this week - all roles
+  if (dueThisWeek > 0) {
+    items.push({
+      type: 'warning',
+      icon: 'bi-calendar-event',
+      title: dueThisWeek + ' action plan' + (dueThisWeek > 1 ? 's' : '') + ' due this week',
+      subtitle: 'Coming up in the next 7 days',
+      action: 'View',
+      onclick: "navigateTo('action-plans')"
+    });
+  }
+
+  // Auditee pending responses
+  if (['AUDITEE', 'UNIT_MANAGER', 'JUNIOR_STAFF'].includes(role)) {
+    const myPlans = data.myActionPlans || [];
+    const pendingResponse = myPlans.filter(p => p.status === 'Pending' || p.status === 'Not Due').length;
+    if (pendingResponse > 0) {
+      items.push({
+        type: 'info',
+        icon: 'bi-chat-left-dots',
+        title: pendingResponse + ' action plan' + (pendingResponse > 1 ? 's' : '') + ' awaiting your response',
+        subtitle: 'Update your implementation progress',
+        action: 'Respond',
+        onclick: "navigateTo('action-plans', {mine: true})"
+      });
+    }
+  }
+
+  if (items.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '<div class="attention-section">';
+  html += '<div class="attention-title"><i class="bi bi-bell-fill text-warning"></i> Needs Your Attention</div>';
+  items.forEach(item => {
+    html += `
+      <div class="attention-item ${item.type}">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi ${item.icon}" style="font-size:1.25rem;"></i>
+          <div class="attention-text">
+            <strong>${item.title}</strong>
+            <small>${item.subtitle}</small>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-outline-${item.type === 'danger' ? 'danger' : item.type === 'warning' ? 'warning' : 'primary'}" onclick="${item.onclick}">
+          ${item.action}
+        </button>
+      </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 function viewItem(type, id) {
