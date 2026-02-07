@@ -20,7 +20,6 @@ function login(email, password) {
   
   const normalizedEmail = email.toLowerCase().trim();
   
-  // 1. User lookup (cached - fast)
   const user = getUserByEmailCached(normalizedEmail);
   console.log('User lookup:', new Date().getTime() - startTime, 'ms');
 
@@ -41,7 +40,6 @@ function login(email, password) {
     }
   }
   
-  // 2. Password verification (reduced iterations - still secure)
   const verifyStart = new Date().getTime();
   const passwordValid = verifyPassword(password, user.password_salt, user.password_hash);
   console.log('Password verify:', new Date().getTime() - verifyStart, 'ms');
@@ -51,14 +49,11 @@ function login(email, password) {
     return { success: false, error: 'Invalid email or password' };
   }
   
-  // 3. Create session (single sheet write - required)
   const session = createSession(user);
   console.log('Session created:', new Date().getTime() - startTime, 'ms');
 
-  // 3b. Pre-warm caches for this user (permissions, role name, dropdowns)
   prewarmUserCache(user);
 
-  // 4. Get permissions + role name (from cache if warm, else fast lookup)
   const cache = CacheService.getScriptCache();
   let roleName = cache.get('role_name_' + user.role_code);
   if (!roleName) {
@@ -77,7 +72,6 @@ function login(email, password) {
     }
   } catch(e) {}
   
-  // 5. Get dropdowns from cache only (don't generate if missing - background will handle it)
   let dropdowns = {};
   try {
     const cachedDropdowns = cache.get('dropdown_data_all');
@@ -88,7 +82,6 @@ function login(email, password) {
   
   console.log('Total login time:', new Date().getTime() - startTime, 'ms');
   
-  // Return EVERYTHING the app needs - no second round trip needed
   return sanitizeForClient({
     success: true,
     sessionToken: session.session_token,
@@ -108,22 +101,16 @@ function login(email, password) {
       systemName: 'Hass Petroleum Internal Audit System',
       currentYear: new Date().getFullYear()
     },
-    // Tell client to run post-login cleanup
     _needsCleanup: true
   });
 }
 
-/**
- * Post-login cleanup - called by client in background after app loads
- * Handles all the non-critical work that used to block login
- */
 function postLoginCleanup(data) {
   try {
     const userId = data.userId;
     const userEmail = data.email;
     const roleCode = data.roleCode;
     
-    // Reset failed attempts (sheet writes)
     try {
       const user = getUserByEmailCached(userEmail);
       if (user) {
@@ -134,7 +121,6 @@ function postLoginCleanup(data) {
           const lockedIdx = getColumnIndex('USERS', 'locked_until');
           const lastLoginIdx = getColumnIndex('USERS', 'last_login');
           
-          // Batch write - all three at once
           sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
           sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
           sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
@@ -143,12 +129,10 @@ function postLoginCleanup(data) {
       }
     } catch(e) { console.warn('Cleanup: reset attempts failed:', e); }
     
-    // Audit log
     try {
       logAuditEvent('LOGIN', 'USER', userId, null, { email: userEmail }, userId, userEmail);
     } catch(e) { console.warn('Cleanup: audit log failed:', e); }
     
-    // Warm dropdown cache if not already warm
     try {
       const cache = CacheService.getScriptCache();
       if (!cache.get('dropdown_data_all')) {
@@ -164,9 +148,6 @@ function postLoginCleanup(data) {
   }
 }
 
-/**
- * Get user by email with aggressive caching
- */
 function getUserByEmailCached(email) {
   if (!email) return null;
   
@@ -174,12 +155,10 @@ function getUserByEmailCached(email) {
   const cacheKey = 'user_email_' + normalizedEmail;
   const cache = CacheService.getScriptCache();
   
-  // Try cache first
   const cached = cache.get(cacheKey);
   if (cached) {
     try {
       const user = JSON.parse(cached);
-      // Still need to get _rowIndex for updates
       if (!user._rowIndex) {
         user._rowIndex = findUserRowIndex(user.user_id);
       }
@@ -189,22 +168,17 @@ function getUserByEmailCached(email) {
     }
   }
   
-  // Fall back to database lookup
   const user = getUserByEmail(normalizedEmail);
   
   if (user) {
-    // Cache for 10 minutes (longer than before)
     const userForCache = { ...user };
-    delete userForCache._rowIndex; // Don't cache row index - it can change
+    delete userForCache._rowIndex;
     cache.put(cacheKey, JSON.stringify(userForCache), 600);
   }
   
   return user;
 }
 
-/**
- * Find user row index by ID (for updates after cache hit)
- */
 function findUserRowIndex(userId) {
   const sheet = getSheet(SHEETS.USERS);
   const data = sheet.getDataRange().getValues();
@@ -219,22 +193,16 @@ function findUserRowIndex(userId) {
   return null;
 }
 
-/**
- * Pre-warm cache after successful login
- */
 function prewarmUserCache(user) {
   try {
     const cache = CacheService.getScriptCache();
     
-    // Cache permissions
     const permissions = getUserPermissions(user.role_code);
     cache.put('perm_' + user.role_code, JSON.stringify(permissions), 1800);
     
-    // Cache role name
     const roleName = getRoleName(user.role_code);
     cache.put('role_name_' + user.role_code, roleName, 3600);
     
-    // Pre-warm dropdown cache so SSR can use it on next page load
     try {
       const existingDropdowns = cache.get('dropdown_data_all');
       if (!existingDropdowns) {
@@ -252,9 +220,6 @@ function prewarmUserCache(user) {
   }
 }
 
-/**
- * Update last login without blocking
- */
 function updateLastLoginAsync(user) {
   try {
     const sheet = getSheet(SHEETS.USERS);
@@ -265,17 +230,12 @@ function updateLastLoginAsync(user) {
       sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
     }
     
-    // Invalidate cache
     invalidateUserCache(user.email, user.user_id);
   } catch (e) {
     console.warn('updateLastLoginAsync failed:', e);
-    // Non-fatal
   }
 }
 
-/**
- * Logout - invalidate session
- */
 function logout(sessionToken) {
   if (!sessionToken) {
     return { success: false, error: 'Session token required' };
@@ -285,7 +245,6 @@ function logout(sessionToken) {
   if (session) {
     invalidateSession(session.session_id);
     
-    // Clear session cache
     const cache = CacheService.getScriptCache();
     cache.remove('session_' + sessionToken.substring(0, 16));
     
@@ -295,9 +254,6 @@ function logout(sessionToken) {
   return { success: true };
 }
 
-/**
- * Validate session and return user - OPTIMIZED
- */
 function validateSession(sessionToken) {
   const startTime = new Date().getTime();
   
@@ -305,7 +261,6 @@ function validateSession(sessionToken) {
     return { valid: false, error: 'No session token' };
   }
 
-  // Try cache first for session
   const session = getSessionByTokenCached(sessionToken);
   
   if (!session) {
@@ -322,7 +277,6 @@ function validateSession(sessionToken) {
     return { valid: false, error: 'Session expired' };
   }
 
-  // Get user from cache or database
   let user = getUserByIdCached(session.user_id);
 
   if (!user || !isActive(user.is_active)) {
@@ -348,9 +302,6 @@ function validateSession(sessionToken) {
   });
 }
 
-/**
- * Get session by token with caching
- */
 function getSessionByTokenCached(token) {
   if (!token) return null;
   
@@ -364,20 +315,15 @@ function getSessionByTokenCached(token) {
     } catch (e) {}
   }
   
-  // Fall back to database
   const session = getSessionByToken(token);
   
   if (session) {
-    // Cache for 5 minutes
     cache.put(cacheKey, JSON.stringify(session), 300);
   }
   
   return session;
 }
 
-/**
- * Get user by ID with caching
- */
 function getUserByIdCached(userId) {
   if (!userId) return null;
   
@@ -395,21 +341,17 @@ function getUserByIdCached(userId) {
     } catch (e) {}
   }
   
-  // Fall back to database
   const user = getUserById(userId);
   
   if (user) {
     const userForCache = { ...user };
     delete userForCache._rowIndex;
-    cache.put(cacheKey, JSON.stringify(userForCache), 600); // 10 min
+    cache.put(cacheKey, JSON.stringify(userForCache), 600);
   }
   
   return user;
 }
 
-/**
- * Get current user from Google session (for Apps Script web apps)
- */
 function getCurrentUser() {
   try {
     const email = Session.getActiveUser().getEmail();
@@ -452,7 +394,6 @@ function createSession(user) {
   const row = objectToRow('SESSIONS', session);
   sheet.appendRow(row);
   
-  // Cache the new session immediately
   const cache = CacheService.getScriptCache();
   const cacheKey = 'session_' + sessionToken.substring(0, 16);
   cache.put(cacheKey, JSON.stringify(session), 300);
@@ -460,9 +401,6 @@ function createSession(user) {
   return session;
 }
 
-/**
- * Get session by token
- */
 function getSessionByToken(token) {
   if (!token) return null;
   
@@ -482,9 +420,6 @@ function getSessionByToken(token) {
   return null;
 }
 
-/**
- * Invalidate a session
- */
 function invalidateSession(sessionId) {
   const sheet = getSheet(SHEETS.SESSIONS);
   const data = sheet.getDataRange().getValues();
@@ -496,7 +431,6 @@ function invalidateSession(sessionId) {
     if (data[i][idIdx] === sessionId) {
       sheet.getRange(i + 1, validIdx + 1).setValue(false);
       
-      // Clear cache
       const token = data[i][headers.indexOf('session_token')];
       if (token) {
         const cache = CacheService.getScriptCache();
@@ -510,9 +444,6 @@ function invalidateSession(sessionId) {
   return false;
 }
 
-/**
- * Clean up expired sessions
- */
 function cleanupExpiredSessions() {
   const sheet = getSheet(SHEETS.SESSIONS);
   const data = sheet.getDataRange().getValues();
@@ -523,7 +454,6 @@ function cleanupExpiredSessions() {
   const now = new Date();
   let cleaned = 0;
   
-  // Delete from bottom to top
   for (let i = data.length - 1; i >= 1; i--) {
     const expiresAt = data[i][expiresIdx];
     const isValid = data[i][validIdx];
@@ -539,8 +469,6 @@ function cleanupExpiredSessions() {
 }
 
 function hashPassword(password, salt) {
-  // OPTIMIZED: Reduced iterations from 10000 to 1000
-  // Still secure for web app, but 10x faster
   let hash = password;
   
   for (let i = 0; i < AUTH_CONFIG.PBKDF2_ITERATIONS; i++) {
@@ -555,18 +483,12 @@ function hashPassword(password, salt) {
   return hash;
 }
 
-/**
- * Verify password - simple direct comparison
- */
 function verifyPassword(password, salt, storedHash) {
   if (!password || !salt || !storedHash) return false;
   const computedHash = hashPassword(password, salt);
   return computedHash === storedHash;
 }
 
-/**
- * Generate salt
- */
 function generateSalt() {
   const bytes = [];
   for (let i = 0; i < AUTH_CONFIG.SALT_LENGTH; i++) {
@@ -575,9 +497,6 @@ function generateSalt() {
   return Utilities.base64Encode(bytes);
 }
 
-/**
- * Generate secure token
- */
 function generateSecureToken(length) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let token = '';
@@ -587,9 +506,6 @@ function generateSecureToken(length) {
   return token;
 }
 
-/**
- * Generate temporary password
- */
 function generateTempPassword() {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const lower = 'abcdefghjkmnpqrstuvwxyz';
@@ -611,9 +527,6 @@ function generateTempPassword() {
   return password.split('').sort(() => Math.random() - 0.5).join('');
 }
 
-/**
- * Change password
- */
 function changePassword(userId, currentPassword, newPassword) {
   console.log('changePassword called for userId:', userId);
 
@@ -662,9 +575,6 @@ function changePassword(userId, currentPassword, newPassword) {
   return { success: true };
 }
 
-/**
- * Reset password (admin function)
- */
 function resetPassword(userId, adminUser) {
   if (!adminUser) {
     return { success: false, error: 'Admin user required' };
@@ -706,13 +616,10 @@ function resetPassword(userId, adminUser) {
   
   invalidateUserCache(user.email, user.user_id);
   
-  // Invalidate all active sessions for this user so they must re-login
   invalidateUserSessions(userId);
   
-  // Get the deployed app URL for the login link
   const loginUrl = ScriptApp.getService().getUrl();
   
-  // Send immediately - password resets are time-sensitive
   const emailBody = `Hello ${user.full_name},\n\n` +
         `Your password has been reset by an administrator.\n\n` +
         `Your temporary password is: ${tempPassword}\n\n` +
@@ -730,9 +637,6 @@ function resetPassword(userId, adminUser) {
   return { success: true };
 }
 
-/**
- * Validate password strength
- */
 function validatePassword(password) {
   if (!password || password.length < 8) {
     return { valid: false, error: 'Password must be at least 8 characters' };
@@ -776,9 +680,6 @@ function incrementFailedAttempts(user) {
   invalidateUserCache(user.email, user.user_id);
 }
 
-/**
- * Reset failed login attempts
- */
 function resetFailedAttempts(user) {
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
@@ -794,9 +695,6 @@ function resetFailedAttempts(user) {
   invalidateUserCache(user.email, user.user_id);
 }
 
-/**
- * Update last login timestamp
- */
 function updateLastLogin(user) {
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
@@ -869,10 +767,8 @@ function createUser(userData, adminUser) {
   
   invalidateDropdownCache();
   
-  // Get the deployed app URL for the login link
   const loginUrl = ScriptApp.getService().getUrl();
   
-  // Send immediately - new users need their credentials right away
   const welcomeBody = `Hello ${user.full_name},\n\n` +
         `Your account has been created for the Internal Audit System.\n\n` +
         `Email: ${user.email}\n` +
@@ -891,9 +787,6 @@ function createUser(userData, adminUser) {
   return sanitizeForClient({ success: true, userId: userId, tempPassword: tempPassword });
 }
 
-/**
- * Update user
- */
 function updateUser(userId, userData, adminUser) {
   if (!adminUser) {
     return { success: false, error: 'Admin user required' };
@@ -959,9 +852,6 @@ function updateUser(userId, userData, adminUser) {
   return sanitizeForClient({ success: true, user: updated });
 }
 
-/**
- * Deactivate user
- */
 function deactivateUser(userId, adminUser) {
   if (!adminUser) {
     return { success: false, error: 'Admin user required' };
@@ -1000,13 +890,6 @@ function deactivateUser(userId, adminUser) {
   return { success: true };
 }
 
-/**
- * Invalidate all sessions for a user
- */
-/**
- * Forgot password - self-service, no auth required
- * Sends temp password to the user's registered email
- */
 function forgotPassword(email) {
   if (!email) {
     return { success: false, error: 'Email is required' };
@@ -1015,9 +898,8 @@ function forgotPassword(email) {
   const normalizedEmail = email.toLowerCase().trim();
   const user = getUserByEmailCached(normalizedEmail);
   
-  // Always return success to prevent email enumeration attacks
   if (!user || !isActive(user.is_active)) {
-    Utilities.sleep(500); // Simulate processing time
+    Utilities.sleep(500);
     return { success: true, message: 'If an account exists with that email, a temporary password has been sent.' };
   }
   
@@ -1082,9 +964,6 @@ function invalidateUserSessions(userId) {
   }
 }
 
-/**
- * Get all users (for admin)
- */
 function getUsers(filters, adminUser) {
   if (!adminUser) {
     return { success: false, error: 'Admin user required' };
