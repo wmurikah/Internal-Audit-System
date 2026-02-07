@@ -62,28 +62,22 @@ function sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails) {
 
 /**
  * Unified email sending function.
- * Tries Brevo first, falls back to MailApp if Brevo is not configured.
+ * Currently uses MailApp (sends from wmurikah@gmail.com).
+ * To switch back to Brevo later, uncomment the Brevo block below.
  */
 function sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo) {
-  // Try Brevo first
-  var brevoResult = sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails);
+  // --- BREVO (disabled for now — uncomment to re-enable) ---
+  // var brevoResult = sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails);
+  // if (brevoResult.success) { return brevoResult; }
+  // if (!brevoResult.fallback) { return brevoResult; }
 
-  if (brevoResult.success) {
-    return brevoResult;
-  }
-
-  if (!brevoResult.fallback) {
-    // Brevo was configured but failed — don't silently fall back, propagate error
-    return brevoResult;
-  }
-
-  // Fallback: MailApp (sends from the Google account running the script)
+  // Send via MailApp (sends from the Google account: wmurikah@gmail.com)
   var emailOptions = {
     to: recipientEmail,
     subject: subject,
     body: body,
-    name: fromName || 'Internal Audit Notification',
-    replyTo: replyTo || 'audit@hasspetroleum.com',
+    name: fromName || 'Hass Audit',
+    replyTo: replyTo || 'wmurikah@gmail.com',
     htmlBody: htmlBody
   };
   if (ccEmails) {
@@ -262,7 +256,7 @@ function processEmailQueue() {
     if (!recipientEmail || !subject) continue;
     
     const rowIndex = i + 1;
-    const replyTo = 'audit@hasspetroleum.com';
+    const replyTo = 'wmurikah@gmail.com';
     
     try {
       // Send email via unified sender (Brevo with MailApp fallback)
@@ -764,7 +758,7 @@ function cleanupOldNotifications(daysOld) {
 function sendImmediateEmail(recipientEmail, subject, body, ccEmails) {
   try {
     const fromName = 'Internal Audit Notification';
-    const replyTo = 'audit@hasspetroleum.com';
+    const replyTo = 'wmurikah@gmail.com';
     const htmlBody = formatEmailHtml(subject, body);
 
     const result = sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo);
