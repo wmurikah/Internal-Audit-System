@@ -392,6 +392,38 @@ function routeAction(action, data, user) {
       }
       return testBrevoEmailAction(data.recipientEmail, user);
 
+    // ========== EMAIL TEMPLATES ==========
+    case 'getEmailTemplatesAll':
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return { success: true, templates: getEmailTemplatesAll() };
+
+    case 'saveEmailTemplate':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can edit email templates' };
+      }
+      return saveEmailTemplateAction(data.templateCode, data.updates, user);
+
+    // ========== SUMMARY RECIPIENTS ==========
+    case 'getSummaryRecipients':
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return getSummaryRecipients();
+
+    case 'saveSummaryRecipients':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can configure summary recipients' };
+      }
+      return saveSummaryRecipients(data.recipients, user);
+
+    case 'setupTriggers':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can configure triggers' };
+      }
+      return setupNotificationTriggers();
+
     // ========== EXPORT ==========
     case 'exportWorkPapersCSV':
       if (!canUserPerform(user, 'export', 'REPORT', null)) {

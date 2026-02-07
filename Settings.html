@@ -16,6 +16,9 @@
       <a class="nav-link" data-bs-toggle="tab" href="#aiConfig"><i class="bi bi-robot me-1"></i>AI Configuration</a>
     </li>
     <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#notificationConfig"><i class="bi bi-bell me-1"></i>Notifications</a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link" data-bs-toggle="tab" href="#systemConfig"><i class="bi bi-sliders me-1"></i>System Config</a>
     </li>
     <li class="nav-item">
@@ -276,6 +279,90 @@
       </div>
     </div>
 
+    <!-- Notifications Tab -->
+    <div class="tab-pane fade" id="notificationConfig">
+      <!-- Summary Recipients -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="bi bi-people me-2"></i>Biweekly Summary Recipients
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            Enter comma-separated email addresses to receive the biweekly audit summary report.
+            If left empty, the system sends to all Super Admins, Management, Senior Management, and Senior Auditors by default.
+          </p>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-9">
+              <label class="form-label">Recipient Emails</label>
+              <textarea class="form-control" id="cfgSummaryRecipients" rows="3"
+                placeholder="e.g. admin@company.com, cfo@company.com, auditor@company.com"></textarea>
+            </div>
+            <div class="col-md-3">
+              <button type="button" class="btn btn-primary w-100" onclick="saveSummaryRecipients()">
+                <i class="bi bi-save me-1"></i>Save Recipients
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Email Template Editor -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-envelope-paper me-2"></i>Email Templates</span>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadEmailTemplates()">
+            <i class="bi bi-arrow-repeat me-1"></i>Refresh
+          </button>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            Edit the subject and body templates for system notifications.
+            Use <code>{{variable_name}}</code> placeholders for dynamic content.
+          </p>
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>Template Code</th>
+                  <th>Subject</th>
+                  <th>Active</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="emailTemplatesTable">
+                <tr><td colspan="4" class="text-center py-4 text-muted">Loading templates...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notification Schedule Info -->
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-clock me-2"></i>Notification Schedule
+        </div>
+        <div class="card-body">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Notification</th><th>Schedule</th></tr></thead>
+            <tbody>
+              <tr><td>Overdue Reminders</td><td><span class="badge bg-primary">Weekly &mdash; Monday 10:30 AM EAT</span></td></tr>
+              <tr><td>Upcoming Due Reminders</td><td><span class="badge bg-primary">Weekly &mdash; Monday 10:30 AM EAT</span></td></tr>
+              <tr><td>Biweekly Summary</td><td><span class="badge bg-info">Every Other Monday 11:00 AM EAT</span></td></tr>
+              <tr><td>Email Queue Processor</td><td><span class="badge bg-secondary">Every 10 minutes</span></td></tr>
+              <tr><td>Daily Maintenance</td><td><span class="badge bg-secondary">Daily 9:00 AM EAT</span></td></tr>
+            </tbody>
+          </table>
+          <div class="mt-3">
+            <button class="btn btn-outline-primary btn-sm" onclick="setupTriggers()">
+              <i class="bi bi-arrow-repeat me-1"></i>Reset All Triggers
+            </button>
+            <small class="text-muted ms-2">Run once to configure/reconfigure all scheduled triggers.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="tab-pane fade" id="systemConfig">
       <div class="card mb-4">
         <div class="card-header">
@@ -408,9 +495,8 @@ function loadSettings() {
   // Restrict tabs based on role - only SUPER_ADMIN sees all tabs
   const role = window.currentUser?.role_code;
   if (role !== 'SUPER_ADMIN') {
-    const restrictedTabs = ['aiConfig', 'systemConfig', 'auditLog'];
+    const restrictedTabs = ['aiConfig', 'systemConfig', 'notificationConfig', 'auditLog'];
     restrictedTabs.forEach(tabId => {
-      // Hide the nav tab
       const navLink = document.querySelector(`a[href="#${tabId}"]`);
       if (navLink) navLink.closest('li').style.display = 'none';
     });
@@ -421,6 +507,7 @@ function loadSettings() {
   loadAIConfig();
   loadSystemConfig();
   loadBrevoConfig();
+  loadNotificationConfig();
   loadAuditLog();
 }
 
@@ -1060,5 +1147,141 @@ function getActionBadgeColor(action) {
 
 function viewLogDetails(logId) {
   showToast('Log details: ' + logId, 'info');
+}
+
+// ========== Notification Configuration ==========
+let emailTemplatesData = [];
+
+function loadNotificationConfig() {
+  loadSummaryRecipients();
+  loadEmailTemplates();
+}
+
+function loadSummaryRecipients() {
+  apiCall('getSummaryRecipients', {}).then(r => {
+    if (r.success) {
+      document.getElementById('cfgSummaryRecipients').value = r.recipients || '';
+    }
+  }).catch(() => {});
+}
+
+function saveSummaryRecipients() {
+  const recipients = document.getElementById('cfgSummaryRecipients').value.trim();
+  showLoading('Saving recipients...');
+  apiCall('saveSummaryRecipients', { recipients }).then(r => {
+    hideLoading();
+    if (r.success) showToast('Summary recipients saved', 'success');
+    else showToast(r.error || 'Error saving recipients', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error saving recipients', 'danger'); });
+}
+
+function loadEmailTemplates() {
+  document.getElementById('emailTemplatesTable').innerHTML =
+    '<tr><td colspan="4" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</td></tr>';
+
+  apiCall('getEmailTemplatesAll', {}).then(r => {
+    if (r.success && r.templates) {
+      emailTemplatesData = r.templates;
+      renderEmailTemplates();
+    } else {
+      document.getElementById('emailTemplatesTable').innerHTML =
+        '<tr><td colspan="4" class="text-center text-muted py-4">No templates found or permission denied</td></tr>';
+    }
+  }).catch(() => {
+    document.getElementById('emailTemplatesTable').innerHTML =
+      '<tr><td colspan="4" class="text-center text-danger py-4">Error loading templates</td></tr>';
+  });
+}
+
+function renderEmailTemplates() {
+  const tbody = document.getElementById('emailTemplatesTable');
+  if (!emailTemplatesData.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">No email templates configured</td></tr>';
+    return;
+  }
+  tbody.innerHTML = emailTemplatesData.map((t, idx) => `
+    <tr>
+      <td><code class="small">${escapeHtml(t.template_code || '-')}</code></td>
+      <td class="small">${escapeHtml(t.subject_template || '-')}</td>
+      <td><span class="badge ${t.is_active === false || t.is_active === 'false' ? 'bg-secondary' : 'bg-success'}">${t.is_active === false || t.is_active === 'false' ? 'Inactive' : 'Active'}</span></td>
+      <td>
+        <button class="btn btn-sm btn-outline-primary" onclick="editEmailTemplate(${idx})">
+          <i class="bi bi-pencil me-1"></i>Edit
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function editEmailTemplate(idx) {
+  const t = emailTemplatesData[idx];
+  if (!t) return;
+
+  const html = `
+    <div class="card border-primary mt-3" id="templateEditorCard">
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-pencil-square me-2"></i>Editing: ${escapeHtml(t.template_code)}</span>
+        <button class="btn btn-sm btn-outline-light" onclick="document.getElementById('templateEditorCard').remove()">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Subject Template</label>
+          <input type="text" class="form-control" id="editTplSubject" value="${escapeHtml(t.subject_template || '')}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Body Template</label>
+          <textarea class="form-control" id="editTplBody" rows="6">${escapeHtml(t.body_template || '')}</textarea>
+          <small class="text-muted">Use <code>{{variable}}</code> for dynamic content. Common: {{work_paper_id}}, {{observation_title}}, {{status}}, {{submitter_name}}</small>
+        </div>
+        <div class="mb-3 form-check">
+          <input type="checkbox" class="form-check-input" id="editTplActive" ${t.is_active !== false && t.is_active !== 'false' ? 'checked' : ''}>
+          <label class="form-check-label" for="editTplActive">Active</label>
+        </div>
+        <button class="btn btn-primary" onclick="saveEmailTemplate('${escapeHtml(t.template_code)}')">
+          <i class="bi bi-save me-1"></i>Save Template
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Remove any existing editor
+  const existing = document.getElementById('templateEditorCard');
+  if (existing) existing.remove();
+
+  // Insert editor after the templates table
+  document.getElementById('emailTemplatesTable').closest('.card').insertAdjacentHTML('afterend', html);
+}
+
+function saveEmailTemplate(templateCode) {
+  const updates = {
+    subject_template: document.getElementById('editTplSubject').value,
+    body_template: document.getElementById('editTplBody').value,
+    is_active: document.getElementById('editTplActive').checked
+  };
+
+  showLoading('Saving template...');
+  apiCall('saveEmailTemplate', { templateCode, updates }).then(r => {
+    hideLoading();
+    if (r.success) {
+      showToast('Template saved', 'success');
+      const editor = document.getElementById('templateEditorCard');
+      if (editor) editor.remove();
+      loadEmailTemplates();
+    } else {
+      showToast(r.error || 'Error saving template', 'danger');
+    }
+  }).catch(() => { hideLoading(); showToast('Error saving template', 'danger'); });
+}
+
+function setupTriggers() {
+  if (!confirm('This will reset all notification triggers to their default schedule. Continue?')) return;
+  showLoading('Setting up triggers...');
+  apiCall('setupTriggers', {}).then(r => {
+    hideLoading();
+    if (r.success) showToast('Triggers configured successfully', 'success');
+    else showToast(r.error || 'Error', 'danger');
+  }).catch(() => { hideLoading(); showToast('Error configuring triggers', 'danger'); });
 }
 </script>

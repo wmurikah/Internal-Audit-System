@@ -526,9 +526,12 @@ function retryFailedEmails() {
  * @param {string} auditeeEmail - Recipient email
  * @param {string} auditeeUserId - Recipient user ID
  * @param {string} auditeeName - Recipient name
+ * @param {string} [ccEmails] - Optional comma-separated CC emails from work paper cc_recipients
  */
-function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId, auditeeName) {
+function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId, auditeeName, ccEmails) {
   if (!workPapers || workPapers.length === 0 || !auditeeEmail) return;
+
+  var loginUrl = ScriptApp.getService().getUrl();
 
   var subject = workPapers.length === 1
     ? 'Audit Finding Requires Your Response'
@@ -547,13 +550,18 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
     ];
   });
 
-  var outro = 'Please log in to the system and submit your action plans at your earliest convenience.';
+  var outro = 'Please log in to the Audit System and submit your action plans at your earliest convenience.<br><br>' +
+    loginUrl;
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
 
-  sendEmail(auditeeEmail, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
+  sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'wmurikah@gmail.com');
 }
 
-// Send daily overdue reminders with professional table (called by daily trigger)
+/**
+ * Send overdue reminders with professional table (called by weekly Monday trigger).
+ * Groups overdue action plans by owner and sends ONE table email per person.
+ * Also sends auditor summary.
+ */
 function sendOverdueReminders() {
   const actionPlans = getActionPlansRaw({ overdue_only: true }, null);
 
@@ -561,6 +569,20 @@ function sendOverdueReminders() {
     console.log('No overdue action plans');
     return 0;
   }
+
+  var loginUrl = ScriptApp.getService().getUrl();
+
+  // Enrich with parent work paper observation title
+  var wpCache = {};
+  actionPlans.forEach(function(ap) {
+    if (ap.work_paper_id && !wpCache[ap.work_paper_id]) {
+      var wp = getWorkPaperById(ap.work_paper_id);
+      wpCache[ap.work_paper_id] = wp || {};
+    }
+    var parentWp = wpCache[ap.work_paper_id] || {};
+    ap._observation_title = parentWp.observation_title || '';
+    ap._risk_rating = ap.risk_rating || parentWp.risk_rating || '';
+  });
 
   // Group by owner
   const byOwner = {};
@@ -589,15 +611,15 @@ function sendOverdueReminders() {
       var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
       var daysOver = ap.days_overdue ? '<span style="color:#dc2626; font-weight:600;">' + ap.days_overdue + '</span>' : '-';
       return [
-        String(ap.action_description || ap.action_plan_id || '-').substring(0, 40),
+        String(ap._observation_title || ap.action_plan_id || '-').substring(0, 50),
         truncateWords(ap.action_description || '', 8),
-        ratingBadge(ap.risk_rating || ''),
+        ratingBadge(ap._risk_rating),
         dueStr,
         daysOver
       ];
     });
 
-    const outro = 'Please log in and update the status of these items immediately.';
+    const outro = 'Please log in and update the status of these items immediately.<br><br>' + loginUrl;
     const htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
     sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
     notificationCount++;
@@ -609,15 +631,15 @@ function sendOverdueReminders() {
   });
 
   if (actionPlans.length > 0 && auditors.length > 0) {
-    const summarySubject = 'Daily Summary: ' + actionPlans.length + ' Overdue Action Plans';
+    const summarySubject = 'Weekly Summary: ' + actionPlans.length + ' Overdue Action Plans';
     const summaryIntro = 'The following action plans are currently overdue across all owners:';
     const summaryRows = actionPlans.slice(0, 50).map(function(ap) {
       var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
       var daysOver = ap.days_overdue ? '<span style="color:#dc2626; font-weight:600;">' + ap.days_overdue + '</span>' : '-';
       return [
-        String(ap.action_description || ap.action_plan_id || '-').substring(0, 40),
+        String(ap._observation_title || ap.action_plan_id || '-').substring(0, 50),
         truncateWords(ap.action_description || '', 8),
-        ratingBadge(ap.risk_rating || ''),
+        ratingBadge(ap._risk_rating),
         dueStr,
         daysOver
       ];
@@ -636,123 +658,219 @@ function sendOverdueReminders() {
 }
 
 /**
- * Send upcoming due date reminders
- * Called by daily trigger
+ * Send upcoming due date reminders with professional table.
+ * Called by weekly Monday trigger — sends reminders for items due within 14 days.
+ * Groups by owner and sends ONE table email per person.
  */
 function sendUpcomingDueReminders() {
   const sheet = getSheet(SHEETS.ACTION_PLANS);
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
-  
+
   const colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
-  
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
-  const reminderDays = [7, 3, 1]; // Send reminders 7, 3, and 1 day before due
-  
-  let notificationCount = 0;
-  
+
+  var loginUrl = ScriptApp.getService().getUrl();
+
+  // Collect action plans due within 14 days that are not yet closed
+  var upcoming = [];
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const status = row[colMap['status']];
     const dueDate = row[colMap['due_date']];
-    const ownerIds = row[colMap['owner_ids']];
-    const actionPlanId = row[colMap['action_plan_id']];
-    const description = row[colMap['action_description']];
-    
-    // Skip if already implemented or no due date
+
     if (!dueDate) continue;
     if (isImplementedOrVerified(status)) continue;
-    
+
     const due = new Date(dueDate);
     due.setHours(0, 0, 0, 0);
-    
     const daysUntilDue = Math.floor((due - today) / (1000 * 60 * 60 * 24));
-    
-    // Check if this is a reminder day
-    if (reminderDays.includes(daysUntilDue)) {
-      const owners = String(ownerIds || '').split(',').map(s => s.trim()).filter(Boolean);
-      
-      owners.forEach(ownerId => {
-        const owner = getUserById(ownerId);
-        if (owner && owner.email) {
-          queueEmail({
-            template_code: 'DUE_DATE_REMINDER',
-            recipient_email: owner.email,
-            recipient_user_id: ownerId,
-            subject: `Reminder: Action Plan Due in ${daysUntilDue} Day(s)`,
-            body: `This is a reminder that the following action plan is due in ${daysUntilDue} day(s):\n\n` +
-              `Action Plan: ${actionPlanId}\n` +
-              `Description: ${description}\n` +
-              `Due Date: ${formatDate(dueDate, 'YYYY-MM-DD')}\n\n` +
-              `Please ensure you complete this action on time.`,
-            module: 'ACTION_PLAN',
-            record_id: actionPlanId
-          });
-          notificationCount++;
-        }
-      });
+
+    // Due within 14 days and not overdue (overdue handled by sendOverdueReminders)
+    if (daysUntilDue > 0 && daysUntilDue <= 14) {
+      var ap = rowToObject(headers, data[i]);
+      ap._daysUntilDue = daysUntilDue;
+      // Enrich with parent observation title
+      if (ap.work_paper_id) {
+        var wp = getWorkPaperById(ap.work_paper_id);
+        ap._observation_title = wp ? wp.observation_title : '';
+        ap._risk_rating = ap.risk_rating || (wp ? wp.risk_rating : '');
+      }
+      upcoming.push(ap);
     }
   }
-  
+
+  if (upcoming.length === 0) {
+    console.log('No upcoming due action plans');
+    return 0;
+  }
+
+  // Group by owner
+  var byOwner = {};
+  upcoming.forEach(function(ap) {
+    var ownerIds = String(ap.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    ownerIds.forEach(function(ownerId) {
+      if (!byOwner[ownerId]) byOwner[ownerId] = [];
+      byOwner[ownerId].push(ap);
+    });
+  });
+
+  let notificationCount = 0;
+  var tableHeaders = ['Observation', 'Summary', 'Rating', 'Due Date', 'Days Left'];
+
+  Object.keys(byOwner).forEach(function(ownerId) {
+    var owner = getUserById(ownerId);
+    if (!owner || !owner.email) return;
+
+    var plans = byOwner[ownerId];
+    var subject = 'Reminder: ' + plans.length + ' Action Plan(s) Due Soon';
+    var intro = 'Dear ' + (owner.full_name || 'Colleague') + ',<br><br>' +
+      'You have <strong>' + plans.length + '</strong> action plan(s) due within the next two weeks:';
+
+    var rows = plans.map(function(ap) {
+      var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+      var daysLeft = '<span style="color:#f59e0b; font-weight:600;">' + ap._daysUntilDue + '</span>';
+      return [
+        String(ap._observation_title || ap.action_plan_id || '-').substring(0, 50),
+        truncateWords(ap.action_description || '', 8),
+        ratingBadge(ap._risk_rating || ''),
+        dueStr,
+        daysLeft
+      ];
+    });
+
+    var outro = 'Please ensure these items are completed before their due dates.<br><br>' + loginUrl;
+    var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
+    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
+    notificationCount++;
+  });
+
   console.log('Queued upcoming due reminders:', notificationCount);
   return notificationCount;
 }
 
 /**
- * Send weekly summary to management
- * Called by weekly trigger
+ * Send biweekly summary to configured recipients.
+ * Called by biweekly trigger (every other Monday).
+ * Recipients can be configured via Settings > Notification Recipients.
+ * Falls back to Super Admin + Management + Senior Mgmt + Auditors by role.
  */
-function sendWeeklySummary() {
-  const wpCounts = getWorkPaperCounts({}, null);
-  const apCounts = getActionPlanCounts({}, null);
-  
-  const summary = `
-WEEKLY AUDIT SUMMARY
-====================
+function sendBiweeklySummary() {
+  var wpCounts = getWorkPaperCounts({}, null);
+  var apCounts = getActionPlanCounts({}, null);
 
-WORK PAPERS
------------
-Total: ${wpCounts.total}
-By Status:
-${Object.entries(wpCounts.byStatus).map(([k, v]) => `  - ${k}: ${v}`).join('\n')}
+  // Build professional HTML summary with tables
+  var loginUrl = ScriptApp.getService().getUrl();
 
-ACTION PLANS
-------------
-Total: ${apCounts.total}
-Overdue: ${apCounts.overdue}
-Due This Week: ${apCounts.dueThisWeek}
-By Status:
-${Object.entries(apCounts.byStatus).map(([k, v]) => `  - ${k}: ${v}`).join('\n')}
-`;
+  // Work Paper status rows
+  var wpHeaders = ['Status', 'Count'];
+  var wpRows = Object.entries(wpCounts.byStatus).map(function(entry) {
+    return [entry[0], '<strong>' + entry[1] + '</strong>'];
+  });
 
-  // Send to management and HOA
-  const recipients = getUsersDropdown().filter(u => 
-    [ROLES.SUPER_ADMIN, ROLES.MANAGEMENT, ROLES.SENIOR_MGMT].includes(u.roleCode)
-  );
-  
+  // Action Plan status rows
+  var apHeaders = ['Metric', 'Value'];
+  var apRows = [
+    ['Total Action Plans', '<strong>' + apCounts.total + '</strong>'],
+    ['Overdue', '<span style="color:#dc2626; font-weight:600;">' + apCounts.overdue + '</span>'],
+    ['Due This Week', '<span style="color:#f59e0b; font-weight:600;">' + apCounts.dueThisWeek + '</span>'],
+    ['Due This Month', '<strong>' + apCounts.dueThisMonth + '</strong>']
+  ];
+  Object.entries(apCounts.byStatus).forEach(function(entry) {
+    apRows.push([entry[0], '<strong>' + entry[1] + '</strong>']);
+  });
+
+  var subject = 'Biweekly Audit Summary Report';
+  var intro = 'Here is your biweekly audit summary as of <strong>' +
+    new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) + '</strong>.' +
+    '<br><br><strong>Work Papers (' + wpCounts.total + ' total):</strong>';
+
+  // Build combined HTML: WP table + AP table
+  var wpTableHtml = formatTableEmailHtml(subject, intro, wpHeaders, wpRows,
+    '<strong>Action Plans (' + apCounts.total + ' total):</strong>');
+
+  // For the AP table, embed it manually after the WP section
+  var apTableIntro = '';
+  var apOutro = '<br>' + loginUrl;
+  var apTableHtml = formatTableEmailHtml(subject, apTableIntro, apHeaders, apRows, apOutro);
+
+  // Use the WP table email as the main body (it includes both sections)
+  var htmlBody = wpTableHtml;
+
+  // Get configured recipients from system config, or fall back to role-based
+  var recipientEmails = getConfiguredSummaryRecipients();
+
   let notificationCount = 0;
-  
-  recipients.forEach(recipient => {
-    queueEmail({
-      template_code: 'WEEKLY_SUMMARY',
-      recipient_email: recipient.email,
-      recipient_user_id: recipient.id,
-      subject: 'Weekly Audit Summary Report',
-      body: summary,
-      module: 'SYSTEM',
-      record_id: ''
-    });
+
+  recipientEmails.forEach(function(email) {
+    sendEmail(email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
     notificationCount++;
   });
-  
-  console.log('Queued weekly summaries:', notificationCount);
+
+  console.log('Queued biweekly summaries:', notificationCount);
   return notificationCount;
 }
 
-// Setup all notification triggers (run once to configure)
+/**
+ * Get configured summary report recipients.
+ * Reads from system config SUMMARY_RECIPIENTS; falls back to role-based lookup.
+ */
+function getConfiguredSummaryRecipients() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var stored = props.getProperty('SUMMARY_RECIPIENTS');
+    if (stored) {
+      var emails = String(stored).split(',').map(function(e) { return e.trim(); }).filter(Boolean);
+      if (emails.length > 0) return emails;
+    }
+  } catch (e) {
+    console.warn('Error reading SUMMARY_RECIPIENTS:', e);
+  }
+
+  // Fallback: Super Admin + Management + Senior Mgmt + Auditors
+  var recipients = getUsersDropdown().filter(function(u) {
+    return [ROLES.SUPER_ADMIN, ROLES.MANAGEMENT, ROLES.SENIOR_MGMT, ROLES.SENIOR_AUDITOR].includes(u.roleCode);
+  });
+  return recipients.map(function(u) { return u.email; }).filter(Boolean);
+}
+
+/**
+ * Save summary recipient emails (called from Settings UI)
+ */
+function saveSummaryRecipients(emailsString, user) {
+  if (!user || (user.role_code !== ROLES.SUPER_ADMIN)) {
+    return { success: false, error: 'Only Super Admin can configure summary recipients' };
+  }
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('SUMMARY_RECIPIENTS', String(emailsString || '').trim());
+  logAuditEvent('SET_SUMMARY_RECIPIENTS', 'CONFIG', 'NOTIFICATION', null, { recipients: emailsString }, user.user_id, user.email);
+  return { success: true };
+}
+
+/**
+ * Get saved summary recipient emails (for Settings UI)
+ */
+function getSummaryRecipients() {
+  var props = PropertiesService.getScriptProperties();
+  return { success: true, recipients: props.getProperty('SUMMARY_RECIPIENTS') || '' };
+}
+
+/**
+ * Setup all notification triggers (run once to configure).
+ *
+ * Schedule overview:
+ *   - Email queue processor: every 10 min
+ *   - Daily maintenance (overdue status updates + cleanup): 6 AM daily
+ *   - Overdue reminders: Monday 7:30 UTC (10:30 AM EAT)
+ *   - Upcoming due reminders: Monday 7:30 UTC (10:30 AM EAT)
+ *   - Biweekly summary: Every other Monday 8:00 UTC (11:00 AM EAT)
+ *
+ * Note: GAS triggers use UTC. EAT = UTC+3.
+ *       10:30 AM EAT = 7:30 AM UTC. We use atHour(7) which runs between 7–8 AM UTC.
+ */
 function setupNotificationTriggers() {
   // Remove existing triggers for these functions
   const functionNames = [
@@ -760,72 +878,83 @@ function setupNotificationTriggers() {
     'sendOverdueReminders',
     'sendUpcomingDueReminders',
     'sendWeeklySummary',
+    'sendBiweeklySummary',
+    'weeklyReminderRunner',
     'dailyMaintenance'
   ];
-  
+
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(trigger => {
     if (functionNames.includes(trigger.getHandlerFunction())) {
       ScriptApp.deleteTrigger(trigger);
     }
   });
-  
+
   // Process email queue every 10 minutes
   ScriptApp.newTrigger('processEmailQueue')
     .timeBased()
     .everyMinutes(10)
     .create();
-  
-  // Daily maintenance at 6 AM
+
+  // Daily maintenance at 6 AM UTC (9 AM EAT) — updates overdue statuses, cleanups only
   ScriptApp.newTrigger('dailyMaintenance')
     .timeBased()
     .atHour(6)
     .everyDays(1)
     .create();
-  
-  // Weekly summary on Monday at 8 AM
-  ScriptApp.newTrigger('sendWeeklySummary')
+
+  // Weekly reminders on Monday at 7 AM UTC (~10:30 AM EAT)
+  // Runs both overdue and upcoming due reminders
+  ScriptApp.newTrigger('weeklyReminderRunner')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(7)
+    .create();
+
+  // Biweekly summary on Monday at 8 AM UTC (11 AM EAT)
+  // GAS doesn't support biweekly directly — we use weekly trigger + check week parity
+  ScriptApp.newTrigger('sendBiweeklySummary')
     .timeBased()
     .onWeekDay(ScriptApp.WeekDay.MONDAY)
     .atHour(8)
     .create();
-  
+
   console.log('Notification triggers configured');
   return { success: true };
 }
 
 /**
- * Daily maintenance tasks
+ * Weekly reminder runner — executes every Monday.
+ * Calls both overdue and upcoming due reminders.
+ */
+function weeklyReminderRunner() {
+  console.log('Running weekly reminders (Monday)...');
+  var overdueCount = sendOverdueReminders();
+  var upcomingCount = sendUpcomingDueReminders();
+  console.log('Weekly reminders done. Overdue:', overdueCount, 'Upcoming:', upcomingCount);
+  return { overdue: overdueCount, upcoming: upcomingCount };
+}
+
+/**
+ * Daily maintenance tasks.
+ * Runs daily at 6 AM UTC (9 AM EAT).
+ * Note: Reminders are now sent weekly on Mondays via weeklyReminderRunner().
  */
 function dailyMaintenance() {
   console.log('Starting daily maintenance...');
-  
+
   // Update overdue statuses
   const overdueUpdated = updateOverdueStatuses();
   console.log('Overdue statuses updated:', overdueUpdated);
-  
-  // Send overdue reminders
-  const overdueReminders = sendOverdueReminders();
-  console.log('Overdue reminders queued:', overdueReminders);
-  
-  // Send upcoming due reminders
-  const upcomingReminders = sendUpcomingDueReminders();
-  console.log('Upcoming due reminders queued:', upcomingReminders);
-  
+
   // Clean up old sent notifications (older than 30 days)
   const cleaned = cleanupOldNotifications(30);
   console.log('Old notifications cleaned:', cleaned);
-  
-  // Rebuild indexes (optional, for data integrity)
-  // rebuildWorkPaperIndex();
-  // rebuildActionPlanIndex();
-  
+
   console.log('Daily maintenance completed');
-  
+
   return {
     overdueUpdated,
-    overdueReminders,
-    upcomingReminders,
     cleaned
   };
 }
@@ -997,6 +1126,62 @@ function testBrevoEmailAction(recipientEmail, user) {
   } else {
     return { success: false, error: result.error || 'Test email failed' };
   }
+}
+
+/**
+ * Get all email templates (for Settings editor).
+ * Returns all templates including inactive ones for admin editing.
+ */
+function getEmailTemplatesAll() {
+  var sheet = getSheet(SHEETS.EMAIL_TEMPLATES);
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+
+  var templates = [];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0]) {
+      var t = rowToObject(headers, data[i]);
+      t._rowIndex = i + 1;
+      templates.push(t);
+    }
+  }
+  return sanitizeForClient(templates);
+}
+
+/**
+ * Save (update) an email template from Settings editor.
+ */
+function saveEmailTemplateAction(templateCode, updates, user) {
+  if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
+    return { success: false, error: 'Only Super Admin can edit email templates' };
+  }
+  if (!templateCode) return { success: false, error: 'Template code required' };
+
+  var sheet = getSheet(SHEETS.EMAIL_TEMPLATES);
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var codeIdx = headers.indexOf('template_code');
+
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][codeIdx] === templateCode) {
+      var existing = rowToObject(headers, data[i]);
+      if (updates.subject_template !== undefined) existing.subject_template = sanitizeInput(updates.subject_template);
+      if (updates.body_template !== undefined) existing.body_template = sanitizeInput(updates.body_template);
+      if (updates.is_active !== undefined) existing.is_active = updates.is_active;
+
+      var row = objectToRow('EMAIL_TEMPLATES', existing);
+      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+
+      // Clear template cache
+      var cache = CacheService.getScriptCache();
+      cache.remove('email_template_' + templateCode);
+
+      logAuditEvent('UPDATE_TEMPLATE', 'CONFIG', 'EMAIL', null, { template_code: templateCode }, user.user_id, user.email);
+      return { success: true };
+    }
+  }
+
+  return { success: false, error: 'Template not found: ' + templateCode };
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)
