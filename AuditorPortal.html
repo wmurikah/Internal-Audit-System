@@ -351,6 +351,66 @@
 
   <!-- SSR: Server-baked init data - arrives WITH the HTML, zero API calls -->
   <script>
+    // --- Google Apps Script Banner Suppression ---
+    // Remove any banner injected by Google before the app container
+    (function suppressBanner() {
+      function removeBanner() {
+        var children = document.body ? document.body.children : [];
+        for (var i = 0; i < children.length; i++) {
+          var el = children[i];
+          // Skip known app elements
+          if (el.classList.contains('app-container') ||
+              el.classList.contains('loading-overlay') ||
+              el.classList.contains('toast-container') ||
+              el.classList.contains('sidebar-overlay') ||
+              el.id === 'forcePasswordOverlay' ||
+              el.id === 'toastContainer' ||
+              el.classList.contains('modal') ||
+              el.tagName === 'SCRIPT' ||
+              el.tagName === 'LINK' ||
+              el.tagName === 'STYLE') continue;
+          // Check for Google-injected banner patterns
+          var text = el.textContent || '';
+          if (text.indexOf('Google Apps Script') !== -1 ||
+              text.indexOf('created by') !== -1 ||
+              el.id === 'docs-editor-container' ||
+              el.id === 'docs-notice') {
+            el.style.display = 'none';
+            el.style.height = '0';
+            el.style.overflow = 'hidden';
+            el.style.visibility = 'hidden';
+            el.style.position = 'absolute';
+          }
+        }
+      }
+      // Run immediately and after DOM load
+      if (document.body) removeBanner();
+      document.addEventListener('DOMContentLoaded', removeBanner);
+      // Watch for dynamically injected banners
+      if (typeof MutationObserver !== 'undefined') {
+        var observer = new MutationObserver(function(mutations) {
+          mutations.forEach(function(m) {
+            m.addedNodes.forEach(function(node) {
+              if (node.nodeType === 1 && node.parentNode === document.body) {
+                var txt = node.textContent || '';
+                if (txt.indexOf('Google Apps Script') !== -1 || txt.indexOf('created by') !== -1) {
+                  node.style.display = 'none';
+                  node.style.height = '0';
+                  node.style.visibility = 'hidden';
+                  node.style.position = 'absolute';
+                }
+              }
+            });
+          });
+        });
+        document.addEventListener('DOMContentLoaded', function() {
+          observer.observe(document.body, { childList: true });
+          // Stop observing after 10 seconds to avoid perf impact
+          setTimeout(function() { observer.disconnect(); }, 10000);
+        });
+      }
+    })();
+
     window.__INIT_DATA__ = <?!= inlineInitData ?>;
   </script>
 

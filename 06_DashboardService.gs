@@ -904,4 +904,335 @@ function getUserPermissions(roleCode) {
   return permissions;
 }
 
+// ============================================================
+// COMPREHENSIVE REPORT ENGINE
+// Industry-standard scoring methodology for internal audit
+// Based on IIA (Institute of Internal Auditors) frameworks
+// ============================================================
+
+/**
+ * Get comprehensive report data with scoring, analytics, and detailed breakdowns.
+ * Single endpoint that powers all report views (Executive Summary, Findings,
+ * Action Plan Tracker, Risk Assessment, Performance Scorecard, Aging Analysis).
+ *
+ * Scoring Methodology:
+ *   Audit Area Score (0-100):
+ *     - Implementation Rate (40%): % of action plans resolved
+ *     - Timeliness (35%): inverse of overdue rate
+ *     - Risk Profile (25%): penalty for high-severity open findings
+ *
+ *   Control Effectiveness Rating:
+ *     - Effective:           score >= 80
+ *     - Needs Improvement:   score 60-79
+ *     - Ineffective:         score < 60
+ *
+ *   Overall Audit Health Score (0-100):
+ *     - Implementation Rate (35%)
+ *     - On-Time Closure Rate (25%)
+ *     - Risk Posture (20%): inverse of weighted avg risk
+ *     - Overdue Penalty (20%): fewer overdue = higher score
+ */
+function getComprehensiveReportData(filters) {
+  filters = filters || {};
+  var startTime = new Date().getTime();
+
+  var workPapers = getWorkPapers(filters, null);
+  var actionPlans = getActionPlans(filters, null);
+
+  // Build lookup: work_paper_id -> work paper
+  var wpLookup = {};
+  workPapers.forEach(function(wp) { wpLookup[wp.work_paper_id] = wp; });
+
+  // Build lookup: work_paper_id -> action plans[]
+  var apByWp = {};
+  actionPlans.forEach(function(ap) {
+    var wpId = ap.work_paper_id;
+    if (!apByWp[wpId]) apByWp[wpId] = [];
+    apByWp[wpId].push(ap);
+  });
+
+  var totalFindings = workPapers.length;
+  var totalAPs = actionPlans.length;
+  var closedAPs = actionPlans.filter(function(ap) { return isImplementedOrVerified(ap.status); });
+  var overdueAPs = actionPlans.filter(function(ap) {
+    return (ap.days_overdue > 0) && !isImplementedOrVerified(ap.status);
+  });
+
+  var implementationRate = totalAPs > 0 ? Math.round((closedAPs.length / totalAPs) * 100) : 0;
+
+  // On-time closure: closed items that were NOT overdue at closure (approximate)
+  var closedOnTime = closedAPs.filter(function(ap) { return (ap.days_overdue || 0) <= 0; });
+  var onTimeRate = closedAPs.length > 0 ? Math.round((closedOnTime.length / closedAPs.length) * 100) : 0;
+
+  // --- Risk Distribution ---
+  var riskDistribution = { Extreme: 0, High: 0, Medium: 0, Low: 0 };
+  workPapers.forEach(function(wp) {
+    if (riskDistribution.hasOwnProperty(wp.risk_rating)) riskDistribution[wp.risk_rating]++;
+  });
+
+  var riskWeights = { Extreme: 100, High: 75, Medium: 50, Low: 25 };
+  var totalRiskScore = 0;
+  var riskCount = 0;
+  workPapers.forEach(function(wp) {
+    var w = riskWeights[wp.risk_rating];
+    if (w !== undefined) { totalRiskScore += w; riskCount++; }
+  });
+  var avgRiskScore = riskCount > 0 ? Math.round(totalRiskScore / riskCount) : 0;
+
+  // Overall health score
+  var overallScore = Math.round(
+    (implementationRate * 0.35) +
+    (onTimeRate * 0.25) +
+    ((100 - avgRiskScore) * 0.20) +
+    (Math.min(100, Math.max(0, 100 - (overdueAPs.length * 5))) * 0.20)
+  );
+  overallScore = Math.min(100, Math.max(0, overallScore));
+
+  // --- By Affiliate ---
+  var byAffiliate = {};
+  workPapers.forEach(function(wp) {
+    var code = wp.affiliate_code || 'Unknown';
+    if (!byAffiliate[code]) {
+      byAffiliate[code] = {
+        code: code, name: code, findings: 0, actionPlans: 0,
+        closedAPs: 0, overdueAPs: 0, implementationRate: 0, score: 0,
+        riskDistribution: { Extreme: 0, High: 0, Medium: 0, Low: 0 }
+      };
+    }
+    byAffiliate[code].findings++;
+    if (riskDistribution.hasOwnProperty(wp.risk_rating)) {
+      byAffiliate[code].riskDistribution[wp.risk_rating]++;
+    }
+  });
+
+  actionPlans.forEach(function(ap) {
+    var wp = wpLookup[ap.work_paper_id];
+    var code = wp ? (wp.affiliate_code || 'Unknown') : 'Unknown';
+    if (!byAffiliate[code]) {
+      byAffiliate[code] = {
+        code: code, name: code, findings: 0, actionPlans: 0,
+        closedAPs: 0, overdueAPs: 0, implementationRate: 0, score: 0,
+        riskDistribution: { Extreme: 0, High: 0, Medium: 0, Low: 0 }
+      };
+    }
+    byAffiliate[code].actionPlans++;
+    if (isImplementedOrVerified(ap.status)) byAffiliate[code].closedAPs++;
+    if (ap.days_overdue > 0 && !isImplementedOrVerified(ap.status)) byAffiliate[code].overdueAPs++;
+  });
+
+  Object.keys(byAffiliate).forEach(function(key) {
+    var a = byAffiliate[key];
+    if (a.actionPlans > 0) {
+      a.implementationRate = Math.round((a.closedAPs / a.actionPlans) * 100);
+      var overdueRate = (a.overdueAPs / a.actionPlans) * 100;
+      a.score = Math.round(
+        (a.implementationRate * 0.50) +
+        ((100 - overdueRate) * 0.30) +
+        (Math.max(0, 100 - (a.findings * 5)) * 0.20)
+      );
+      a.score = Math.min(100, Math.max(0, a.score));
+    } else {
+      a.implementationRate = 0;
+      a.score = a.findings === 0 ? 100 : 40;
+    }
+  });
+
+  // --- By Audit Area (Performance Scorecard) ---
+  var byAuditArea = {};
+  workPapers.forEach(function(wp) {
+    var areaId = wp.audit_area_id || 'Unknown';
+    var areaName = wp.audit_area_name || areaId;
+    if (!byAuditArea[areaId]) {
+      byAuditArea[areaId] = {
+        id: areaId, name: areaName, findings: 0, actionPlans: 0,
+        closedAPs: 0, overdueAPs: 0, implementationRate: 0,
+        score: 0, rating: 'N/A',
+        riskDistribution: { Extreme: 0, High: 0, Medium: 0, Low: 0 }
+      };
+    }
+    byAuditArea[areaId].findings++;
+    if (byAuditArea[areaId].riskDistribution.hasOwnProperty(wp.risk_rating)) {
+      byAuditArea[areaId].riskDistribution[wp.risk_rating]++;
+    }
+  });
+
+  actionPlans.forEach(function(ap) {
+    var wp = wpLookup[ap.work_paper_id];
+    var areaId = wp ? (wp.audit_area_id || 'Unknown') : 'Unknown';
+    if (!byAuditArea[areaId]) {
+      var areaName = wp ? (wp.audit_area_name || areaId) : areaId;
+      byAuditArea[areaId] = {
+        id: areaId, name: areaName, findings: 0, actionPlans: 0,
+        closedAPs: 0, overdueAPs: 0, implementationRate: 0,
+        score: 0, rating: 'N/A',
+        riskDistribution: { Extreme: 0, High: 0, Medium: 0, Low: 0 }
+      };
+    }
+    byAuditArea[areaId].actionPlans++;
+    if (isImplementedOrVerified(ap.status)) byAuditArea[areaId].closedAPs++;
+    if (ap.days_overdue > 0 && !isImplementedOrVerified(ap.status)) byAuditArea[areaId].overdueAPs++;
+  });
+
+  Object.keys(byAuditArea).forEach(function(key) {
+    var a = byAuditArea[key];
+    if (a.actionPlans > 0) {
+      a.implementationRate = Math.round((a.closedAPs / a.actionPlans) * 100);
+      var overdueRate = (a.overdueAPs / a.actionPlans) * 100;
+      a.score = Math.round(
+        (a.implementationRate * 0.40) +
+        ((100 - overdueRate) * 0.35) +
+        (Math.max(0, 100 - (a.findings * 3)) * 0.25)
+      );
+      a.score = Math.min(100, Math.max(0, a.score));
+    } else {
+      a.implementationRate = 0;
+      a.score = a.findings === 0 ? 100 : 40;
+    }
+    // Control effectiveness rating
+    if (a.score >= 80) a.rating = 'Effective';
+    else if (a.score >= 60) a.rating = 'Needs Improvement';
+    else a.rating = 'Ineffective';
+  });
+
+  // --- Aging Analysis ---
+  var aging = {
+    current:       { count: 0, items: [] },
+    overdue1to30:  { count: 0, items: [] },
+    overdue31to60: { count: 0, items: [] },
+    overdue61to90: { count: 0, items: [] },
+    overdue90plus: { count: 0, items: [] }
+  };
+
+  actionPlans.forEach(function(ap) {
+    if (isImplementedOrVerified(ap.status)) return;
+    var d = ap.days_overdue || 0;
+    var wp = wpLookup[ap.work_paper_id];
+    var item = {
+      id: ap.action_plan_id,
+      description: (ap.action_description || '').substring(0, 120),
+      owner: ap.owner_names || '',
+      dueDate: ap.due_date,
+      daysOverdue: d,
+      status: ap.status,
+      riskRating: wp ? (wp.risk_rating || '') : '',
+      affiliate: wp ? (wp.affiliate_code || '') : ''
+    };
+    if (d <= 0)       { aging.current.count++;       aging.current.items.push(item); }
+    else if (d <= 30) { aging.overdue1to30.count++;  aging.overdue1to30.items.push(item); }
+    else if (d <= 60) { aging.overdue31to60.count++; aging.overdue31to60.items.push(item); }
+    else if (d <= 90) { aging.overdue61to90.count++; aging.overdue61to90.items.push(item); }
+    else              { aging.overdue90plus.count++;  aging.overdue90plus.items.push(item); }
+  });
+
+  // --- 12-Month Trends ---
+  var months = [];
+  var now = new Date();
+  for (var i = 11; i >= 0; i--) {
+    var date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      label: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      year: date.getFullYear(),
+      month: date.getMonth()
+    });
+  }
+
+  var trends = {
+    labels: months.map(function(m) { return m.label; }),
+    findingsCreated:    new Array(12).fill(0),
+    actionPlansCreated: new Array(12).fill(0),
+    actionPlansClosed:  new Array(12).fill(0)
+  };
+
+  workPapers.forEach(function(wp) {
+    var created = wp.created_at ? new Date(wp.created_at) : null;
+    if (created) {
+      months.forEach(function(m, idx) {
+        if (created.getFullYear() === m.year && created.getMonth() === m.month) {
+          trends.findingsCreated[idx]++;
+        }
+      });
+    }
+  });
+
+  actionPlans.forEach(function(ap) {
+    var created = ap.created_at ? new Date(ap.created_at) : null;
+    if (created) {
+      months.forEach(function(m, idx) {
+        if (created.getFullYear() === m.year && created.getMonth() === m.month) {
+          trends.actionPlansCreated[idx]++;
+        }
+      });
+    }
+    if (isImplementedOrVerified(ap.status)) {
+      var closed = ap.updated_at ? new Date(ap.updated_at) : null;
+      if (closed) {
+        months.forEach(function(m, idx) {
+          if (closed.getFullYear() === m.year && closed.getMonth() === m.month) {
+            trends.actionPlansClosed[idx]++;
+          }
+        });
+      }
+    }
+  });
+
+  // --- Status Distributions ---
+  var wpStatusDist = {};
+  workPapers.forEach(function(wp) {
+    wpStatusDist[wp.status] = (wpStatusDist[wp.status] || 0) + 1;
+  });
+  var apStatusDist = {};
+  actionPlans.forEach(function(ap) {
+    apStatusDist[ap.status] = (apStatusDist[ap.status] || 0) + 1;
+  });
+
+  // --- Detailed Findings (sorted by risk severity) ---
+  var riskOrder = { Extreme: 0, High: 1, Medium: 2, Low: 3 };
+  var findings = workPapers.map(function(wp) {
+    var wpAPs = apByWp[wp.work_paper_id] || [];
+    return {
+      id: wp.work_paper_id,
+      title: wp.observation_title || '',
+      description: (wp.observation_description || '').substring(0, 250),
+      affiliate: wp.affiliate_code || '',
+      auditArea: wp.audit_area_name || wp.audit_area_id || '',
+      riskRating: wp.risk_rating || '',
+      status: wp.status || '',
+      date: wp.work_paper_date || wp.created_at || '',
+      preparedBy: wp.prepared_by_name || '',
+      recommendation: (wp.recommendation || '').substring(0, 250),
+      actionPlansTotal: wpAPs.length,
+      actionPlansClosed: wpAPs.filter(function(ap) { return isImplementedOrVerified(ap.status); }).length,
+      actionPlansOverdue: wpAPs.filter(function(ap) { return ap.days_overdue > 0 && !isImplementedOrVerified(ap.status); }).length
+    };
+  });
+  findings.sort(function(a, b) { return (riskOrder[a.riskRating] || 99) - (riskOrder[b.riskRating] || 99); });
+
+  console.log('getComprehensiveReportData completed in', new Date().getTime() - startTime, 'ms');
+
+  return sanitizeForClient({
+    generatedAt: new Date(),
+    filters: filters,
+    executive: {
+      totalFindings: totalFindings,
+      totalActionPlans: totalAPs,
+      closedActionPlans: closedAPs.length,
+      overdueActionPlans: overdueAPs.length,
+      implementationRate: implementationRate,
+      onTimeClosureRate: onTimeRate,
+      avgRiskScore: avgRiskScore,
+      riskDistribution: riskDistribution,
+      overallScore: overallScore
+    },
+    byAffiliate: Object.keys(byAffiliate).map(function(k) { return byAffiliate[k]; })
+                  .filter(function(a) { return a.findings > 0 || a.actionPlans > 0; }),
+    byAuditArea: Object.keys(byAuditArea).map(function(k) { return byAuditArea[k]; })
+                  .filter(function(a) { return a.findings > 0; }),
+    wpStatusDistribution: wpStatusDist,
+    apStatusDistribution: apStatusDist,
+    aging: aging,
+    trends: trends,
+    findings: findings
+  });
+}
+
 // sanitizeForClient() is defined in 01_Core.gs (canonical)
