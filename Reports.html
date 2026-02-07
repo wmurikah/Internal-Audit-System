@@ -1,106 +1,759 @@
-<!-- Reports Page -->
+<!-- Reports Center - Professional Internal Audit Reporting -->
 <div class="reports-page">
-  <div class="row g-4">
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body text-center">
-          <i class="bi bi-file-earmark-bar-graph display-4 text-primary mb-3"></i>
-          <h5>Audit Summary Report</h5>
-          <p class="text-muted">Overview of work papers and action plans by affiliate</p>
-          <button class="btn btn-primary" onclick="generateReport('summary')">Generate</button>
+
+  <!-- Report Filters Bar -->
+  <div class="card mb-4">
+    <div class="card-body py-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small text-muted mb-1">Year</label>
+          <select class="form-select form-select-sm" id="rptFilterYear"></select>
         </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body text-center">
-          <i class="bi bi-clock-history display-4 text-warning mb-3"></i>
-          <h5>Action Plan Aging</h5>
-          <p class="text-muted">Action plans grouped by overdue status</p>
-          <button class="btn btn-warning" onclick="generateReport('aging')">Generate</button>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">Affiliate</label>
+          <select class="form-select form-select-sm" id="rptFilterAffiliate">
+            <option value="">All Affiliates</option>
+          </select>
         </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body text-center">
-          <i class="bi bi-shield-exclamation display-4 text-danger mb-3"></i>
-          <h5>Risk Summary</h5>
-          <p class="text-muted">Findings grouped by risk rating</p>
-          <button class="btn btn-danger" onclick="generateReport('risk')">Generate</button>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">Audit Area</label>
+          <select class="form-select form-select-sm" id="rptFilterArea">
+            <option value="">All Audit Areas</option>
+          </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end gap-2">
+          <button class="btn btn-sm btn-outline-secondary" onclick="clearReportFilters()">
+            <i class="bi bi-x-circle me-1"></i>Clear
+          </button>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card mt-4" id="reportResults" style="display:none;">
-    <div class="card-header d-flex justify-content-between">
-      <span id="reportTitle">Report</span>
-      <button class="btn btn-sm btn-outline-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+  <!-- Report Categories -->
+  <div class="row g-3 mb-4">
+    <!-- Board / Audit Committee Reports -->
+    <div class="col-12">
+      <h6 class="text-muted text-uppercase small fw-bold mb-2">
+        <i class="bi bi-building me-1"></i>Board &amp; Audit Committee
+      </h6>
     </div>
-    <div class="card-body" id="reportContent"></div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('executive_summary')">
+        <div class="rpt-icon" style="background: #eef2ff; color: #1a365d;">
+          <i class="bi bi-speedometer2"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Executive Summary</div>
+          <div class="rpt-desc">KPIs, risk distribution, affiliate overview, area scores</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('audit_area_scorecard')">
+        <div class="rpt-icon" style="background: #fef3c7; color: #92400e;">
+          <i class="bi bi-award"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Audit Area Scorecard</div>
+          <div class="rpt-desc">Performance scores (0-100) for each audit area with grading</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('risk_heat_map')">
+        <div class="rpt-icon" style="background: #fef2f2; color: #dc2626;">
+          <i class="bi bi-grid-3x3"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Risk Heat Map</div>
+          <div class="rpt-desc">Risk matrix by affiliate and audit area</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('repeat_findings')">
+        <div class="rpt-icon" style="background: #fef2f2; color: #b91c1c;">
+          <i class="bi bi-arrow-repeat"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Repeat Findings</div>
+          <div class="rpt-desc">Recurring findings across audit cycles</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Management Reports -->
+    <div class="col-12 mt-3">
+      <h6 class="text-muted text-uppercase small fw-bold mb-2">
+        <i class="bi bi-people me-1"></i>Management
+      </h6>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('finding_tracker')">
+        <div class="rpt-icon" style="background: #ecfdf5; color: #065f46;">
+          <i class="bi bi-list-check"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Finding Tracker</div>
+          <div class="rpt-desc">All findings with action plan completion status</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('action_plan_status')">
+        <div class="rpt-icon" style="background: #eff6ff; color: #1e40af;">
+          <i class="bi bi-clipboard-data"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Action Plan Status</div>
+          <div class="rpt-desc">All action plans with owners, due dates, status</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('management_action_plan')">
+        <div class="rpt-icon" style="background: #f5f3ff; color: #6d28d9;">
+          <i class="bi bi-person-lines-fill"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Management Accountability</div>
+          <div class="rpt-desc">Action plans grouped by responsible owner</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('overdue_aging')">
+        <div class="rpt-icon" style="background: #fff7ed; color: #c2410c;">
+          <i class="bi bi-clock-history"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Overdue &amp; Aging</div>
+          <div class="rpt-desc">Action plans bucketed by overdue severity</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audit Team Reports -->
+    <div class="col-12 mt-3">
+      <h6 class="text-muted text-uppercase small fw-bold mb-2">
+        <i class="bi bi-clipboard-check me-1"></i>Audit Team
+      </h6>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('implementation_rate')">
+        <div class="rpt-icon" style="background: #ecfdf5; color: #047857;">
+          <i class="bi bi-graph-up-arrow"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Implementation Rate</div>
+          <div class="rpt-desc">Monthly trends and rate by affiliate</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="runReport('auditor_productivity')">
+        <div class="rpt-icon" style="background: #f0f9ff; color: #0369a1;">
+          <i class="bi bi-person-workspace"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Auditor Productivity</div>
+          <div class="rpt-desc">Work paper output, approval rates, turnaround time</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="exportDataCSV('workpapers')">
+        <div class="rpt-icon" style="background: #f0fdf4; color: #16a34a;">
+          <i class="bi bi-file-earmark-excel"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Export Work Papers</div>
+          <div class="rpt-desc">Raw work paper data as CSV/Excel</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-lg-3">
+      <div class="rpt-card" onclick="exportDataCSV('actionplans')">
+        <div class="rpt-icon" style="background: #f0fdf4; color: #16a34a;">
+          <i class="bi bi-file-earmark-excel"></i>
+        </div>
+        <div class="rpt-info">
+          <div class="rpt-name">Export Action Plans</div>
+          <div class="rpt-desc">Raw action plan data as CSV/Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report Output Area -->
+  <div class="card" id="reportResults" style="display:none;">
+    <div class="card-header rpt-results-header">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-text text-primary"></i>
+        <span id="reportTitle" class="fw-bold">Report</span>
+        <span class="text-muted small ms-2" id="reportGeneratedAt"></span>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-primary" onclick="downloadWord()" title="Download as Word document">
+          <i class="bi bi-file-earmark-word me-1"></i>Word
+        </button>
+        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel()" title="Download as Excel/CSV">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="downloadPDF()" title="Print / Save as PDF">
+          <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+        </button>
+      </div>
+    </div>
+    <div class="card-body" id="reportContent" style="max-height: 70vh; overflow-y: auto;"></div>
   </div>
 </div>
 
+<style>
+.rpt-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-radius: 10px;
+  border: 1px solid #e5e7eb; background: #fff;
+  cursor: pointer; transition: all 0.2s ease;
+  height: 100%;
+}
+.rpt-card:hover { border-color: #1a365d; box-shadow: 0 2px 8px rgba(26,54,93,0.1); transform: translateY(-1px); }
+.rpt-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.rpt-info { min-width: 0; }
+.rpt-name { font-weight: 600; font-size: 0.9rem; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rpt-desc { font-size: 0.75rem; color: #6b7280; line-height: 1.3; margin-top: 2px; }
+.rpt-results-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+/* In-page report rendering */
+.rpt-section { margin-bottom: 24px; }
+.rpt-section h5 { color: #1a365d; font-size: 1rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 12px; }
+.rpt-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.rpt-kpi { padding: 16px; background: #f8f9fb; border-radius: 8px; border-left: 4px solid #1a365d; text-align: center; }
+.rpt-kpi .value { font-size: 1.8rem; font-weight: 700; color: #1a365d; line-height: 1; }
+.rpt-kpi .label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+.rpt-kpi.danger { border-left-color: #dc3545; }
+.rpt-kpi.danger .value { color: #dc3545; }
+.rpt-kpi.warning { border-left-color: #f59e0b; }
+.rpt-kpi.warning .value { color: #f59e0b; }
+.rpt-kpi.success { border-left-color: #10b981; }
+.rpt-kpi.success .value { color: #10b981; }
+
+.rpt-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.rpt-table th { background: #1a365d; color: #fff; padding: 8px 10px; font-weight: 600; text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.3px; }
+.rpt-table td { padding: 7px 10px; border-bottom: 1px solid #eee; }
+.rpt-table tr:nth-child(even) { background: #f9fafb; }
+.rpt-table tr:hover { background: #f0f4f8; }
+
+.rpt-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; color: #fff; }
+.rpt-badge-extreme { background: #dc3545; }
+.rpt-badge-high { background: #fd7e14; }
+.rpt-badge-medium { background: #ffc107; color: #333; }
+.rpt-badge-low { background: #28a745; }
+
+.grade-badge { display: inline-block; width: 32px; height: 32px; border-radius: 50%; text-align: center; line-height: 32px; font-weight: 700; font-size: 0.95rem; color: #fff; }
+.grade-a { background: #10b981; }
+.grade-b { background: #3b82f6; }
+.grade-c { background: #f59e0b; }
+.grade-d { background: #f97316; }
+.grade-f { background: #ef4444; }
+
+.score-bar { height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; min-width: 80px; }
+.score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+
+.heat-cell { text-align: center; font-weight: 600; min-width: 60px; }
+.heat-0 { background: #f9fafb; color: #9ca3af; }
+.heat-low { background: #fef3c7; color: #92400e; }
+.heat-med { background: #fed7aa; color: #c2410c; }
+.heat-high { background: #fecaca; color: #b91c1c; }
+.heat-extreme { background: #fca5a5; color: #7f1d1d; }
+
+@media print {
+  .rpt-results-header .btn { display: none !important; }
+  .card-header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .rpt-table th { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+</style>
+
 <script>
+let currentReportType = null;
+let currentReportData = null;
+
 function loadReports() {
-  // Auto-generate summary report on page load for quick overview
-  generateReport('summary');
+  initReportFilters();
 }
 
-function generateReport(type) {
-  showLoading('Generating report...');
-  let action = type === 'summary' ? 'getAuditSummaryReport' : type === 'aging' ? 'getActionPlanAgingReport' : 'getRiskSummaryReport';
-  let reportTitle = type === 'summary' ? 'Audit Summary Report' : type === 'aging' ? 'Action Plan Aging Report' : 'Risk Summary Report';
+function initReportFilters() {
+  const yearSel = document.getElementById('rptFilterYear');
+  const cur = new Date().getFullYear();
+  yearSel.innerHTML = '';
+  for (let y = cur + 1; y >= cur - 4; y--) {
+    yearSel.innerHTML += `<option value="${y}" ${y === cur ? 'selected' : ''}>${y}</option>`;
+  }
 
-  apiCall(action, { filters: {} })
+  const affiliates = window.appDropdowns?.affiliates || [];
+  const affSel = document.getElementById('rptFilterAffiliate');
+  affSel.innerHTML = '<option value="">All Affiliates</option>';
+  affiliates.forEach(a => { affSel.innerHTML += `<option value="${a.code}">${a.display || a.name || a.code}</option>`; });
+
+  const areas = window.appDropdowns?.auditAreas || [];
+  const areaSel = document.getElementById('rptFilterArea');
+  areaSel.innerHTML = '<option value="">All Audit Areas</option>';
+  areas.forEach(a => { areaSel.innerHTML += `<option value="${a.id}">${a.display || a.name || a.id}</option>`; });
+}
+
+function getReportFilters() {
+  return {
+    year: document.getElementById('rptFilterYear')?.value || '',
+    affiliate_code: document.getElementById('rptFilterAffiliate')?.value || '',
+    audit_area_id: document.getElementById('rptFilterArea')?.value || ''
+  };
+}
+
+function clearReportFilters() {
+  const cur = new Date().getFullYear();
+  document.getElementById('rptFilterYear').value = cur;
+  document.getElementById('rptFilterAffiliate').value = '';
+  document.getElementById('rptFilterArea').value = '';
+}
+
+// =============================================
+// REPORT GENERATION
+// =============================================
+
+function runReport(type) {
+  currentReportType = type;
+  showLoading('Generating report...');
+
+  apiCall('generateReport', { reportType: type, filters: getReportFilters() })
     .then(r => {
       hideLoading();
-      if (r && r.success !== false && r.report) {
+      if (r && r.success) {
+        currentReportData = r;
         document.getElementById('reportResults').style.display = 'block';
-        document.getElementById('reportTitle').textContent = reportTitle;
-        renderReport(type, r.report);
+        document.getElementById('reportTitle').textContent = r.title || type;
+        document.getElementById('reportGeneratedAt').textContent = 'Generated: ' + new Date().toLocaleString();
+        renderReportInPage(r);
+        document.getElementById('reportResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
       } else {
-        console.error('Report error:', r?.error);
-        // Show empty report with error message
-        document.getElementById('reportResults').style.display = 'block';
-        document.getElementById('reportTitle').textContent = reportTitle;
-        document.getElementById('reportContent').innerHTML = `
-          <div class="text-center py-4">
-            <i class="bi bi-exclamation-circle text-warning display-4"></i>
-            <p class="mt-3">${r?.error || 'Unable to generate report. Please try again.'}</p>
-          </div>
-        `;
-        if (r?.error) showToast(r.error, 'warning');
+        showToast(r?.error || 'Report generation failed', 'danger');
       }
     })
     .catch(err => {
       hideLoading();
-      console.error('Report error:', err);
-      showToast('Error generating report', 'danger');
+      showToast('Error: ' + (err.message || err), 'danger');
     });
 }
 
-function renderReport(type, data) {
-  const content = document.getElementById('reportContent');
-  let html = `<p class="text-muted">Generated: ${formatDate(data.generatedAt)}</p>`;
-  
-  if (type === 'summary') {
-    html += `<h5>Summary</h5><p>Total Work Papers: ${data.summary?.totalWorkPapers || 0} | Total Action Plans: ${data.summary?.totalActionPlans || 0}</p>`;
-    html += '<h5>By Affiliate</h5><table class="table"><thead><tr><th>Affiliate</th><th>Work Papers</th><th>Action Plans</th><th>Overdue</th></tr></thead><tbody>';
-    (data.byAffiliate || []).forEach(a => {
-      html += `<tr><td>${a.affiliate_code}</td><td>${a.workPapers?.total || 0}</td><td>${a.actionPlans?.total || 0}</td><td>${a.actionPlans?.overdue || 0}</td></tr>`;
-    });
-    html += '</tbody></table>';
-  } else if (type === 'aging') {
-    html += `<h5>Summary</h5><p>Current: ${data.summary?.current || 0} | Overdue 1-30: ${data.summary?.overdue1to30 || 0} | 31-60: ${data.summary?.overdue31to60 || 0} | 61-90: ${data.summary?.overdue61to90 || 0} | 90+: ${data.summary?.overdue90plus || 0}</p>`;
-  } else {
-    html += '<h5>By Risk Level</h5><table class="table"><thead><tr><th>Risk</th><th>Work Papers</th><th>Open APs</th><th>Closed APs</th></tr></thead><tbody>';
-    (data.byRisk || []).forEach(r => {
-      html += `<tr><td><span class="badge ${getRiskClass(r.level)}">${r.level}</span></td><td>${r.count}</td><td>${r.openActionPlans}</td><td>${r.closedActionPlans}</td></tr>`;
-    });
-    html += '</tbody></table>';
+// =============================================
+// IN-PAGE REPORT RENDERING
+// =============================================
+
+function renderReportInPage(report) {
+  const el = document.getElementById('reportContent');
+  const data = report.data || {};
+
+  switch (report.reportType) {
+    case 'executive_summary': el.innerHTML = renderExecSummary(data, report); break;
+    case 'audit_area_scorecard': el.innerHTML = renderScorecard(data, report); break;
+    case 'finding_tracker': el.innerHTML = renderFindingTracker(data, report); break;
+    case 'action_plan_status': el.innerHTML = renderAPStatus(data, report); break;
+    case 'overdue_aging': el.innerHTML = renderOverdueAging(data, report); break;
+    case 'risk_heat_map': el.innerHTML = renderRiskHeatMap(data); break;
+    case 'auditor_productivity': el.innerHTML = renderAuditorProd(data); break;
+    case 'implementation_rate': el.innerHTML = renderImplRate(data, report); break;
+    case 'repeat_findings': el.innerHTML = renderRepeatFindings(data, report); break;
+    case 'management_action_plan': el.innerHTML = renderMgmtAP(data, report); break;
+    default: el.innerHTML = '<pre>' + JSON.stringify(report, null, 2) + '</pre>';
   }
-  content.innerHTML = html;
+}
+
+function rBadge(risk) {
+  return `<span class="rpt-badge rpt-badge-${(risk||'').toLowerCase()}">${esc(risk)}</span>`;
+}
+
+function gradeBadge(grade) {
+  return `<span class="grade-badge grade-${(grade||'f').toLowerCase()}">${esc(grade)}</span>`;
+}
+
+function scoreBar(score, max) {
+  max = max || 100;
+  const pct = Math.min(100, Math.max(0, (score / max) * 100));
+  const color = pct >= 75 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+  return `<div class="score-bar"><div class="score-bar-fill" style="width:${pct}%; background:${color};"></div></div>`;
+}
+
+function heatClass(val) {
+  if (!val || val === 0) return 'heat-0';
+  if (val <= 1) return 'heat-low';
+  if (val <= 3) return 'heat-med';
+  if (val <= 5) return 'heat-high';
+  return 'heat-extreme';
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+
+// ---------- Executive Summary ----------
+function renderExecSummary(data, report) {
+  const k = data.kpis || {};
+  let h = `<div class="rpt-kpi-grid">
+    <div class="rpt-kpi"><div class="value">${k.totalFindings||0}</div><div class="label">Total Findings</div></div>
+    <div class="rpt-kpi"><div class="value">${k.totalActionPlans||0}</div><div class="label">Action Plans</div></div>
+    <div class="rpt-kpi success"><div class="value">${k.implementationRate||0}%</div><div class="label">Implementation Rate</div></div>
+    <div class="rpt-kpi danger"><div class="value">${k.overdueCount||0}</div><div class="label">Overdue</div></div>
+    <div class="rpt-kpi warning"><div class="value">${k.highRiskFindings||0}</div><div class="label">High/Extreme Risk</div></div>
+    <div class="rpt-kpi success"><div class="value">${k.closureRate||0}%</div><div class="label">Closure Rate</div></div>
+  </div>`;
+
+  // Risk distribution
+  const rd = data.riskDistribution || {};
+  const total = (rd.Extreme||0)+(rd.High||0)+(rd.Medium||0)+(rd.Low||0);
+  h += `<div class="rpt-section"><h5>Risk Distribution</h5>
+    <div class="d-flex gap-3 flex-wrap">
+      ${['Extreme','High','Medium','Low'].map(r => {
+        const pct = total > 0 ? Math.round(((rd[r]||0)/total)*100) : 0;
+        return `<div>${rBadge(r)} <strong>${rd[r]||0}</strong> <span class="text-muted small">(${pct}%)</span></div>`;
+      }).join('')}
+    </div></div>`;
+
+  // By Affiliate
+  h += `<div class="rpt-section"><h5>Summary by Affiliate</h5>
+    <table class="rpt-table"><thead><tr><th>Affiliate</th><th>Findings</th><th>High/Extreme</th><th>Overdue APs</th><th>Implementation Rate</th></tr></thead><tbody>`;
+  (data.byAffiliate||[]).forEach(a => {
+    h += `<tr><td><strong>${esc(a.name)}</strong></td><td>${a.findings}</td><td>${a.high}</td><td>${a.overdue > 0 ? '<span class="text-danger fw-bold">'+a.overdue+'</span>' : '0'}</td><td>${scoreBar(a.implRate)} ${a.implRate}%</td></tr>`;
+  });
+  h += `</tbody></table></div>`;
+
+  // Area Scores
+  if ((data.areaScores||[]).length > 0) {
+    h += `<div class="rpt-section"><h5>Audit Area Performance Scores</h5>
+      <table class="rpt-table"><thead><tr><th>Audit Area</th><th>Score</th><th>Grade</th><th>Findings</th><th>Impl. Rate</th><th>Overdue</th></tr></thead><tbody>`;
+    (data.areaScores||[]).forEach(a => {
+      h += `<tr><td>${esc(a.areaName)}</td><td>${scoreBar(a.score)} ${a.score !== null ? a.score+'/100' : 'N/A'}</td><td>${gradeBadge(a.grade)}</td><td>${a.details?.findingCount||0}</td><td>${a.details?.implementationRate||0}%</td><td>${(a.details?.overdueCount||0) > 0 ? '<span class="text-danger fw-bold">'+a.details.overdueCount+'</span>' : '0'}</td></tr>`;
+    });
+    h += `</tbody></table></div>`;
+  }
+
+  // Top Overdue
+  if ((data.topOverdue||[]).length > 0) {
+    h += `<div class="rpt-section"><h5>Critical Overdue Items</h5>
+      <table class="rpt-table"><thead><tr><th>Action Plan</th><th>Owner</th><th>Days Overdue</th><th>Audit Area</th><th>Affiliate</th></tr></thead><tbody>`;
+    data.topOverdue.forEach(o => {
+      h += `<tr><td>${esc(o.description)}</td><td>${esc(o.owner)}</td><td class="text-danger fw-bold">${o.daysOverdue}</td><td>${esc(o.auditArea)}</td><td>${esc(o.affiliate)}</td></tr>`;
+    });
+    h += `</tbody></table></div>`;
+  }
+
+  return h;
+}
+
+// ---------- Audit Area Scorecard ----------
+function renderScorecard(data, report) {
+  let h = `<div class="rpt-section"><h5>Scoring Methodology</h5>
+    <div class="row g-2 mb-3">
+      <div class="col-auto"><span class="badge bg-secondary">Severity 25%</span></div>
+      <div class="col-auto"><span class="badge bg-secondary">Implementation 30%</span></div>
+      <div class="col-auto"><span class="badge bg-secondary">Timeliness 20%</span></div>
+      <div class="col-auto"><span class="badge bg-secondary">Repeat Findings 15%</span></div>
+      <div class="col-auto"><span class="badge bg-secondary">Overdue 10%</span></div>
+    </div></div>`;
+
+  h += `<div class="rpt-section"><h5>Scorecard</h5>
+    <table class="rpt-table"><thead><tr><th>Audit Area</th><th>Overall</th><th>Grade</th><th>Severity</th><th>Impl. Rate</th><th>Timeliness</th><th>Repeat</th><th>Overdue</th><th>Findings</th></tr></thead><tbody>`;
+  (data.scorecards||[]).forEach(sc => {
+    const d = sc.details || {};
+    h += `<tr><td><strong>${esc(sc.areaName)}</strong></td><td>${scoreBar(sc.score)} ${sc.score}/100</td><td>${gradeBadge(sc.grade)}</td><td>${d.severityScore||0}</td><td>${d.implementationRate||0}%</td><td>${d.timelinessScore||0}</td><td>${d.repeatScore||0}</td><td>${d.overdueScore||0}</td><td>${d.findingCount||0}</td></tr>`;
+  });
+  h += `</tbody></table></div>`;
+  return h;
+}
+
+// ---------- Finding Tracker ----------
+function renderFindingTracker(data, report) {
+  const s = report.summary || {};
+  const br = s.byRisk || {};
+  let h = `<div class="rpt-kpi-grid">
+    <div class="rpt-kpi"><div class="value">${s.total||0}</div><div class="label">Total Findings</div></div>
+    <div class="rpt-kpi danger"><div class="value">${br.Extreme||0}</div><div class="label">Extreme</div></div>
+    <div class="rpt-kpi warning"><div class="value">${br.High||0}</div><div class="label">High</div></div>
+    <div class="rpt-kpi"><div class="value">${br.Medium||0}</div><div class="label">Medium</div></div>
+    <div class="rpt-kpi success"><div class="value">${br.Low||0}</div><div class="label">Low</div></div>
+  </div>`;
+
+  h += `<table class="rpt-table"><thead><tr><th>ID</th><th>Title</th><th>Affiliate</th><th>Audit Area</th><th>Risk</th><th>Status</th><th>APs</th><th>Complete</th></tr></thead><tbody>`;
+  (data.findings||[]).forEach(f => {
+    h += `<tr><td class="text-nowrap">${esc(f.workPaperId)}</td><td>${esc(f.title)}</td><td>${esc(f.affiliateName)}</td><td>${esc(f.auditArea)}</td><td>${rBadge(f.riskRating)}</td><td>${esc(f.status)}</td><td>${f.totalActionPlans}</td><td>${scoreBar(f.completionPct)} ${f.completionPct}%</td></tr>`;
+  });
+  h += `</tbody></table>`;
+  return h;
+}
+
+// ---------- Action Plan Status ----------
+function renderAPStatus(data, report) {
+  const s = report.summary || {};
+  let h = `<div class="rpt-kpi-grid">
+    <div class="rpt-kpi"><div class="value">${s.total||0}</div><div class="label">Total Plans</div></div>
+    <div class="rpt-kpi success"><div class="value">${s.implemented||0}</div><div class="label">Implemented</div></div>
+    <div class="rpt-kpi success"><div class="value">${s.verified||0}</div><div class="label">Verified</div></div>
+    <div class="rpt-kpi danger"><div class="value">${s.overdue||0}</div><div class="label">Overdue</div></div>
+  </div>`;
+
+  h += `<table class="rpt-table"><thead><tr><th>ID</th><th>Finding</th><th>Owner</th><th>Due Date</th><th>Status</th><th>Days Overdue</th><th>Risk</th></tr></thead><tbody>`;
+  (data.plans||[]).forEach(p => {
+    const overdueClass = p.daysOverdue > 0 && !['Implemented','Verified'].includes(p.status) ? ' class="text-danger fw-bold"' : '';
+    h += `<tr><td class="text-nowrap">${esc(p.actionPlanId)}</td><td>${esc(p.findingTitle)}</td><td>${esc(p.owners)}</td><td>${esc(p.dueDate)}</td><td>${esc(p.status)}</td><td${overdueClass}>${p.daysOverdue > 0 ? p.daysOverdue : '-'}</td><td>${rBadge(p.riskRating)}</td></tr>`;
+  });
+  h += `</tbody></table>`;
+  return h;
+}
+
+// ---------- Overdue Aging ----------
+function renderOverdueAging(data, report) {
+  const s = report.summary || {};
+  let h = `<div class="rpt-kpi-grid">
+    <div class="rpt-kpi"><div class="value">${s.totalOpen||0}</div><div class="label">Open Plans</div></div>
+    <div class="rpt-kpi danger"><div class="value">${s.totalOverdue||0}</div><div class="label">Overdue</div></div>
+    <div class="rpt-kpi warning"><div class="value">${s.avgDaysOverdue||0}</div><div class="label">Avg Days Overdue</div></div>
+  </div>`;
+
+  const buckets = data.buckets || {};
+  Object.keys(buckets).forEach(k => {
+    const b = buckets[k];
+    if (!b.count) return;
+    h += `<div class="rpt-section"><h5 style="color:${b.color};">${esc(b.label)} (${b.count})</h5>
+      <table class="rpt-table"><thead><tr><th>Action Plan</th><th>Owner</th><th>Due Date</th><th>Days Overdue</th><th>Finding</th><th>Risk</th></tr></thead><tbody>`;
+    (b.items||[]).forEach(item => {
+      h += `<tr><td>${esc(item.description)}</td><td>${esc(item.owners)}</td><td>${esc(item.dueDate)}</td><td class="fw-bold">${item.daysOverdue}</td><td>${esc(item.findingTitle)}</td><td>${rBadge(item.riskRating)}</td></tr>`;
+    });
+    h += `</tbody></table></div>`;
+  });
+  return h;
+}
+
+// ---------- Risk Heat Map ----------
+function renderRiskHeatMap(data) {
+  let h = `<div class="rpt-section"><h5>Risk Heat Map by Affiliate</h5>
+    <table class="rpt-table"><thead><tr><th>Affiliate</th><th style="background:#dc3545;">Extreme</th><th style="background:#fd7e14;">High</th><th style="background:#ffc107; color:#333;">Medium</th><th style="background:#28a745;">Low</th><th>Total</th></tr></thead><tbody>`;
+  (data.byAffiliate||[]).forEach(a => {
+    h += `<tr><td><strong>${esc(a.affiliateName)}</strong></td>
+      <td class="heat-cell ${heatClass(a.Extreme)}">${a.Extreme||0}</td>
+      <td class="heat-cell ${heatClass(a.High)}">${a.High||0}</td>
+      <td class="heat-cell ${heatClass(a.Medium)}">${a.Medium||0}</td>
+      <td class="heat-cell ${heatClass(a.Low)}">${a.Low||0}</td>
+      <td class="fw-bold text-center">${a.total}</td></tr>`;
+  });
+  h += `</tbody></table></div>`;
+
+  h += `<div class="rpt-section"><h5>Risk Heat Map by Audit Area</h5>
+    <table class="rpt-table"><thead><tr><th>Audit Area</th><th style="background:#dc3545;">Extreme</th><th style="background:#fd7e14;">High</th><th style="background:#ffc107; color:#333;">Medium</th><th style="background:#28a745;">Low</th><th>Total</th></tr></thead><tbody>`;
+  (data.byAuditArea||[]).forEach(a => {
+    h += `<tr><td><strong>${esc(a.areaName)}</strong></td>
+      <td class="heat-cell ${heatClass(a.Extreme)}">${a.Extreme||0}</td>
+      <td class="heat-cell ${heatClass(a.High)}">${a.High||0}</td>
+      <td class="heat-cell ${heatClass(a.Medium)}">${a.Medium||0}</td>
+      <td class="heat-cell ${heatClass(a.Low)}">${a.Low||0}</td>
+      <td class="fw-bold text-center">${a.total}</td></tr>`;
+  });
+  h += `</tbody></table></div>`;
+  return h;
+}
+
+// ---------- Auditor Productivity ----------
+function renderAuditorProd(data) {
+  let h = `<table class="rpt-table"><thead><tr><th>Auditor</th><th>Total WPs</th><th>Approved</th><th>Approval Rate</th><th>Avg Days to Approve</th><th>Extreme</th><th>High</th><th>Medium</th><th>Low</th></tr></thead><tbody>`;
+  (data.auditors||[]).forEach(a => {
+    h += `<tr><td><strong>${esc(a.name)}</strong></td><td>${a.totalWPs}</td><td>${a.approved}</td><td>${scoreBar(a.approvalRate)} ${a.approvalRate}%</td><td>${a.avgDaysToApprove !== null ? a.avgDaysToApprove + ' days' : '-'}</td><td>${a.byRisk?.Extreme||0}</td><td>${a.byRisk?.High||0}</td><td>${a.byRisk?.Medium||0}</td><td>${a.byRisk?.Low||0}</td></tr>`;
+  });
+  h += `</tbody></table>`;
+  return h;
+}
+
+// ---------- Implementation Rate ----------
+function renderImplRate(data, report) {
+  const s = report.summary || {};
+  let h = `<div class="rpt-kpi-grid">
+    <div class="rpt-kpi"><div class="value">${s.totalPlans||0}</div><div class="label">Total Plans</div></div>
+    <div class="rpt-kpi success"><div class="value">${s.implemented||0}</div><div class="label">Implemented</div></div>
+    <div class="rpt-kpi success"><div class="value">${s.overallRate||0}%</div><div class="label">Overall Rate</div></div>
+  </div>`;
+
+  h += `<div class="rpt-section"><h5>Monthly Trend</h5>
+    <table class="rpt-table"><thead><tr><th>Month</th><th>Created</th><th>Implemented</th><th>Verified</th></tr></thead><tbody>`;
+  (data.monthly||[]).forEach(m => {
+    h += `<tr><td>${m.month}</td><td>${m.created}</td><td>${m.implemented}</td><td>${m.verified}</td></tr>`;
+  });
+  h += `</tbody></table></div>`;
+
+  h += `<div class="rpt-section"><h5>By Affiliate</h5>
+    <table class="rpt-table"><thead><tr><th>Affiliate</th><th>Total</th><th>Implemented</th><th>Overdue</th><th>Rate</th></tr></thead><tbody>`;
+  (data.byAffiliate||[]).forEach(a => {
+    h += `<tr><td><strong>${esc(a.name)}</strong></td><td>${a.total}</td><td>${a.implemented + (a.verified||0)}</td><td>${a.overdue > 0 ? '<span class="text-danger fw-bold">'+a.overdue+'</span>' : '0'}</td><td>${scoreBar(a.rate)} ${a.rate}%</td></tr>`;
+  });
+  h += `</tbody></table></div>`;
+  return h;
+}
+
+// ---------- Repeat Findings ----------
+function renderRepeatFindings(data, report) {
+  const s = report.summary || {};
+  let h = `<div class="rpt-kpi-grid">
+    <div class="rpt-kpi"><div class="value">${s.totalFindings||0}</div><div class="label">Total Findings</div></div>
+    <div class="rpt-kpi danger"><div class="value">${s.repeatGroups||0}</div><div class="label">Repeat Groups</div></div>
+    <div class="rpt-kpi warning"><div class="value">${s.totalRepeats||0}</div><div class="label">Total Repeat Instances</div></div>
+  </div>`;
+
+  if (!(data.repeats||[]).length) {
+    h += '<div class="text-center py-4 text-muted"><i class="bi bi-check-circle display-4 text-success"></i><p class="mt-2">No repeat findings detected for this period.</p></div>';
+  } else {
+    h += `<table class="rpt-table"><thead><tr><th>Finding Title</th><th>Audit Area</th><th>Occurrences</th><th>Years</th></tr></thead><tbody>`;
+    data.repeats.forEach(r => {
+      h += `<tr><td>${esc(r.title)}</td><td>${esc(r.auditArea)}</td><td class="text-danger fw-bold">${r.occurrences}</td><td>${(r.years||[]).join(', ')}</td></tr>`;
+    });
+    h += `</tbody></table>`;
+  }
+  return h;
+}
+
+// ---------- Management AP ----------
+function renderMgmtAP(data, report) {
+  const s = report.summary || {};
+  let h = `<div class="rpt-kpi-grid">
+    <div class="rpt-kpi"><div class="value">${s.totalPlans||0}</div><div class="label">Total Plans</div></div>
+    <div class="rpt-kpi"><div class="value">${s.uniqueOwners||0}</div><div class="label">Responsible Owners</div></div>
+    <div class="rpt-kpi success"><div class="value">${s.implemented||0}</div><div class="label">Implemented</div></div>
+    <div class="rpt-kpi danger"><div class="value">${s.overdue||0}</div><div class="label">Overdue</div></div>
+  </div>`;
+
+  (data.byOwner||[]).forEach(owner => {
+    const overdueFlag = owner.overdue > 0 ? ` <span class="text-danger">(${owner.overdue} overdue)</span>` : '';
+    h += `<div class="rpt-section"><h5>${esc(owner.owner)}${overdueFlag}</h5>
+      <p class="text-muted small">Total: ${owner.total} | Implemented: ${owner.implemented} | Pending: ${owner.pending}</p>
+      <table class="rpt-table"><thead><tr><th>Description</th><th>Status</th><th>Due Date</th><th>Overdue</th><th>Risk</th></tr></thead><tbody>`;
+    (owner.plans||[]).forEach(p => {
+      h += `<tr><td>${esc(p.description)}</td><td>${esc(p.status)}</td><td>${esc(p.dueDate)}</td><td>${p.daysOverdue > 0 ? '<span class="text-danger fw-bold">'+p.daysOverdue+' days</span>' : '-'}</td><td>${rBadge(p.riskRating)}</td></tr>`;
+    });
+    h += `</tbody></table></div>`;
+  });
+  return h;
+}
+
+// =============================================
+// EXPORT / DOWNLOAD
+// =============================================
+
+function downloadWord() {
+  if (!currentReportType) { showToast('Generate a report first', 'warning'); return; }
+  showLoading('Generating Word document...');
+
+  apiCall('exportReportWord', { reportType: currentReportType, filters: getReportFilters() })
+    .then(r => {
+      hideLoading();
+      if (r.success && r.html) {
+        const blob = new Blob([r.html], { type: 'application/msword' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = r.filename || 'report.doc';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Word document downloaded', 'success');
+      } else {
+        showToast(r.error || 'Export failed', 'danger');
+      }
+    })
+    .catch(() => { hideLoading(); showToast('Export failed', 'danger'); });
+}
+
+function downloadExcel() {
+  if (!currentReportType) { showToast('Generate a report first', 'warning'); return; }
+  showLoading('Generating Excel file...');
+
+  apiCall('exportReportExcel', { reportType: currentReportType, filters: getReportFilters() })
+    .then(r => {
+      hideLoading();
+      if (r.success && r.csv) {
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + r.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = r.filename || 'report.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Excel file downloaded', 'success');
+      } else {
+        showToast(r.error || 'Export failed', 'danger');
+      }
+    })
+    .catch(() => { hideLoading(); showToast('Export failed', 'danger'); });
+}
+
+function downloadPDF() {
+  if (!currentReportType) { showToast('Generate a report first', 'warning'); return; }
+  // Use browser print dialog which allows Save as PDF
+  const content = document.getElementById('reportContent').innerHTML;
+  const title = document.getElementById('reportTitle').textContent;
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+    <style>
+      body { font-family: Calibri, Arial, sans-serif; margin: 30px; color: #333; font-size: 11pt; }
+      h1 { color: #1a365d; font-size: 18pt; border-bottom: 3px solid #1a365d; padding-bottom: 8px; }
+      h5 { color: #1a365d; font-size: 12pt; }
+      table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 9pt; }
+      th { background: #1a365d; color: white; padding: 6px 8px; text-align: left; }
+      td { padding: 5px 8px; border-bottom: 1px solid #ddd; }
+      tr:nth-child(even) { background: #f8f9fb; }
+      .rpt-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 8pt; font-weight: bold; color: white; }
+      .rpt-badge-extreme { background: #dc3545; } .rpt-badge-high { background: #fd7e14; }
+      .rpt-badge-medium { background: #ffc107; color: #333; } .rpt-badge-low { background: #28a745; }
+      .grade-badge { display: inline-block; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-weight: bold; font-size: 10pt; color: white; }
+      .grade-a { background: #10b981; } .grade-b { background: #3b82f6; } .grade-c { background: #f59e0b; } .grade-d { background: #f97316; } .grade-f { background: #ef4444; }
+      .score-bar { height: 6px; border-radius: 3px; background: #e5e7eb; display: inline-block; width: 60px; vertical-align: middle; }
+      .score-bar-fill { height: 100%; border-radius: 3px; }
+      .rpt-kpi-grid { display: flex; gap: 10px; margin: 10px 0; }
+      .rpt-kpi { padding: 10px; background: #f8f9fb; border-left: 3px solid #1a365d; text-align: center; flex: 1; }
+      .rpt-kpi .value { font-size: 18pt; font-weight: bold; color: #1a365d; }
+      .rpt-kpi .label { font-size: 7pt; color: #666; text-transform: uppercase; }
+      .rpt-kpi.danger .value { color: #dc3545; } .rpt-kpi.danger { border-left-color: #dc3545; }
+      .rpt-kpi.warning .value { color: #f59e0b; } .rpt-kpi.warning { border-left-color: #f59e0b; }
+      .rpt-kpi.success .value { color: #10b981; } .rpt-kpi.success { border-left-color: #10b981; }
+      .text-danger { color: #dc3545; } .fw-bold { font-weight: bold; }
+      .text-muted { color: #6b7280; }
+      .heat-cell { text-align: center; font-weight: bold; }
+      .heat-0 { background: #f9fafb; color: #9ca3af; } .heat-low { background: #fef3c7; } .heat-med { background: #fed7aa; } .heat-high { background: #fecaca; } .heat-extreme { background: #fca5a5; }
+      @page { margin: 1.5cm; }
+      .footer { border-top: 2px solid #1a365d; margin-top: 30px; padding-top: 8px; text-align: center; font-size: 8pt; color: #999; }
+      .confidential { color: #dc3545; font-weight: bold; font-size: 8pt; letter-spacing: 2px; }
+    </style></head><body>
+    <p class="confidential">CONFIDENTIAL</p>
+    <h1>${title}</h1>
+    <p style="color:#c9a227; font-weight:bold;">Hass Petroleum - Internal Audit Department</p>
+    <p style="color:#666; font-size:9pt;">Generated: ${new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}</p>
+    ${content}
+    <div class="footer"><strong style="color:#1a365d;">Hass Petroleum - Internal Audit Department</strong><br>This report is confidential and intended solely for authorized personnel.<br><span style="border-top: 1px solid #c9a227; padding-top: 4px; display: inline-block; margin-top: 4px;">&copy; ${new Date().getFullYear()}</span></div>
+  </body></html>`);
+  printWindow.document.close();
+  setTimeout(() => { printWindow.print(); }, 500);
+}
+
+function exportDataCSV(type) {
+  showLoading('Exporting data...');
+  const action = type === 'workpapers' ? 'exportWorkPapersCSV' : 'exportActionPlansCSV';
+
+  apiCall(action, { filters: getReportFilters() })
+    .then(r => {
+      hideLoading();
+      if (r.success && r.csv) {
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + r.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = r.filename || 'export.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${r.count || 0} records`, 'success');
+      } else {
+        showToast(r.error || 'Export failed', 'danger');
+      }
+    })
+    .catch(() => { hideLoading(); showToast('Export failed', 'danger'); });
 }
 </script>

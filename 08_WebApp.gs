@@ -424,6 +424,25 @@ function routeAction(action, data, user) {
       }
       return setupNotificationTriggers();
 
+    // ========== PROFESSIONAL REPORTS ==========
+    case 'generateReport':
+      if (!canUserPerform(user, 'read', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return generateReport(data.reportType, data.filters, user);
+
+    case 'exportReportWord':
+      if (!canUserPerform(user, 'export', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return exportReportAsWord(data.reportType, data.filters, user);
+
+    case 'exportReportExcel':
+      if (!canUserPerform(user, 'export', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return exportReportAsExcel(data.reportType, data.filters, user);
+
     // ========== EXPORT ==========
     case 'exportWorkPapersCSV':
       if (!canUserPerform(user, 'export', 'REPORT', null)) {

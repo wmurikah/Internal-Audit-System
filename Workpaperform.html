@@ -1373,6 +1373,9 @@ function updateCharCounter(textarea, maxLen) {
   }
 }
 
+// Alias for backwards compatibility with deployed versions
+var initInlineValidation;
+
 function setupInlineValidation() {
   const requiredFields = document.querySelectorAll('#workPaperForm [required]');
   requiredFields.forEach(field => {
@@ -1408,6 +1411,9 @@ function validateFieldInline(field) {
     field.classList.add('is-valid-inline');
   }
 }
+
+// Assign alias after definition
+initInlineValidation = setupInlineValidation;
 
 function startAutoSave() {
   if (autoSaveTimer) clearInterval(autoSaveTimer);
