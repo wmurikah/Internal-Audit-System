@@ -1,4 +1,6 @@
-<!-- Dashboard Page Content -->
+<!-- Audit Workbench Page Content (formerly Dashboard) -->
+<!-- Auditor-only operational view: pending reviews, attention items, quick actions -->
+<!-- Charts (WP Status, AP Status, Risk Distribution, Monthly Trend) live in Reports -->
 <div class="dashboard-content">
   <!-- Alerts Section -->
   <div id="alertsSection" class="mb-4"></div>
@@ -9,7 +11,7 @@
       <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div>
           <h4 class="mb-1">Welcome back, <span id="dashboardUserName">User</span></h4>
-          <p class="text-muted mb-0" id="dashboardRoleMessage">Your dashboard overview</p>
+          <p class="text-muted mb-0" id="dashboardRoleMessage">Your audit workbench</p>
         </div>
         <div class="d-flex gap-2" id="dashboardQuickActions">
           <!-- Role-specific quick actions will be inserted here -->
@@ -69,54 +71,8 @@
     </div>
   </div>
 
-  <!-- Role-Specific Section: My Action Plans (for Auditee/Unit Manager) -->
-  <div class="dashboard-section" id="myActionPlansSection" style="display:none;">
-    <div class="dashboard-section-title">
-      <i class="bi bi-list-task"></i>
-      <span>My Action Plans</span>
-    </div>
-    <div class="row g-4">
-      <div class="col-md-8">
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-clipboard-check me-2"></i>Assigned to Me</span>
-            <a href="#action-plans" class="btn btn-sm btn-outline-primary" onclick="navigateTo('action-plans', {mine: true})">View All</a>
-          </div>
-          <div class="card-body p-0">
-            <div class="table-responsive">
-              <table class="table table-hover mb-0">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Description</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="myActionPlansTable">
-                  <tr><td colspan="5" class="text-center py-4 text-muted">Loading...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-pie-chart me-2"></i>My Implementation Status</span>
-          </div>
-          <div class="card-body" style="height: 230px;">
-            <canvas id="myAPStatusChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Role-Specific Section: Pending Reviews (for Auditors/HOA) -->
-  <div class="dashboard-section" id="pendingReviewsSection" style="display:none;">
+  <!-- Pending Reviews Section (Auditors/HOA) -->
+  <div class="dashboard-section" id="pendingReviewsSection">
     <div class="dashboard-section-title">
       <i class="bi bi-clock-history"></i>
       <span>Pending Reviews</span>
@@ -146,54 +102,6 @@
               <li class="list-group-item text-center text-muted py-3">Loading...</li>
             </ul>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Charts Row -->
-  <div class="row g-4 mb-4">
-    <div class="col-md-6">
-      <div class="card chart-card">
-        <div class="card-header">
-          <span><i class="bi bi-pie-chart me-2"></i>Work Paper Status</span>
-        </div>
-        <div class="card-body">
-          <canvas id="wpStatusChart"></canvas>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card chart-card">
-        <div class="card-header">
-          <span><i class="bi bi-bar-chart me-2"></i>Action Plan Status</span>
-        </div>
-        <div class="card-body">
-          <canvas id="apStatusChart"></canvas>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Second Charts Row -->
-  <div class="row g-4 mb-4">
-    <div class="col-md-4">
-      <div class="card chart-card-sm">
-        <div class="card-header">
-          <span><i class="bi bi-shield-exclamation me-2"></i>Risk Distribution</span>
-        </div>
-        <div class="card-body">
-          <canvas id="riskChart"></canvas>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-8">
-      <div class="card chart-card-sm">
-        <div class="card-header">
-          <span><i class="bi bi-graph-up me-2"></i>Monthly Trend</span>
-        </div>
-        <div class="card-body">
-          <canvas id="trendChart"></canvas>
         </div>
       </div>
     </div>
@@ -266,7 +174,7 @@
     </div>
   </div>
 
-  <!-- Role-Specific Section: Team Performance (for HOA/Senior Auditor) -->
+  <!-- Team Performance (for HOA/Senior Auditor) -->
   <div class="dashboard-section mt-4" id="teamPerformanceSection" style="display:none;">
     <div class="dashboard-section-title">
       <i class="bi bi-people"></i>
@@ -298,40 +206,42 @@
 </div>
 
 <script>
-// Dashboard-specific functions
+// Audit Workbench functions (formerly Dashboard)
 let dashboardCharts = {};
 
-function loadDashboard() {
-  showLoading('Loading dashboard...');
+function loadAuditWorkbench() {
+  showLoading('Loading audit workbench...');
 
   apiCall('getDashboardData', {})
     .then(data => {
       hideLoading();
       if (data && data.success !== false) {
-        renderDashboard(data);
-        renderRoleBasedSections(data);
+        renderWorkbench(data);
+        renderWorkbenchSections(data);
       } else {
-        console.error('Dashboard load failed:', data?.error);
-        showToast(data?.error || 'Failed to load dashboard', 'danger');
-        renderDashboard({ summary: { workPapers: {}, actionPlans: {} }, alerts: [], recentActivity: [], charts: {} });
+        console.error('Workbench load failed:', data?.error);
+        showToast(data?.error || 'Failed to load workbench', 'danger');
+        renderWorkbench({ summary: { workPapers: {}, actionPlans: {} }, alerts: [], recentActivity: [] });
       }
     })
     .catch(err => {
       hideLoading();
-      console.error('Dashboard error:', err);
-      showToast('Error loading dashboard', 'danger');
-      renderDashboard({ summary: { workPapers: {}, actionPlans: {} }, alerts: [], recentActivity: [], charts: {} });
+      console.error('Workbench error:', err);
+      showToast('Error loading workbench', 'danger');
+      renderWorkbench({ summary: { workPapers: {}, actionPlans: {} }, alerts: [], recentActivity: [] });
     });
 }
 
-function renderDashboard(data) {
-  // Handle multiple response formats
+// Keep loadDashboard as alias for backward compatibility
+function loadDashboard() {
+  loadAuditWorkbench();
+}
+
+function renderWorkbench(data) {
   const summary = data.summary || data.stats || {};
   const wp = summary.workPapers || data.workPaperStats || data.workPapers || {};
   const ap = summary.actionPlans || data.actionPlanStats || data.actionPlans || {};
 
-  // Calculate pending review count - only count 'Submitted' status (awaiting review)
-  // Don't double-count by adding multiple sources
   const pendingReviewCount = wp.submitted || data.pendingReview || 0;
   const overdueCount = ap.overdue || data.overdueCount || 0;
 
@@ -355,9 +265,6 @@ function renderDashboard(data) {
   // Render alerts
   renderAlerts(data.alerts || []);
 
-  // Render charts
-  renderDashboardCharts(data.charts || {});
-
   // Render recent activity
   renderRecentActivity(data.recentActivity || data.recentWorkPapers || []);
 
@@ -370,110 +277,35 @@ function renderDashboard(data) {
 
 function setRoleBasedMessage(roleCode) {
   const messages = {
-    'SUPER_ADMIN': 'System administrator overview',
-    'HEAD_OF_AUDIT': 'Head of Internal Audit dashboard',
-    'AUDITOR': 'Your audit management overview',
-    'SENIOR_AUDITOR': 'Senior auditor overview',
-    'UNIT_MANAGER': 'Your action plans and findings overview',
-    'AUDITEE': 'Your assigned action items',
-    'JUNIOR_STAFF': 'Your tasks overview',
-    'MANAGEMENT': 'Executive summary',
-    'BOARD': 'Board oversight view',
-    'EXTERNAL_AUDITOR': 'External auditor view'
+    'SUPER_ADMIN': 'System administrator workbench',
+    'HEAD_OF_AUDIT': 'Head of Internal Audit workbench',
+    'AUDITOR': 'Your audit workbench',
+    'SENIOR_AUDITOR': 'Senior auditor workbench'
   };
-  document.getElementById('dashboardRoleMessage').textContent = messages[roleCode] || 'Your dashboard overview';
+  document.getElementById('dashboardRoleMessage').textContent = messages[roleCode] || 'Your audit workbench';
 }
 
-function renderRoleBasedSections(data) {
+function renderWorkbenchSections(data) {
   const role = window.currentUser?.role_code || '';
   const quickActions = document.getElementById('dashboardQuickActions');
 
-  // Auditee/Unit Manager specific sections
-  if (['AUDITEE', 'UNIT_MANAGER', 'JUNIOR_STAFF'].includes(role)) {
-    document.getElementById('myActionPlansSection').style.display = 'block';
-    document.getElementById('btnQuickNewWP').style.display = 'none';
-    renderMyActionPlans(data.myActionPlans || []);
+  // Pending reviews - always visible on workbench (auditor-only page)
+  renderPendingReviews(data.pendingReviews || {});
 
-    quickActions.innerHTML = `
-      <button class="btn btn-primary" onclick="navigateTo('action-plans', {mine: true})">
-        <i class="bi bi-list-check me-2"></i>My Action Plans
-      </button>
-      <button class="btn btn-outline-primary" onclick="navigateTo('work-papers')">
-        <i class="bi bi-file-earmark-text me-2"></i>View Findings
-      </button>
-    `;
-  }
-
-  // Auditor specific sections
-  if (['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(role)) {
-    document.getElementById('pendingReviewsSection').style.display = 'block';
-    renderPendingReviews(data.pendingReviews || {});
-
-    quickActions.innerHTML = `
-      <button class="btn btn-primary" onclick="navigateTo('work-paper-form')">
-        <i class="bi bi-plus-circle me-2"></i>New Work Paper
-      </button>
-      <button class="btn btn-outline-primary" onclick="navigateTo('work-papers', {status: 'Submitted'})">
-        <i class="bi bi-eye me-2"></i>Review Queue
-      </button>
-    `;
-  }
+  quickActions.innerHTML = `
+    <button class="btn btn-primary" onclick="navigateTo('work-paper-form')">
+      <i class="bi bi-plus-circle me-2"></i>New Work Paper
+    </button>
+    <button class="btn btn-outline-primary" onclick="navigateTo('work-papers', {status: 'Submitted'})">
+      <i class="bi bi-eye me-2"></i>Review Queue
+    </button>
+  `;
 
   // HOA/Senior Auditor team performance section
   if (['HEAD_OF_AUDIT', 'SUPER_ADMIN', 'SENIOR_AUDITOR'].includes(role)) {
     document.getElementById('teamPerformanceSection').style.display = 'block';
     renderTeamPerformance(data.teamStats || {});
   }
-
-  // Management view
-  if (['MANAGEMENT', 'BOARD'].includes(role)) {
-    document.getElementById('btnQuickNewWP').style.display = 'none';
-
-    quickActions.innerHTML = `
-      <button class="btn btn-primary" onclick="navigateTo('reports')">
-        <i class="bi bi-file-earmark-bar-graph me-2"></i>View Reports
-      </button>
-      <button class="btn btn-outline-primary" onclick="navigateTo('analytics')">
-        <i class="bi bi-graph-up me-2"></i>Analytics
-      </button>
-    `;
-  }
-}
-
-function renderMyActionPlans(actionPlans) {
-  const tbody = document.getElementById('myActionPlansTable');
-  if (!tbody) return;
-
-  if (!actionPlans || actionPlans.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No action plans assigned to you</td></tr>';
-    return;
-  }
-
-  let html = '';
-  actionPlans.slice(0, 5).forEach(ap => {
-    const statusClass = getStatusClass(ap.status);
-    const isOverdue = ap.days_overdue > 0;
-    const dueDate = formatDate(ap.due_date);
-
-    html += `
-      <tr onclick="navigateTo('action-plan-view', {id: '${ap.action_plan_id}'})">
-        <td><span class="badge bg-secondary">${ap.action_plan_id}</span></td>
-        <td class="text-truncate" style="max-width: 200px;">${escapeHtml(ap.action_description || '-')}</td>
-        <td>
-          <span class="${isOverdue ? 'text-danger fw-bold' : ''}">${dueDate}</span>
-          ${isOverdue ? '<br><small class="text-danger">' + ap.days_overdue + ' days overdue</small>' : ''}
-        </td>
-        <td><span class="badge badge-status ${statusClass}">${ap.status || '-'}</span></td>
-        <td>
-          <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); navigateTo('action-plan-view', {id: '${ap.action_plan_id}'})">
-            <i class="bi bi-eye"></i>
-          </button>
-        </td>
-      </tr>
-    `;
-  });
-
-  tbody.innerHTML = html;
 }
 
 function renderPendingReviews(pendingReviews) {
@@ -517,7 +349,6 @@ function renderPendingReviews(pendingReviews) {
 }
 
 function renderTeamPerformance(teamStats) {
-  // Auditor Productivity Chart
   const prodCtx = document.getElementById('auditorProductivityChart');
   if (prodCtx && teamStats.auditorStats) {
     if (dashboardCharts.productivity) dashboardCharts.productivity.destroy();
@@ -541,7 +372,6 @@ function renderTeamPerformance(teamStats) {
     });
   }
 
-  // Affiliate Comparison Chart
   const affCtx = document.getElementById('affiliateComparisonChart');
   if (affCtx && teamStats.affiliateStats) {
     if (dashboardCharts.affiliate) dashboardCharts.affiliate.destroy();
@@ -604,141 +434,6 @@ function renderAlerts(alerts) {
   container.innerHTML = html;
 }
 
-function renderDashboardCharts(charts) {
-  // Destroy existing charts
-  Object.values(dashboardCharts).forEach(chart => {
-    if (chart && typeof chart.destroy === 'function') chart.destroy();
-  });
-  dashboardCharts = {};
-
-  // Check if Chart.js is available
-  if (typeof Chart === 'undefined') {
-    console.warn('Chart.js not loaded');
-    return;
-  }
-
-  // Work Paper Status Chart
-  const wpCtx = document.getElementById('wpStatusChart');
-  if (wpCtx && charts.wpStatusChart) {
-    dashboardCharts.wpStatus = new Chart(wpCtx.getContext('2d'), {
-      type: 'doughnut',
-      data: {
-        labels: charts.wpStatusChart.labels,
-        datasets: [{
-          data: charts.wpStatusChart.data,
-          backgroundColor: charts.wpStatusChart.colors || ['#6c757d', '#17a2b8', '#ffc107', '#fd7e14', '#28a745', '#1a365d'],
-          borderWidth: 0
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'right',
-            labels: { padding: 15, usePointStyle: true }
-          }
-        }
-      }
-    });
-  }
-
-  // Action Plan Status Chart
-  const apCtx = document.getElementById('apStatusChart');
-  if (apCtx && charts.apStatusChart) {
-    dashboardCharts.apStatus = new Chart(apCtx.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: charts.apStatusChart.labels,
-        datasets: [{
-          label: 'Count',
-          data: charts.apStatusChart.data,
-          backgroundColor: charts.apStatusChart.colors || ['#6c757d', '#17a2b8', '#ffc107', '#28a745', '#1a365d', '#dc3545'],
-          borderRadius: 5
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false }
-        },
-        scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1 } }
-        }
-      }
-    });
-  }
-
-  // Risk Distribution Chart
-  const riskCtx = document.getElementById('riskChart');
-  if (riskCtx && charts.riskChart) {
-    dashboardCharts.risk = new Chart(riskCtx.getContext('2d'), {
-      type: 'pie',
-      data: {
-        labels: charts.riskChart.labels,
-        datasets: [{
-          data: charts.riskChart.data,
-          backgroundColor: charts.riskChart.colors || ['#dc3545', '#fd7e14', '#ffc107', '#28a745'],
-          borderWidth: 0
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { padding: 10, usePointStyle: true }
-          }
-        }
-      }
-    });
-  }
-
-  // Monthly Trend Chart
-  const trendCtx = document.getElementById('trendChart');
-  if (trendCtx && charts.trendChart) {
-    dashboardCharts.trend = new Chart(trendCtx.getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: charts.trendChart.labels,
-        datasets: [
-          {
-            label: 'Created',
-            data: charts.trendChart.created,
-            borderColor: '#17a2b8',
-            backgroundColor: 'rgba(23, 162, 184, 0.1)',
-            fill: true,
-            tension: 0.4
-          },
-          {
-            label: 'Completed',
-            data: charts.trendChart.completed,
-            borderColor: '#28a745',
-            backgroundColor: 'rgba(40, 167, 69, 0.1)',
-            fill: true,
-            tension: 0.4
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'top',
-            labels: { usePointStyle: true }
-          }
-        },
-        scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1 } }
-        }
-      }
-    });
-  }
-}
-
 function renderRecentActivity(activities) {
   const tbody = document.getElementById('recentActivityTable');
   if (!tbody) return;
@@ -781,7 +476,6 @@ function renderDueThisWeek(count) {
     return;
   }
 
-  // Fetch action plans due this week
   apiCall('getActionPlans', { filters: { limit: 10 } })
     .then(result => {
       const actionPlans = result.actionPlans || result.data || [];
@@ -831,7 +525,7 @@ function renderAttentionSection(data, wp, ap) {
   const pendingReviewCount = wp.submitted || data.pendingReview || 0;
   const dueThisWeek = ap.dueThisWeek || data.dueThisWeek || 0;
 
-  // Overdue action plans - all roles
+  // Overdue action plans
   if (overdueCount > 0) {
     items.push({
       type: 'danger',
@@ -843,8 +537,8 @@ function renderAttentionSection(data, wp, ap) {
     });
   }
 
-  // Pending reviews - auditor roles
-  if (['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(role) && pendingReviewCount > 0) {
+  // Pending reviews
+  if (pendingReviewCount > 0) {
     items.push({
       type: 'info',
       icon: 'bi-hourglass-split',
@@ -855,7 +549,7 @@ function renderAttentionSection(data, wp, ap) {
     });
   }
 
-  // Due this week - all roles
+  // Due this week
   if (dueThisWeek > 0) {
     items.push({
       type: 'warning',
@@ -865,22 +559,6 @@ function renderAttentionSection(data, wp, ap) {
       action: 'View',
       onclick: "navigateTo('action-plans')"
     });
-  }
-
-  // Auditee pending responses
-  if (['AUDITEE', 'UNIT_MANAGER', 'JUNIOR_STAFF'].includes(role)) {
-    const myPlans = data.myActionPlans || [];
-    const pendingResponse = myPlans.filter(p => p.status === 'Pending' || p.status === 'Not Due').length;
-    if (pendingResponse > 0) {
-      items.push({
-        type: 'info',
-        icon: 'bi-chat-left-dots',
-        title: pendingResponse + ' action plan' + (pendingResponse > 1 ? 's' : '') + ' awaiting your response',
-        subtitle: 'Update your implementation progress',
-        action: 'Respond',
-        onclick: "navigateTo('action-plans', {mine: true})"
-      });
-    }
   }
 
   if (items.length === 0) {
