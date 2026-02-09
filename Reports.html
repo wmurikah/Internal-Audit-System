@@ -1,4 +1,4 @@
-<!-- Reports Page - Comprehensive Internal Audit Reporting Module -->
+<!-- Dashboard Page - Comprehensive Internal Audit Reporting Module -->
 <div class="reports-page">
 
   <!-- Report Header & Filters -->
@@ -586,14 +586,31 @@ function renderAgingAnalysis(container) {
 function renderRiskPieChart(canvasId, rd) {
   var ctx = document.getElementById(canvasId);
   if (!ctx) return;
+  var chartColors = ['#dc3545','#fd7e14','#ffc107','#28a745'];
   reportCharts[canvasId] = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: ['Extreme', 'High', 'Medium', 'Low'],
       datasets: [{ data: [rd.Extreme||0, rd.High||0, rd.Medium||0, rd.Low||0],
-        backgroundColor: ['#dc3545','#fd7e14','#ffc107','#28a745'], borderWidth: 0 }]
+        backgroundColor: chartColors, borderWidth: 0 }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+    options: { responsive: true, maintainAspectRatio: false,
+      layout: { padding: 20 },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
+          color: function(context) { return chartColors[context.dataIndex]; },
+          font: { size: 11, weight: '600' },
+          anchor: 'end',
+          align: 'end',
+          offset: 8,
+          formatter: function(value, context) {
+            return context.chart.data.labels[context.dataIndex] + ': ' + value;
+          }
+        }
+      }
+    }
   });
 }
 
@@ -606,7 +623,23 @@ function renderAPStatusChart(canvasId, dist) {
   reportCharts[canvasId] = new Chart(ctx, {
     type: 'doughnut',
     data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+    options: { responsive: true, maintainAspectRatio: false,
+      layout: { padding: 20 },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
+          color: function(context) { return colors[context.dataIndex]; },
+          font: { size: 11, weight: '600' },
+          anchor: 'end',
+          align: 'end',
+          offset: 8,
+          formatter: function(value, context) {
+            return labels[context.dataIndex] + ': ' + value;
+          }
+        }
+      }
+    }
   });
 }
 
@@ -618,7 +651,18 @@ function renderAffiliateBarChart(canvasId, byAff) {
   reportCharts[canvasId] = new Chart(ctx, {
     type: 'bar',
     data: { labels: labels, datasets: [{ label: 'Findings', data: data, backgroundColor: '#1a365d', borderRadius: 4 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
+          color: '#1a365d',
+          font: { size: 11, weight: '700' },
+          anchor: 'end',
+          align: 'top',
+          offset: 2
+        }
+      },
       scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
   });
 }
@@ -786,9 +830,9 @@ function buildMethodologyBox() {
     '<h6><i class="bi bi-info-circle me-1"></i>Scoring Methodology</h6>' +
     '<p>Audit area scores are calculated using a weighted composite of three factors aligned with IIA standards:</p>' +
     '<ul>' +
-    '<li><strong>Implementation Rate (40%)</strong> &mdash; Percentage of action plans that have been closed (Implemented or Verified status).</li>' +
-    '<li><strong>Timeliness (35%)</strong> &mdash; Inverse of the overdue rate. Fewer overdue action plans result in a higher timeliness score.</li>' +
-    '<li><strong>Risk Profile (25%)</strong> &mdash; Penalty applied proportional to the volume of findings. Areas with fewer findings score higher.</li>' +
+    '<li><strong>Implementation Rate (40%):</strong> Percentage of action plans that have been closed (Implemented or Verified status).</li>' +
+    '<li><strong>Timeliness (35%):</strong> Inverse of the overdue rate. Fewer overdue action plans result in a higher timeliness score.</li>' +
+    '<li><strong>Risk Profile (25%):</strong> Penalty applied proportional to the volume of findings. Areas with fewer findings score higher.</li>' +
     '</ul>' +
     '<p><strong>Ratings:</strong> Effective (&ge;80) | Needs Improvement (60&ndash;79) | Ineffective (&lt;60)</p>' +
     '</div>';
