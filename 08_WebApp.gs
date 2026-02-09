@@ -277,7 +277,7 @@ function routeAction(action, data, user) {
       return { success: true, report: getRiskSummaryReport(data.filters) };
 
     case 'getComprehensiveReportData':
-      if (!canUserPerform(user, 'read', 'REPORT', null)) {
+      if (!canUserPerform(user, 'read', 'DASHBOARD', null) && !canUserPerform(user, 'read', 'REPORT', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return { success: true, ...getComprehensiveReportData(data.filters) };
@@ -460,7 +460,7 @@ function routeAction(action, data, user) {
 
     // ========== ANALYTICS ==========
     case 'getAnalyticsData':
-      if (!canUserPerform(user, 'read', 'REPORT', null)) {
+      if (!canUserPerform(user, 'read', 'AI_ASSIST', null) && !canUserPerform(user, 'read', 'REPORT', null)) {
         return { success: false, error: 'Permission denied' };
       }
       return getAnalyticsData(data.year, user);

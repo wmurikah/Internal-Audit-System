@@ -492,9 +492,10 @@ let aiConfigStatus = null;
 let usersData = [];
 
 function loadSettings() {
-  // Restrict tabs based on role - only SUPER_ADMIN sees all tabs
+  // Restrict advanced tabs - only users with CONFIG update permission see them
   const role = window.currentUser?.role_code;
-  if (role !== 'SUPER_ADMIN') {
+  const cfgPerms = window.currentPermissions || {};
+  if (role !== 'SUPER_ADMIN' && !cfgPerms.canManageSettings) {
     const restrictedTabs = ['aiConfig', 'systemConfig', 'notificationConfig', 'auditLog'];
     restrictedTabs.forEach(tabId => {
       const navLink = document.querySelector(`a[href="#${tabId}"]`);
@@ -704,21 +705,45 @@ function loadPermissions(roleCode) {
 }
 
 function renderPermissionsTable() {
-  const modules = ['WORK_PAPER', 'ACTION_PLAN', 'USER', 'REPORT', 'CONFIG'];
+  const modules = [
+    { key: 'WORK_PAPER', label: 'Work Paper' },
+    { key: 'ACTION_PLAN', label: 'Action Plan' },
+    { key: 'USER', label: 'User Management' },
+    { key: 'REPORT', label: 'Report' },
+    { key: 'DASHBOARD', label: 'Dashboard' },
+    { key: 'AI_ASSIST', label: 'AI Assist' },
+    { key: 'AUDIT_WORKBENCH', label: 'Audit Workbench' },
+    { key: 'CONFIG', label: 'Config' }
+  ];
   const actions = ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'];
+
+  // Define which actions are relevant per module (grey out irrelevant ones)
+  const relevantActions = {
+    'WORK_PAPER': ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'],
+    'ACTION_PLAN': ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'],
+    'USER': ['can_create', 'can_read', 'can_update', 'can_delete'],
+    'REPORT': ['can_read', 'can_export'],
+    'DASHBOARD': ['can_read', 'can_export'],
+    'AI_ASSIST': ['can_create', 'can_read'],
+    'AUDIT_WORKBENCH': ['can_read'],
+    'CONFIG': ['can_read', 'can_update']
+  };
 
   const tbody = document.getElementById('permissionsTable');
   tbody.innerHTML = modules.map(mod => {
-    const perm = permissionsData[mod] || {};
+    const perm = permissionsData[mod.key] || {};
+    const relevant = relevantActions[mod.key] || actions;
     return `
       <tr>
-        <td>${mod.replace('_', ' ')}</td>
-        ${actions.map(act => `
+        <td>${mod.label}</td>
+        ${actions.map(act => {
+          const isRelevant = relevant.includes(act);
+          return `
           <td class="text-center">
-            <input type="checkbox" class="form-check-input" data-module="${mod}" data-action="${act}"
-              ${perm[act] ? 'checked' : ''} onchange="markPermissionChanged()">
-          </td>
-        `).join('')}
+            ${isRelevant ? `<input type="checkbox" class="form-check-input" data-module="${mod.key}" data-action="${act}"
+              ${perm[act] ? 'checked' : ''} onchange="markPermissionChanged()">` : '<span class="text-muted">-</span>'}
+          </td>`;
+        }).join('')}
       </tr>
     `;
   }).join('');

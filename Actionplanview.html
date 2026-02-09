@@ -348,9 +348,10 @@ function renderActionPlanView() {
   // Setup upload zone drag and drop
   setupAPUploadZone();
 
-  // Show review card for auditors if implemented
+  // Show review card for auditors if implemented (driven by DB permissions)
   const user = window.currentUser;
-  const isAuditor = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'].includes(user?.role_code);
+  const p = window.currentPermissions || {};
+  const isAuditor = user?.role_code === 'SUPER_ADMIN' || p.canVerifyActionPlan;
   document.getElementById('apReviewCard').style.display = (isAuditor && ap.status === 'Implemented') ? 'block' : 'none';
 }
 
@@ -359,7 +360,8 @@ function renderAPActions(ap) {
   const impl = document.getElementById('apImplementBtn');
   const user = window.currentUser;
   const isOwner = (ap.owner_ids || '').split(',').includes(user?.user_id);
-  const isAuditor = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'].includes(user?.role_code);
+  const apPerms = window.currentPermissions || {};
+  const isAuditor = user?.role_code === 'SUPER_ADMIN' || apPerms.canEditActionPlan;
   
   let actionsHtml = '';
   let implHtml = '';

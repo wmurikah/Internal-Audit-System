@@ -203,6 +203,14 @@ let reportCharts = {};
 let currentReportTab = 'executive';
 
 function loadReports() {
+  // Hide export dropdown if user lacks export permission
+  var p = window.currentPermissions || {};
+  var role = window.currentUser?.role_code || '';
+  if (role !== 'SUPER_ADMIN' && !p.canExportDashboard && !p.canExportData) {
+    var exportBtn = document.querySelector('.reports-page .dropdown-toggle');
+    if (exportBtn) exportBtn.closest('.dropdown').style.display = 'none';
+  }
+
   initReportFilters();
   loadReportData();
 }

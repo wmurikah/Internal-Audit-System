@@ -847,32 +847,43 @@ function getUserPermissions(roleCode) {
     canDeleteWorkPaper: false,
     canReviewWorkPaper: false,
     canApproveWorkPaper: false,
-    
+
     // Action Plan permissions
     canCreateActionPlan: false,
     canViewActionPlans: false,
     canEditActionPlan: false,
     canDeleteActionPlan: false,
     canVerifyActionPlan: false,
-    
+
     // User Management
     canManageUsers: false,
     canCreateUser: false,
     canEditUser: false,
     canDeleteUser: false,
-    
-    // Reports
+
+    // Reports (legacy REPORT module - kept for backward compat)
     canViewReports: false,
     canExportData: false,
-    
+
+    // Dashboard module (page visibility + export)
+    canViewDashboard: false,
+    canExportDashboard: false,
+
+    // AI Assist module (page visibility + generate insights)
+    canViewAIAssist: false,
+    canGenerateAIInsights: false,
+
+    // Audit Workbench module (page + quick stats visibility)
+    canViewAuditWorkbench: false,
+
     // Settings/Config
     canManageSettings: false,
     canManageRoles: false
   };
-  
+
   // Load permissions fresh from database (bypass cache for accurate permissions)
   const dbPermissions = getPermissionsFresh(roleCode);
-  
+
   // Map database permissions to UI feature flags
   // WORK_PAPER module
   if (dbPermissions.WORK_PAPER) {
@@ -884,7 +895,7 @@ function getUserPermissions(roleCode) {
     // Review permission = approve permission for work papers
     permissions.canReviewWorkPaper = dbPermissions.WORK_PAPER.can_approve === true;
   }
-  
+
   // ACTION_PLAN module
   if (dbPermissions.ACTION_PLAN) {
     permissions.canCreateActionPlan = dbPermissions.ACTION_PLAN.can_create === true;
@@ -893,7 +904,7 @@ function getUserPermissions(roleCode) {
     permissions.canDeleteActionPlan = dbPermissions.ACTION_PLAN.can_delete === true;
     permissions.canVerifyActionPlan = dbPermissions.ACTION_PLAN.can_approve === true;
   }
-  
+
   // USER module
   if (dbPermissions.USER) {
     permissions.canManageUsers = dbPermissions.USER.can_read === true;
@@ -901,21 +912,42 @@ function getUserPermissions(roleCode) {
     permissions.canEditUser = dbPermissions.USER.can_update === true;
     permissions.canDeleteUser = dbPermissions.USER.can_delete === true;
   }
-  
-  // REPORT module
+
+  // REPORT module (legacy - maps to canViewReports for backward compat)
   if (dbPermissions.REPORT) {
     permissions.canViewReports = dbPermissions.REPORT.can_read === true;
     permissions.canExportData = dbPermissions.REPORT.can_export === true;
   }
-  
+
+  // DASHBOARD module (new - controls Dashboard page access)
+  if (dbPermissions.DASHBOARD) {
+    permissions.canViewDashboard = dbPermissions.DASHBOARD.can_read === true;
+    permissions.canExportDashboard = dbPermissions.DASHBOARD.can_export === true;
+  } else {
+    // Fallback: if DASHBOARD module not yet configured in DB, inherit from REPORT
+    permissions.canViewDashboard = permissions.canViewReports;
+    permissions.canExportDashboard = permissions.canExportData;
+  }
+
+  // AI_ASSIST module (new - controls AI Assist page access)
+  if (dbPermissions.AI_ASSIST) {
+    permissions.canViewAIAssist = dbPermissions.AI_ASSIST.can_read === true;
+    permissions.canGenerateAIInsights = dbPermissions.AI_ASSIST.can_create === true;
+  }
+
+  // AUDIT_WORKBENCH module (new - controls Audit Workbench + Quick Stats)
+  if (dbPermissions.AUDIT_WORKBENCH) {
+    permissions.canViewAuditWorkbench = dbPermissions.AUDIT_WORKBENCH.can_read === true;
+  }
+
   // CONFIG module
   if (dbPermissions.CONFIG) {
     permissions.canManageSettings = dbPermissions.CONFIG.can_update === true;
     permissions.canManageRoles = dbPermissions.CONFIG.can_update === true;
   }
-  
+
   console.log('getUserPermissions for role', roleCode, '- loaded from database');
-  
+
   return permissions;
 }
 
