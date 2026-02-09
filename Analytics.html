@@ -245,6 +245,15 @@ function initAnalyticsPage() {
   for (let y = currentYear; y >= currentYear - 5; y--) {
     yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
   }
+
+  // Hide Generate button if user lacks AI_ASSIST create permission
+  const p = window.currentPermissions || {};
+  const role = window.currentUser?.role_code || '';
+  if (role !== 'SUPER_ADMIN' && !p.canGenerateAIInsights) {
+    const btn = document.getElementById('btnGenerateAI');
+    if (btn) btn.style.display = 'none';
+  }
+
   loadAnalytics();
 }
 

@@ -300,8 +300,9 @@ function renderWorkbenchSections(data) {
     </button>
   `;
 
-  // HOA/Senior Auditor team performance section
-  if (['SUPER_ADMIN', 'SENIOR_AUDITOR'].includes(role)) {
+  // Team performance - visible to users with approve permission (supervisory roles)
+  const dashPerms = window.currentPermissions || {};
+  if (role === 'SUPER_ADMIN' || dashPerms.canApproveWorkPaper) {
     document.getElementById('teamPerformanceSection').style.display = 'block';
     renderTeamPerformance(data.teamStats || {});
   }
