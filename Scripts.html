@@ -399,8 +399,8 @@ function setupNavigation(p) {
     document.getElementById('navReports')?.classList.add('d-none');
   }
 
-  // Analytics - show for auditor roles and management
-  const analyticsRoles = ['SENIOR_AUDITOR', 'AUDITOR', 'MANAGEMENT', 'BOARD'];
+  // AI Assist - show for auditor roles and management
+  const analyticsRoles = ['SENIOR_AUDITOR', 'AUDITOR', 'MANAGEMENT', 'SENIOR_MGMT', 'BOARD'];
   if (!analyticsRoles.includes(role)) {
     document.getElementById('navAnalytics')?.classList.add('d-none');
   }
@@ -430,7 +430,7 @@ function setupNavigation(p) {
   }
 
   // Audit Workbench & Quick Stats - auditor roles only
-  const auditorRoles = ['SENIOR_AUDITOR', 'AUDITOR', 'HEAD_OF_AUDIT'];
+  const auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
   if (!auditorRoles.includes(role)) {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
     document.getElementById('navQuickStats')?.classList.add('d-none');
@@ -450,7 +450,7 @@ function setupNavigation(p) {
 // Navigation
 function getDefaultPage() {
   const role = window.currentUser?.role_code || '';
-  const auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'HEAD_OF_AUDIT'];
+  const auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
   return auditorRoles.includes(role) ? 'audit-workbench' : 'reports';
 }
 
@@ -519,7 +519,7 @@ function navigateTo(page, params, updateHash = true) {
     'reports': { el: 'page-reports', title: 'Dashboard', init: () => { if (typeof loadReports === 'function') loadReports(); } },
     'users': { el: 'page-settings', title: 'User Management', init: () => { if (typeof loadSettings === 'function') loadSettings({ tab: 'users' }); } },
     'settings': { el: 'page-settings', title: 'Settings', init: () => { if (typeof loadSettings === 'function') loadSettings(params); } },
-    'analytics': { el: 'page-analytics', title: 'Analytics & Insights', init: () => { if (typeof initAnalyticsPage === 'function') initAnalyticsPage(); } }
+    'analytics': { el: 'page-analytics', title: 'AI Assist', init: () => { if (typeof initAnalyticsPage === 'function') initAnalyticsPage(); } }
   };
 
   const config = pageMap[page];

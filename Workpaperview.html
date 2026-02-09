@@ -142,8 +142,8 @@ function renderWPActions(wp) {
   const actions = document.getElementById('wpViewActions');
   let html = '';
   const user = window.currentUser;
-  const isAuditor = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR', 'JUNIOR_STAFF'].includes(user?.role_code);
-  const isReviewer = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR'].includes(user?.role_code);
+  const isAuditor = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'].includes(user?.role_code);
+  const isReviewer = ['SUPER_ADMIN', 'SENIOR_AUDITOR'].includes(user?.role_code);
   
   if (wp.status === 'Draft' || wp.status === 'Revision Required') {
     if (isAuditor) html += `<button class="btn btn-outline-primary" onclick="editWorkPaper('${wp.work_paper_id}')"><i class="bi bi-pencil me-1"></i>Edit</button>`;

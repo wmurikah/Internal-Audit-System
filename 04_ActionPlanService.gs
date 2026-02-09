@@ -279,7 +279,7 @@ function updateActionPlan(actionPlanId, data, user) {
 
   // Determine which fields can be updated based on role
   const isAuditee = user.role_code === ROLES.AUDITEE;
-  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF].includes(user.role_code);
+  const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
   
   if (isAuditee) {
     // Auditees can only update implementation-related fields
@@ -443,6 +443,14 @@ function getActionPlansRaw(filters, user) {
       if (roleCode === ROLES.AUDITEE) {
         const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
         if (!ownerIds.includes(user.user_id)) {
+          match = false;
+        }
+      }
+
+      // OBSERVER and EXTERNAL_AUDITOR: read-only, only see closed/verified action plans
+      if (roleCode === ROLES.OBSERVER || roleCode === ROLES.EXTERNAL_AUDITOR) {
+        const viewableStatuses = ['Implemented', 'Verified', 'Closed'];
+        if (!viewableStatuses.includes(row[colMap['status']])) {
           match = false;
         }
       }
