@@ -155,51 +155,66 @@ function getDashboardData(user) {
  */
 function getSidebarCounts(user) {
   try {
+    const roleCode = user ? user.role_code : '';
+
+    // Roles that should not see operational counts
+    const nonOperationalRoles = [ROLES.OBSERVER, ROLES.EXTERNAL_AUDITOR, ROLES.BOARD, ROLES.SENIOR_MGMT];
+    if (nonOperationalRoles.includes(roleCode)) {
+      return { success: true, pendingReview: 0, overdueActionPlans: 0 };
+    }
+
     // Count work papers with status 'Submitted' (pending review)
     const wpSheet = getSheet(SHEETS.WORK_PAPERS);
     const wpData = wpSheet.getDataRange().getValues();
     const wpHeaders = wpData[0];
     const wpStatusIdx = wpHeaders.indexOf('status');
-    
+
     let pendingReview = 0;
     for (let i = 1; i < wpData.length; i++) {
       if (wpData[i][wpStatusIdx] === 'Submitted') {
         pendingReview++;
       }
     }
-    
+
     // Count overdue action plans
     const apSheet = getSheet(SHEETS.ACTION_PLANS);
     const apData = apSheet.getDataRange().getValues();
     const apHeaders = apData[0];
     const apStatusIdx = apHeaders.indexOf('status');
     const apDueDateIdx = apHeaders.indexOf('due_date');
-    
+    const apOwnerIdx = apHeaders.indexOf('owner_ids');
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    // Statuses that are considered "closed" (no longer active)
+
     const closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
-    
+
     let overdueActionPlans = 0;
     for (let i = 1; i < apData.length; i++) {
       const status = apData[i][apStatusIdx];
       const dueDate = apData[i][apDueDateIdx];
-      
-      // Only count open items (not in closed statuses)
+
       if (status && !closedStatuses.includes(status)) {
         if (dueDate) {
           const due = new Date(dueDate);
           due.setHours(0, 0, 0, 0);
           if (due < today) {
-            overdueActionPlans++;
+            // AUDITEE only sees their own overdue items
+            if (roleCode === ROLES.AUDITEE && user) {
+              const ownerIds = String(apData[i][apOwnerIdx] || '').split(',').map(s => s.trim());
+              if (ownerIds.includes(user.user_id)) {
+                overdueActionPlans++;
+              }
+            } else {
+              overdueActionPlans++;
+            }
           }
         }
       }
     }
-    
+
     console.log('Sidebar counts - Pending Review:', pendingReview, 'Overdue APs:', overdueActionPlans);
-    
+
     return {
       success: true,
       pendingReview: pendingReview,

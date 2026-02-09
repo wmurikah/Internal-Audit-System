@@ -181,13 +181,6 @@
     </div>
   </div>
 
-  <!-- Bulk Actions Toolbar -->
-  <div class="bulk-toolbar" id="wpBulkToolbar">
-    <span class="bulk-count"><span id="wpBulkCount">0</span> selected</span>
-    <button class="btn btn-sm btn-outline-light" onclick="bulkExportSelected()"><i class="bi bi-download me-1"></i>Export Selected</button>
-    <span class="btn-close-bulk" onclick="clearWPSelection()" title="Clear selection">&times;</span>
-  </div>
-
   <!-- Cards View -->
   <div class="row g-3" id="wpCardsView" style="display: none;"></div>
 
@@ -554,7 +547,7 @@ function renderWPTable(data) {
         </td>
       </tr>
     `;
-    updateBulkToolbar();
+    updateWPBulkToolbar();
     return;
   }
 
@@ -895,7 +888,7 @@ function initWPFilters() {
   const preparedBySelect = document.getElementById('wpFilterPreparedBy');
   if (preparedBySelect && window.appDropdowns && window.appDropdowns.users) {
     window.appDropdowns.users
-      .filter(u => ['AUDITOR', 'SENIOR_AUDITOR', 'HEAD_OF_AUDIT', 'SUPER_ADMIN'].includes(u.role_code))
+      .filter(u => ['AUDITOR', 'SENIOR_AUDITOR', 'SUPER_ADMIN'].includes(u.role_code))
       .forEach(u => {
         preparedBySelect.innerHTML += `<option value="${u.id}">${u.name}</option>`;
       });

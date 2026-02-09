@@ -259,15 +259,27 @@ function routeAction(action, data, user) {
       
     // ========== REPORTS ==========
     case 'getAuditSummaryReport':
+      if (!canUserPerform(user, 'read', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
       return { success: true, report: getAuditSummaryReport(data.filters) };
-      
+
     case 'getActionPlanAgingReport':
+      if (!canUserPerform(user, 'read', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
       return { success: true, report: getActionPlanAgingReport() };
-      
+
     case 'getRiskSummaryReport':
+      if (!canUserPerform(user, 'read', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
       return { success: true, report: getRiskSummaryReport(data.filters) };
 
     case 'getComprehensiveReportData':
+      if (!canUserPerform(user, 'read', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
       return { success: true, ...getComprehensiveReportData(data.filters) };
 
     // ========== NOTIFICATIONS ==========
@@ -304,6 +316,9 @@ function routeAction(action, data, user) {
 
     // ========== SETTINGS ==========
     case 'getPermissions':
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
       return { success: true, permissions: getPermissionsCached(data.roleCode) };
 
     case 'updatePermissions':
@@ -313,6 +328,9 @@ function routeAction(action, data, user) {
       return updatePermissions(data.roleCode, data.permissions, user);
 
     case 'getUserStats':
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
       return { success: true, stats: getUserStats() };
 
     case 'getSystemConfig':
@@ -442,10 +460,16 @@ function routeAction(action, data, user) {
 
     // ========== ANALYTICS ==========
     case 'getAnalyticsData':
+      if (!canUserPerform(user, 'read', 'REPORT', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
       return getAnalyticsData(data.year, user);
 
     // ========== CACHE MANAGEMENT ==========
     case 'warmCache':
+      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
       return warmAllCaches();
 
     case 'clearCache':
@@ -646,7 +670,7 @@ function clearAllCaches() {
   ];
   
   // Clear all role permission caches
-  const roles = ['SUPER_ADMIN', 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'UNIT_MANAGER', 'MANAGEMENT', 'SENIOR_MGMT', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
   roles.forEach(role => {
     keysToRemove.push('perm_' + role);
     keysToRemove.push('role_name_' + role);

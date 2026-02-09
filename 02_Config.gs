@@ -354,7 +354,8 @@ function clearAllCaches() {
     'perm_MANAGEMENT',
     'perm_SENIOR_MGMT',
     'perm_BOARD',
-    'perm_EXTERNAL_AUDITOR'
+    'perm_EXTERNAL_AUDITOR',
+    'perm_OBSERVER'
   ];
   
   keysToRemove.forEach(key => {

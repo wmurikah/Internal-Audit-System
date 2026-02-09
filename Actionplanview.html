@@ -350,7 +350,7 @@ function renderActionPlanView() {
 
   // Show review card for auditors if implemented
   const user = window.currentUser;
-  const isAuditor = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR'].includes(user?.role_code);
+  const isAuditor = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'].includes(user?.role_code);
   document.getElementById('apReviewCard').style.display = (isAuditor && ap.status === 'Implemented') ? 'block' : 'none';
 }
 
@@ -359,7 +359,7 @@ function renderAPActions(ap) {
   const impl = document.getElementById('apImplementBtn');
   const user = window.currentUser;
   const isOwner = (ap.owner_ids || '').split(',').includes(user?.user_id);
-  const isAuditor = ['SUPER_ADMIN', 'HEAD_OF_AUDIT', 'SENIOR_AUDITOR'].includes(user?.role_code);
+  const isAuditor = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'].includes(user?.role_code);
   
   let actionsHtml = '';
   let implHtml = '';

@@ -336,7 +336,15 @@ function getWorkPapersRaw(filters, user) {
           match = false;
         }
       }
-      
+
+      // OBSERVER and EXTERNAL_AUDITOR can only see approved/sent work papers
+      if (roleCode === ROLES.OBSERVER || roleCode === ROLES.EXTERNAL_AUDITOR) {
+        const viewableStatuses = [STATUS.WORK_PAPER.APPROVED, STATUS.WORK_PAPER.SENT_TO_AUDITEE];
+        if (!viewableStatuses.includes(row[colMap['status']])) {
+          match = false;
+        }
+      }
+
       if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.SENIOR_AUDITOR) {
         const userAffiliates = parseIdList(user.affiliate_code);
         if (!userAffiliates.includes(row[colMap['affiliate_code']])) {

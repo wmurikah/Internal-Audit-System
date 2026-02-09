@@ -277,8 +277,7 @@ function renderWorkbench(data) {
 
 function setRoleBasedMessage(roleCode) {
   const messages = {
-    'SUPER_ADMIN': 'System administrator workbench',
-    'HEAD_OF_AUDIT': 'Head of Internal Audit workbench',
+    'SUPER_ADMIN': 'Head of Internal Audit workbench',
     'AUDITOR': 'Your audit workbench',
     'SENIOR_AUDITOR': 'Senior auditor workbench'
   };
@@ -302,7 +301,7 @@ function renderWorkbenchSections(data) {
   `;
 
   // HOA/Senior Auditor team performance section
-  if (['HEAD_OF_AUDIT', 'SUPER_ADMIN', 'SENIOR_AUDITOR'].includes(role)) {
+  if (['SUPER_ADMIN', 'SENIOR_AUDITOR'].includes(role)) {
     document.getElementById('teamPerformanceSection').style.display = 'block';
     renderTeamPerformance(data.teamStats || {});
   }
