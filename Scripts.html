@@ -588,7 +588,7 @@ function apiCall(action, data) {
           // Check if session expired and redirect to login
           if (result.requireLogin) {
             sessionStorage.removeItem('sessionToken');
-            window.top.location.href = window.top.location.pathname;
+            redirectToLogin();
             return;
           }
           resolve(result);
@@ -771,11 +771,19 @@ function handleLogout() {
   sessionStorage.removeItem('sessionToken');
   sessionStorage.clear();
 
+  // Redirect after a short delay regardless of API response
+  // This prevents hanging if the server call stalls
+  var redirectTimer = setTimeout(function() {
+    redirectToLogin();
+  }, 2000);
+
   apiCall('logout', {})
     .then(function() {
+      clearTimeout(redirectTimer);
       redirectToLogin();
     })
     .catch(function() {
+      clearTimeout(redirectTimer);
       redirectToLogin();
     });
 }
