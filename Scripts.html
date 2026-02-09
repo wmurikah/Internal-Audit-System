@@ -354,7 +354,8 @@ function silentRefreshInitData() {
 function handleAuthFailure() {
   LocalStore.clear();
   sessionStorage.removeItem('sessionToken');
-  window.top.location.href = window.top.location.pathname;
+  sessionStorage.clear();
+  redirectToLogin();
 }
 
 // Legacy alias
@@ -515,7 +516,7 @@ function navigateTo(page, params, updateHash = true) {
     'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => { if (typeof loadActionPlans === 'function') loadActionPlans(params); } },
     'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: () => { if (typeof loadActionPlansOverdue === 'function') loadActionPlansOverdue(); else if (typeof loadActionPlans === 'function') loadActionPlans({ overdue: true }); } },
     'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => { if (typeof loadActionPlanView === 'function') loadActionPlanView(params); } },
-    'reports': { el: 'page-reports', title: 'Reports', init: () => { if (typeof loadReports === 'function') loadReports(); } },
+    'reports': { el: 'page-reports', title: 'Dashboard', init: () => { if (typeof loadReports === 'function') loadReports(); } },
     'users': { el: 'page-settings', title: 'User Management', init: () => { if (typeof loadSettings === 'function') loadSettings({ tab: 'users' }); } },
     'settings': { el: 'page-settings', title: 'Settings', init: () => { if (typeof loadSettings === 'function') loadSettings(params); } },
     'analytics': { el: 'page-analytics', title: 'Analytics & Insights', init: () => { if (typeof initAnalyticsPage === 'function') initAnalyticsPage(); } }
@@ -765,27 +766,25 @@ function handleLogout() {
 
   // Clear all caches
   LocalStore.clear();
-  
+  sessionStorage.removeItem('sessionToken');
+  sessionStorage.clear();
+
   apiCall('logout', {})
-    .then(() => {
-      sessionStorage.removeItem('sessionToken');
-      LocalStore.clear();
-      // GAS sandbox-safe redirect to login page
-      var a = document.createElement('a');
-      a.href = window.location.pathname.replace(/\/exec.*/, '/exec');
-      a.target = '_top';
-      document.body.appendChild(a);
-      a.click();
+    .then(function() {
+      redirectToLogin();
     })
-    .catch(() => {
-      sessionStorage.removeItem('sessionToken');
-      LocalStore.clear();
-      var a = document.createElement('a');
-      a.href = window.location.pathname.replace(/\/exec.*/, '/exec');
-      a.target = '_top';
-      document.body.appendChild(a);
-      a.click();
+    .catch(function() {
+      redirectToLogin();
     });
+}
+
+function redirectToLogin() {
+  var loginUrl = window.__BASE_URL__ || window.location.pathname.replace(/\/exec.*/, '/exec');
+  var a = document.createElement('a');
+  a.href = loginUrl;
+  a.target = '_top';
+  document.body.appendChild(a);
+  a.click();
 }
 
 function showChangePassword() {
