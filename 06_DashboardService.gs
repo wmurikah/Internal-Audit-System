@@ -986,6 +986,37 @@ function getComprehensiveReportData(filters) {
   var workPapers = getWorkPapers(filters, null);
   var actionPlans = getActionPlans(filters, null);
 
+  // Build area lookup: area_id -> area_name from Audit Areas sheet
+  var areaLookup = {};
+  try {
+    var areaSheet = getSheet(SHEETS.AUDIT_AREAS);
+    if (areaSheet && areaSheet.getLastRow() > 1) {
+      var areaData = areaSheet.getDataRange().getValues();
+      var areaHeaders = areaData[0];
+      var areaIdIdx = areaHeaders.indexOf('area_id');
+      var areaNameIdx = areaHeaders.indexOf('area_name');
+      var areaCodeIdx = areaHeaders.indexOf('area_code');
+      for (var ai = 1; ai < areaData.length; ai++) {
+        var aid = areaData[ai][areaIdIdx];
+        if (aid) {
+          areaLookup[aid] = areaData[ai][areaNameIdx] || areaData[ai][areaCodeIdx] || aid;
+        }
+        // Also map area_code -> area_name for fallback
+        var acode = areaData[ai][areaCodeIdx];
+        if (acode && !areaLookup[acode]) {
+          areaLookup[acode] = areaData[ai][areaNameIdx] || acode;
+        }
+      }
+    }
+  } catch(e) { console.warn('Failed to load audit areas lookup:', e); }
+
+  // Enrich work papers with area_name from lookup
+  workPapers.forEach(function(wp) {
+    if (!wp.audit_area_name && wp.audit_area_id && areaLookup[wp.audit_area_id]) {
+      wp.audit_area_name = areaLookup[wp.audit_area_id];
+    }
+  });
+
   // Build lookup: work_paper_id -> work paper
   var wpLookup = {};
   workPapers.forEach(function(wp) { wpLookup[wp.work_paper_id] = wp; });

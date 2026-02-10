@@ -366,7 +366,7 @@ function renderAPActions(ap) {
   let actionsHtml = '';
   let implHtml = '';
 
-  if ((isOwner || isAuditor) && !['Implemented', 'Verified'].includes(ap.status)) {
+  if ((isOwner || isAuditor) && !['Implemented', 'Verified', 'Closed'].includes(ap.status)) {
     implHtml = `<button class="btn btn-success" onclick="markImplemented()"><i class="bi bi-check2-circle me-1"></i>Mark as Implemented</button>`;
     actionsHtml = `<button class="btn btn-primary" onclick="saveNotes()"><i class="bi bi-save me-1"></i>Save Notes</button>`;
   }
@@ -443,6 +443,12 @@ function saveNotes() {
 }
 
 function markImplemented() {
+  // Evidence is mandatory to mark as implemented
+  var evidence = currentActionPlan.evidence || [];
+  if (evidence.length === 0) {
+    showToast('Please attach at least one evidence document before marking as implemented.', 'danger');
+    return;
+  }
   const notes = document.getElementById('apViewNotes').value;
   if (!notes && !confirm('No implementation notes provided. Continue?')) return;
   showLoading('Processing...');
