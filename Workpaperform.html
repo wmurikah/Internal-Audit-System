@@ -235,7 +235,7 @@
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label">Work Paper Reference</label>
-              <input type="text" class="form-control" id="wpWorkPaperRef" placeholder="Enter work paper reference number">
+              <input type="text" class="form-control" id="wpWorkPaperRef" placeholder="Auto-generated on save" readonly style="background-color: #e9ecef; cursor: not-allowed;">
             </div>
             <div class="col-md-6">
               <label class="form-label">File Category</label>
@@ -1769,7 +1769,6 @@ function getFormData() {
     risk_summary: document.getElementById('wpRiskSummary').value,
     recommendation: document.getElementById('wpRecommendation').value,
     management_response: document.getElementById('wpManagementResponse').value,
-    work_paper_ref: document.getElementById('wpWorkPaperRef').value,
     responsible_ids: document.getElementById('wpResponsibleIds').value,
     cc_recipients: document.getElementById('wpCCRecipients').value
   };
