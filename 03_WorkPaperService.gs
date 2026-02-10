@@ -51,7 +51,7 @@ function createWorkPaper(data, user) {
     sent_to_auditee_date: '',
     created_at: now,
     updated_at: now,
-    work_paper_ref: sanitizeInput(data.work_paper_ref || '')
+    work_paper_ref: workPaperId
   };
 
   // Insert into sheet
@@ -137,7 +137,7 @@ function updateWorkPaper(workPaperId, data, user) {
     'control_objectives', 'control_classification', 'control_type', 'control_frequency', 'control_standards',
     'risk_description', 'test_objective', 'testing_steps',
     'observation_title', 'observation_description', 'risk_rating', 'risk_summary', 'recommendation',
-    'management_response', 'responsible_ids', 'cc_recipients', 'work_paper_ref'
+    'management_response', 'responsible_ids', 'cc_recipients'
   ];
   
   editableFields.forEach(field => {
