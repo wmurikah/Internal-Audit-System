@@ -405,22 +405,15 @@ function setupNavigation(p) {
     document.getElementById('navMyWorkPapers')?.classList.add('d-none');
   }
 
-  // Dashboard (formerly Reports) - driven by DASHBOARD module permission
-  if (!p || !p.canViewDashboard) {
-    document.getElementById('navReports')?.classList.add('d-none');
-  }
+  // Dashboard (Reports) - visible to ALL users regardless of role
+  document.getElementById('navReports')?.classList.remove('d-none');
 
   // AI Assist - driven by AI_ASSIST module permission
   if (!p || !p.canViewAIAssist) {
     document.getElementById('navAnalytics')?.classList.add('d-none');
   }
 
-  // Hide Insights section header if both Dashboard and AI Assist are hidden
-  const reportsHidden = document.getElementById('navReports')?.classList.contains('d-none');
-  const analyticsHidden = document.getElementById('navAnalytics')?.classList.contains('d-none');
-  if (reportsHidden && analyticsHidden) {
-    document.getElementById('navInsightsSection')?.classList.add('d-none');
-  }
+  // Insights section header is always visible since Dashboard is always visible
 
   // User Management - driven by USER module permission
   if (!p || !p.canManageUsers) {
@@ -452,8 +445,8 @@ function getDefaultPage() {
   // Use permissions to determine default page (no hardcoded role arrays)
   const p = window.currentPermissions || {};
   if (role === 'SUPER_ADMIN' || p.canViewAuditWorkbench) return 'audit-workbench';
-  if (p.canViewDashboard) return 'reports';
-  return 'work-papers';
+  // Dashboard is visible to all users - use as default fallback
+  return 'reports';
 }
 
 function handleHashChange() {
@@ -789,7 +782,9 @@ function handleLogout() {
 }
 
 function redirectToLogin() {
-  var loginUrl = window.__BASE_URL__ || window.location.pathname.replace(/\/exec.*/, '/exec');
+  var baseUrl = window.__BASE_URL__ || window.location.pathname.replace(/\/exec.*/, '/exec');
+  // Explicitly navigate to login page
+  var loginUrl = baseUrl + (baseUrl.indexOf('?') === -1 ? '?page=login' : '&page=login');
   var a = document.createElement('a');
   a.href = loginUrl;
   a.target = '_top';
@@ -1316,4 +1311,28 @@ document.addEventListener('DOMContentLoaded', function() {
   // Small delay to ensure DOM is ready
   setTimeout(initSidebarState, 100);
 });
+
+// ============================================================
+// INACTIVITY TIMEOUT - Auto-redirect to login after 5 minutes
+// ============================================================
+var INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+var _inactivityTimer = null;
+
+function resetInactivityTimer() {
+  if (_inactivityTimer) clearTimeout(_inactivityTimer);
+  _inactivityTimer = setTimeout(function() {
+    console.log('Session timed out due to inactivity');
+    LocalStore.clear();
+    sessionStorage.removeItem('sessionToken');
+    sessionStorage.clear();
+    redirectToLogin();
+  }, INACTIVITY_TIMEOUT_MS);
+}
+
+['mousemove', 'mousedown', 'keydown', 'click', 'scroll', 'touchstart'].forEach(function(evt) {
+  document.addEventListener(evt, resetInactivityTimer, { passive: true });
+});
+
+// Start inactivity timer on load
+resetInactivityTimer();
 </script>

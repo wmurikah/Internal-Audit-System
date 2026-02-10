@@ -603,16 +603,22 @@ function renderRiskPieChart(canvasId, rd) {
         backgroundColor: chartColors, borderWidth: 0 }]
     },
     options: { responsive: true, maintainAspectRatio: false,
-      layout: { padding: 20 },
+      layout: { padding: 40 },
       plugins: {
         legend: { display: false },
         datalabels: {
           display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
           color: function(context) { return chartColors[context.dataIndex]; },
+          backgroundColor: null,
+          borderColor: null,
+          borderWidth: 0,
+          borderRadius: 0,
+          padding: 0,
           font: { size: 11, weight: '600' },
           anchor: 'end',
           align: 'end',
-          offset: 8,
+          offset: 16,
+          clamp: true,
           formatter: function(value, context) {
             return context.chart.data.labels[context.dataIndex] + ': ' + value;
           }
@@ -632,16 +638,22 @@ function renderAPStatusChart(canvasId, dist) {
     type: 'doughnut',
     data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }] },
     options: { responsive: true, maintainAspectRatio: false,
-      layout: { padding: 20 },
+      layout: { padding: 40 },
       plugins: {
         legend: { display: false },
         datalabels: {
           display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
           color: function(context) { return colors[context.dataIndex]; },
+          backgroundColor: null,
+          borderColor: null,
+          borderWidth: 0,
+          borderRadius: 0,
+          padding: 0,
           font: { size: 11, weight: '600' },
           anchor: 'end',
           align: 'end',
-          offset: 8,
+          offset: 16,
+          clamp: true,
           formatter: function(value, context) {
             return labels[context.dataIndex] + ': ' + value;
           }
@@ -756,14 +768,38 @@ function renderScoreBarChart(canvasId, areas) {
 function renderAgingChart(canvasId, ag) {
   var ctx = document.getElementById(canvasId);
   if (!ctx) return;
+  var agingColors = ['#10b981','#f59e0b','#f97316','#ef4444','#991b1b'];
+  var agingLabels = ['Current', '1-30 Days', '31-60 Days', '61-90 Days', '90+ Days'];
   reportCharts[canvasId] = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Current', '1-30 Days', '31-60 Days', '61-90 Days', '90+ Days'],
+      labels: agingLabels,
       datasets: [{ data: [ag.current.count, ag.overdue1to30.count, ag.overdue31to60.count, ag.overdue61to90.count, ag.overdue90plus.count],
-        backgroundColor: ['#10b981','#f59e0b','#f97316','#ef4444','#991b1b'], borderWidth: 0 }]
+        backgroundColor: agingColors, borderWidth: 0 }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+    options: { responsive: true, maintainAspectRatio: false,
+      layout: { padding: 40 },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
+          color: function(context) { return agingColors[context.dataIndex]; },
+          backgroundColor: null,
+          borderColor: null,
+          borderWidth: 0,
+          borderRadius: 0,
+          padding: 0,
+          font: { size: 11, weight: '600' },
+          anchor: 'end',
+          align: 'end',
+          offset: 16,
+          clamp: true,
+          formatter: function(value, context) {
+            return agingLabels[context.dataIndex] + ': ' + value;
+          }
+        }
+      }
+    }
   });
 }
 

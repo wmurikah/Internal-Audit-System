@@ -563,19 +563,25 @@ function isImplementedOrVerified(status) {
 
 function markAsImplemented(actionPlanId, implementationNotes, user) {
   if (!user) throw new Error('User required');
-  
+
   const actionPlan = getActionPlanRaw(actionPlanId);
   if (!actionPlan) throw new Error('Action plan not found');
-  
+
   // Verify user is an owner or has permission
   const ownerIds = String(actionPlan.owner_ids || '').split(',').map(s => s.trim());
   const isOwner = ownerIds.includes(user.user_id);
   const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
-  
+
   if (!isOwner && !isAuditor) {
     throw new Error('Permission denied: Only owners can mark as implemented');
   }
-  
+
+  // Evidence is mandatory to mark as implemented
+  const evidence = getActionPlanEvidence(actionPlanId);
+  if (!evidence || evidence.length === 0) {
+    throw new Error('Evidence attachment is required before marking as implemented. Please upload at least one supporting document.');
+  }
+
   const now = new Date();
   const previousStatus = actionPlan.status;
   
