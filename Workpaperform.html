@@ -821,7 +821,8 @@ function setupAutocomplete(inputId, suggestionsId, tagsId, hiddenId, dataSource)
     // Get data based on source
     let data = [];
     if (dataSource === 'auditees') {
-      data = window.appDropdowns?.auditees || [];
+      // Keep Responsible field aligned with CC recipients source (same users sheet)
+      data = window.appDropdowns?.users || [];
     } else {
       data = window.appDropdowns?.users || [];
     }

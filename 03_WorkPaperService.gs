@@ -372,6 +372,10 @@ function getWorkPapersRaw(filters, user) {
 
 function submitWorkPaper(workPaperId, user) {
   if (!user) throw new Error('User required');
+
+  if (!canUserPerform(user, 'create', 'WORK_PAPER', null)) {
+    throw new Error('Permission denied: Cannot submit work papers');
+  }
   
   const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');

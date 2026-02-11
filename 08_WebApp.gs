@@ -473,9 +473,7 @@ function routeAction(action, data, user) {
 
     // ========== ANALYTICS ==========
     case 'getAnalyticsData':
-      if (!canUserPerform(user, 'read', 'AI_ASSIST', null) && !canUserPerform(user, 'read', 'REPORT', null)) {
-        return { success: false, error: 'Permission denied' };
-      }
+      // AI Assist module is available to all authenticated users
       return getAnalyticsData(data.year, user);
 
     // ========== CACHE MANAGEMENT ==========
