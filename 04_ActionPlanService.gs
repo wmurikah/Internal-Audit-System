@@ -26,6 +26,9 @@ function createActionPlan(data, user) {
   if (!workPaper) {
     throw new Error('Work paper not found: ' + data.work_paper_id);
   }
+  if (workPaper.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+    throw new Error('Action plans can only be created after work paper is sent to auditee');
+  }
 
   const actionPlanId = generateId('ACTION_PLAN');
   const now = new Date();
@@ -98,6 +101,14 @@ function createActionPlansBatch(workPaperId, plansData, user) {
   if (!user) throw new Error('User required');
   if (!Array.isArray(plansData) || plansData.length === 0) {
     throw new Error('Plans data array is required');
+  }
+
+  const workPaper = getWorkPaperById(workPaperId);
+  if (!workPaper) {
+    throw new Error('Work paper not found: ' + workPaperId);
+  }
+  if (workPaper.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+    throw new Error('Action plans can only be created after work paper is sent to auditee');
   }
   
   // Validate all due dates: must not be more than 6 months from today
