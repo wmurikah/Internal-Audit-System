@@ -372,6 +372,10 @@ function getWorkPapersRaw(filters, user) {
 
 function submitWorkPaper(workPaperId, user) {
   if (!user) throw new Error('User required');
+
+  if (!canUserPerform(user, 'create', 'WORK_PAPER', null)) {
+    throw new Error('Permission denied: Cannot submit work papers');
+  }
   
   const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
@@ -453,31 +457,47 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
     updated_at: now
   };
   
-  let revisionAction = '';
-  
-  switch (action) {
-    case 'approve':
-      updates.status = STATUS.WORK_PAPER.APPROVED;
-      updates.approved_by_id = user.user_id;
-      updates.approved_by_name = user.full_name;
-      updates.approved_date = now;
-      revisionAction = 'Approved';
-      break;
-      
-    case 'reject':
-    case 'return':
-      updates.status = STATUS.WORK_PAPER.REVISION_REQUIRED;
-      updates.revision_count = (workPaper.revision_count || 0) + 1;
-      revisionAction = 'Returned for Revision';
-      break;
-      
-    case 'start_review':
-      updates.status = STATUS.WORK_PAPER.UNDER_REVIEW;
-      revisionAction = 'Review Started';
-      break;
-      
-    default:
-      throw new Error('Invalid review action: ' + action);
+  const transitionMap = {
+    approve: {
+      from: [STATUS.WORK_PAPER.SUBMITTED, STATUS.WORK_PAPER.UNDER_REVIEW],
+      to: STATUS.WORK_PAPER.APPROVED,
+      revisionAction: 'Approved'
+    },
+    reject: {
+      from: [STATUS.WORK_PAPER.SUBMITTED, STATUS.WORK_PAPER.UNDER_REVIEW],
+      to: STATUS.WORK_PAPER.REVISION_REQUIRED,
+      revisionAction: 'Returned for Revision'
+    },
+    return: {
+      from: [STATUS.WORK_PAPER.SUBMITTED, STATUS.WORK_PAPER.UNDER_REVIEW],
+      to: STATUS.WORK_PAPER.REVISION_REQUIRED,
+      revisionAction: 'Returned for Revision'
+    },
+    start_review: {
+      from: [STATUS.WORK_PAPER.SUBMITTED],
+      to: STATUS.WORK_PAPER.UNDER_REVIEW,
+      revisionAction: 'Review Started'
+    }
+  };
+
+  const transition = transitionMap[action];
+  if (!transition) {
+    throw new Error('Invalid review action: ' + action);
+  }
+  if (!transition.from.includes(workPaper.status)) {
+    throw new Error('Action "' + action + '" is not allowed from status: ' + workPaper.status);
+  }
+
+  updates.status = transition.to;
+  const revisionAction = transition.revisionAction;
+
+  if (action === 'approve') {
+    updates.approved_by_id = user.user_id;
+    updates.approved_by_name = user.full_name;
+    updates.approved_date = now;
+  }
+  if (action === 'reject' || action === 'return') {
+    updates.revision_count = (workPaper.revision_count || 0) + 1;
   }
   
   // Update sheet

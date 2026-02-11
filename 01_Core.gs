@@ -7,7 +7,7 @@ const CONFIG = {
   CACHE_TTL: {
     CONFIG: 3600,        // 1 hour - rarely changes
     DROPDOWNS: 1800,     // 30 min - affiliates, areas, users list
-    PERMISSIONS: 600,    // 10 min - role permissions
+    PERMISSIONS: 10,     // 10 sec - keep access control changes near-real-time
     SESSION: 300,        // 5 min - session validation
     INDEX: 600,          // 10 min - lookup indexes
     USER_BY_EMAIL: 300,  // 5 min - email to user mapping
@@ -982,7 +982,23 @@ function logAudit(action, entityType, entityId, oldData, newData, userId) {
 
 function checkPermission(roleCode, module, action) {
   const permissions = getPermissions(roleCode);
-  const modulePerm = permissions[module];
+  let modulePerm = permissions[module];
+
+  // Backward-compatible module aliases to prevent false denials when one module
+  // is configured but an equivalent legacy/new module key is checked.
+  if (!modulePerm) {
+    const moduleAliases = {
+      'DASHBOARD': ['REPORT'],
+      'REPORT': ['DASHBOARD']
+    };
+    const aliases = moduleAliases[module] || [];
+    for (var i = 0; i < aliases.length; i++) {
+      if (permissions[aliases[i]]) {
+        modulePerm = permissions[aliases[i]];
+        break;
+      }
+    }
+  }
   
   if (!modulePerm) return false;
   
@@ -1013,12 +1029,12 @@ function getPermissions(roleCode) {
   data.forEach(row => {
     if (row.role_code === roleCode) {
       permissions[row.module] = {
-        can_create: row.can_create === true || row.can_create === 'TRUE',
-        can_read: row.can_read === true || row.can_read === 'TRUE',
-        can_update: row.can_update === true || row.can_update === 'TRUE',
-        can_delete: row.can_delete === true || row.can_delete === 'TRUE',
-        can_approve: row.can_approve === true || row.can_approve === 'TRUE',
-        can_export: row.can_export === true || row.can_export === 'TRUE',
+        can_create: isActive(row.can_create),
+        can_read: isActive(row.can_read),
+        can_update: isActive(row.can_update),
+        can_delete: isActive(row.can_delete),
+        can_approve: isActive(row.can_approve),
+        can_export: isActive(row.can_export),
         field_restrictions: parseStringArray(row.field_restrictions)
       };
     }

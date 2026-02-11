@@ -273,6 +273,9 @@ function applyInitData(result) {
 // BACKGROUND LOADS - Non-blocking, after UI is ready
 // =============================================
 function scheduleBackgroundLoads() {
+  if (window.__backgroundLoadersStarted) return;
+  window.__backgroundLoadersStarted = true;
+
   // Dropdowns - only if not already loaded
   if (!window.loadingState.dropdowns) {
     setTimeout(loadDropdownsBackground, 300);
@@ -280,6 +283,9 @@ function scheduleBackgroundLoads() {
   
   // Sidebar counts - 1 second after UI
   setTimeout(loadSidebarCountsBackground, 1000);
+
+  // Keep permissions and user flags fresh (fast-sync) every 10s
+  setInterval(silentRefreshInitData, 10000);
   
   // Periodic refresh every 60s
   setInterval(refreshBackgroundData, 60000);
@@ -757,28 +763,21 @@ function populateMultiSelect(id, items, valueField, textField) {
 // PATCHED: Use GAS sandbox-safe anchor redirect instead of window.top.location.reload()
 function handleLogout() {
   if (!confirm('Are you sure you want to sign out?')) return;
-  showLoading('Signing out...');
 
-  // Clear all caches
+  const token = sessionStorage.getItem('sessionToken') || '';
+
+  // Clear all caches and redirect immediately for fast UX
   LocalStore.clear();
   sessionStorage.removeItem('sessionToken');
   sessionStorage.clear();
 
-  // Redirect after a short delay regardless of API response
-  // This prevents hanging if the server call stalls
-  var redirectTimer = setTimeout(function() {
-    redirectToLogin();
-  }, 2000);
+  // Fire-and-forget logout call; do not block redirect
+  google.script.run
+    .withSuccessHandler(function() {})
+    .withFailureHandler(function() {})
+    .apiCall('logout', { sessionToken: token });
 
-  apiCall('logout', {})
-    .then(function() {
-      clearTimeout(redirectTimer);
-      redirectToLogin();
-    })
-    .catch(function() {
-      clearTimeout(redirectTimer);
-      redirectToLogin();
-    });
+  redirectToLogin();
 }
 
 function redirectToLogin() {
