@@ -97,7 +97,6 @@ function queueEmail(data) {
       template_code: data.template_code || '',
       recipient_user_id: data.recipient_user_id || '',
       recipient_email: data.recipient_email || '',
-      cc_emails: data.cc_emails || '',
       subject: sanitizeInput(data.subject || ''),
       body: sanitizeInput(data.body || ''),
       module: data.module || '',
@@ -232,7 +231,6 @@ function processEmailQueue() {
   
   const now = new Date();
   const fromName = 'Internal Audit Notification';
-  const maxRetries = 3;
   
   let sentCount = 0;
   let failedCount = 0;
@@ -241,17 +239,14 @@ function processEmailQueue() {
     const row = data[i];
     const status = row[colMap['status']];
     const scheduledFor = row[colMap['scheduled_for']];
-    const retryCount = parseInt(row[colMap['retry_count']] || 0);
     
     // Skip if not pending or scheduled for future
     if (status !== STATUS.NOTIFICATION.PENDING) continue;
     if (scheduledFor && new Date(scheduledFor) > now) continue;
-    if (retryCount >= maxRetries) continue;
     
     const recipientEmail = row[colMap['recipient_email']];
     const subject = row[colMap['subject']];
     const body = row[colMap['body']];
-    const ccEmails = row[colMap['cc_emails']] || '';
     
     if (!recipientEmail || !subject) continue;
     
@@ -261,7 +256,7 @@ function processEmailQueue() {
     try {
       // Send email via unified sender (Brevo with MailApp fallback)
       const htmlBody = formatEmailHtml(subject, body);
-      const result = sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo);
+      const result = sendEmail(recipientEmail, subject, body, htmlBody, '', fromName, replyTo);
       if (!result.success) {
         throw new Error(result.error || 'Email send failed');
       }
@@ -273,22 +268,12 @@ function processEmailQueue() {
       sentCount++;
       
     } catch (e) {
-      // Increment retry_count and set status based on retries remaining
-      const newRetryCount = retryCount + 1;
-      if (colMap['retry_count'] !== undefined) {
-        sheet.getRange(rowIndex, colMap['retry_count'] + 1).setValue(newRetryCount);
-      }
-      if (newRetryCount >= maxRetries) {
-        // Max retries exhausted — mark as permanently failed
-        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
-      } else {
-        // Keep as PENDING so it retries on next queue run
-        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.PENDING);
-      }
+      // Align with database schema: mark as failed on send error
+      sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
       sheet.getRange(rowIndex, colMap['error_message'] + 1).setValue(e.message);
 
       failedCount++;
-      console.error('Failed to send email to', recipientEmail, '(attempt ' + newRetryCount + '/' + maxRetries + '):', e.message);
+      console.error('Failed to send email to', recipientEmail + ':', e.message);
     }
     
     // Rate limiting - don't send too many at once

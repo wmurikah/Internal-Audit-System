@@ -26,6 +26,9 @@ function createActionPlan(data, user) {
   if (!workPaper) {
     throw new Error('Work paper not found: ' + data.work_paper_id);
   }
+  if (workPaper.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+    throw new Error('Action plans can only be created after work paper is sent to auditee');
+  }
 
   const actionPlanId = generateId('ACTION_PLAN');
   const now = new Date();
@@ -98,6 +101,14 @@ function createActionPlansBatch(workPaperId, plansData, user) {
   if (!user) throw new Error('User required');
   if (!Array.isArray(plansData) || plansData.length === 0) {
     throw new Error('Plans data array is required');
+  }
+
+  const workPaper = getWorkPaperById(workPaperId);
+  if (!workPaper) {
+    throw new Error('Work paper not found: ' + workPaperId);
+  }
+  if (workPaper.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+    throw new Error('Action plans can only be created after work paper is sent to auditee');
   }
   
   // Validate all due dates: must not be more than 6 months from today
@@ -586,9 +597,9 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   const previousStatus = actionPlan.status;
   
   // Auditees mark as implemented -> goes to Pending Verification for auditor review
-  // Status flow: In Progress -> Implemented (by auditee) -> Verified/Rejected (by auditor)
+  // Status flow: In Progress -> Pending Verification (by auditee) -> Verified/Rejected (by auditor)
   const updates = {
-    status: STATUS.ACTION_PLAN.IMPLEMENTED || 'Implemented',
+    status: STATUS.ACTION_PLAN.PENDING_VERIFICATION || 'Pending Verification',
     implementation_notes: sanitizeInput(implementationNotes || actionPlan.implementation_notes || ''),
     implemented_date: now,
     implemented_by: user.user_id,
@@ -634,9 +645,15 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   const actionPlan = getActionPlanRaw(actionPlanId);
   if (!actionPlan) throw new Error('Action plan not found');
   
-  // Can only verify if status is Implemented (awaiting verification)
-  if (actionPlan.status !== STATUS.ACTION_PLAN.IMPLEMENTED && actionPlan.status !== 'Implemented') {
-    throw new Error('Action plan must be marked as implemented before verification');
+  // Can only verify if status is pending verification (or legacy implemented)
+  const verifiableStatuses = [
+    STATUS.ACTION_PLAN.PENDING_VERIFICATION,
+    'Pending Verification',
+    STATUS.ACTION_PLAN.IMPLEMENTED,
+    'Implemented'
+  ];
+  if (!verifiableStatuses.includes(actionPlan.status)) {
+    throw new Error('Action plan must be marked as implemented and pending verification before verification');
   }
   
   const now = new Date();
@@ -763,12 +780,18 @@ function updateOverdueStatuses() {
   const statusIdx = colMap['status'];
   const daysOverdueIdx = colMap['days_overdue'];
   const dueDateIdx = colMap['due_date'];
+  const actionPlanIdIdx = colMap['action_plan_id'];
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
   let updatedCount = 0;
   const activeStatuses = [STATUS.ACTION_PLAN.NOT_DUE, STATUS.ACTION_PLAN.PENDING, STATUS.ACTION_PLAN.IN_PROGRESS];
+  const systemUser = {
+    user_id: 'SYSTEM',
+    full_name: 'System Trigger',
+    email: 'system@internal-audit.local'
+  };
   
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -789,11 +812,29 @@ function updateOverdueStatuses() {
       // Update status to Overdue if past due
       if (currentStatus !== STATUS.ACTION_PLAN.OVERDUE && daysOverdue > 0) {
         sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.OVERDUE);
+        if (actionPlanIdIdx !== undefined) {
+          const actionPlanId = row[actionPlanIdIdx];
+          if (actionPlanId) {
+            const notes = 'AUTO_OVERDUE: Automatically marked overdue based on due date aging';
+            addActionPlanHistory(actionPlanId, currentStatus, STATUS.ACTION_PLAN.OVERDUE, notes, systemUser);
+            logAuditEvent('AUTO_STATUS_UPDATE', 'ACTION_PLAN', actionPlanId, { status: currentStatus },
+              { status: STATUS.ACTION_PLAN.OVERDUE, reason: 'AUTO_OVERDUE' }, systemUser.user_id, systemUser.email);
+          }
+        }
         updatedCount++;
       }
     } else if (currentStatus === STATUS.ACTION_PLAN.NOT_DUE && daysOverdue <= 0 && daysOverdue >= -30) {
       // Update to Pending if due within 30 days
       sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.PENDING);
+      if (actionPlanIdIdx !== undefined) {
+        const actionPlanId = row[actionPlanIdIdx];
+        if (actionPlanId) {
+          const notes = 'AUTO_DUE_WINDOW: Automatically moved to pending (due within 30 days)';
+          addActionPlanHistory(actionPlanId, currentStatus, STATUS.ACTION_PLAN.PENDING, notes, systemUser);
+          logAuditEvent('AUTO_STATUS_UPDATE', 'ACTION_PLAN', actionPlanId, { status: currentStatus },
+            { status: STATUS.ACTION_PLAN.PENDING, reason: 'AUTO_DUE_WINDOW' }, systemUser.user_id, systemUser.email);
+        }
+      }
       updatedCount++;
     }
   }
