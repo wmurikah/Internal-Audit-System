@@ -929,16 +929,14 @@ function getUserPermissions(roleCode) {
     permissions.canExportDashboard = permissions.canExportData;
   }
 
-  // AI_ASSIST module (new - controls AI Assist page access)
+  // AI_ASSIST module is visible to all users by request; create controls generation
+  permissions.canViewAIAssist = true;
   if (dbPermissions.AI_ASSIST) {
-    permissions.canViewAIAssist = dbPermissions.AI_ASSIST.can_read === true;
     permissions.canGenerateAIInsights = dbPermissions.AI_ASSIST.can_create === true;
   }
 
-  // AUDIT_WORKBENCH module (new - controls Audit Workbench + Quick Stats)
-  if (dbPermissions.AUDIT_WORKBENCH) {
-    permissions.canViewAuditWorkbench = dbPermissions.AUDIT_WORKBENCH.can_read === true;
-  }
+  // AUDIT_WORKBENCH visibility is granted to all users by request
+  permissions.canViewAuditWorkbench = true;
 
   // CONFIG module
   if (dbPermissions.CONFIG) {

@@ -7,7 +7,7 @@ const CONFIG = {
   CACHE_TTL: {
     CONFIG: 3600,        // 1 hour - rarely changes
     DROPDOWNS: 1800,     // 30 min - affiliates, areas, users list
-    PERMISSIONS: 600,    // 10 min - role permissions
+    PERMISSIONS: 10,     // 10 sec - keep access control changes near-real-time
     SESSION: 300,        // 5 min - session validation
     INDEX: 600,          // 10 min - lookup indexes
     USER_BY_EMAIL: 300,  // 5 min - email to user mapping

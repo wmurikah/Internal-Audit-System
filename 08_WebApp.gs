@@ -84,11 +84,24 @@ function doPost(e) {
     const request = JSON.parse(e.postData.contents);
     const action = request.action;
     const data = request.data || {};
-    
-    const user = getCurrentUser();
-    
-    const publicActions = ['login', 'ping', 'forgotPassword'];
-    
+
+    const publicActions = ['login', 'ping', 'forgotPassword', 'validateSession', 'postLoginCleanup'];
+
+    let user = null;
+    if (!publicActions.includes(action)) {
+      if (data.sessionToken) {
+        const sessionResult = validateSession(data.sessionToken);
+        if (sessionResult && sessionResult.valid && sessionResult.user) {
+          user = getUserByIdCached(sessionResult.user.user_id) || sessionResult.user;
+        }
+      }
+
+      // Fallback for legacy Google-session based access in editor/development contexts
+      if (!user) {
+        user = getCurrentUser();
+      }
+    }
+
     if (!publicActions.includes(action) && !user) {
       return jsonResponse({ success: false, error: 'Authentication required' }, 401);
     }
@@ -460,9 +473,7 @@ function routeAction(action, data, user) {
 
     // ========== ANALYTICS ==========
     case 'getAnalyticsData':
-      if (!canUserPerform(user, 'read', 'AI_ASSIST', null) && !canUserPerform(user, 'read', 'REPORT', null)) {
-        return { success: false, error: 'Permission denied' };
-      }
+      // AI Assist module is available to all authenticated users
       return getAnalyticsData(data.year, user);
 
     // ========== CACHE MANAGEMENT ==========
