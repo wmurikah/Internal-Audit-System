@@ -764,16 +764,20 @@ function createUser(userData, adminUser) {
   invalidateDropdownCache();
   
   const loginUrl = ScriptApp.getService().getUrl();
-  
-  const welcomeBody = `Hello ${user.full_name},\n\n` +
-        `Your account has been created for the Internal Audit System.\n\n` +
-        `Email: ${user.email}\n` +
-        `Temporary Password: ${tempPassword}\n\n` +
-        `Please log in and change your password immediately.\n\n` +
-        `${loginUrl}\n\n` +
-        `Best regards,\nAudit Team`;
-  
-  const emailResult = sendImmediateEmail(user.email, 'Welcome - Your Account Has Been Created', welcomeBody);
+  var roleName = '';
+  try { roleName = getRoleName(user.role_code) || user.role_code; } catch (e) { roleName = user.role_code; }
+
+  const welcomeSubject = 'Welcome to the Audit System';
+  const welcomeHtml = formatWelcomeEmailHtml(
+    user.full_name, user.first_name, user.email, tempPassword, roleName, loginUrl
+  );
+  const welcomePlain = 'Hello ' + user.full_name + ',\n\n' +
+    'Your account has been created.\n\n' +
+    'Email: ' + user.email + '\n' +
+    'Temporary Password: ' + tempPassword + '\n\n' +
+    'Please log in and change your password: ' + loginUrl;
+
+  const emailResult = sendEmail(user.email, welcomeSubject, welcomePlain, welcomeHtml, null, 'Hass Audit', 'hassaudit@outlook.com');
   if (!emailResult.success) {
     console.error('Failed to send welcome email:', emailResult.error);
   }

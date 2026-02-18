@@ -53,11 +53,11 @@ function getPermissions(roleCode, forceFresh) {
  */
 function checkPermission(roleCode, module, action) {
   if (!roleCode || !module || !action) return false;
-  
-  const permissions = getPermissions(roleCode);
-  
+
+  var permissions = getPermissions(roleCode);
+
   // Map action to permission field
-  const actionMap = {
+  var actionMap = {
     'create': 'can_create',
     'read': 'can_read',
     'update': 'can_update',
@@ -65,16 +65,92 @@ function checkPermission(roleCode, module, action) {
     'approve': 'can_approve',
     'export': 'can_export'
   };
-  
-  const permField = actionMap[action.toLowerCase()];
+
+  var permField = actionMap[action.toLowerCase()];
   if (!permField) return false;
-  
-  // Check module permissions
+
+  // Check module permissions from database
   if (permissions[module] && permissions[module][permField] === true) {
     return true;
   }
-  
+
+  // Fallback defaults when database rows are missing for a role
+  // This ensures core roles work even before 02_Permissions is fully populated
+  var defaults = _getDefaultPermissions(roleCode);
+  if (defaults[module] && defaults[module][permField] === true) {
+    return true;
+  }
+
   return false;
+}
+
+/**
+ * Default permission fallbacks for roles that may not have complete 02_Permissions rows.
+ * Database permissions always take precedence; these are only used when a role+module
+ * combination has no row in the sheet at all.
+ */
+function _getDefaultPermissions(roleCode) {
+  var DEFAULTS = {
+    'AUDITOR': {
+      'WORK_PAPER':   { can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: true },
+      'ACTION_PLAN':  { can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: true },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'REPORT':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true }
+    },
+    'SENIOR_AUDITOR': {
+      'WORK_PAPER':   { can_create: true, can_read: true, can_update: true, can_delete: true, can_approve: true, can_export: true },
+      'ACTION_PLAN':  { can_create: true, can_read: true, can_update: true, can_delete: true, can_approve: true, can_export: true },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'REPORT':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'CONFIG':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'USER':         { can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false }
+    },
+    'JUNIOR_STAFF': {
+      'WORK_PAPER':   { can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false },
+      'ACTION_PLAN':  { can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'REPORT':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false }
+    },
+    'AUDITEE': {
+      'WORK_PAPER':   { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'ACTION_PLAN':  { can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false }
+    },
+    'UNIT_MANAGER': {
+      'WORK_PAPER':   { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'ACTION_PLAN':  { can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: true },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'REPORT':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true }
+    },
+    'MANAGEMENT': {
+      'WORK_PAPER':   { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'ACTION_PLAN':  { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'REPORT':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true }
+    },
+    'SENIOR_MGMT': {
+      'WORK_PAPER':   { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'ACTION_PLAN':  { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: true, can_export: true },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'REPORT':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true }
+    },
+    'EXTERNAL_AUDITOR': {
+      'WORK_PAPER':   { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'ACTION_PLAN':  { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'REPORT':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true }
+    },
+    'BOARD': {
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'REPORT':       { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true }
+    },
+    'OBSERVER': {
+      'WORK_PAPER':   { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'ACTION_PLAN':  { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false },
+      'DASHBOARD':    { can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false }
+    }
+  };
+  return DEFAULTS[roleCode] || {};
 }
 
 /**
@@ -111,7 +187,7 @@ function warmAllCachesOnDeploy() {
   
   // 2. Warm role permissions
   console.log('\n[2/6] Caching role permissions...');
-  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT'];
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
   try {
     const permStart = new Date().getTime();
     roles.forEach(role => {
@@ -124,7 +200,7 @@ function warmAllCachesOnDeploy() {
     results.errors.push('permissions: ' + e.message);
     console.error('✗ Permission caching failed:', e);
   }
-  
+
   // 3. Warm role names
   console.log('\n[3/6] Caching role names...');
   try {
@@ -546,7 +622,7 @@ function clearAllCachesForced() {
   ];
   
   // Add role-based keys
-  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT'];
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
   roles.forEach(role => {
     allKeys.push('perm_' + role);
     allKeys.push('role_name_' + role);
