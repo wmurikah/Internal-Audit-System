@@ -352,6 +352,44 @@ function processEmailQueue() {
 }
 
 /**
+ * Get the current web-app URL for embedding in emails.
+ * Returns empty string if unavailable (safe for concatenation).
+ */
+function getSystemUrl() {
+  try {
+    return ScriptApp.getService().getUrl() || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
+ * Build a branded CTA button row for emails.
+ * @param {string} url - The URL to link to
+ * @param {string} [label] - Button text (default: "Click Here to Access the Audit System")
+ */
+function buildCtaButton(url, label) {
+  if (!url) return '';
+  label = label || 'Click Here to Access the Audit System';
+  return '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">' +
+    '<tr><td align="center">' +
+    '<a href="' + url + '" style="display:inline-block; background: linear-gradient(135deg, #1a365d, #0f2744); ' +
+    'color:#ffffff; padding:14px 36px; text-decoration:none; border-radius:8px; font-weight:600; font-size:14px; ' +
+    'font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 2px 8px rgba(15,39,68,0.2);">' +
+    label + '</a>' +
+    '</td></tr></table>';
+}
+
+/**
+ * Strip raw URLs from text so they don't show alongside the CTA button.
+ * Returns the cleaned text.
+ */
+function stripUrls(text) {
+  if (!text) return '';
+  return text.replace(/(https?:\/\/[^\s<]+)/g, '').replace(/\n{3,}/g, '\n\n');
+}
+
+/**
  * Convert plain URLs in text to styled button links (hides ugly raw URLs)
  */
 function linkifyUrls(text) {
@@ -373,7 +411,13 @@ function formatEmailHtml(subject, body) {
   var goldLight = '#dbb84a';
   var year = new Date().getFullYear();
 
-  var htmlBody = linkifyUrls(body).replace(/\n/g, '<br>');
+  // Strip raw URLs from body text - they'll be replaced by the CTA button
+  var cleanBody = stripUrls(body);
+  var htmlBody = cleanBody.replace(/\n/g, '<br>');
+
+  // Always append a branded CTA button linking to the system
+  var systemUrl = getSystemUrl();
+  var ctaHtml = buildCtaButton(systemUrl);
 
   return '<!DOCTYPE html>' +
 '<html lang="en">' +
@@ -425,6 +469,7 @@ function formatEmailHtml(subject, body) {
 '        <tr>' +
 '          <td style="padding:0 36px 36px 36px;" class="email-content">' +
 '            <div style="color:#374151; line-height:1.75; font-size:14px; font-family:\'Segoe UI\',Arial,sans-serif;">' + htmlBody + '</div>' +
+             ctaHtml +
 '          </td>' +
 '        </tr>' +
 '        <!-- FOOTER -->' +
@@ -483,7 +528,12 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
     return '<tr style="background-color:' + bg + ';">' + cells + '</tr>';
   }).join('');
 
-  var outroHtml = outro ? '<div style="color:#374151; line-height:1.6; font-size:14px; margin-top:24px; font-family:\'Segoe UI\',Arial,sans-serif;">' + linkifyUrls(outro).replace(/\n/g, '<br>') + '</div>' : '';
+  var outroClean = outro ? stripUrls(outro) : '';
+  var outroHtml = outroClean ? '<div style="color:#374151; line-height:1.6; font-size:14px; margin-top:24px; font-family:\'Segoe UI\',Arial,sans-serif;">' + outroClean.replace(/\n/g, '<br>') + '</div>' : '';
+
+  // Always append CTA button linking to system
+  var systemUrl = getSystemUrl();
+  var ctaHtml = buildCtaButton(systemUrl);
 
   return '<!DOCTYPE html>' +
 '<html lang="en">' +
@@ -545,6 +595,7 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '            </table>' +
 '            </div>' +
 '            ' + outroHtml +
+             ctaHtml +
 '          </td>' +
 '        </tr>' +
 '        <!-- FOOTER -->' +
@@ -687,8 +738,6 @@ function resolveAuditContext(workPapers) {
 function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId, auditeeName, auditeeFirstName, ccEmails) {
   if (!workPapers || workPapers.length === 0 || !auditeeEmail) return;
 
-  var loginUrl = ScriptApp.getService().getUrl();
-
   // Resolve affiliate and audit area for context line
   var ctx = resolveAuditContext(workPapers);
   var contextLine = '';
@@ -723,13 +772,8 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
     ];
   });
 
-  // Branded login button instead of plain URL
-  var outro = '<div style="text-align:center; margin:24px 0 8px 0;">' +
-    '<a href="' + loginUrl + '" style="display:inline-block; background: linear-gradient(135deg, #1a365d, #0f2744); color:#ffffff; ' +
-    'padding:14px 36px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; ' +
-    'font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 2px 8px rgba(15,39,68,0.2);">' +
-    'Open Audit System</a></div>' +
-    '<p style="color:#9ca3af; font-size:12px; text-align:center; font-family:\'Segoe UI\',Arial,sans-serif; margin-top:12px;">Please log in and submit your action plans at your earliest convenience.</p>';
+  // Text-only outro — the CTA button is appended automatically by formatTableEmailHtml
+  var outro = '<p style="color:#6b7280; font-size:13px; text-align:center; font-family:\'Segoe UI\',Arial,sans-serif;">Please log in and submit your action plans at your earliest convenience.</p>';
 
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
 
