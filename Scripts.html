@@ -615,8 +615,8 @@ function showToast(message, type, optionsOrDuration) {
   type = type || 'info';
 
   // Support both old signature (message, type, duration) and new (message, type, {duration, undoCallback})
-  let duration = 5000;
-  let undoCallback = null;
+  var duration = 5000;
+  var undoCallback = null;
   if (typeof optionsOrDuration === 'object' && optionsOrDuration !== null) {
     duration = optionsOrDuration.duration || 5000;
     undoCallback = optionsOrDuration.undoCallback || null;
@@ -624,30 +624,59 @@ function showToast(message, type, optionsOrDuration) {
     duration = optionsOrDuration;
   }
 
-  const toastId = 'toast-' + Date.now();
-  const bgClass = type === 'danger' ? 'bg-danger' :
-                  type === 'success' ? 'bg-success' :
-                  type === 'warning' ? 'bg-warning text-dark' : 'bg-info';
+  var toastId = 'toast-' + Date.now();
 
-  const undoBtn = undoCallback ? `<button class="btn-undo" data-toast-id="${toastId}">Undo</button>` : '';
+  // Icon and title mapping
+  var iconMap = {
+    success: '<i class="bi bi-check-circle-fill"></i>',
+    danger: '<i class="bi bi-exclamation-circle-fill"></i>',
+    warning: '<i class="bi bi-exclamation-triangle-fill"></i>',
+    info: '<i class="bi bi-info-circle-fill"></i>'
+  };
+  var titleMap = {
+    success: 'Success',
+    danger: 'Error',
+    warning: 'Warning',
+    info: 'Notice'
+  };
 
-  const html = `
-    <div id="${toastId}" class="toast ${bgClass} text-white" role="alert">
-      <div class="d-flex align-items-center">
-        <div class="toast-body">${escapeHtml(message)}${undoBtn}</div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-      </div>
-    </div>
-  `;
+  var icon = iconMap[type] || iconMap.info;
+  var title = titleMap[type] || titleMap.info;
+  var typeClass = 'toast-' + type;
+  var undoBtn = undoCallback ? '<button class="btn-undo" data-toast-id="' + toastId + '">Undo</button>' : '';
+
+  var html =
+    '<div id="' + toastId + '" class="toast toast-styled ' + typeClass + '" role="alert" data-bs-autohide="true" data-bs-delay="' + duration + '">' +
+    '  <div class="toast-inner">' +
+    '    <div class="toast-accent"></div>' +
+    '    <div class="toast-icon">' + icon + '</div>' +
+    '    <div class="toast-content">' +
+    '      <p class="toast-title">' + title + '</p>' +
+    '      <p class="toast-message">' + escapeHtml(message) + '</p>' +
+    undoBtn +
+    '    </div>' +
+    '    <button type="button" class="toast-close" data-bs-dismiss="toast" aria-label="Close">&times;</button>' +
+    '  </div>' +
+    '  <div class="toast-progress"><div class="toast-progress-bar" style="width:100%;"></div></div>' +
+    '</div>';
 
   document.getElementById('toastContainer').insertAdjacentHTML('beforeend', html);
-  const toastEl = document.getElementById(toastId);
-  const toast = new bootstrap.Toast(toastEl, { delay: duration });
+  var toastEl = document.getElementById(toastId);
+  var toast = new bootstrap.Toast(toastEl, { delay: duration });
   toast.show();
+
+  // Animate progress bar
+  var progressBar = toastEl.querySelector('.toast-progress-bar');
+  if (progressBar) {
+    requestAnimationFrame(function() {
+      progressBar.style.transitionDuration = duration + 'ms';
+      progressBar.style.width = '0%';
+    });
+  }
 
   // Wire up undo button
   if (undoCallback) {
-    const undoBtnEl = toastEl.querySelector('.btn-undo');
+    var undoBtnEl = toastEl.querySelector('.btn-undo');
     if (undoBtnEl) {
       undoBtnEl.addEventListener('click', function(e) {
         e.stopPropagation();
