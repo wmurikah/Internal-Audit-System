@@ -883,22 +883,31 @@ function getColumnIndex(schemaKey, columnName) {
 /**
  * Check if user can perform action - NOW USES DATABASE PERMISSIONS
  * SUPER_ADMIN has full access to everything
+ * Auditor roles have code-level fallback for work paper create/update
  */
 function canUserPerform(user, action, entityType, entity) {
   if (!user) return false;
-  
+
   const roleCode = user.role_code || user.roleCode;
-  
+
   // SUPER_ADMIN bypasses all permission checks - full system access
   if (roleCode === 'SUPER_ADMIN') {
     return true;
   }
-  
+
   // Check database permissions first
   if (typeof checkPermission === 'function') {
     if (!checkPermission(roleCode, entityType, action)) {
-      console.log('Permission denied by database:', roleCode, entityType, action);
-      return false;
+      // Fallback: auditor roles should always be able to create/update/read work papers
+      // This prevents lockouts when the 02_Permissions sheet is missing entries
+      var auditorRoles = [ROLES.AUDITOR, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF];
+      var wpFallbackActions = ['create', 'read', 'update'];
+      if (entityType === 'WORK_PAPER' && auditorRoles.indexOf(roleCode) !== -1 && wpFallbackActions.indexOf(action) !== -1) {
+        console.log('Permission granted via auditor fallback:', roleCode, entityType, action);
+      } else {
+        console.log('Permission denied by database:', roleCode, entityType, action);
+        return false;
+      }
     }
   }
   
