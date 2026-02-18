@@ -1,83 +1,144 @@
 // 05_NotificationService.gs - Email Queue, Templates, Reminders, Alerts
 
 /**
- * Send email via Brevo (formerly Sendinblue) transactional API.
- * Sends from hassaudit@outlook.com using UrlFetchApp.
- * Falls back to MailApp.sendEmail() if Brevo is not configured.
+ * Get a fresh access token from Microsoft using the stored refresh token.
+ * Uses OAuth2 client credentials + refresh token flow.
+ * Caches the access token for 50 minutes (tokens expire in 60 min).
  */
-function sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails) {
-  var apiKey = PropertiesService.getScriptProperties().getProperty('BREVO_API_KEY');
+function getOutlookAccessToken() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('outlook_access_token');
+  if (cached) return cached;
 
-  if (!apiKey) {
-    // Brevo not configured — fall back to GAS MailApp
-    console.log('BREVO_API_KEY not set, falling back to MailApp');
+  var props = PropertiesService.getScriptProperties();
+  var clientId = props.getProperty('OUTLOOK_CLIENT_ID');
+  var clientSecret = props.getProperty('OUTLOOK_CLIENT_SECRET');
+  var refreshToken = props.getProperty('OUTLOOK_REFRESH_TOKEN');
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    return null;
+  }
+
+  var tokenUrl = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token';
+  var payload = 'client_id=' + encodeURIComponent(clientId) +
+    '&scope=' + encodeURIComponent('offline_access Mail.Send') +
+    '&refresh_token=' + encodeURIComponent(refreshToken) +
+    '&grant_type=refresh_token' +
+    '&client_secret=' + encodeURIComponent(clientSecret);
+
+  var options = {
+    method: 'post',
+    contentType: 'application/x-www-form-urlencoded',
+    payload: payload,
+    muteHttpExceptions: true
+  };
+
+  try {
+    var response = UrlFetchApp.fetch(tokenUrl, options);
+    var code = response.getResponseCode();
+    var result = JSON.parse(response.getContentText());
+
+    if (code === 200 && result.access_token) {
+      // Cache for 50 minutes (token valid for 60 min)
+      cache.put('outlook_access_token', result.access_token, 3000);
+
+      // If Microsoft returned a new refresh token, store it
+      if (result.refresh_token) {
+        props.setProperty('OUTLOOK_REFRESH_TOKEN', result.refresh_token);
+      }
+
+      return result.access_token;
+    } else {
+      console.error('Outlook token refresh failed (HTTP ' + code + '):', JSON.stringify(result));
+      return null;
+    }
+  } catch (e) {
+    console.error('Outlook token refresh error:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Send email via Microsoft Graph API (sends directly from hassaudit@outlook.com).
+ * Uses OAuth2 access token obtained from refresh token flow.
+ * Falls back to MailApp if Outlook is not configured.
+ */
+function sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails) {
+  var accessToken = getOutlookAccessToken();
+
+  if (!accessToken) {
+    console.log('Outlook not configured, falling back to MailApp');
     return { success: false, fallback: true };
   }
 
-  var toList = [{ email: recipientEmail }];
+  var toRecipients = [{ emailAddress: { address: recipientEmail } }];
 
-  var payload = {
-    sender: { name: 'Hass Audit', email: 'hassaudit@outlook.com' },
-    replyTo: { name: 'Hass Audit Team', email: 'hassaudit@outlook.com' },
-    to: toList,
+  var message = {
     subject: subject,
-    htmlContent: htmlBody,
-    headers: {
-      'X-Mailer': 'Hass Petroleum Audit System',
-      'Organization': 'Hass Petroleum - Internal Audit'
-    }
+    body: {
+      contentType: 'HTML',
+      content: htmlBody
+    },
+    toRecipients: toRecipients
   };
 
   if (ccEmails) {
-    var ccList = String(ccEmails).split(',').map(function(e) { return { email: e.trim() }; }).filter(function(e) { return e.email; });
+    var ccList = String(ccEmails).split(',').map(function(e) {
+      return { emailAddress: { address: e.trim() } };
+    }).filter(function(e) { return e.emailAddress.address; });
     if (ccList.length > 0) {
-      payload.cc = ccList;
+      message.ccRecipients = ccList;
     }
   }
+
+  var payload = {
+    message: message,
+    saveToSentItems: true
+  };
 
   var options = {
     method: 'post',
     contentType: 'application/json',
-    headers: { 'api-key': apiKey },
+    headers: { 'Authorization': 'Bearer ' + accessToken },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   };
 
   try {
-    var response = UrlFetchApp.fetch('https://api.brevo.com/v3/smtp/email', options);
+    var response = UrlFetchApp.fetch('https://graph.microsoft.com/v1.0/me/sendMail', options);
     var code = response.getResponseCode();
-    var result = JSON.parse(response.getContentText());
 
-    if (code === 201) {
-      return { success: true, messageId: result.messageId };
+    if (code === 202) {
+      return { success: true, via: 'outlook' };
     } else {
-      console.error('Brevo API error (HTTP ' + code + '):', JSON.stringify(result));
-      return { success: false, error: result.message || 'Brevo send failed (HTTP ' + code + ')' };
+      var errorText = response.getContentText();
+      console.error('Graph API error (HTTP ' + code + '):', errorText);
+      return { success: false, error: 'Outlook send failed (HTTP ' + code + ')' };
     }
   } catch (e) {
-    console.error('Brevo fetch error:', e.message);
+    console.error('Graph API fetch error:', e.message);
     return { success: false, error: e.message };
   }
 }
 
 /**
  * Unified email sending function.
- * Currently uses MailApp (sends from wmurikah@gmail.com).
- * To switch back to Brevo later, uncomment the Brevo block below.
+ * Primary: Microsoft Graph API (sends from hassaudit@outlook.com).
+ * Fallback: Google Apps Script MailApp.
  */
 function sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo) {
-  // --- BREVO (disabled for now — uncomment to re-enable) ---
-  // var brevoResult = sendEmailViaBrevo(recipientEmail, subject, htmlBody, ccEmails);
-  // if (brevoResult.success) { return brevoResult; }
-  // if (!brevoResult.fallback) { return brevoResult; }
+  // Try Outlook (Microsoft Graph API) first
+  var outlookResult = sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails);
+  if (outlookResult.success) { return outlookResult; }
+  if (!outlookResult.fallback) { return outlookResult; }
 
-  // Send via MailApp (sends from the Google account: wmurikah@gmail.com)
+  // Fallback: Send via MailApp (sends from the Google account)
   var emailOptions = {
     to: recipientEmail,
     subject: subject,
     body: body,
     name: fromName || 'Hass Audit',
-    replyTo: replyTo || 'wmurikah@gmail.com',
+    replyTo: replyTo || 'hassaudit@outlook.com',
     htmlBody: htmlBody
   };
   if (ccEmails) {
@@ -251,10 +312,10 @@ function processEmailQueue() {
     if (!recipientEmail || !subject) continue;
     
     const rowIndex = i + 1;
-    const replyTo = 'wmurikah@gmail.com';
+    const replyTo = 'hassaudit@outlook.com';
     
     try {
-      // Send email via unified sender (Brevo with MailApp fallback)
+      // Send email via unified sender (Outlook Graph API with MailApp fallback)
       const htmlBody = formatEmailHtml(subject, body);
       const result = sendEmail(recipientEmail, subject, body, htmlBody, '', fromName, replyTo);
       if (!result.success) {
@@ -611,7 +672,7 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
 
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
 
-  sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'wmurikah@gmail.com');
+  sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'hassaudit@outlook.com');
 }
 
 /**
@@ -712,7 +773,7 @@ function sendOverdueReminders() {
 
     const outro = 'Please log in and update the status of these items immediately.<br><br>' + loginUrl;
     const htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
-    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
+    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
   });
 
@@ -739,7 +800,7 @@ function sendOverdueReminders() {
     var summaryHtml = formatTableEmailHtml(summarySubject, summaryIntro, tableHeaders, summaryRows, summaryOutro);
 
     auditors.forEach(function(auditor) {
-      sendEmail(auditor.email, summarySubject, summarySubject, summaryHtml, null, 'Hass Audit', 'wmurikah@gmail.com');
+      sendEmail(auditor.email, summarySubject, summarySubject, summaryHtml, null, 'Hass Audit', 'hassaudit@outlook.com');
       notificationCount++;
     });
   }
@@ -836,7 +897,7 @@ function sendUpcomingDueReminders() {
 
     var outro = 'Please ensure these items are completed before their due dates.<br><br>' + loginUrl;
     var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
-    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
+    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
   });
 
@@ -898,7 +959,7 @@ function sendBiweeklySummary() {
   let notificationCount = 0;
 
   recipientEmails.forEach(function(email) {
-    sendEmail(email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
+    sendEmail(email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
   });
 
@@ -1088,7 +1149,7 @@ function cleanupOldNotifications(daysOld) {
 function sendImmediateEmail(recipientEmail, subject, body, ccEmails) {
   try {
     const fromName = 'Internal Audit Notification';
-    const replyTo = 'wmurikah@gmail.com';
+    const replyTo = 'hassaudit@outlook.com';
     const htmlBody = formatEmailHtml(subject, body);
 
     const result = sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo);
@@ -1156,65 +1217,38 @@ function getUserNotifications(userId, limit) {
 }
 
 /**
- * Get Brevo configuration status (for Settings UI)
+ * Get Outlook email configuration status (for Settings UI)
  */
-function getBrevoStatus() {
+function getOutlookStatus() {
   var props = PropertiesService.getScriptProperties();
-  var key = props.getProperty('BREVO_API_KEY');
+  var clientId = props.getProperty('OUTLOOK_CLIENT_ID');
+  var refreshToken = props.getProperty('OUTLOOK_REFRESH_TOKEN');
 
-  if (key) {
-    var masked = key.substring(0, 8) + '...' + key.substring(key.length - 4);
-    return { configured: true, keyMasked: masked };
+  if (clientId && refreshToken) {
+    var masked = clientId.substring(0, 8) + '...';
+    return { configured: true, clientIdMasked: masked };
   }
   return { configured: false };
 }
 
 /**
- * Save Brevo API key (requires SUPER_ADMIN)
+ * Send a test email via Outlook (Microsoft Graph API) to verify configuration
  */
-function saveBrevoKey(apiKey, user) {
-  if (!apiKey || apiKey.trim().length < 10) {
-    return { success: false, error: 'Invalid API key' };
-  }
-
-  var props = PropertiesService.getScriptProperties();
-  props.setProperty('BREVO_API_KEY', apiKey.trim());
-
-  logAuditEvent('SET_BREVO_KEY', 'CONFIG', 'EMAIL', null, { provider: 'brevo' }, user.user_id, user.email);
-
-  return { success: true };
-}
-
-/**
- * Remove Brevo API key (requires SUPER_ADMIN)
- */
-function removeBrevoKeyAction(user) {
-  var props = PropertiesService.getScriptProperties();
-  props.deleteProperty('BREVO_API_KEY');
-
-  logAuditEvent('REMOVE_BREVO_KEY', 'CONFIG', 'EMAIL', null, null, user.user_id, user.email);
-
-  return { success: true };
-}
-
-/**
- * Send a test email via Brevo to verify configuration
- */
-function testBrevoEmailAction(recipientEmail, user) {
+function testOutlookEmailAction(recipientEmail, user) {
   if (!recipientEmail) {
     return { success: false, error: 'No recipient email provided' };
   }
 
   var subject = 'Test Email - Hass Petroleum Audit System';
-  var body = 'This is a test email from the Internal Audit System.\n\nIf you received this, your Brevo email integration is working correctly.\n\nSent at: ' + new Date().toISOString();
+  var body = 'This is a test email from the Internal Audit System.\n\nIf you received this, your Outlook email integration is working correctly.\n\nSent from: hassaudit@outlook.com via Microsoft Graph API\nSent at: ' + new Date().toISOString();
   var htmlBody = formatEmailHtml(subject, body);
 
-  var result = sendEmailViaBrevo(recipientEmail, subject, htmlBody, null);
+  var result = sendEmailViaOutlook(recipientEmail, subject, htmlBody, null);
 
   if (result.success) {
     return { success: true };
   } else if (result.fallback) {
-    return { success: false, error: 'Brevo API key not configured. Please save a key first.' };
+    return { success: false, error: 'Outlook credentials not configured. Please set OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET, and OUTLOOK_REFRESH_TOKEN in Script Properties.' };
   } else {
     return { success: false, error: result.error || 'Test email failed' };
   }

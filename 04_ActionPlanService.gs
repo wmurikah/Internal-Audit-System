@@ -1074,7 +1074,7 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
     }
 
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'wmurikah@gmail.com');
+    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 
