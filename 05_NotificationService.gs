@@ -371,12 +371,15 @@ function getSystemUrl() {
 function buildCtaButton(url, label) {
   if (!url) return '';
   label = label || 'Click Here to Access the Audit System';
-  return '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">' +
+  return '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">' +
     '<tr><td align="center">' +
-    '<a href="' + url + '" style="display:inline-block; background: linear-gradient(135deg, #1a365d, #0f2744); ' +
-    'color:#ffffff; padding:14px 36px; text-decoration:none; border-radius:8px; font-weight:600; font-size:14px; ' +
-    'font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 2px 8px rgba(15,39,68,0.2);">' +
+    '<table cellpadding="0" cellspacing="0" border="0" style="background-color:#e8f0fe; border:2px solid #1a73e8; border-radius:10px; min-width:320px;">' +
+    '<tr><td align="center" style="padding:20px 32px;">' +
+    '<a href="' + url + '" style="display:inline-block; background-color:#1a73e8; color:#ffffff; padding:14px 40px; ' +
+    'text-decoration:none; border-radius:8px; font-weight:700; font-size:15px; ' +
+    'font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 3px 10px rgba(26,115,232,0.35);">' +
     label + '</a>' +
+    '</td></tr></table>' +
     '</td></tr></table>';
 }
 
@@ -485,7 +488,7 @@ function formatEmailHtml(subject, body) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#d1d5db; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">This is an automated notification. Please do not reply directly to this email.</p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -611,7 +614,7 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#d1d5db; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">This is an automated notification. Please do not reply directly to this email.</p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -1434,7 +1437,11 @@ function formatWelcomeEmailHtml(opts) {
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
 '              <tr>' +
 '                <td align="center" style="padding:4px 0 24px 0;">' +
-'                  <a href="' + opts.loginUrl + '" style="display:inline-block; background: linear-gradient(135deg, ' + navy + ', ' + navyDark + '); color:#ffffff; padding:14px 40px; text-decoration:none; border-radius:8px; font-weight:600; font-size:14px; font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 2px 8px rgba(15,39,68,0.2);">Log In to Your Account</a>' +
+'                  <table cellpadding="0" cellspacing="0" border="0" style="background-color:#e8f0fe; border:2px solid #1a73e8; border-radius:10px; min-width:320px;">' +
+'                    <tr><td align="center" style="padding:20px 32px;">' +
+'                      <a href="' + opts.loginUrl + '" style="display:inline-block; background-color:#1a73e8; color:#ffffff; padding:14px 40px; text-decoration:none; border-radius:8px; font-weight:700; font-size:15px; font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 3px 10px rgba(26,115,232,0.35);">Click Here to Access the Audit System</a>' +
+'                    </td></tr>' +
+'                  </table>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -1462,7 +1469,141 @@ function formatWelcomeEmailHtml(opts) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#d1d5db; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">This is an automated notification. Please do not reply directly to this email.</p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
+'                </td>' +
+'              </tr>' +
+'            </table>' +
+'          </td>' +
+'        </tr>' +
+'      </table>' +
+'    </td></tr>' +
+'  </table>' +
+'</body>' +
+'</html>';
+}
+
+/**
+ * Format a branded HTML email for password reset / forgot password.
+ * Displays the temporary password in a styled credentials box and
+ * includes a prominent blue CTA button linking to the system.
+ *
+ * @param {Object} opts
+ * @param {string} opts.firstName - Recipient first name
+ * @param {string} opts.email - Recipient email address
+ * @param {string} opts.tempPassword - The new temporary password
+ * @param {string} opts.loginUrl - System login URL
+ * @param {string} opts.reason - 'admin_reset' or 'forgot'
+ */
+function formatPasswordResetEmailHtml(opts) {
+  var navy = '#1a365d';
+  var navyDark = '#0f2744';
+  var gold = '#c9a227';
+  var goldLight = '#dbb84a';
+  var year = new Date().getFullYear();
+  var subject = 'Password Reset - Hass Petroleum Audit System';
+
+  var introParagraph = opts.reason === 'forgot'
+    ? 'A password reset was requested for your account. Please use the new temporary credentials below to log in.'
+    : 'Your password has been reset by an administrator. Please use the new temporary credentials below to log in.';
+
+  var warningNote = opts.reason === 'forgot'
+    ? 'If you did not request this reset, please contact your administrator immediately.'
+    : 'If you did not expect this reset, please contact your administrator immediately.';
+
+  return '<!DOCTYPE html>' +
+'<html lang="en">' +
+'<head>' +
+'  <meta charset="utf-8">' +
+'  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+'  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->' +
+'  <style>' +
+'    @media only screen and (max-width: 620px) {' +
+'      .email-outer { padding: 0 !important; }' +
+'      .email-inner { width: 100% !important; min-width: 100% !important; border-radius: 0 !important; }' +
+'      .email-content { padding: 24px 20px !important; }' +
+'      .email-header { padding: 20px 20px !important; }' +
+'      .email-footer-inner { padding: 20px 20px !important; }' +
+'      .cred-table { margin-left: 0 !important; margin-right: 0 !important; }' +
+'    }' +
+'  </style>' +
+'</head>' +
+'<body style="margin:0; padding:0; font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f0f2f7; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
+'    Your password has been reset &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
+'  </div>' +
+'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f2f7;" class="email-outer">' +
+'    <tr><td align="center" style="padding:32px 16px;">' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(15,39,68,0.06), 0 12px 40px rgba(15,39,68,0.04);" class="email-inner">' +
+'        <!-- HEADER -->' +
+'        <tr>' +
+'          <td style="background: linear-gradient(135deg, ' + navy + ' 0%, ' + navyDark + ' 100%); padding:28px 36px; text-align:center;" class="email-header">' +
+'            <p style="margin:0 0 4px 0; color:' + gold + '; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; font-family:\'Segoe UI\',Arial,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0 0 14px 0; color:rgba(255,255,255,0.7); font-size:12px; font-family:\'Segoe UI\',Arial,sans-serif;">Internal Audit Department</p>' +
+'            <p style="margin:0; color:#ffffff; font-size:20px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.3;">Password Reset</p>' +
+'          </td>' +
+'        </tr>' +
+'        <!-- GOLD ACCENT -->' +
+'        <tr><td style="height:3px; background: linear-gradient(90deg, ' + gold + ', ' + goldLight + ', ' + gold + '); font-size:0; line-height:0;">&nbsp;</td></tr>' +
+'        <!-- CONTENT -->' +
+'        <tr>' +
+'          <td style="padding:32px 36px;" class="email-content">' +
+'            <p style="margin:0 0 16px 0; color:' + navy + '; font-size:16px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif;">Dear ' + (opts.firstName || 'Colleague') + ',</p>' +
+'            <p style="margin:0 0 20px 0; color:#374151; font-size:14px; line-height:1.75; font-family:\'Segoe UI\',Arial,sans-serif;">' + introParagraph + '</p>' +
+'            <!-- CREDENTIALS BOX -->' +
+'            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc; border-radius:10px; border:1px solid #e5e7eb; margin:0 0 24px 0;" class="cred-table">' +
+'              <tr>' +
+'                <td style="padding:20px 24px;">' +
+'                  <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
+'                    <tr>' +
+'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:\'Segoe UI\',Arial,sans-serif; width:160px;">Email</td>' +
+'                      <td style="padding:6px 0; color:' + navy + '; font-size:14px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif;">' + opts.email + '</td>' +
+'                    </tr>' +
+'                    <tr><td colspan="2" style="padding:0;"><div style="height:1px; background-color:#e5e7eb; margin:6px 0;"></div></td></tr>' +
+'                    <tr>' +
+'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:\'Segoe UI\',Arial,sans-serif;">Temporary Password</td>' +
+'                      <td style="padding:6px 0; color:' + navy + '; font-size:14px; font-weight:600; font-family:\'Courier New\',monospace; letter-spacing:1px;">' + opts.tempPassword + '</td>' +
+'                    </tr>' +
+'                  </table>' +
+'                </td>' +
+'              </tr>' +
+'            </table>' +
+'            <!-- CTA BUTTON -->' +
+'            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
+'              <tr>' +
+'                <td align="center" style="padding:4px 0 24px 0;">' +
+'                  <table cellpadding="0" cellspacing="0" border="0" style="background-color:#e8f0fe; border:2px solid #1a73e8; border-radius:10px; min-width:320px;">' +
+'                    <tr><td align="center" style="padding:20px 32px;">' +
+'                      <a href="' + opts.loginUrl + '" style="display:inline-block; background-color:#1a73e8; color:#ffffff; padding:14px 40px; text-decoration:none; border-radius:8px; font-weight:700; font-size:15px; font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 3px 10px rgba(26,115,232,0.35);">Click Here to Access the Audit System</a>' +
+'                    </td></tr>' +
+'                  </table>' +
+'                </td>' +
+'              </tr>' +
+'            </table>' +
+'            <!-- SECURITY NOTE -->' +
+'            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fffbeb; border-radius:8px; border:1px solid #fde68a;">' +
+'              <tr>' +
+'                <td style="padding:14px 18px;">' +
+'                  <p style="margin:0; color:#92400e; font-size:12px; line-height:1.6; font-family:\'Segoe UI\',Arial,sans-serif;">' +
+'                    <strong>Security Notice:</strong> You will be required to change your password on first login. ' + warningNote + '</p>' +
+'                </td>' +
+'              </tr>' +
+'            </table>' +
+'          </td>' +
+'        </tr>' +
+'        <!-- FOOTER -->' +
+'        <tr>' +
+'          <td style="padding:0 36px;">' +
+'            <div style="height:1px; background-color:#e5e7eb;"></div>' +
+'          </td>' +
+'        </tr>' +
+'        <tr>' +
+'          <td style="padding:20px 36px 24px 36px;" class="email-footer-inner">' +
+'            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
+'              <tr>' +
+'                <td align="center">' +
+'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' +
+'                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +

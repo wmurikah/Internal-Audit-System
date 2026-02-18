@@ -616,14 +616,22 @@ function resetPassword(userId, adminUser) {
   
   const loginUrl = ScriptApp.getService().getUrl();
 
-  var resetBody = 'Dear ' + (user.first_name || user.full_name.split(' ')[0]) + ',\n\n' +
+  var resetPlain = 'Dear ' + (user.first_name || user.full_name.split(' ')[0]) + ',\n\n' +
     'Your password has been reset by an administrator.\n\n' +
     'Your new temporary password is: ' + tempPassword + '\n\n' +
     'For security, please log in and change your password immediately.\n\n' +
     loginUrl + '\n\n' +
     'If you did not request this reset, please contact your administrator immediately.';
 
-  const emailResult = sendImmediateEmail(user.email, 'Password Reset - Hass Petroleum Audit System', resetBody);
+  var resetHtml = formatPasswordResetEmailHtml({
+    firstName: user.first_name || user.full_name.split(' ')[0],
+    email: user.email,
+    tempPassword: tempPassword,
+    loginUrl: loginUrl,
+    reason: 'admin_reset'
+  });
+
+  const emailResult = sendEmail(user.email, 'Password Reset - Hass Petroleum Audit System', resetPlain, resetHtml, null, 'Internal Audit Notification', 'hassaudit@outlook.com');
   if (!emailResult.success) {
     console.error('Failed to send password reset email:', emailResult.error);
   }
@@ -943,14 +951,22 @@ function forgotPassword(email) {
   
   const loginUrl = ScriptApp.getService().getUrl();
 
-  var forgotBody = 'Dear ' + (user.first_name || user.full_name.split(' ')[0]) + ',\n\n' +
+  var forgotPlain = 'Dear ' + (user.first_name || user.full_name.split(' ')[0]) + ',\n\n' +
     'A password reset was requested for your account.\n\n' +
     'Your new temporary password is: ' + tempPassword + '\n\n' +
     'Please log in and change your password immediately.\n\n' +
     loginUrl + '\n\n' +
     'If you did not request this, please contact your administrator immediately.';
 
-  const emailResult = sendImmediateEmail(user.email, 'Password Reset - Hass Petroleum Audit System', forgotBody);
+  var forgotHtml = formatPasswordResetEmailHtml({
+    firstName: user.first_name || user.full_name.split(' ')[0],
+    email: user.email,
+    tempPassword: tempPassword,
+    loginUrl: loginUrl,
+    reason: 'forgot'
+  });
+
+  const emailResult = sendEmail(user.email, 'Password Reset - Hass Petroleum Audit System', forgotPlain, forgotHtml, null, 'Internal Audit Notification', 'hassaudit@outlook.com');
   if (!emailResult.success) {
     console.error('Failed to send forgot password email:', emailResult.error);
   }
