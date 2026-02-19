@@ -291,7 +291,24 @@
 
   <script>
     var APP_URL = '<?= ScriptApp.getService().getUrl() ?>?page=app';
+    var BASE_URL = '<?= ScriptApp.getService().getUrl() ?>';
     var STORAGE_KEY_EMAIL = 'hass_audit_remembered_email';
+
+    // =============================================
+    // HTTP FALLBACK - Direct POST to web app URL
+    // Used when google.script.run fails (broken Google auth context)
+    // =============================================
+    function httpApiCall(action, data) {
+      return fetch(BASE_URL, {
+        method: 'POST',
+        redirect: 'follow',
+        body: JSON.stringify({ action: action, data: data || {} })
+      })
+      .then(function(response) {
+        if (!response.ok) throw new Error('Server returned ' + response.status);
+        return response.json();
+      });
+    }
 
     // =============================================
     // SESSION CHECK - no server call
@@ -415,27 +432,38 @@
       document.getElementById('forgotErrorMsg').style.display = 'none';
       document.getElementById('forgotSuccessMsg').style.display = 'none';
 
-      google.script.run
-        .withSuccessHandler(function(result) {
-          document.getElementById('forgotBtnText').style.display = 'inline';
-          document.getElementById('forgotBtnSpinner').style.display = 'none';
-          document.getElementById('forgotBtn').disabled = false;
-          if (result && result.success) {
-            document.getElementById('forgotSuccessMsg').textContent = result.message || 'A temporary password has been sent to your email.';
-            document.getElementById('forgotSuccessMsg').style.display = 'block';
-          } else {
-            document.getElementById('forgotErrorMsg').textContent = result?.error || 'Something went wrong. Try again.';
-            document.getElementById('forgotErrorMsg').style.display = 'block';
-          }
-        })
-        .withFailureHandler(function(error) {
-          document.getElementById('forgotBtnText').style.display = 'inline';
-          document.getElementById('forgotBtnSpinner').style.display = 'none';
-          document.getElementById('forgotBtn').disabled = false;
-          document.getElementById('forgotErrorMsg').textContent = 'Connection error. Please try again.';
+      function onForgotSuccess(result) {
+        document.getElementById('forgotBtnText').style.display = 'inline';
+        document.getElementById('forgotBtnSpinner').style.display = 'none';
+        document.getElementById('forgotBtn').disabled = false;
+        if (result && result.success) {
+          document.getElementById('forgotSuccessMsg').textContent = result.message || 'A temporary password has been sent to your email.';
+          document.getElementById('forgotSuccessMsg').style.display = 'block';
+        } else {
+          document.getElementById('forgotErrorMsg').textContent = (result && result.error) || 'Something went wrong. Try again.';
           document.getElementById('forgotErrorMsg').style.display = 'block';
+        }
+      }
+
+      function onForgotFinalFailure() {
+        document.getElementById('forgotBtnText').style.display = 'inline';
+        document.getElementById('forgotBtnSpinner').style.display = 'none';
+        document.getElementById('forgotBtn').disabled = false;
+        document.getElementById('forgotErrorMsg').textContent = 'Unable to connect to the server. Please contact your administrator.';
+        document.getElementById('forgotErrorMsg').style.display = 'block';
+      }
+
+      var forgotData = { email: email };
+
+      google.script.run
+        .withSuccessHandler(onForgotSuccess)
+        .withFailureHandler(function(err) {
+          console.warn('google.script.run failed for forgotPassword, trying HTTP fallback:', err);
+          httpApiCall('forgotPassword', forgotData)
+            .then(onForgotSuccess)
+            .catch(onForgotFinalFailure);
         })
-        .apiCall('forgotPassword', { email: email });
+        .apiCall('forgotPassword', forgotData);
     }
 
     // =============================================
@@ -455,10 +483,22 @@
       if (remember) localStorage.setItem(STORAGE_KEY_EMAIL, email);
       else localStorage.removeItem(STORAGE_KEY_EMAIL);
 
+      var loginData = { email: email, password: password };
+
       google.script.run
         .withSuccessHandler(onLoginSuccess)
-        .withFailureHandler(onLoginFailure)
-        .apiCall('login', { email: email, password: password });
+        .withFailureHandler(function(err) {
+          // google.script.run failed - try direct HTTP POST fallback
+          console.warn('google.script.run failed, trying HTTP fallback:', err);
+          httpApiCall('login', loginData)
+            .then(onLoginSuccess)
+            .catch(function(fetchErr) {
+              console.error('HTTP fallback also failed:', fetchErr);
+              setLoading(false);
+              showError('Unable to connect to the server. This usually means the app deployment needs updating. Please contact your administrator.');
+            });
+        })
+        .apiCall('login', loginData);
     }
 
     function onLoginSuccess(result) {
@@ -490,10 +530,7 @@
       }
     }
 
-    function onLoginFailure(err) {
-      setLoading(false);
-      showError('Connection error. Please check your internet and try again.');
-    }
+    // onLoginFailure is handled inline with HTTP fallback above
 
     // =============================================
     // INIT
