@@ -88,36 +88,42 @@ const Cache = {
   },
 
   invalidatePattern: function(pattern) {
-    // CacheService doesn't support pattern deletion
-    // We track known cache keys and remove matching ones
-    const knownPrefixes = [
-      'config_', 'dropdown_', 'perm_', 'session_', 
-      'index_', 'user_email_', 'headers_', 'entity_'
-    ];
-    
-    const cache = CacheService.getScriptCache();
-    knownPrefixes.forEach(prefix => {
-      if (pattern === '*' || prefix.startsWith(pattern)) {
-        // Remove common keys with this prefix
-        try {
-          cache.remove(prefix + 'all');
-          cache.remove(prefix + 'list');
-        } catch (e) {}
-      }
-    });
+    // CacheService doesn't support pattern deletion.
+    // Remove all well-known dynamic keys that match the pattern.
+    var cache = CacheService.getScriptCache();
+    var keysToRemove = [];
+    var roles = ['SUPER_ADMIN','SENIOR_AUDITOR','AUDITOR','JUNIOR_STAFF','AUDITEE','UNIT_MANAGER','MANAGEMENT','SENIOR_MGMT','BOARD','EXTERNAL_AUDITOR','OBSERVER'];
+
+    if (pattern === '*' || pattern === 'perm_' || pattern === 'perm') {
+      roles.forEach(function(r) { keysToRemove.push('perm_' + r); });
+    }
+    if (pattern === '*' || pattern === 'dropdown' || pattern === 'dropdown_') {
+      keysToRemove.push('dropdown_data_all', 'dropdown_all', 'dropdown_affiliates',
+        'dropdown_areas', 'dropdown_subareas', 'dropdown_users');
+    }
+    if (pattern === '*' || pattern === 'config' || pattern === 'config_') {
+      keysToRemove.push('config_all', 'config_SYSTEM_NAME', 'config_SESSION_TIMEOUT_HOURS', 'config_AUDIT_FILES_FOLDER_ID');
+    }
+    if (pattern === '*' || pattern === 'index' || pattern === 'index_') {
+      keysToRemove.push('index_work_paper_map', 'index_action_plan_map', 'index_user_map');
+    }
+    if (pattern === '*' || pattern === 'role') {
+      keysToRemove.push('role_names');
+      roles.forEach(function(r) { keysToRemove.push('role_name_' + r); });
+    }
+    if (pattern === '*' || pattern === 'headers' || pattern === 'headers_') {
+      keysToRemove.push('headers_05_Users', 'headers_09_WorkPapers', 'headers_13_ActionPlans',
+        'headers_00_Config', 'headers_02_Permissions', 'headers_06_Sessions');
+    }
+
+    if (keysToRemove.length > 0) {
+      try { cache.removeAll(keysToRemove); } catch (e) {}
+    }
   },
 
   clearAll: function() {
-    try {
-      // CacheService doesn't have clearAll, but we can remove known keys
-      const cache = CacheService.getScriptCache();
-      const keysToRemove = [
-        'config_all', 'dropdown_all', 'dropdown_affiliates', 
-        'dropdown_areas', 'dropdown_subareas', 'dropdown_users',
-        'index_wp_map', 'index_ap_map', 'index_user_map'
-      ];
-      cache.removeAll(keysToRemove);
-    } catch (e) {}
+    // Remove all well-known cache keys
+    this.invalidatePattern('*');
   }
 };
 
@@ -388,13 +394,18 @@ const DB = {
         }
       }
     } else {
-      // Individual reads
-      rowsToFetch.forEach(rowNum => {
-        const rowData = sheet.getRange(rowNum, 1, 1, headers.length).getValues()[0];
-        const entity = {};
-        headers.forEach((h, idx) => entity[h] = rowData[idx]);
-        results.push(entity);
-      });
+      // Batch range read: fetch one range covering min to max row, then pick needed rows
+      var minRow = rowsToFetch[0];
+      var maxRow = rowsToFetch[rowsToFetch.length - 1];
+      var rangeData = sheet.getRange(minRow, 1, maxRow - minRow + 1, headers.length).getValues();
+      var rowSet = new Set(rowsToFetch);
+      for (var r = minRow; r <= maxRow; r++) {
+        if (rowSet.has(r)) {
+          var entity = {};
+          headers.forEach(function(h, idx) { entity[h] = rangeData[r - minRow][idx]; });
+          results.push(entity);
+        }
+      }
     }
     
     return results;
@@ -466,19 +477,30 @@ const DBWrite = {
   insert: function(sheetName, data) {
     const sheet = getSheet(sheetName);
     if (!sheet) return -1;
-    
+
     const headers = getSheetHeaders(sheetName);
-    
+
     // Build row array from data object
     const rowArray = headers.map(header => {
       const value = data[header];
       return sanitizeValue(value !== undefined ? value : '');
     });
-    
-    sheet.appendRow(rowArray);
-    const newRowNumber = sheet.getLastRow();
-    
-    return newRowNumber;
+
+    // Use lock to make appendRow + getLastRow atomic
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(15000);
+      sheet.appendRow(rowArray);
+      const newRowNumber = sheet.getLastRow();
+      lock.releaseLock();
+      return newRowNumber;
+    } catch (e) {
+      try { lock.releaseLock(); } catch (ignored) {}
+      console.error('DBWrite.insert lock error:', e.message);
+      // Fallback without lock
+      sheet.appendRow(rowArray);
+      return sheet.getLastRow();
+    }
   },
 
   updateRow: function(sheetName, rowNumber, data) {
@@ -547,16 +569,24 @@ const DBWrite = {
   deleteById: function(entityType, entityId) {
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return false;
-    
+
     const sheetName = CONFIG.DATA_SHEETS[entityType];
-    const result = this.deleteRow(sheetName, rowNumber);
-    
-    if (result) {
-      // Must rebuild entire index since row numbers shifted
-      Index.rebuild(entityType);
+
+    // Use lock to prevent concurrent reads from seeing stale index during rebuild
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(30000);
+      const result = this.deleteRow(sheetName, rowNumber);
+      if (result) {
+        // Remove just this entry from the index instead of full rebuild
+        Index.removeEntry(entityType, entityId);
+      }
+      lock.releaseLock();
+      return result;
+    } catch (e) {
+      try { lock.releaseLock(); } catch (ignored) {}
+      throw e;
     }
-    
-    return result;
   },
 
   batchInsert: function(sheetName, dataArray) {
@@ -695,15 +725,30 @@ const Transaction = {
                 DBWrite.updateRow(rollback.sheet, rollback.rowNumber, rollback.data);
                 break;
               case 'insert':
-                // Re-insert at specific row is complex, just append
+                // Re-insert the deleted data - row number may differ
                 DBWrite.insert(rollback.sheet, rollback.data);
+                // Schedule index rebuild after rollback since row positions changed
+                rollback._needsIndexRebuild = true;
                 break;
             }
           } catch (rollbackError) {
             console.error('Rollback failed:', rollbackError.message);
           }
         }
-        
+
+        // Rebuild indexes for any entities that had row position changes during rollback
+        var rebuiltTypes = {};
+        rollbackOps.forEach(function(rb) {
+          if (rb._needsIndexRebuild) {
+            Object.keys(CONFIG.DATA_SHEETS).forEach(function(entityType) {
+              if (CONFIG.DATA_SHEETS[entityType] === rb.sheet && !rebuiltTypes[entityType]) {
+                try { Index.rebuild(entityType); } catch (e) {}
+                rebuiltTypes[entityType] = true;
+              }
+            });
+          }
+        });
+
         lock.releaseLock();
         throw opError;
       }
@@ -823,64 +868,65 @@ function setConfig(key, value) {
 
 const Security = {
   hashPassword: function(password, salt) {
-    // Use 1000 iterations to match AUTH_CONFIG in 07_AuthService.gs
-    // All existing passwords in DB were hashed at 1000 iterations
-    const iterations = 1000;
-    let hash = password;
-
-    for (let i = 0; i < iterations; i++) {
-      const signature = Utilities.computeHmacSignature(
-        Utilities.MacAlgorithm.HMAC_SHA_256,
-        hash + salt + i,
-        salt
-      );
-      hash = Utilities.base64Encode(signature);
-    }
-
-    return hash;
+    // Delegate to the canonical implementation in 07_AuthService.gs
+    // This avoids duplication and ensures they stay in sync
+    return hashPassword(password, salt);
   },
 
   verifyPassword: function(password, salt, storedHash) {
-    const computedHash = this.hashPassword(password, salt);
-    return computedHash === storedHash;
+    return verifyPassword(password, salt, storedHash);
   },
 
   generateSalt: function() {
-    const bytes = [];
-    for (let i = 0; i < 32; i++) {
-      bytes.push(Math.floor(Math.random() * 256));
+    // Use Utilities.getUuid() for cryptographic entropy instead of Math.random()
+    var uuids = Utilities.getUuid() + Utilities.getUuid();
+    var bytes = [];
+    var hex = uuids.replace(/-/g, '');
+    for (var i = 0; i < 32 && i * 2 < hex.length; i++) {
+      bytes.push(parseInt(hex.substr(i * 2, 2), 16));
     }
     return Utilities.base64Encode(bytes);
   },
 
   generatePassword: function(length) {
     length = length || 12;
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
-    let password = '';
-    
-    // Ensure at least one of each required type
-    password += 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)];
-    password += 'abcdefghjkmnpqrstuvwxyz'[Math.floor(Math.random() * 23)];
-    password += '23456789'[Math.floor(Math.random() * 8)];
-    password += '!@#$%'[Math.floor(Math.random() * 5)];
-    
-    // Fill rest randomly
-    for (let i = 4; i < length; i++) {
-      password += chars[Math.floor(Math.random() * chars.length)];
+    function secureRandom(max) {
+      var hex = Utilities.getUuid().replace(/-/g, '').substring(0, 8);
+      return parseInt(hex, 16) % max;
     }
-    
-    // Shuffle
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+
+    var upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    var lower = 'abcdefghjkmnpqrstuvwxyz';
+    var numbers = '23456789';
+    var special = '!@#$%';
+    var allChars = upper + lower + numbers + special;
+    var chars = [];
+
+    // Ensure at least one of each required type
+    chars.push(upper[secureRandom(upper.length)]);
+    chars.push(lower[secureRandom(lower.length)]);
+    chars.push(numbers[secureRandom(numbers.length)]);
+    chars.push(special[secureRandom(special.length)]);
+
+    for (var i = 4; i < length; i++) {
+      chars.push(allChars[secureRandom(allChars.length)]);
+    }
+
+    // Fisher-Yates shuffle
+    for (var j = chars.length - 1; j > 0; j--) {
+      var k = secureRandom(j + 1);
+      var tmp = chars[j]; chars[j] = chars[k]; chars[k] = tmp;
+    }
+    return chars.join('');
   },
 
   generateSessionToken: function() {
-    const bytes = [];
-    for (let i = 0; i < 48; i++) {
-      bytes.push(Math.floor(Math.random() * 256));
+    // Use Utilities.getUuid() for cryptographic randomness
+    var token = '';
+    while (token.length < 64) {
+      token += Utilities.getUuid().replace(/-/g, '');
     }
-    return Utilities.base64Encode(bytes).replace(/[+/=]/g, c => {
-      return c === '+' ? '-' : c === '/' ? '_' : '';
-    });
+    return token.substring(0, 64);
   },
 
   sanitizeInput: function(value) {
@@ -1085,10 +1131,17 @@ function sanitizeForClient(obj) {
  * Sanitize user input to prevent formula injection in Google Sheets
  * CANONICAL definition - used by all service files
  */
-function sanitizeInput(value) {
+function sanitizeInput(value, maxLength) {
   if (typeof value !== 'string') return value;
 
   let sanitized = value;
+
+  // Enforce maximum length to prevent exceeding Google Sheets cell limits (50K chars)
+  var limit = maxLength || 50000;
+  if (sanitized.length > limit) {
+    sanitized = sanitized.substring(0, limit);
+  }
+
   const dangerousChars = ['=', '+', '-', '@', '\t', '\r', '\n'];
 
   while (dangerousChars.includes(sanitized.charAt(0))) {

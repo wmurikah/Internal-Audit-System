@@ -117,9 +117,9 @@ function postLoginCleanup(data) {
         const sheet = getSheet(SHEETS.USERS);
         const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
         if (rowIndex) {
-          const attemptsIdx = getColumnIndex('USERS', 'login_attempts');
-          const lockedIdx = getColumnIndex('USERS', 'locked_until');
-          const lastLoginIdx = getColumnIndex('USERS', 'last_login');
+          const attemptsIdx = getColumnIndex(SHEETS.USERS, 'login_attempts');
+          const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
+          const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
           
           sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
           sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
@@ -224,9 +224,9 @@ function updateLastLoginAsync(user) {
   try {
     const sheet = getSheet(SHEETS.USERS);
     const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
-    
+
     if (rowIndex) {
-      const lastLoginIdx = getColumnIndex('USERS', 'last_login');
+      const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
       sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
     }
     
@@ -486,20 +486,23 @@ function verifyPassword(password, salt, storedHash) {
 }
 
 function generateSalt() {
+  // Use Utilities.getUuid() as a cryptographic entropy source instead of Math.random()
+  const uuids = Utilities.getUuid() + Utilities.getUuid();
   const bytes = [];
-  for (let i = 0; i < AUTH_CONFIG.SALT_LENGTH; i++) {
-    bytes.push(Math.floor(Math.random() * 256));
+  const hex = uuids.replace(/-/g, '');
+  for (let i = 0; i < AUTH_CONFIG.SALT_LENGTH && i * 2 < hex.length; i++) {
+    bytes.push(parseInt(hex.substr(i * 2, 2), 16));
   }
   return Utilities.base64Encode(bytes);
 }
 
 function generateSecureToken(length) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  // Use Utilities.getUuid() for cryptographic randomness instead of Math.random()
   let token = '';
-  for (let i = 0; i < length; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  while (token.length < length) {
+    token += Utilities.getUuid().replace(/-/g, '');
   }
-  return token;
+  return token.substring(0, length);
 }
 
 function generateTempPassword() {
@@ -507,20 +510,34 @@ function generateTempPassword() {
   const lower = 'abcdefghjkmnpqrstuvwxyz';
   const numbers = '23456789';
   const special = '!@#$%';
-  
-  let password = '';
-  
-  password += upper.charAt(Math.floor(Math.random() * upper.length));
-  password += lower.charAt(Math.floor(Math.random() * lower.length));
-  password += numbers.charAt(Math.floor(Math.random() * numbers.length));
-  password += special.charAt(Math.floor(Math.random() * special.length));
-  
-  const allChars = upper + lower + numbers;
-  for (let i = password.length; i < AUTH_CONFIG.TEMP_PASSWORD_LENGTH; i++) {
-    password += allChars.charAt(Math.floor(Math.random() * allChars.length));
+
+  // Use UUID-based entropy instead of Math.random()
+  function secureRandom(max) {
+    var hex = Utilities.getUuid().replace(/-/g, '').substring(0, 8);
+    return parseInt(hex, 16) % max;
   }
-  
-  return password.split('').sort(() => Math.random() - 0.5).join('');
+
+  let chars = [];
+
+  chars.push(upper.charAt(secureRandom(upper.length)));
+  chars.push(lower.charAt(secureRandom(lower.length)));
+  chars.push(numbers.charAt(secureRandom(numbers.length)));
+  chars.push(special.charAt(secureRandom(special.length)));
+
+  const allChars = upper + lower + numbers;
+  for (let i = chars.length; i < AUTH_CONFIG.TEMP_PASSWORD_LENGTH; i++) {
+    chars.push(allChars.charAt(secureRandom(allChars.length)));
+  }
+
+  // Fisher-Yates shuffle for uniform distribution
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = secureRandom(i + 1);
+    var tmp = chars[i];
+    chars[i] = chars[j];
+    chars[j] = tmp;
+  }
+
+  return chars.join('');
 }
 
 function changePassword(userId, currentPassword, newPassword) {
@@ -554,10 +571,16 @@ function changePassword(userId, currentPassword, newPassword) {
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex;
 
-  const hashIdx = getColumnIndex('USERS', 'password_hash');
-  const saltIdx = getColumnIndex('USERS', 'password_salt');
-  const mustChangeIdx = getColumnIndex('USERS', 'must_change_password');
-  const updatedIdx = getColumnIndex('USERS', 'updated_at');
+  const sheetName = SHEETS.USERS;
+  const hashIdx = getColumnIndex(sheetName, 'password_hash');
+  const saltIdx = getColumnIndex(sheetName, 'password_salt');
+  const mustChangeIdx = getColumnIndex(sheetName, 'must_change_password');
+  const updatedIdx = getColumnIndex(sheetName, 'updated_at');
+
+  if (hashIdx < 0 || saltIdx < 0 || mustChangeIdx < 0 || updatedIdx < 0) {
+    console.error('changePassword: Column index lookup failed for sheet:', sheetName);
+    return { success: false, error: 'Internal configuration error' };
+  }
 
   sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
   sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
@@ -595,25 +618,26 @@ function resetPassword(userId, adminUser) {
   
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex;
-  
-  const hashIdx = getColumnIndex('USERS', 'password_hash');
-  const saltIdx = getColumnIndex('USERS', 'password_salt');
-  const mustChangeIdx = getColumnIndex('USERS', 'must_change_password');
-  const updatedIdx = getColumnIndex('USERS', 'updated_at');
-  const attemptsIdx = getColumnIndex('USERS', 'login_attempts');
-  const lockedIdx = getColumnIndex('USERS', 'locked_until');
-  
+  const sheetName = SHEETS.USERS;
+
+  const hashIdx = getColumnIndex(sheetName, 'password_hash');
+  const saltIdx = getColumnIndex(sheetName, 'password_salt');
+  const mustChangeIdx = getColumnIndex(sheetName, 'must_change_password');
+  const updatedIdx = getColumnIndex(sheetName, 'updated_at');
+  const attemptsIdx = getColumnIndex(sheetName, 'login_attempts');
+  const lockedIdx = getColumnIndex(sheetName, 'locked_until');
+
   sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
   sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
   sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
   sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
   sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
   sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
-  
+
   invalidateUserCache(user.email, user.user_id);
-  
+
   invalidateUserSessions(userId);
-  
+
   const loginUrl = ScriptApp.getService().getUrl();
 
   var resetPlain = 'Dear ' + (user.first_name || user.full_name.split(' ')[0]) + ',\n\n' +
@@ -664,11 +688,11 @@ function validatePassword(password) {
 function incrementFailedAttempts(user) {
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
-  
+
   if (!rowIndex) return;
-  
-  const attemptsIdx = getColumnIndex('USERS', 'login_attempts');
-  const lockedIdx = getColumnIndex('USERS', 'locked_until');
+
+  const attemptsIdx = getColumnIndex(SHEETS.USERS, 'login_attempts');
+  const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
   
   const attempts = (parseInt(user.login_attempts) || 0) + 1;
   sheet.getRange(rowIndex, attemptsIdx + 1).setValue(attempts);
@@ -687,11 +711,11 @@ function incrementFailedAttempts(user) {
 function resetFailedAttempts(user) {
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
-  
+
   if (!rowIndex) return;
-  
-  const attemptsIdx = getColumnIndex('USERS', 'login_attempts');
-  const lockedIdx = getColumnIndex('USERS', 'locked_until');
+
+  const attemptsIdx = getColumnIndex(SHEETS.USERS, 'login_attempts');
+  const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
   
   sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
   sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
@@ -702,10 +726,10 @@ function resetFailedAttempts(user) {
 function updateLastLogin(user) {
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
-  
+
   if (!rowIndex) return;
-  
-  const lastLoginIdx = getColumnIndex('USERS', 'last_login');
+
+  const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
   sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
   
   invalidateUserCache(user.email, user.user_id);
@@ -764,9 +788,20 @@ function createUser(userData, adminUser) {
   
   const sheet = getSheet(SHEETS.USERS);
   const row = objectToRow('USERS', user);
-  sheet.appendRow(row);
-  
-  const rowNum = sheet.getLastRow();
+
+  // Lock to make appendRow + getLastRow atomic
+  const lock = LockService.getScriptLock();
+  let rowNum;
+  try {
+    lock.waitLock(15000);
+    sheet.appendRow(row);
+    rowNum = sheet.getLastRow();
+    lock.releaseLock();
+  } catch (lockErr) {
+    try { lock.releaseLock(); } catch (ignored) {}
+    throw lockErr;
+  }
+
   updateUserIndex(userId, user, rowNum);
   
   invalidateDropdownCache();
@@ -894,7 +929,7 @@ function deactivateUser(userId, adminUser) {
   
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex;
-  const activeIdx = getColumnIndex('USERS', 'is_active');
+  const activeIdx = getColumnIndex(SHEETS.USERS, 'is_active');
   
   sheet.getRange(rowIndex, activeIdx + 1).setValue(false);
   
@@ -931,24 +966,25 @@ function forgotPassword(email) {
   
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex;
-  
-  const hashIdx = getColumnIndex('USERS', 'password_hash');
-  const saltIdx = getColumnIndex('USERS', 'password_salt');
-  const mustChangeIdx = getColumnIndex('USERS', 'must_change_password');
-  const updatedIdx = getColumnIndex('USERS', 'updated_at');
-  const attemptsIdx = getColumnIndex('USERS', 'login_attempts');
-  const lockedIdx = getColumnIndex('USERS', 'locked_until');
-  
+  const sheetName = SHEETS.USERS;
+
+  const hashIdx = getColumnIndex(sheetName, 'password_hash');
+  const saltIdx = getColumnIndex(sheetName, 'password_salt');
+  const mustChangeIdx = getColumnIndex(sheetName, 'must_change_password');
+  const updatedIdx = getColumnIndex(sheetName, 'updated_at');
+  const attemptsIdx = getColumnIndex(sheetName, 'login_attempts');
+  const lockedIdx = getColumnIndex(sheetName, 'locked_until');
+
   sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
   sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
   sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
   sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
   sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
   sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
-  
+
   invalidateUserCache(user.email, user.user_id);
   invalidateUserSessions(user.user_id);
-  
+
   const loginUrl = ScriptApp.getService().getUrl();
 
   var forgotPlain = 'Dear ' + (user.first_name || user.full_name.split(' ')[0]) + ',\n\n' +
@@ -982,10 +1018,17 @@ function invalidateUserSessions(userId) {
   const headers = data[0];
   const userIdIdx = headers.indexOf('user_id');
   const validIdx = headers.indexOf('is_valid');
-  
+  const tokenIdx = headers.indexOf('session_token');
+  const cache = CacheService.getScriptCache();
+
   for (let i = 1; i < data.length; i++) {
     if (data[i][userIdIdx] === userId) {
       sheet.getRange(i + 1, validIdx + 1).setValue(false);
+      // Also invalidate the session cache entry
+      var token = data[i][tokenIdx];
+      if (token) {
+        try { cache.remove('session_' + String(token).substring(0, 16)); } catch (e) {}
+      }
     }
   }
 }

@@ -1193,7 +1193,7 @@ function uploadEvidenceFile() {
         hideLoading();
         showToast('Upload failed: ' + err.message, 'danger');
       })
-      .uploadFileToDrive(file.name, file.type, base64);
+      .uploadFileToDrive(file.name, file.type, base64, null, sessionStorage.getItem('sessionToken') || '');
   };
   reader.readAsDataURL(file);
 }
@@ -1276,7 +1276,7 @@ function uploadActionPlanEvidence(button) {
         hideLoading();
         showToast('Upload failed: ' + err.message, 'danger');
       })
-      .uploadFileToDrive(file.name, file.type, base64);
+      .uploadFileToDrive(file.name, file.type, base64, null, sessionStorage.getItem('sessionToken') || '');
   };
   reader.readAsDataURL(file);
 }

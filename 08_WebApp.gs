@@ -85,7 +85,7 @@ function doPost(e) {
     const action = request.action;
     const data = request.data || {};
 
-    const publicActions = ['login', 'ping', 'forgotPassword', 'validateSession', 'postLoginCleanup'];
+    const publicActions = ['login', 'ping', 'forgotPassword', 'validateSession'];
 
     let user = null;
     if (!publicActions.includes(action)) {
@@ -105,7 +105,10 @@ function doPost(e) {
     if (!publicActions.includes(action) && !user) {
       return jsonResponse({ success: false, error: 'Authentication required' }, 401);
     }
-    
+
+    // Strip sessionToken from data to prevent it leaking into business logic
+    delete data.sessionToken;
+
     const result = routeAction(action, data, user);
     
     if (result === null || result === undefined) {
@@ -686,15 +689,45 @@ function clearAllCaches() {
   return { success: true, cleared: keysToRemove.length };
 }
 
-function uploadFileToDrive(fileName, mimeType, base64Data, folderId) {
+function uploadFileToDrive(fileName, mimeType, base64Data, folderId, sessionToken) {
   try {
-    const user = getCurrentUser();
+    // Try session-based auth first, then fall back to Google session
+    let user = null;
+    if (sessionToken) {
+      const sessionResult = validateSession(sessionToken);
+      if (sessionResult && sessionResult.valid) {
+        user = getUserByIdCached(sessionResult.user.user_id) || sessionResult.user;
+      }
+    }
+    if (!user) {
+      user = getCurrentUser();
+    }
     if (!user) {
       return { success: false, error: 'Authentication required' };
     }
-    
+
+    // Server-side file type validation
+    const allowedMimeTypes = [
+      'application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'image/jpeg', 'image/png', 'image/gif',
+      'text/plain', 'text/csv'
+    ];
+    if (mimeType && !allowedMimeTypes.includes(mimeType)) {
+      return { success: false, error: 'File type not allowed: ' + mimeType };
+    }
+
+    // Validate file size (base64 adds ~33% overhead, limit to ~10MB decoded)
+    if (base64Data && base64Data.length > 14000000) {
+      return { success: false, error: 'File too large. Maximum size is 10MB.' };
+    }
+
     const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
-    
+
     let folder;
     if (folderId) {
       folder = DriveApp.getFolderById(folderId);
@@ -706,10 +739,16 @@ function uploadFileToDrive(fileName, mimeType, base64Data, folderId) {
         folder = DriveApp.getRootFolder();
       }
     }
-    
+
     const file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    
+    // Share within the domain only, not to anyone with link
+    try {
+      file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (sharingError) {
+      // If domain sharing fails (e.g. personal account), use restricted access
+      console.warn('Domain sharing not available, file will be private:', sharingError.message);
+    }
+
     return {
       success: true,
       file: {
@@ -720,7 +759,7 @@ function uploadFileToDrive(fileName, mimeType, base64Data, folderId) {
         mime_type: file.getMimeType()
       }
     };
-    
+
   } catch (error) {
     console.error('Upload error:', error);
     return { success: false, error: error.message };
@@ -823,7 +862,7 @@ function apiCall(action, data) {
 
     console.log('=== API Call: ' + action + ' ===');
 
-    const publicActions = ['login', 'ping', 'testConnection', 'validateSession', 'postLoginCleanup', 'forgotPassword'];
+    const publicActions = ['login', 'ping', 'testConnection', 'validateSession', 'forgotPassword'];
 
     let user = null;
 
@@ -875,17 +914,21 @@ function apiCall(action, data) {
       return initResult;
     }
 
-    const result = routeAction(action, data, user);
-    
+    // Strip sessionToken from data to prevent it leaking into business logic / audit logs
+    var cleanData = Object.assign({}, data);
+    delete cleanData.sessionToken;
+
+    const result = routeAction(action, cleanData, user);
+
     if (result === null || result === undefined) {
       console.error('apiCall: routeAction returned null/undefined for action:', action);
-      return { 
-        success: false, 
-        error: 'No response from server', 
-        errorDetail: 'routeAction returned null/undefined for action: ' + action 
+      return {
+        success: false,
+        error: 'No response from server',
+        errorDetail: 'routeAction returned null/undefined for action: ' + action
       };
     }
-    
+
     console.log('apiCall completed in', new Date().getTime() - startTime, 'ms');
     return result;
 
@@ -1091,9 +1134,13 @@ function runScheduledMaintenance() {
  * Setup all time-based triggers
  */
 function setupAllTriggers() {
+  // Only delete triggers for known handler functions - preserve any custom triggers
+  const knownHandlers = ['processEmailQueue', 'dailyMaintenance', 'sendWeeklySummary', 'warmAllCaches'];
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(trigger => {
-    ScriptApp.deleteTrigger(trigger);
+    if (knownHandlers.includes(trigger.getHandlerFunction())) {
+      ScriptApp.deleteTrigger(trigger);
+    }
   });
   
   ScriptApp.newTrigger('processEmailQueue')

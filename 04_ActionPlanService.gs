@@ -76,13 +76,26 @@ function createActionPlan(data, user) {
     updated_by: user.user_id
   };
   
-  // Insert into sheet
+  // Insert into sheet with lock to make appendRow + getLastRow atomic
   const sheet = getSheet(SHEETS.ACTION_PLANS);
+  if (!sheet) {
+    return { success: false, error: 'Action plans sheet not found' };
+  }
   const row = objectToRow('ACTION_PLANS', actionPlan);
-  sheet.appendRow(row);
-  
+
+  const lock = LockService.getScriptLock();
+  let rowNum;
+  try {
+    lock.waitLock(15000);
+    sheet.appendRow(row);
+    rowNum = sheet.getLastRow();
+    lock.releaseLock();
+  } catch (lockErr) {
+    try { lock.releaseLock(); } catch (ignored) {}
+    throw lockErr;
+  }
+
   // Update index
-  const rowNum = sheet.getLastRow();
   updateActionPlanIndex(actionPlanId, actionPlan, rowNum);
   
   // Add history entry
