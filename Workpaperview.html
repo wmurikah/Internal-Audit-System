@@ -131,7 +131,13 @@ function renderWorkPaperView() {
   renderWPTimeline(wp);
   renderWPActionPlans(wp.actionPlans || []);
   renderWPFiles(wp.files || []);
-  
+
+  // Only show "Add Action Plan" button when work paper is sent to auditee
+  var btnAddAP = document.getElementById('btnAddAP');
+  if (btnAddAP) {
+    btnAddAP.style.display = wp.status === 'Sent to Auditee' ? '' : 'none';
+  }
+
   if (wp.review_comments) {
     document.getElementById('reviewCommentsCard').style.display = 'block';
     document.getElementById('wpViewReviewComments').textContent = wp.review_comments;
@@ -148,7 +154,7 @@ function renderWPActions(wp) {
   
   if (wp.status === 'Draft' || wp.status === 'Revision Required') {
     if (isAuditor) html += `<button class="btn btn-outline-primary" onclick="editWorkPaper('${wp.work_paper_id}')"><i class="bi bi-pencil me-1"></i>Edit</button>`;
-    html += `<button class="btn btn-success" onclick="submitWP()"><i class="bi bi-send me-1"></i>Submit</button>`;
+    if (isAuditor) html += `<button class="btn btn-success" onclick="submitWP()"><i class="bi bi-send me-1"></i>Submit</button>`;
   }
   if ((wp.status === 'Submitted' || wp.status === 'Under Review') && isReviewer) {
     html += `<button class="btn btn-primary" onclick="showReviewModal('approve')"><i class="bi bi-check-circle me-1"></i>Approve</button>`;
@@ -276,8 +282,11 @@ function getAIInsights() {
 }
 
 function formatAIResponse(text) {
-  // Convert markdown-like formatting to HTML
-  let html = text
+  // Escape HTML first to prevent XSS from AI responses
+  let escaped = escapeHtml(text);
+
+  // Then convert markdown-like formatting to HTML on the escaped text
+  let html = escaped
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/^### (.*?)$/gm, '<h6 class="mt-3 text-primary">$1</h6>')

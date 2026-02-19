@@ -442,15 +442,30 @@ function initAPFilters() {
   const ownerSelect = document.getElementById('apFilterOwner');
   if (ownerSelect && window.appDropdowns && window.appDropdowns.users) {
     window.appDropdowns.users.forEach(u => {
-      ownerSelect.innerHTML += `<option value="${u.id}">${u.name}</option>`;
+      var opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.name;
+      ownerSelect.appendChild(opt);
     });
   }
 }
 
-// Export action plans
+// Collect current active filter selections
+function getCurrentAPFilters() {
+  var filters = {};
+  var status = document.getElementById('apFilterStatus')?.value;
+  var owner = document.getElementById('apFilterOwner')?.value;
+  var search = document.getElementById('apSearchInput')?.value;
+  if (status) filters.status = status;
+  if (owner) filters.owner = owner;
+  if (search) filters.search = search;
+  return filters;
+}
+
+// Export action plans - pass current active filters
 function exportAPList(format) {
   showLoading('Exporting...');
-  apiCall('exportActionPlansCSV', { filters: {} })
+  apiCall('exportActionPlansCSV', { filters: getCurrentAPFilters() })
     .then(function(result) {
       hideLoading();
       if (result.success && result.csv) {
@@ -543,7 +558,9 @@ function loadActionPlansOverdue() {
 function renderActionPlans() {
   const start = (apCurrentPage - 1) * apPageSize;
   const pageData = actionPlansData.slice(start, start + apPageSize);
-  document.getElementById('apResultsInfo').textContent = `Showing ${start + 1}-${Math.min(start + apPageSize, actionPlansData.length)} of ${actionPlansData.length}`;
+  document.getElementById('apResultsInfo').textContent = actionPlansData.length === 0
+    ? 'No results found'
+    : `Showing ${start + 1}-${Math.min(start + apPageSize, actionPlansData.length)} of ${actionPlansData.length}`;
 
   const apTbody = document.getElementById('apTableBody');
   if (!pageData.length) {
@@ -599,8 +616,15 @@ function clearAPFilters() {
   loadActionPlans();
 }
 
-// Initialize filters on page load
+// Initialize filters when dropdowns are available (not just on a timer)
 document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(initAPFilters, 100);
+  function tryInitFilters(retries) {
+    if (window.appDropdowns && window.appDropdowns.users) {
+      initAPFilters();
+    } else if (retries > 0) {
+      setTimeout(function() { tryInitFilters(retries - 1); }, 500);
+    }
+  }
+  tryInitFilters(20);
 });
 </script>

@@ -97,36 +97,41 @@ function throttle(func, limit) {
 // Three-tier init: SSR → localStorage → API fallback
 // =============================================
 
-// localStorage cache layer - survives page reloads
+// sessionStorage cache layer - cleared when browser tab closes (safer for sensitive data)
 const LocalStore = {
   PREFIX: 'hpias_',
-  
+
   set(key, value, ttlMinutes = 30) {
     try {
       const item = {
         data: value,
         expires: Date.now() + (ttlMinutes * 60 * 1000)
       };
-      localStorage.setItem(this.PREFIX + key, JSON.stringify(item));
+      sessionStorage.setItem(this.PREFIX + key, JSON.stringify(item));
     } catch(e) { /* quota exceeded - ignore */ }
   },
-  
+
   get(key) {
     try {
-      const raw = localStorage.getItem(this.PREFIX + key);
+      const raw = sessionStorage.getItem(this.PREFIX + key);
       if (!raw) return null;
       const item = JSON.parse(raw);
       if (Date.now() > item.expires) {
-        localStorage.removeItem(this.PREFIX + key);
+        sessionStorage.removeItem(this.PREFIX + key);
         return null;
       }
       return item.data;
     } catch(e) { return null; }
   },
-  
+
   clear() {
-    const keys = Object.keys(localStorage).filter(k => k.startsWith(this.PREFIX));
-    keys.forEach(k => localStorage.removeItem(k));
+    const keys = Object.keys(sessionStorage).filter(k => k.startsWith(this.PREFIX));
+    keys.forEach(k => sessionStorage.removeItem(k));
+    // Also clear any legacy localStorage entries
+    try {
+      const legacyKeys = Object.keys(localStorage).filter(k => k.startsWith(this.PREFIX));
+      legacyKeys.forEach(k => localStorage.removeItem(k));
+    } catch(e) {}
   }
 };
 
@@ -285,8 +290,8 @@ function scheduleBackgroundLoads() {
   // Sidebar counts - 1 second after UI
   setTimeout(loadSidebarCountsBackground, 1000);
 
-  // Keep permissions and user flags fresh (fast-sync) every 10s
-  setInterval(silentRefreshInitData, 10000);
+  // Keep permissions and user flags fresh - every 60s to stay within API quotas
+  setInterval(silentRefreshInitData, 60000);
   
   // Periodic refresh every 60s
   setInterval(refreshBackgroundData, 60000);
@@ -1083,7 +1088,7 @@ function uploadFile() {
         hideLoading();
         showToast('Upload error: ' + (error?.message || 'Unknown error'), 'danger');
       })
-      .uploadFileToDrive(file.name, file.type, base64, null);
+      .uploadFileToDrive(file.name, file.type, base64, null, sessionStorage.getItem('sessionToken') || '');
   };
 
   reader.onerror = function() {

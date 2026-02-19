@@ -54,13 +54,26 @@ function createWorkPaper(data, user) {
     work_paper_ref: workPaperId
   };
 
-  // Insert into sheet
+  // Insert into sheet with lock to make appendRow + getLastRow atomic
   const sheet = getSheet(SHEETS.WORK_PAPERS);
+  if (!sheet) {
+    return { success: false, error: 'Work papers sheet not found' };
+  }
   const row = objectToRow('WORK_PAPERS', workPaper);
-  sheet.appendRow(row);
-  
+
+  const lock = LockService.getScriptLock();
+  let rowNum;
+  try {
+    lock.waitLock(15000);
+    sheet.appendRow(row);
+    rowNum = sheet.getLastRow();
+    lock.releaseLock();
+  } catch (lockErr) {
+    try { lock.releaseLock(); } catch (ignored) {}
+    throw lockErr;
+  }
+
   // Update index
-  const rowNum = sheet.getLastRow();
   updateWorkPaperIndex(workPaperId, workPaper, rowNum);
   
   // Log audit event

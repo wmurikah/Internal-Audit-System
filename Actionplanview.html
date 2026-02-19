@@ -289,7 +289,7 @@ function handleAPEvidenceUpload(input) {
         showToast('Upload failed: ' + err.message, 'danger');
         input.value = '';
       })
-      .uploadFileToDrive(file.name, file.type, base64);
+      .uploadFileToDrive(file.name, file.type, base64, null, sessionStorage.getItem('sessionToken') || '');
   };
   reader.readAsDataURL(file);
 }
