@@ -1966,6 +1966,7 @@ async function saveAndSubmit() {
     clearDraft();
     stopAutoSave();
     showToast('Submitted successfully', 'success');
+    if (typeof refreshSidebarCounts === 'function') refreshSidebarCounts();
     navigateTo('work-papers');
 
   } catch (err) {

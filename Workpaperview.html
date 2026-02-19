@@ -213,7 +213,11 @@ function submitWP() {
   showLoading('Submitting...');
   apiCall('submitWorkPaper', { workPaperId: currentWorkPaper.work_paper_id }).then(r => {
     hideLoading();
-    if (r.success) { showToast('Submitted', 'success'); loadWorkPaperView({ id: currentWorkPaper.work_paper_id }); }
+    if (r.success) {
+      showToast('Submitted', 'success');
+      loadWorkPaperView({ id: currentWorkPaper.work_paper_id });
+      if (typeof refreshSidebarCounts === 'function') refreshSidebarCounts();
+    }
     else showToast(r.error || 'Error', 'danger');
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }
@@ -232,7 +236,11 @@ function submitReview() {
   apiCall('reviewWorkPaper', { workPaperId: currentWorkPaper.work_paper_id, action, comments }).then(r => {
     hideLoading();
     bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
-    if (r.success) { showToast(action === 'approve' ? 'Approved' : 'Returned', 'success'); loadWorkPaperView({ id: currentWorkPaper.work_paper_id }); }
+    if (r.success) {
+      showToast(action === 'approve' ? 'Approved' : 'Returned', 'success');
+      loadWorkPaperView({ id: currentWorkPaper.work_paper_id });
+      if (typeof refreshSidebarCounts === 'function') refreshSidebarCounts();
+    }
     else showToast(r.error || 'Error', 'danger');
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }
@@ -242,7 +250,11 @@ function sendToAuditee() {
   showLoading('Sending...');
   apiCall('sendToAuditee', { workPaperId: currentWorkPaper.work_paper_id }).then(r => {
     hideLoading();
-    if (r.success) { showToast('Sent to auditee', 'success'); loadWorkPaperView({ id: currentWorkPaper.work_paper_id }); }
+    if (r.success) {
+      showToast('Sent to auditee', 'success');
+      loadWorkPaperView({ id: currentWorkPaper.work_paper_id });
+      if (typeof refreshSidebarCounts === 'function') refreshSidebarCounts();
+    }
     else showToast(r.error || 'Error', 'danger');
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }

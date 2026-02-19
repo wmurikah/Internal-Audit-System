@@ -202,15 +202,21 @@ function queueTemplatedEmail(templateCode, recipientEmail, recipientUserId, vari
   // Replace variables in template
   let subject = template.subject_template || '';
   let body = template.body_template || '';
-  
+
   if (variables) {
     Object.keys(variables).forEach(key => {
       const placeholder = '{{' + key + '}}';
+      // Escape regex special characters in the placeholder to ensure literal match
+      const escaped = placeholder.replace(/[{}.*+?^$|\\()[\]]/g, '\\$&');
       const value = variables[key] || '';
-      subject = subject.replace(new RegExp(placeholder, 'g'), value);
-      body = body.replace(new RegExp(placeholder, 'g'), value);
+      subject = subject.replace(new RegExp(escaped, 'g'), value);
+      body = body.replace(new RegExp(escaped, 'g'), value);
     });
   }
+
+  // Remove any remaining unreplaced template variables (e.g. {{unknown_var}})
+  subject = subject.replace(/\{\{[a-zA-Z_]+\}\}/g, '');
+  body = body.replace(/\{\{[a-zA-Z_]+\}\}/g, '');
   
   return queueEmail({
     template_code: templateCode,
@@ -353,14 +359,24 @@ function processEmailQueue() {
 
 /**
  * Get the current web-app URL for embedding in emails.
- * Returns empty string if unavailable (safe for concatenation).
+ * Uses the deployed web-app URL (ends with /exec) so recipients
+ * land on the login page, NOT a Google Drive file-open page.
+ * Falls back to a config value if ScriptApp is unavailable (e.g. in triggers).
  */
 function getSystemUrl() {
+  // 1. Try the live deployed web-app URL
   try {
-    return ScriptApp.getService().getUrl() || '';
-  } catch (e) {
-    return '';
-  }
+    var url = ScriptApp.getService().getUrl();
+    if (url) return url;
+  } catch (e) { /* ignore - may fail in certain trigger contexts */ }
+
+  // 2. Fallback: read from script properties (set once via Settings or manually)
+  try {
+    var stored = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL');
+    if (stored) return stored;
+  } catch (e) { /* ignore */ }
+
+  return '';
 }
 
 /**
@@ -1133,6 +1149,19 @@ function getSummaryRecipients() {
  *       10:30 AM EAT = 7:30 AM UTC. We use atHour(7) which runs between 7–8 AM UTC.
  */
 function setupNotificationTriggers() {
+  // Persist the web-app URL so that time-driven triggers can include it in emails.
+  // ScriptApp.getService().getUrl() only works when called from a user context,
+  // so we store it now while we have access.
+  try {
+    var webAppUrl = ScriptApp.getService().getUrl();
+    if (webAppUrl) {
+      PropertiesService.getScriptProperties().setProperty('WEB_APP_URL', webAppUrl);
+      console.log('Stored WEB_APP_URL:', webAppUrl);
+    }
+  } catch (e) {
+    console.warn('Could not store WEB_APP_URL:', e.message);
+  }
+
   // Remove existing triggers for these functions
   const functionNames = [
     'processEmailQueue',
