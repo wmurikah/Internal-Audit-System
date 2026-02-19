@@ -24,14 +24,6 @@
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-observation" data-bs-toggle="tab" data-bs-target="#panel-observation"
-                type="button" role="tab" aria-controls="panel-observation" aria-selected="false">
-          <i class="bi bi-eye me-1"></i>
-          <span class="tab-label">Observation</span>
-          <span class="tab-status" id="status-observation"></span>
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-testing" data-bs-toggle="tab" data-bs-target="#panel-testing"
                 type="button" role="tab" aria-controls="panel-testing" aria-selected="false">
           <i class="bi bi-clipboard-check me-1"></i>
@@ -45,6 +37,14 @@
           <i class="bi bi-paperclip me-1"></i>
           <span class="tab-label">Evidence</span>
           <span class="tab-status" id="status-evidence"></span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-observation" data-bs-toggle="tab" data-bs-target="#panel-observation"
+                type="button" role="tab" aria-controls="panel-observation" aria-selected="false">
+          <i class="bi bi-eye me-1"></i>
+          <span class="tab-label">Observation</span>
+          <span class="tab-status" id="status-observation"></span>
         </button>
       </li>
       <li class="nav-item" role="presentation">
@@ -108,6 +108,101 @@
 
           <!-- Tab Navigation Buttons -->
           <div class="d-flex justify-content-end mt-4 pt-3 border-top">
+            <button type="button" class="btn btn-primary" onclick="goToTab('tab-testing')">
+              Next: Testing <i class="bi bi-arrow-right ms-1"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Testing Panel -->
+      <div class="tab-pane fade" id="panel-testing" role="tabpanel" aria-labelledby="tab-testing">
+        <div class="card-body">
+          <h5 class="card-title mb-3">
+            <i class="bi bi-clipboard-check text-primary me-2"></i>Testing Information
+          </h5>
+          <p class="text-muted small mb-4">Document the audit testing methodology and procedures used.</p>
+
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Control Objectives</label>
+              <textarea class="form-control" id="wpControlObjectives" rows="2"
+                        placeholder="What controls were being tested?"></textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Risk Description</label>
+              <textarea class="form-control" id="wpRiskDesc" rows="2"
+                        placeholder="What are the inherent risks in this area?"></textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Test Objective</label>
+              <textarea class="form-control" id="wpTestObj" rows="2"
+                        placeholder="What was the objective of the testing?"></textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Testing Steps</label>
+              <textarea class="form-control" id="wpTestSteps" rows="3"
+                        placeholder="Describe the testing procedures performed..."></textarea>
+            </div>
+          </div>
+
+          <!-- Tab Navigation Buttons -->
+          <div class="d-flex justify-content-between mt-4 pt-3 border-top">
+            <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-basic')">
+              <i class="bi bi-arrow-left me-1"></i> Back
+            </button>
+            <button type="button" class="btn btn-primary" onclick="goToTab('tab-evidence')">
+              Next: Evidence <i class="bi bi-arrow-right ms-1"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evidence Panel -->
+      <div class="tab-pane fade" id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence">
+        <div class="card-body">
+          <h5 class="card-title mb-3">
+            <i class="bi bi-paperclip text-primary me-2"></i>Evidence & Documents
+          </h5>
+          <p class="text-muted small mb-4">Attach supporting evidence and reference documents.</p>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Work Paper Reference</label>
+              <input type="text" class="form-control" id="wpWorkPaperRef" placeholder="Auto-generated on save" readonly style="background-color: #e9ecef; cursor: not-allowed;">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">File Category</label>
+              <select class="form-select" id="wpFileCategory">
+                <option value="Evidence">Evidence</option>
+                <option value="Supporting">Supporting Document</option>
+                <option value="Correspondence">Correspondence</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <!-- Enhanced Upload Zone -->
+            <div class="col-12">
+              <label class="form-label">Upload Evidence Documents</label>
+              <div class="upload-zone" id="wpUploadZone" onclick="document.getElementById('wpEvidenceFile').click()">
+                <input type="file" class="d-none" id="wpEvidenceFile" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" onchange="handleFileSelect(this)">
+                <i class="bi bi-cloud-arrow-up upload-icon"></i>
+                <h5 class="upload-title">Drop files here or click to browse</h5>
+                <p class="upload-text">Supported formats: PDF, Word, Excel, Images (Max 10MB per file)</p>
+              </div>
+            </div>
+
+            <!-- Uploaded Files List -->
+            <div class="col-12">
+              <div id="wpEvidenceFilesList" class="file-items-container"></div>
+            </div>
+          </div>
+
+          <!-- Tab Navigation Buttons -->
+          <div class="d-flex justify-content-between mt-4 pt-3 border-top">
+            <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-testing')">
+              <i class="bi bi-arrow-left me-1"></i> Back
+            </button>
             <button type="button" class="btn btn-primary" onclick="goToTab('tab-observation')">
               Next: Observation <i class="bi bi-arrow-right ms-1"></i>
             </button>
@@ -171,102 +266,7 @@
 
           <!-- Tab Navigation Buttons -->
           <div class="d-flex justify-content-between mt-4 pt-3 border-top">
-            <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-basic')">
-              <i class="bi bi-arrow-left me-1"></i> Back
-            </button>
-            <button type="button" class="btn btn-primary" onclick="goToTab('tab-testing')">
-              Next: Testing <i class="bi bi-arrow-right ms-1"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Testing Panel -->
-      <div class="tab-pane fade" id="panel-testing" role="tabpanel" aria-labelledby="tab-testing">
-        <div class="card-body">
-          <h5 class="card-title mb-3">
-            <i class="bi bi-clipboard-check text-primary me-2"></i>Testing Information
-          </h5>
-          <p class="text-muted small mb-4">Document the audit testing methodology and procedures used.</p>
-
-          <div class="row g-3">
-            <div class="col-12">
-              <label class="form-label">Control Objectives</label>
-              <textarea class="form-control" id="wpControlObjectives" rows="2"
-                        placeholder="What controls were being tested?"></textarea>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Risk Description</label>
-              <textarea class="form-control" id="wpRiskDesc" rows="2"
-                        placeholder="What are the inherent risks in this area?"></textarea>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Test Objective</label>
-              <textarea class="form-control" id="wpTestObj" rows="2"
-                        placeholder="What was the objective of the testing?"></textarea>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Testing Steps</label>
-              <textarea class="form-control" id="wpTestSteps" rows="3"
-                        placeholder="Describe the testing procedures performed..."></textarea>
-            </div>
-          </div>
-
-          <!-- Tab Navigation Buttons -->
-          <div class="d-flex justify-content-between mt-4 pt-3 border-top">
-            <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-observation')">
-              <i class="bi bi-arrow-left me-1"></i> Back
-            </button>
-            <button type="button" class="btn btn-primary" onclick="goToTab('tab-evidence')">
-              Next: Evidence <i class="bi bi-arrow-right ms-1"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Evidence Panel -->
-      <div class="tab-pane fade" id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence">
-        <div class="card-body">
-          <h5 class="card-title mb-3">
-            <i class="bi bi-paperclip text-primary me-2"></i>Evidence & Documents
-          </h5>
-          <p class="text-muted small mb-4">Attach supporting evidence and reference documents.</p>
-
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label">Work Paper Reference</label>
-              <input type="text" class="form-control" id="wpWorkPaperRef" placeholder="Auto-generated on save" readonly style="background-color: #e9ecef; cursor: not-allowed;">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">File Category</label>
-              <select class="form-select" id="wpFileCategory">
-                <option value="Evidence">Evidence</option>
-                <option value="Supporting">Supporting Document</option>
-                <option value="Correspondence">Correspondence</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-
-            <!-- Enhanced Upload Zone -->
-            <div class="col-12">
-              <label class="form-label">Upload Evidence Documents</label>
-              <div class="upload-zone" id="wpUploadZone" onclick="document.getElementById('wpEvidenceFile').click()">
-                <input type="file" class="d-none" id="wpEvidenceFile" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" onchange="handleFileSelect(this)">
-                <i class="bi bi-cloud-arrow-up upload-icon"></i>
-                <h5 class="upload-title">Drop files here or click to browse</h5>
-                <p class="upload-text">Supported formats: PDF, Word, Excel, Images (Max 10MB per file)</p>
-              </div>
-            </div>
-
-            <!-- Uploaded Files List -->
-            <div class="col-12">
-              <div id="wpEvidenceFilesList" class="file-items-container"></div>
-            </div>
-          </div>
-
-          <!-- Tab Navigation Buttons -->
-          <div class="d-flex justify-content-between mt-4 pt-3 border-top">
-            <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-testing')">
+            <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-evidence')">
               <i class="bi bi-arrow-left me-1"></i> Back
             </button>
             <button type="button" class="btn btn-primary" onclick="goToTab('tab-response')">
@@ -313,7 +313,7 @@
 
           <!-- Tab Navigation Buttons -->
           <div class="d-flex justify-content-between mt-4 pt-3 border-top">
-            <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-evidence')">
+            <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-observation')">
               <i class="bi bi-arrow-left me-1"></i> Back
             </button>
             <button type="button" class="btn btn-primary" onclick="goToTab('tab-parties')">
