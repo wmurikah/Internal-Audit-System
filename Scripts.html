@@ -457,11 +457,7 @@ function setupNavigation(p) {
 
 // Navigation
 function getDefaultPage() {
-  const role = window.currentUser?.role_code || '';
-  // Use permissions to determine default page (no hardcoded role arrays)
-  const p = window.currentPermissions || {};
-  if (role === 'SUPER_ADMIN' || p.canViewAuditWorkbench) return 'audit-workbench';
-  // Dashboard is visible to all users - use as default fallback
+  // Dashboard is the default landing page for ALL users/roles
   return 'reports';
 }
 
