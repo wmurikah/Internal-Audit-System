@@ -865,13 +865,27 @@ function queueReviewNotification(workPaperId, workPaper, submitter) {
     u.roleCode === ROLES.SENIOR_AUDITOR ||
     u.roleCode === ROLES.SUPER_ADMIN
   );
-  
+
+  // Resolve affiliate name from code for template variable
+  var affiliateName = workPaper.affiliate_code || '';
+  try {
+    var affiliates = getAffiliatesDropdown();
+    var match = affiliates.find(function(a) { return a.code === workPaper.affiliate_code; });
+    if (match) affiliateName = match.name || match.code;
+  } catch (e) { /* keep code as fallback */ }
+
   reviewers.forEach(reviewer => {
     queueTemplatedEmail('WP_SUBMITTED', reviewer.email, reviewer.id, {
       work_paper_id: workPaperId,
       observation_title: workPaper.observation_title || '',
       submitter_name: submitter.full_name || '',
-      status: workPaper.status || ''
+      submitted_by: submitter.full_name || '',
+      status: workPaper.status || '',
+      risk_rating: workPaper.risk_rating || '',
+      affiliate_name: affiliateName,
+      affiliate_code: workPaper.affiliate_code || '',
+      recommendation: workPaper.recommendation || '',
+      observation_description: workPaper.observation_description || ''
     }, 'WORK_PAPER', workPaperId);
   });
 }
@@ -882,13 +896,27 @@ function queueReviewNotification(workPaperId, workPaper, submitter) {
 function queueStatusNotification(workPaperId, workPaper, previousStatus, reviewer) {
   const preparer = getUserById(workPaper.prepared_by_id);
   if (!preparer) return;
-  
+
+  // Resolve affiliate name from code for template variable
+  var affiliateName = workPaper.affiliate_code || '';
+  try {
+    var affiliates = getAffiliatesDropdown();
+    var match = affiliates.find(function(a) { return a.code === workPaper.affiliate_code; });
+    if (match) affiliateName = match.name || match.code;
+  } catch (e) { /* keep code as fallback */ }
+
   queueTemplatedEmail('WP_STATUS_CHANGE', preparer.email, preparer.user_id, {
     work_paper_id: workPaperId,
     observation_title: workPaper.observation_title || '',
     previous_status: previousStatus || '',
     new_status: workPaper.status || '',
-    reviewer_name: reviewer.full_name || ''
+    reviewer_name: reviewer.full_name || '',
+    submitted_by: workPaper.prepared_by_name || preparer.full_name || '',
+    risk_rating: workPaper.risk_rating || '',
+    affiliate_name: affiliateName,
+    affiliate_code: workPaper.affiliate_code || '',
+    recommendation: workPaper.recommendation || '',
+    observation_description: workPaper.observation_description || ''
   }, 'WORK_PAPER', workPaperId);
 }
 
@@ -906,8 +934,10 @@ function queueAuditeeNotification(workPaperId, workPaper, sender) {
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
     if (auditee && auditee.email) {
+      var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Auditee';
       // Send immediately using the batched table format with CC
-      sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name, ccEmails);
+      // Parameters: workPapers, email, userId, fullName, firstName, ccEmails
+      sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name, firstName, ccEmails);
     }
   });
 }

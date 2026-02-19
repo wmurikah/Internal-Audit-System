@@ -454,7 +454,11 @@ function markImplemented() {
   showLoading('Processing...');
   apiCall('markAsImplemented', { actionPlanId: currentActionPlan.action_plan_id, implementationNotes: notes }).then(r => {
     hideLoading();
-    if (r.success) { showToast('Marked as implemented', 'success'); loadActionPlanView({ id: currentActionPlan.action_plan_id }); }
+    if (r.success) {
+      showToast('Marked as implemented', 'success');
+      loadActionPlanView({ id: currentActionPlan.action_plan_id });
+      if (typeof refreshSidebarCounts === 'function') refreshSidebarCounts();
+    }
     else showToast(r.error || 'Error', 'danger');
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }
@@ -464,7 +468,11 @@ function verifyAP(action) {
   showLoading('Processing...');
   apiCall('verifyImplementation', { actionPlanId: currentActionPlan.action_plan_id, action, comments }).then(r => {
     hideLoading();
-    if (r.success) { showToast(action === 'approve' ? 'Verified' : 'Updated', 'success'); loadActionPlanView({ id: currentActionPlan.action_plan_id }); }
+    if (r.success) {
+      showToast(action === 'approve' ? 'Verified' : 'Updated', 'success');
+      loadActionPlanView({ id: currentActionPlan.action_plan_id });
+      if (typeof refreshSidebarCounts === 'function') refreshSidebarCounts();
+    }
     else showToast(r.error || 'Error', 'danger');
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }

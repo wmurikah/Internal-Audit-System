@@ -293,9 +293,7 @@ function routeAction(action, data, user) {
       return { success: true, report: getRiskSummaryReport(data.filters) };
 
     case 'getComprehensiveReportData':
-      if (!canUserPerform(user, 'read', 'DASHBOARD', null) && !canUserPerform(user, 'read', 'REPORT', null)) {
-        return { success: false, error: 'Permission denied' };
-      }
+      // Dashboard is visible to ALL authenticated users regardless of role
       return { success: true, ...getComprehensiveReportData(data.filters) };
 
     // ========== NOTIFICATIONS ==========
@@ -741,12 +739,18 @@ function uploadFileToDrive(fileName, mimeType, base64Data, folderId, sessionToke
     }
 
     const file = folder.createFile(blob);
-    // Share within the domain only, not to anyone with link
+    // Share within the domain only (Google Workspace accounts)
     try {
       file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
     } catch (sharingError) {
-      // If domain sharing fails (e.g. personal account), use restricted access
-      console.warn('Domain sharing not available, file will be private:', sharingError.message);
+      // If domain sharing fails (e.g. consumer/personal account without Workspace),
+      // fall back to ANYONE_WITH_LINK so files remain accessible to system users
+      console.warn('Domain sharing not available, falling back to ANYONE_WITH_LINK:', sharingError.message);
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (fallbackError) {
+        console.error('File sharing fallback also failed:', fallbackError.message);
+      }
     }
 
     return {

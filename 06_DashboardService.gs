@@ -919,14 +919,12 @@ function getUserPermissions(roleCode) {
     permissions.canExportData = dbPermissions.REPORT.can_export === true;
   }
 
-  // DASHBOARD module (new - controls Dashboard page access)
+  // DASHBOARD module - visible to ALL users; export controlled by DB permissions
+  permissions.canViewDashboard = true;
   if (dbPermissions.DASHBOARD) {
-    permissions.canViewDashboard = dbPermissions.DASHBOARD.can_read === true;
     permissions.canExportDashboard = dbPermissions.DASHBOARD.can_export === true;
-  } else {
-    // Fallback: if DASHBOARD module not yet configured in DB, inherit from REPORT
-    permissions.canViewDashboard = permissions.canViewReports;
-    permissions.canExportDashboard = permissions.canExportData;
+  } else if (dbPermissions.REPORT) {
+    permissions.canExportDashboard = dbPermissions.REPORT.can_export === true;
   }
 
   // AI_ASSIST module is visible to all users by request; create controls generation
