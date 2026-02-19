@@ -564,11 +564,14 @@ function changePassword(userId, currentPassword, newPassword) {
   sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(false);
   sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
 
+  // Flush sheet writes immediately so concurrent reads get the updated must_change_password=false
+  SpreadsheetApp.flush();
+
   invalidateUserCache(user.email, user.user_id);
 
   logAuditEvent('CHANGE_PASSWORD', 'USER', userId, null, null, userId, user.email);
 
-  return { success: true };
+  return { success: true, must_change_password: false };
 }
 
 function resetPassword(userId, adminUser) {

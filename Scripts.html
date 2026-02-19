@@ -337,10 +337,16 @@ function refreshBackgroundData() {
 // Silent refresh: update cached data without blocking UI
 function silentRefreshInitData() {
   const sessionToken = sessionStorage.getItem('sessionToken') || '';
-  
+
   google.script.run
     .withSuccessHandler(function(result) {
       if (result && result.success) {
+        // Guard against race condition: if password was recently changed,
+        // an in-flight request may return stale must_change_password=true.
+        // Preserve the local (correct) state to prevent the change-password loop.
+        if (window._passwordJustChanged && result.user && result.user.must_change_password) {
+          result.user.must_change_password = false;
+        }
         // Update in-memory state
         window.currentUser = result.user;
         if (result.permissions) {
@@ -863,6 +869,9 @@ function submitChangePassword() {
       if (r.success) {
         bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
         showToast('Password changed successfully', 'success');
+        // Guard: prevent in-flight silentRefreshInitData from overwriting with stale data
+        window._passwordJustChanged = true;
+        setTimeout(function() { window._passwordJustChanged = false; }, 30000);
         if (window.currentUser) {
           window.currentUser.must_change_password = false;
         }
@@ -922,6 +931,9 @@ function submitForcePasswordChange() {
       btn.innerHTML = '<i class="bi bi-check-lg me-2"></i>Set New Password';
       if (r.success) {
         window.currentUser.must_change_password = false;
+        // Guard: prevent in-flight silentRefreshInitData from overwriting with stale data
+        window._passwordJustChanged = true;
+        setTimeout(function() { window._passwordJustChanged = false; }, 30000);
         // Update cached data
         var cached = LocalStore.get('initData');
         if (cached && cached.user) {
