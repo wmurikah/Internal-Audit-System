@@ -93,7 +93,7 @@ function login(email, password) {
       role_name: roleName,
       affiliate_code: user.affiliate_code || '',
       department: user.department || '',
-      must_change_password: user.must_change_password || false
+      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
     },
     permissions: permissions,
     dropdowns: dropdowns,
@@ -296,7 +296,7 @@ function validateSession(sessionToken) {
       role_name: getRoleName(user.role_code),
       affiliate_code: user.affiliate_code,
       department: user.department,
-      must_change_password: user.must_change_password,
+      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE',
       is_active: user.is_active
     }
   });

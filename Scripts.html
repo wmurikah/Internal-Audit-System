@@ -264,7 +264,8 @@ function applyInitData(result) {
   window.addEventListener('hashchange', handleHashChange);
 
   // PATCHED: Block dashboard until password is changed
-  if (result.user.must_change_password) {
+  // Skip if password was already changed in this session (prevents race condition loop)
+  if (result.user.must_change_password && !sessionStorage.getItem('passwordChangedInSession')) {
     showForcePasswordChange();
   }
 }
@@ -337,10 +338,18 @@ function refreshBackgroundData() {
 // Silent refresh: update cached data without blocking UI
 function silentRefreshInitData() {
   const sessionToken = sessionStorage.getItem('sessionToken') || '';
-  
+
   google.script.run
     .withSuccessHandler(function(result) {
       if (result && result.success) {
+        // Prevent stale must_change_password from overwriting a successful change
+        if (sessionStorage.getItem('passwordChangedInSession') && result.user) {
+          result.user.must_change_password = false;
+          // Clear the flag once server confirms the change
+          if (!result.user.must_change_password) {
+            // Server has caught up - flag can stay for the session to be safe
+          }
+        }
         // Update in-memory state
         window.currentUser = result.user;
         if (result.permissions) {
@@ -364,6 +373,7 @@ function silentRefreshInitData() {
 function handleAuthFailure() {
   LocalStore.clear();
   sessionStorage.removeItem('sessionToken');
+  sessionStorage.removeItem('passwordChangedInSession');
   sessionStorage.clear();
   redirectToLogin();
 }
@@ -866,6 +876,7 @@ function submitChangePassword() {
         if (window.currentUser) {
           window.currentUser.must_change_password = false;
         }
+        sessionStorage.setItem('passwordChangedInSession', 'true');
       } else {
         showToast(r.error || 'Failed to change password', 'danger');
       }
@@ -922,6 +933,8 @@ function submitForcePasswordChange() {
       btn.innerHTML = '<i class="bi bi-check-lg me-2"></i>Set New Password';
       if (r.success) {
         window.currentUser.must_change_password = false;
+        // Mark that password was changed in this session to prevent race condition loop
+        sessionStorage.setItem('passwordChangedInSession', 'true');
         // Update cached data
         var cached = LocalStore.get('initData');
         if (cached && cached.user) {
@@ -933,6 +946,8 @@ function submitForcePasswordChange() {
         document.getElementById('sidebar').style.display = '';
         document.querySelector('.main-content').style.display = '';
         showToast('Password changed. Welcome!', 'success');
+        // Force an immediate refresh to sync server state
+        silentRefreshInitData();
       } else {
         errorEl.textContent = r.error || 'Failed to change password';
         errorEl.style.display = 'block';
