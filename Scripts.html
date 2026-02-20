@@ -268,6 +268,26 @@ function applyInitData(result) {
   handleHashChange();
   window.addEventListener('hashchange', handleHashChange);
 
+  // Invalidate the server-side session when the tab/browser is closed.
+  // sessionStorage auto-clears the token on the client side,
+  // but we also need to tell the server so the session row is marked invalid.
+  if (!window.__beforeUnloadRegistered) {
+    window.__beforeUnloadRegistered = true;
+    window.addEventListener('beforeunload', function() {
+      var token = sessionStorage.getItem('sessionToken');
+      if (token) {
+        // Use sendBeacon for reliable fire-and-forget on tab close
+        var baseUrl = window.__BASE_URL__ || window.location.pathname.replace(/\/exec.*/, '/exec');
+        try {
+          navigator.sendBeacon(
+            baseUrl,
+            JSON.stringify({ action: 'logout', data: { sessionToken: token } })
+          );
+        } catch(e) { /* best-effort */ }
+      }
+    });
+  }
+
   // PATCHED: Block dashboard until password is changed
   // Skip if password was already changed in this session (prevents race condition loop)
   if (result.user.must_change_password && !sessionStorage.getItem('passwordChangedInSession')) {
@@ -613,13 +633,26 @@ function apiCall(action, data) {
 }
 
 // UI helpers
+var _loadingTimeout = null;
+
 function showLoading(text) {
   document.getElementById('loadingText').textContent = text || 'Loading...';
   document.getElementById('loadingOverlay').classList.add('show');
+
+  // Safety: auto-hide overlay after 30 seconds to prevent permanent UI freeze
+  clearTimeout(_loadingTimeout);
+  _loadingTimeout = setTimeout(function() {
+    if (document.getElementById('loadingOverlay').classList.contains('show')) {
+      console.warn('Loading overlay auto-hidden after 30s timeout');
+      hideLoading();
+      showToast('The operation is taking longer than expected. You can continue using the system.', 'warning');
+    }
+  }, 30000);
 }
 
 function hideLoading() {
   document.getElementById('loadingOverlay').classList.remove('show');
+  clearTimeout(_loadingTimeout);
 }
 
 function showToast(message, type, optionsOrDuration) {

@@ -251,24 +251,36 @@ function getReportFilters() {
 }
 
 function loadReportData() {
-  showLoading('Generating comprehensive report...');
+  // Use inline loading indicator instead of full-screen blocking overlay
+  // so users can still navigate to other pages while the report loads
+  document.getElementById('reportBody').innerHTML =
+    '<div class="text-center py-5">' +
+    '<div class="spinner-border text-primary" role="status"></div>' +
+    '<p class="mt-3 text-muted">Loading report data...</p>' +
+    '</div>';
+
   var filters = getReportFilters();
   apiCall('getComprehensiveReportData', { filters: filters })
     .then(function(r) {
-      hideLoading();
       if (r && r.success !== false && r.generatedAt) {
         reportData = r;
         renderCurrentTab();
+      } else if (r && r.requireLogin) {
+        // Session expired - redirect to login
+        return;
       } else {
         document.getElementById('reportBody').innerHTML =
           '<div class="text-center py-5"><i class="bi bi-exclamation-circle text-warning" style="font-size:3rem;"></i>' +
-          '<p class="mt-3">' + escapeHtml(r?.error || 'Unable to generate report. Please try again.') + '</p></div>';
+          '<p class="mt-3">' + escapeHtml(r?.error || 'Unable to generate report. Please try again.') + '</p>' +
+          '<button class="btn btn-sm btn-primary mt-2" onclick="loadReportData()"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button></div>';
       }
     })
     .catch(function(err) {
-      hideLoading();
       console.error('Report error:', err);
-      showToast('Error generating report', 'danger');
+      document.getElementById('reportBody').innerHTML =
+        '<div class="text-center py-5"><i class="bi bi-exclamation-circle text-danger" style="font-size:3rem;"></i>' +
+        '<p class="mt-3">Error generating report. Please try again.</p>' +
+        '<button class="btn btn-sm btn-primary mt-2" onclick="loadReportData()"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button></div>';
     });
 }
 
