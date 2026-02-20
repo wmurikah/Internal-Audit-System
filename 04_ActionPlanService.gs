@@ -407,13 +407,7 @@ function getActionPlans(filters, user) {
 function getActionPlansRaw(filters, user) {
   filters = filters || {};
 
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  if (!sheet) {
-    console.error('getActionPlansRaw: Action Plans sheet not found:', SHEETS.ACTION_PLANS);
-    return [];
-  }
-
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.ACTION_PLANS);
   if (!data || data.length < 2) {
     console.log('getActionPlansRaw: No data in Action Plans sheet');
     return [];

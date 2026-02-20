@@ -48,6 +48,39 @@ function getSheet(sheetName) {
   return sheet;
 }
 
+// ── In-memory sheet data cache ──
+// Prevents duplicate getDataRange().getValues() calls for the same sheet
+// within a single server execution (~3-6 second lifetime).
+// This is the highest-leverage perf win: a single dashboard load can read
+// the same sheet 3-4 times (sidebar counts, dashboard stats, list queries).
+var _sheetDataCache = {};
+
+/**
+ * Get all values from a sheet, using an in-memory cache to avoid
+ * redundant Google Sheets API calls within the same execution.
+ * For write-heavy paths, pass skipCache = true.
+ */
+function getSheetData(sheetName, skipCache) {
+  if (!skipCache && _sheetDataCache[sheetName]) {
+    return _sheetDataCache[sheetName];
+  }
+  var sheet = getSheet(sheetName);
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  _sheetDataCache[sheetName] = data;
+  return data;
+}
+
+/** Invalidate in-memory cache for a sheet after writes */
+function invalidateSheetData(sheetName) {
+  delete _sheetDataCache[sheetName];
+}
+
+/** Invalidate all in-memory sheet data (e.g., after bulk operations) */
+function invalidateAllSheetData() {
+  _sheetDataCache = {};
+}
+
 const Cache = {
   get: function(key) {
     try {
