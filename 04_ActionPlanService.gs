@@ -95,6 +95,9 @@ function createActionPlan(data, user) {
     throw lockErr;
   }
 
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update index
   updateActionPlanIndex(actionPlanId, actionPlan, rowNum);
   
@@ -192,7 +195,10 @@ function createActionPlansBatch(workPaperId, plansData, user) {
   const sheet = getSheet(SHEETS.ACTION_PLANS);
   const startRow = sheet.getLastRow() + 1;
   sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
-  
+
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update indexes
   results.forEach((r, idx) => {
     updateActionPlanIndex(r.actionPlanId, r.actionPlan, startRow + idx);
@@ -333,13 +339,16 @@ function updateActionPlan(actionPlanId, data, user) {
   
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update index
   updateActionPlanIndex(actionPlanId, updated, rowIndex);
-  
+
   // Log audit event
   logAuditEvent('UPDATE', 'ACTION_PLAN', actionPlanId, existing, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
@@ -383,7 +392,12 @@ function deleteActionPlan(actionPlanId, user) {
   if (existing._rowIndex) {
     sheet.deleteRow(existing._rowIndex);
   }
-  
+
+  // Invalidate cached sheet data after deletes
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+  invalidateSheetData(SHEETS.AP_EVIDENCE);
+  invalidateSheetData(SHEETS.AP_HISTORY);
+
   // Remove from index
   removeFromIndex(SHEETS.INDEX_ACTION_PLANS, actionPlanId);
   
@@ -620,16 +634,19 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update index
   updateActionPlanIndex(actionPlanId, updated, rowIndex);
-  
+
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updates.status, implementationNotes, user);
-  
+
   // Queue notification to auditors for verification
   queueImplementationNotification(actionPlanId, updated, user);
-  
+
   // Log audit event
   logAuditEvent('IMPLEMENT', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
   
@@ -698,19 +715,22 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update index
   updateActionPlanIndex(actionPlanId, updated, rowIndex);
-  
+
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updates.status, comments, user);
-  
+
   // Queue notification to owners
   queueVerificationNotification(actionPlanId, updated, action, user);
-  
+
   // Log audit event
   logAuditEvent('VERIFY', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
@@ -759,6 +779,9 @@ function hoaReview(actionPlanId, action, comments, user) {
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
 
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update index if status changed
   if (updates.status && updates.status !== previousStatus) {
     updateActionPlanIndex(actionPlanId, updated, rowIndex);
@@ -769,7 +792,7 @@ function hoaReview(actionPlanId, action, comments, user) {
 
   // Log audit event
   logAuditEvent('HOA_REVIEW', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
@@ -884,9 +907,12 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   const sheet = getSheet(SHEETS.AP_EVIDENCE);
   const row = objectToRow('AP_EVIDENCE', evidence);
   sheet.appendRow(row);
-  
+
+  // Invalidate cached evidence data after write
+  invalidateSheetData(SHEETS.AP_EVIDENCE);
+
   // Add history entry
-  addActionPlanHistory(actionPlanId, actionPlan.status, actionPlan.status, 
+  addActionPlanHistory(actionPlanId, actionPlan.status, actionPlan.status,
     'Evidence uploaded: ' + evidence.file_name, user);
   
   logAuditEvent('ADD_EVIDENCE', 'ACTION_PLAN', actionPlanId, null, evidence, user.user_id, user.email);
@@ -919,9 +945,12 @@ function deleteActionPlanEvidence(evidenceId, user) {
       }
       
       sheet.deleteRow(i + 1);
-      
+
+      // Invalidate cached evidence data after delete
+      invalidateSheetData(SHEETS.AP_EVIDENCE);
+
       logAuditEvent('DELETE_EVIDENCE', 'ACTION_PLAN', existing.action_plan_id, existing, null, user.user_id, user.email);
-      
+
       return { success: true };
     }
   }
@@ -947,7 +976,10 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
   const sheet = getSheet(SHEETS.AP_HISTORY);
   const row = objectToRow('AP_HISTORY', history);
   sheet.appendRow(row);
-  
+
+  // Invalidate cached history data after write
+  invalidateSheetData(SHEETS.AP_HISTORY);
+
   return history;
 }
 

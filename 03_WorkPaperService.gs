@@ -73,12 +73,15 @@ function createWorkPaper(data, user) {
     throw lockErr;
   }
 
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+
   // Update index
   updateWorkPaperIndex(workPaperId, workPaper, rowNum);
-  
+
   // Log audit event
   logAuditEvent('CREATE', 'WORK_PAPER', workPaperId, null, workPaper, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, workPaperId: workPaperId, workPaper: workPaper });
 }
 
@@ -174,13 +177,16 @@ function updateWorkPaper(workPaperId, data, user) {
   
   const row = objectToRow('WORK_PAPERS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+
   // Update index
   updateWorkPaperIndex(workPaperId, updated, rowIndex);
-  
+
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 
@@ -208,10 +214,13 @@ function deleteWorkPaper(workPaperId, user) {
   
   if (rowIndex) {
     sheet.deleteRow(rowIndex);
-    
+
+    // Invalidate cached sheet data after delete
+    invalidateSheetData(SHEETS.WORK_PAPERS);
+
     // Remove from index
     removeFromIndex(SHEETS.INDEX_WORK_PAPERS, workPaperId);
-    
+
     // Rebuild indexes for affected rows (rows after deleted one shifted up)
     rebuildWorkPaperIndex();
   }
@@ -418,7 +427,10 @@ function submitWorkPaper(workPaperId, user) {
   sheet.getRange(rowIndex, statusIdx + 1).setValue(updates.status);
   sheet.getRange(rowIndex, submittedIdx + 1).setValue(updates.submitted_date);
   sheet.getRange(rowIndex, updatedIdx + 1).setValue(updates.updated_at);
-  
+
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+
   // Add revision history
   addWorkPaperRevision(workPaperId, 'Submitted', 'Submitted for review', user);
   
@@ -513,19 +525,22 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   const updated = { ...workPaper, ...updates };
   const row = objectToRow('WORK_PAPERS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+
+  // Invalidate cached sheet data after write
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+
   // Add revision history
   addWorkPaperRevision(workPaperId, revisionAction, comments, user);
-  
+
   // Update index
   updateWorkPaperIndex(workPaperId, updated, rowIndex);
-  
+
   // Queue notification to preparer
   queueStatusNotification(workPaperId, updated, workPaper.status, user);
-  
+
   // Log audit event
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 
@@ -562,6 +577,10 @@ function sendToAuditee(workPaperId, user) {
   const updated = { ...workPaper, ...updates };
   const row = objectToRow('WORK_PAPERS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+
+  // Invalidate in-memory cache so subsequent reads (e.g. createActionPlan → getWorkPaperById)
+  // see the new "Sent to Auditee" status instead of stale "Approved"
+  invalidateSheetData(SHEETS.WORK_PAPERS);
 
   // Add revision history
   addWorkPaperRevision(workPaperId, 'Sent to Auditee', 'Work paper sent to auditee for response', user);
