@@ -289,13 +289,7 @@ function getWorkPaperCounts(filters, user) {
 function getWorkPapersRaw(filters, user) {
   filters = filters || {};
 
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  if (!sheet) {
-    console.error('getWorkPapersRaw: Work Papers sheet not found:', SHEETS.WORK_PAPERS);
-    return [];
-  }
-
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.WORK_PAPERS);
   if (!data || data.length < 2) {
     console.log('getWorkPapersRaw: No data in Work Papers sheet');
     return [];
@@ -540,20 +534,20 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
  */
 function sendToAuditee(workPaperId, user) {
   if (!user) throw new Error('User required');
-  
+
   const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
-  
+
   // Must be approved
   if (workPaper.status !== STATUS.WORK_PAPER.APPROVED) {
     throw new Error('Work paper must be approved before sending to auditee');
   }
-  
+
   // Must have responsible parties
   if (!workPaper.responsible_ids) {
     throw new Error('No responsible parties assigned');
   }
-  
+
   const now = new Date();
   const updates = {
     status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
@@ -561,26 +555,64 @@ function sendToAuditee(workPaperId, user) {
     sent_to_auditee_date: now,
     updated_at: now
   };
-  
+
   // Update sheet
   const sheet = getSheet(SHEETS.WORK_PAPERS);
   const rowIndex = workPaper._rowIndex;
   const updated = { ...workPaper, ...updates };
   const row = objectToRow('WORK_PAPERS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+
   // Add revision history
   addWorkPaperRevision(workPaperId, 'Sent to Auditee', 'Work paper sent to auditee for response', user);
-  
+
   // Update index
   updateWorkPaperIndex(workPaperId, updated, rowIndex);
-  
+
+  // ── AUTO-CREATE ACTION PLAN for auditees ──
+  // Creates a skeleton action plan so that responsible parties see it
+  // immediately in their portal. They fill in their response/action.
+  try {
+    var existingAPs = getActionPlansByWorkPaperRaw(workPaperId);
+    if (existingAPs.length === 0) {
+      // Resolve owner names from responsible_ids
+      var ownerIds = String(workPaper.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      var ownerNames = ownerIds.map(function(id) {
+        var u = getUserById(id);
+        return u ? u.full_name : id;
+      }).join(', ');
+
+      // Default due date: 30 days from now
+      var defaultDue = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+      createActionPlan({
+        work_paper_id: workPaperId,
+        action_description: workPaper.recommendation || workPaper.observation_title || 'Respond to audit finding',
+        owner_ids: workPaper.responsible_ids,
+        owner_names: ownerNames,
+        due_date: defaultDue
+      }, user);
+
+      console.log('Auto-created action plan for work paper:', workPaperId);
+    } else {
+      console.log('Action plans already exist for work paper:', workPaperId, '- skipping auto-create');
+    }
+  } catch (apError) {
+    // Non-fatal: log but don't fail the send-to-auditee operation
+    console.error('Auto-create action plan failed (non-fatal):', apError.message);
+  }
+
+  // Invalidate cached counts so sidebar updates immediately
+  try {
+    CacheService.getScriptCache().remove('sidebar_counts_all');
+  } catch (e) {}
+
   // Queue notifications to responsible parties
   queueAuditeeNotification(workPaperId, updated, user);
-  
+
   // Log audit event
   logAuditEvent('SEND_TO_AUDITEE', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 

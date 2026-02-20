@@ -601,35 +601,47 @@ function refreshCurrentPage() {
   navigateTo(currentPage, pageParams, false);
 }
 
-// API calls
+// In-flight request deduplication map.
+// If the same action+data is already pending, reuse its Promise instead of
+// firing a duplicate google.script.run call.  This eliminates redundant
+// getSidebarCounts / getDropdowns calls that fire in quick succession.
+var _inflightRequests = {};
+
 function apiCall(action, data) {
-  return new Promise((resolve, reject) => {
-    // Include sessionToken with all API calls for session-based authentication
-    const requestData = {
-      ...(data || {}),
+  var dedupeKey = action + '_' + JSON.stringify(data || {});
+
+  // If an identical request is already in flight, piggyback on it
+  if (_inflightRequests[dedupeKey]) {
+    return _inflightRequests[dedupeKey];
+  }
+
+  var promise = new Promise(function(resolve) {
+    var requestData = Object.assign({}, data || {}, {
       sessionToken: sessionStorage.getItem('sessionToken') || ''
-    };
+    });
 
     google.script.run
-      .withSuccessHandler(result => {
+      .withSuccessHandler(function(result) {
+        delete _inflightRequests[dedupeKey];
         if (result === null || result === undefined) {
           resolve({ success: false, error: 'No response from server' });
+        } else if (result.requireLogin) {
+          sessionStorage.removeItem('sessionToken');
+          redirectToLogin();
         } else {
-          // Check if session expired and redirect to login
-          if (result.requireLogin) {
-            sessionStorage.removeItem('sessionToken');
-            redirectToLogin();
-            return;
-          }
           resolve(result);
         }
       })
-      .withFailureHandler(error => {
+      .withFailureHandler(function(error) {
+        delete _inflightRequests[dedupeKey];
         console.error('API error for ' + action + ':', error);
         resolve({ success: false, error: error?.message || 'Connection error' });
       })
       .apiCall(action, requestData);
   });
+
+  _inflightRequests[dedupeKey] = promise;
+  return promise;
 }
 
 // UI helpers

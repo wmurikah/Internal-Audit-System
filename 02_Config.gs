@@ -616,14 +616,13 @@ function getUserByEmail(email) {
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   
-  const sheet = getSheet(SHEETS.USERS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const emailIdx = headers.indexOf('email');
-  
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.USERS);
+  var headers = data[0];
+  var emailIdx = headers.indexOf('email');
+
+  for (var i = 1; i < data.length; i++) {
     if (String(data[i][emailIdx]).toLowerCase().trim() === normalizedEmail) {
-      const user = rowToObject(headers, data[i]);
+      var user = rowToObject(headers, data[i]);
       user._rowIndex = i + 1;
       cache.put(cacheKey, JSON.stringify(user), CONFIG.CACHE_TTL.USER_BY_EMAIL);
       return user;
@@ -656,19 +655,17 @@ function getUserById(userId) {
     console.log('getUserById: DB.getById returned null or no _rowIndex, using direct lookup');
   }
 
-  const sheet = getSheet(SHEETS.USERS);
-  if (!sheet) {
-    console.error('getUserById: Users sheet not found');
+  var data = getSheetData(SHEETS.USERS);
+  if (!data || data.length < 2) {
+    console.error('getUserById: Users sheet empty');
     return null;
   }
+  var headers = data[0];
+  var idIdx = headers.indexOf('user_id');
 
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idIdx = headers.indexOf('user_id');
-
-  for (let i = 1; i < data.length; i++) {
+  for (var i = 1; i < data.length; i++) {
     if (data[i][idIdx] === userId) {
-      const user = rowToObject(headers, data[i]);
+      var user = rowToObject(headers, data[i]);
       user._rowIndex = i + 1;
       return user;
     }
@@ -679,14 +676,14 @@ function getUserById(userId) {
 }
 
 function getWorkPaperById(workPaperId) {
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idIdx = headers.indexOf('work_paper_id');
-  
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.WORK_PAPERS);
+  if (!data || data.length < 2) return null;
+  var headers = data[0];
+  var idIdx = headers.indexOf('work_paper_id');
+
+  for (var i = 1; i < data.length; i++) {
     if (data[i][idIdx] === workPaperId) {
-      const wp = rowToObject(headers, data[i]);
+      var wp = rowToObject(headers, data[i]);
       wp._rowIndex = i + 1;
       return wp;
     }
@@ -715,32 +712,30 @@ function getWorkPaperFull(workPaperId) {
 }
 
 function getWorkPaperRequirements(workPaperId) {
-  const sheet = getSheet(SHEETS.WP_REQUIREMENTS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const wpIdIdx = headers.indexOf('work_paper_id');
-  
-  const requirements = [];
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.WP_REQUIREMENTS);
+  if (!data || data.length < 2) return [];
+  var headers = data[0];
+  var wpIdIdx = headers.indexOf('work_paper_id');
+  var requirements = [];
+  for (var i = 1; i < data.length; i++) {
     if (data[i][wpIdIdx] === workPaperId) {
-      const req = rowToObject(headers, data[i]);
+      var req = rowToObject(headers, data[i]);
       req._rowIndex = i + 1;
       requirements.push(req);
     }
   }
-  return requirements.sort((a, b) => (a.requirement_number || 0) - (b.requirement_number || 0));
+  return requirements.sort(function(a, b) { return (a.requirement_number || 0) - (b.requirement_number || 0); });
 }
 
 function getWorkPaperFiles(workPaperId) {
-  const sheet = getSheet(SHEETS.WP_FILES);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const wpIdIdx = headers.indexOf('work_paper_id');
-  
-  const files = [];
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.WP_FILES);
+  if (!data || data.length < 2) return [];
+  var headers = data[0];
+  var wpIdIdx = headers.indexOf('work_paper_id');
+  var files = [];
+  for (var i = 1; i < data.length; i++) {
     if (data[i][wpIdIdx] === workPaperId) {
-      const file = rowToObject(headers, data[i]);
+      var file = rowToObject(headers, data[i]);
       file._rowIndex = i + 1;
       files.push(file);
     }
@@ -749,37 +744,35 @@ function getWorkPaperFiles(workPaperId) {
 }
 
 function getWorkPaperRevisions(workPaperId) {
-  const sheet = getSheet(SHEETS.WP_REVISIONS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const wpIdIdx = headers.indexOf('work_paper_id');
-  
-  const revisions = [];
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.WP_REVISIONS);
+  if (!data || data.length < 2) return [];
+  var headers = data[0];
+  var wpIdIdx = headers.indexOf('work_paper_id');
+  var revisions = [];
+  for (var i = 1; i < data.length; i++) {
     if (data[i][wpIdIdx] === workPaperId) {
-      const rev = rowToObject(headers, data[i]);
+      var rev = rowToObject(headers, data[i]);
       rev._rowIndex = i + 1;
       revisions.push(rev);
     }
   }
-  return revisions.sort((a, b) => (b.revision_number || 0) - (a.revision_number || 0));
+  return revisions.sort(function(a, b) { return (b.revision_number || 0) - (a.revision_number || 0); });
 }
 
 function getActionPlansByWorkPaper(workPaperId) {
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const wpIdIdx = headers.indexOf('work_paper_id');
-  
-  const plans = [];
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.ACTION_PLANS);
+  if (!data || data.length < 2) return [];
+  var headers = data[0];
+  var wpIdIdx = headers.indexOf('work_paper_id');
+  var plans = [];
+  for (var i = 1; i < data.length; i++) {
     if (data[i][wpIdIdx] === workPaperId) {
-      const plan = rowToObject(headers, data[i]);
+      var plan = rowToObject(headers, data[i]);
       plan._rowIndex = i + 1;
       plans.push(plan);
     }
   }
-  return plans.sort((a, b) => (a.action_number || 0) - (b.action_number || 0));
+  return plans.sort(function(a, b) { return (a.action_number || 0) - (b.action_number || 0); });
 }
 
 function getActionPlanById(actionPlanId) {
@@ -787,15 +780,13 @@ function getActionPlanById(actionPlanId) {
   if (typeof DB !== 'undefined' && DB.getById) {
     return DB.getById('ACTION_PLAN', actionPlanId);
   }
-  
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idIdx = headers.indexOf('action_plan_id');
-  
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.ACTION_PLANS);
+  if (!data || data.length < 2) return null;
+  var headers = data[0];
+  var idIdx = headers.indexOf('action_plan_id');
+  for (var i = 1; i < data.length; i++) {
     if (data[i][idIdx] === actionPlanId) {
-      const plan = rowToObject(headers, data[i]);
+      var plan = rowToObject(headers, data[i]);
       plan._rowIndex = i + 1;
       return plan;
     }
@@ -821,15 +812,14 @@ function getActionPlanFull(actionPlanId) {
 }
 
 function getActionPlanEvidence(actionPlanId) {
-  const sheet = getSheet(SHEETS.AP_EVIDENCE);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const apIdIdx = headers.indexOf('action_plan_id');
-  
-  const evidence = [];
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.AP_EVIDENCE);
+  if (!data || data.length < 2) return [];
+  var headers = data[0];
+  var apIdIdx = headers.indexOf('action_plan_id');
+  var evidence = [];
+  for (var i = 1; i < data.length; i++) {
     if (data[i][apIdIdx] === actionPlanId) {
-      const ev = rowToObject(headers, data[i]);
+      var ev = rowToObject(headers, data[i]);
       ev._rowIndex = i + 1;
       evidence.push(ev);
     }
@@ -838,20 +828,19 @@ function getActionPlanEvidence(actionPlanId) {
 }
 
 function getActionPlanHistory(actionPlanId) {
-  const sheet = getSheet(SHEETS.AP_HISTORY);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const apIdIdx = headers.indexOf('action_plan_id');
-  
-  const history = [];
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.AP_HISTORY);
+  if (!data || data.length < 2) return [];
+  var headers = data[0];
+  var apIdIdx = headers.indexOf('action_plan_id');
+  var history = [];
+  for (var i = 1; i < data.length; i++) {
     if (data[i][apIdIdx] === actionPlanId) {
-      const h = rowToObject(headers, data[i]);
+      var h = rowToObject(headers, data[i]);
       h._rowIndex = i + 1;
       history.push(h);
     }
   }
-  return history.sort((a, b) => new Date(b.changed_at || 0) - new Date(a.changed_at || 0));
+  return history.sort(function(a, b) { return new Date(b.changed_at || 0) - new Date(a.changed_at || 0); });
 }
 
 function rowToObject(headers, row) {

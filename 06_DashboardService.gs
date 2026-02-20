@@ -156,6 +156,7 @@ function getDashboardData(user) {
 function getSidebarCounts(user) {
   try {
     const roleCode = user ? user.role_code : '';
+    const userId = user ? user.user_id : '';
 
     // Roles that should not see operational counts
     const nonOperationalRoles = [ROLES.OBSERVER, ROLES.EXTERNAL_AUDITOR, ROLES.BOARD, ROLES.SENIOR_MGMT];
@@ -163,71 +164,73 @@ function getSidebarCounts(user) {
       return { success: true, pendingReview: 0, overdueActionPlans: 0 };
     }
 
-    // Count work papers with status 'Submitted' (pending review)
-    const wpSheet = getSheet(SHEETS.WORK_PAPERS);
-    const wpData = wpSheet.getDataRange().getValues();
-    const wpHeaders = wpData[0];
-    const wpStatusIdx = wpHeaders.indexOf('status');
+    // ── CACHE: avoid 2 full-sheet reads on every sidebar refresh ──
+    var cache = CacheService.getScriptCache();
+    var cacheKey = 'sidebar_counts_all';
+    var cached = cache.get(cacheKey);
+    var allCounts = null;
 
-    let pendingReview = 0;
-    for (let i = 1; i < wpData.length; i++) {
-      if (wpData[i][wpStatusIdx] === 'Submitted') {
-        pendingReview++;
-      }
+    if (cached) {
+      try { allCounts = JSON.parse(cached); } catch (e) { allCounts = null; }
     }
 
-    // Count overdue action plans
-    const apSheet = getSheet(SHEETS.ACTION_PLANS);
-    const apData = apSheet.getDataRange().getValues();
-    const apHeaders = apData[0];
-    const apStatusIdx = apHeaders.indexOf('status');
-    const apDueDateIdx = apHeaders.indexOf('due_date');
-    const apOwnerIdx = apHeaders.indexOf('owner_ids');
+    if (!allCounts) {
+      // Compute counts ONCE for all roles, cache for 20 seconds
+      var wpData = getSheetData(SHEETS.WORK_PAPERS);
+      var wpHeaders = wpData[0];
+      var wpStatusIdx = wpHeaders.indexOf('status');
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+      var pendingReviewAll = 0;
+      for (var wi = 1; wi < wpData.length; wi++) {
+        if (wpData[wi][wpStatusIdx] === 'Submitted') pendingReviewAll++;
+      }
 
-    const closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+      var apData = getSheetData(SHEETS.ACTION_PLANS);
+      var apHeaders = apData[0];
+      var apStatusIdx = apHeaders.indexOf('status');
+      var apDueDateIdx = apHeaders.indexOf('due_date');
+      var apOwnerIdx = apHeaders.indexOf('owner_ids');
 
-    let overdueActionPlans = 0;
-    for (let i = 1; i < apData.length; i++) {
-      const status = apData[i][apStatusIdx];
-      const dueDate = apData[i][apDueDateIdx];
+      var today = new Date();
+      today.setHours(0, 0, 0, 0);
+      var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
 
-      if (status && !closedStatuses.includes(status)) {
-        if (dueDate) {
-          const due = new Date(dueDate);
+      var overdueAll = 0;
+      var overdueByOwner = {};
+
+      for (var ai = 1; ai < apData.length; ai++) {
+        var apStatus = apData[ai][apStatusIdx];
+        var apDue = apData[ai][apDueDateIdx];
+        if (apStatus && !closedStatuses.includes(apStatus) && apDue) {
+          var due = new Date(apDue);
           due.setHours(0, 0, 0, 0);
           if (due < today) {
-            // AUDITEE only sees their own overdue items
-            if (roleCode === ROLES.AUDITEE && user) {
-              const ownerIds = String(apData[i][apOwnerIdx] || '').split(',').map(s => s.trim());
-              if (ownerIds.includes(user.user_id)) {
-                overdueActionPlans++;
-              }
-            } else {
-              overdueActionPlans++;
+            overdueAll++;
+            // Track per-owner for auditee filtering
+            var owners = String(apData[ai][apOwnerIdx] || '').split(',');
+            for (var oi = 0; oi < owners.length; oi++) {
+              var oid = owners[oi].trim();
+              if (oid) overdueByOwner[oid] = (overdueByOwner[oid] || 0) + 1;
             }
           }
         }
       }
+
+      allCounts = { pendingReview: pendingReviewAll, overdueAll: overdueAll, overdueByOwner: overdueByOwner };
+      cache.put(cacheKey, JSON.stringify(allCounts), 20);
     }
 
-    console.log('Sidebar counts - Pending Review:', pendingReview, 'Overdue APs:', overdueActionPlans);
+    // Role-specific result
+    var pendingReview = allCounts.pendingReview;
+    var overdueActionPlans = allCounts.overdueAll;
+    if (roleCode === ROLES.AUDITEE && userId) {
+      overdueActionPlans = allCounts.overdueByOwner[userId] || 0;
+    }
 
-    return {
-      success: true,
-      pendingReview: pendingReview,
-      overdueActionPlans: overdueActionPlans
-    };
+    return { success: true, pendingReview: pendingReview, overdueActionPlans: overdueActionPlans };
   } catch (e) {
     console.error('Error getting sidebar counts:', e);
-    return {
-      success: false,
-      error: e.message,
-      pendingReview: 0,
-      overdueActionPlans: 0
-    };
+    return { success: false, error: e.message, pendingReview: 0, overdueActionPlans: 0 };
   }
 }
 

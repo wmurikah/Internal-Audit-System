@@ -473,8 +473,17 @@ function loadWorkPapers(filters) {
     '<tr class="skeleton-row"><td></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td></td></tr>'
   ).join('');
 
+  // Timeout wrapper: if API takes >15s, show empty state instead of infinite skeleton
+  var wpLoadTimer = setTimeout(function() {
+    console.warn('Work papers load timed out after 15s');
+    workPapersData = [];
+    renderWorkPapers();
+    showToast('Loading took too long. Please try refreshing.', 'warning');
+  }, 15000);
+
   apiCall('getWorkPapers', { filters: requestFilters })
     .then(result => {
+      clearTimeout(wpLoadTimer);
       if (result && result.success !== false && result.workPapers) {
         workPapersData = result.workPapers;
         renderWorkPapers();
@@ -486,6 +495,7 @@ function loadWorkPapers(filters) {
       }
     })
     .catch(err => {
+      clearTimeout(wpLoadTimer);
       console.error('Load work papers error:', err);
       workPapersData = [];
       renderWorkPapers();

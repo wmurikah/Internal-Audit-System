@@ -515,37 +515,36 @@ function loadActionPlans(filters) {
     '<tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>'
   ).join('');
 
+  // Timeout wrapper: if API takes >15s, show empty state instead of infinite skeleton
+  var apLoadTimer = setTimeout(function() {
+    console.warn('Action plans load timed out after 15s');
+    actionPlansData = [];
+    updateAPStats();
+    if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
+    showToast('Loading took too long. Please try refreshing.', 'warning');
+  }, 15000);
+
   apiCall('getActionPlans', { filters: { ...filters, search, status, owner_id: owner, overdue_only: overdueOnly } })
     .then(r => {
+      clearTimeout(apLoadTimer);
       if (r && r.success !== false && r.actionPlans) {
         actionPlansData = r.actionPlans;
         updateAPStats();
-        if (apViewMode === 'kanban') {
-          renderKanbanBoard();
-        } else {
-          renderActionPlans();
-        }
+        if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
       } else {
         console.error('Action plans load error:', r?.error);
         actionPlansData = [];
         updateAPStats();
-        if (apViewMode === 'kanban') {
-          renderKanbanBoard();
-        } else {
-          renderActionPlans();
-        }
+        if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
         if (r?.error) showToast(r.error, 'danger');
       }
     })
     .catch(err => {
+      clearTimeout(apLoadTimer);
       console.error('Action plans error:', err);
       actionPlansData = [];
       updateAPStats();
-      if (apViewMode === 'kanban') {
-        renderKanbanBoard();
-      } else {
-        renderActionPlans();
-      }
+      if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
       showToast('Error loading action plans', 'danger');
     });
 }
