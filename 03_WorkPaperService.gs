@@ -78,7 +78,10 @@ function createWorkPaper(data, user) {
   
   // Log audit event
   logAuditEvent('CREATE', 'WORK_PAPER', workPaperId, null, workPaper, user.user_id, user.email);
-  
+
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, workPaper);
+
   return sanitizeForClient({ success: true, workPaperId: workPaperId, workPaper: workPaper });
 }
 
@@ -180,7 +183,10 @@ function updateWorkPaper(workPaperId, data, user) {
   
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
-  
+
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
+
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 
@@ -432,7 +438,10 @@ function submitWorkPaper(workPaperId, user) {
   
   // Log audit event
   logAuditEvent('SUBMIT', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
-  
+
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
+
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 
@@ -527,7 +536,10 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   
   // Log audit event
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
-  
+
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
+
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 
@@ -618,6 +630,9 @@ function sendToAuditee(workPaperId, user) {
 
   // Log audit event
   logAuditEvent('SEND_TO_AUDITEE', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
+
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }

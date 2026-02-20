@@ -647,6 +647,12 @@ function invalidateUserCache(email, userId) {
 function getUserById(userId) {
   if (!userId) return null;
 
+  // Try Firestore first (sub-100ms)
+  if (isFirestoreEnabled()) {
+    var fsUser = firestoreGet(SHEETS.USERS, userId);
+    if (fsUser) return fsUser;
+  }
+
   if (typeof DB !== 'undefined' && DB.getById) {
     const user = DB.getById('USER', userId);
     if (user && user._rowIndex) {
@@ -676,6 +682,12 @@ function getUserById(userId) {
 }
 
 function getWorkPaperById(workPaperId) {
+  // Try Firestore first (sub-100ms)
+  if (isFirestoreEnabled()) {
+    var fsWp = firestoreGet(SHEETS.WORK_PAPERS, workPaperId);
+    if (fsWp) return fsWp;
+  }
+
   var data = getSheetData(SHEETS.WORK_PAPERS);
   if (!data || data.length < 2) return null;
   var headers = data[0];
@@ -777,6 +789,13 @@ function getActionPlansByWorkPaper(workPaperId) {
 
 function getActionPlanById(actionPlanId) {
   if (!actionPlanId) return null;
+
+  // Try Firestore first (sub-100ms)
+  if (isFirestoreEnabled()) {
+    var fsPlan = firestoreGet(SHEETS.ACTION_PLANS, actionPlanId);
+    if (fsPlan) return fsPlan;
+  }
+
   if (typeof DB !== 'undefined' && DB.getById) {
     return DB.getById('ACTION_PLAN', actionPlanId);
   }
