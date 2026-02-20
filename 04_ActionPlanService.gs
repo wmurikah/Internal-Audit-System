@@ -88,6 +88,7 @@ function createActionPlan(data, user) {
   try {
     lock.waitLock(15000);
     sheet.appendRow(row);
+    invalidateSheetData(SHEETS.ACTION_PLANS);
     rowNum = sheet.getLastRow();
     lock.releaseLock();
   } catch (lockErr) {
@@ -192,7 +193,8 @@ function createActionPlansBatch(workPaperId, plansData, user) {
   const sheet = getSheet(SHEETS.ACTION_PLANS);
   const startRow = sheet.getLastRow() + 1;
   sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
-  
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update indexes
   results.forEach((r, idx) => {
     updateActionPlanIndex(r.actionPlanId, r.actionPlan, startRow + idx);
@@ -333,10 +335,11 @@ function updateActionPlan(actionPlanId, data, user) {
   
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update index
   updateActionPlanIndex(actionPlanId, updated, rowIndex);
-  
+
   // Log audit event
   logAuditEvent('UPDATE', 'ACTION_PLAN', actionPlanId, existing, updated, user.user_id, user.email);
   
@@ -382,8 +385,9 @@ function deleteActionPlan(actionPlanId, user) {
   const sheet = getSheet(SHEETS.ACTION_PLANS);
   if (existing._rowIndex) {
     sheet.deleteRow(existing._rowIndex);
+    invalidateSheetData(SHEETS.ACTION_PLANS);
   }
-  
+
   // Remove from index
   removeFromIndex(SHEETS.INDEX_ACTION_PLANS, actionPlanId);
   
@@ -620,13 +624,14 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update index
   updateActionPlanIndex(actionPlanId, updated, rowIndex);
-  
+
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updates.status, implementationNotes, user);
-  
+
   // Queue notification to auditors for verification
   queueImplementationNotification(actionPlanId, updated, user);
   
@@ -698,13 +703,14 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
   // Update index
   updateActionPlanIndex(actionPlanId, updated, rowIndex);
-  
+
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updates.status, comments, user);
-  
+
   // Queue notification to owners
   queueVerificationNotification(actionPlanId, updated, action, user);
   
@@ -758,6 +764,7 @@ function hoaReview(actionPlanId, action, comments, user) {
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  invalidateSheetData(SHEETS.ACTION_PLANS);
 
   // Update index if status changed
   if (updates.status && updates.status !== previousStatus) {
@@ -884,7 +891,8 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   const sheet = getSheet(SHEETS.AP_EVIDENCE);
   const row = objectToRow('AP_EVIDENCE', evidence);
   sheet.appendRow(row);
-  
+  invalidateSheetData(SHEETS.AP_EVIDENCE);
+
   // Add history entry
   addActionPlanHistory(actionPlanId, actionPlan.status, actionPlan.status, 
     'Evidence uploaded: ' + evidence.file_name, user);
@@ -919,7 +927,8 @@ function deleteActionPlanEvidence(evidenceId, user) {
       }
       
       sheet.deleteRow(i + 1);
-      
+      invalidateSheetData(SHEETS.AP_EVIDENCE);
+
       logAuditEvent('DELETE_EVIDENCE', 'ACTION_PLAN', existing.action_plan_id, existing, null, user.user_id, user.email);
       
       return { success: true };

@@ -418,7 +418,8 @@ function submitWorkPaper(workPaperId, user) {
   sheet.getRange(rowIndex, statusIdx + 1).setValue(updates.status);
   sheet.getRange(rowIndex, submittedIdx + 1).setValue(updates.submitted_date);
   sheet.getRange(rowIndex, updatedIdx + 1).setValue(updates.updated_at);
-  
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+
   // Add revision history
   addWorkPaperRevision(workPaperId, 'Submitted', 'Submitted for review', user);
   
@@ -513,13 +514,14 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   const updated = { ...workPaper, ...updates };
   const row = objectToRow('WORK_PAPERS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+
   // Add revision history
   addWorkPaperRevision(workPaperId, revisionAction, comments, user);
-  
+
   // Update index
   updateWorkPaperIndex(workPaperId, updated, rowIndex);
-  
+
   // Queue notification to preparer
   queueStatusNotification(workPaperId, updated, workPaper.status, user);
   
@@ -562,6 +564,10 @@ function sendToAuditee(workPaperId, user) {
   const updated = { ...workPaper, ...updates };
   const row = objectToRow('WORK_PAPERS', updated);
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+
+  // Invalidate in-memory cache so subsequent reads (e.g. createActionPlan)
+  // see the new SENT_TO_AUDITEE status instead of stale APPROVED status
+  invalidateSheetData(SHEETS.WORK_PAPERS);
 
   // Add revision history
   addWorkPaperRevision(workPaperId, 'Sent to Auditee', 'Work paper sent to auditee for response', user);
