@@ -69,18 +69,22 @@ function getFirestoreAccessToken_() {
   };
 
   var header = { alg: 'RS256', typ: 'JWT' };
-  var toSign = Utilities.base64EncodeWebSafe(JSON.stringify(header)) + '.' +
-               Utilities.base64EncodeWebSafe(JSON.stringify(claimSet));
+
+  // Base64url encode WITHOUT padding (JWT spec requires no padding)
+  var headerEnc = Utilities.base64EncodeWebSafe(JSON.stringify(header)).replace(/=+$/, '');
+  var claimsEnc = Utilities.base64EncodeWebSafe(JSON.stringify(claimSet)).replace(/=+$/, '');
+  var toSign = headerEnc + '.' + claimsEnc;
 
   // Clean up the private key (handle escaped newlines from Script Properties)
   var cleanKey = config.privateKey.replace(/\\n/g, '\n');
   var signature = Utilities.computeRsaSha256Signature(toSign, cleanKey);
-  var jwt = toSign + '.' + Utilities.base64EncodeWebSafe(signature);
+  var sigEnc = Utilities.base64EncodeWebSafe(signature).replace(/=+$/, '');
+  var jwt = toSign + '.' + sigEnc;
 
   var tokenResponse = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
     method: 'post',
     contentType: 'application/x-www-form-urlencoded',
-    payload: 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant_type:jwt-bearer') + '&assertion=' + encodeURIComponent(jwt),
+    payload: 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer') + '&assertion=' + encodeURIComponent(jwt),
     muteHttpExceptions: true
   });
 
