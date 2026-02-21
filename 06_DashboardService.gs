@@ -181,8 +181,11 @@ function getSidebarCounts(user) {
       var wpStatusIdx = wpHeaders.indexOf('status');
 
       var pendingReviewAll = 0;
+      var approvedQueueAll = 0;
+      var wpResponsibleIdx = wpHeaders.indexOf('responsible_ids');
       for (var wi = 1; wi < wpData.length; wi++) {
         if (wpData[wi][wpStatusIdx] === 'Submitted') pendingReviewAll++;
+        if (wpData[wi][wpStatusIdx] === 'Approved' && wpData[wi][wpResponsibleIdx]) approvedQueueAll++;
       }
 
       var apData = getSheetData(SHEETS.ACTION_PLANS);
@@ -216,7 +219,7 @@ function getSidebarCounts(user) {
         }
       }
 
-      allCounts = { pendingReview: pendingReviewAll, overdueAll: overdueAll, overdueByOwner: overdueByOwner };
+      allCounts = { pendingReview: pendingReviewAll, overdueAll: overdueAll, overdueByOwner: overdueByOwner, approvedQueue: approvedQueueAll };
       cache.put(cacheKey, JSON.stringify(allCounts), 20);
     }
 
@@ -227,7 +230,13 @@ function getSidebarCounts(user) {
       overdueActionPlans = allCounts.overdueByOwner[userId] || 0;
     }
 
-    return { success: true, pendingReview: pendingReview, overdueActionPlans: overdueActionPlans };
+    var approvedQueue = allCounts.approvedQueue || 0;
+    // Only show send queue count for reviewers
+    if (roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.SENIOR_AUDITOR) {
+      approvedQueue = 0;
+    }
+
+    return { success: true, pendingReview: pendingReview, overdueActionPlans: overdueActionPlans, approvedQueue: approvedQueue };
   } catch (e) {
     console.error('Error getting sidebar counts:', e);
     return { success: false, error: e.message, pendingReview: 0, overdueActionPlans: 0 };

@@ -791,8 +791,12 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
     ];
   });
 
-  // Text-only outro — the CTA button is appended automatically by formatTableEmailHtml
-  var outro = '<p style="color:#6b7280; font-size:13px; text-align:center; font-family:\'Segoe UI\',Arial,sans-serif;">Please log in and submit your action plans at your earliest convenience.</p>';
+  // Outro with hyperlinked "log in" — the CTA button is also appended by formatTableEmailHtml
+  var systemUrl = getSystemUrl();
+  var loginLink = systemUrl
+    ? '<a href="' + systemUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a>'
+    : 'log in';
+  var outro = '<p style="color:#6b7280; font-size:13px; text-align:center; font-family:\'Segoe UI\',Arial,sans-serif;">Please ' + loginLink + ' and submit your action plans at your earliest convenience.</p>';
 
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
 
@@ -895,7 +899,10 @@ function sendOverdueReminders() {
       ];
     });
 
-    const outro = 'Please log in and update the status of these items immediately.<br><br>' + loginUrl;
+    const loginLink = loginUrl
+      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> and update the status of these items immediately.'
+      : 'Please log in and update the status of these items immediately.';
+    const outro = loginLink;
     const htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
     sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
@@ -1019,7 +1026,10 @@ function sendUpcomingDueReminders() {
       ];
     });
 
-    var outro = 'Please ensure these items are completed before their due dates.<br><br>' + loginUrl;
+    var loginLink = loginUrl
+      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to ensure these items are completed before their due dates.'
+      : 'Please ensure these items are completed before their due dates.';
+    var outro = loginLink;
     var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
     sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;

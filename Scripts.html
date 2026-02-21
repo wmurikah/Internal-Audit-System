@@ -428,6 +428,7 @@ function setupNavigation(p) {
     document.getElementById('navNewWorkPaper')?.classList.remove('d-none');
     document.getElementById('navMyWorkPapers')?.classList.remove('d-none');
     document.getElementById('navPendingReview')?.classList.remove('d-none');
+    document.getElementById('navSendQueue')?.classList.remove('d-none');
     return;
   }
 
@@ -441,6 +442,11 @@ function setupNavigation(p) {
   // Work Paper review/my items - requires approve permission
   if (!p || !p.canReviewWorkPaper) {
     document.getElementById('navPendingReview')?.classList.add('d-none');
+  }
+
+  // Send Queue - only reviewers (approve permission) can batch-send to auditees
+  if (!p || !p.canApproveWorkPaper) {
+    document.getElementById('navSendQueue')?.classList.add('d-none');
   }
   if (!p || !p.canCreateWorkPaper) {
     document.getElementById('navMyWorkPapers')?.classList.add('d-none');
@@ -545,6 +551,7 @@ function navigateTo(page, params, updateHash = true) {
     'work-papers': { el: 'page-work-papers', title: 'Work Papers', init: () => { if (typeof initWPFilters === 'function') initWPFilters(); if (typeof loadWorkPapers === 'function') loadWorkPapers(params); } },
     'work-paper-form': { el: 'page-work-paper-form', title: params.id ? 'Edit Work Paper' : 'New Work Paper', init: () => { if (typeof initWorkPaperForm === 'function') initWorkPaperForm(params); else console.error('initWorkPaperForm not found!'); } },
     'work-paper-view': { el: 'page-work-paper-view', title: 'Work Paper Details', init: () => { if (typeof loadWorkPaperView === 'function') loadWorkPaperView(params); else console.error('loadWorkPaperView not found!'); } },
+    'send-queue': { el: 'page-send-queue', title: 'Send Queue', init: () => { if (typeof loadSendQueue === 'function') loadSendQueue(); } },
     'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => { if (typeof loadActionPlans === 'function') loadActionPlans(params); } },
     'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: () => { if (typeof loadActionPlansOverdue === 'function') loadActionPlansOverdue(); else if (typeof loadActionPlans === 'function') loadActionPlans({ overdue: true }); } },
     'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => { if (typeof loadActionPlanView === 'function') loadActionPlanView(params); } },
@@ -1268,16 +1275,22 @@ function exportToCSV(data, filename) {
 }
 
 // Update sidebar quick stats badges
-function updateQuickStats(pending, overdue) {
+function updateQuickStats(pending, overdue, approvedQueue) {
   const pendingEl = document.getElementById('quickStatPending');
   const overdueEl = document.getElementById('quickStatOverdue');
   const pendingReviewCount = document.getElementById('pendingReviewCount');
   const overdueCount = document.getElementById('overdueCount');
-  
+  const sendQueueCount = document.getElementById('sendQueueCount');
+
   if (pendingEl) pendingEl.textContent = pending || 0;
   if (overdueEl) overdueEl.textContent = overdue || 0;
   if (pendingReviewCount) pendingReviewCount.textContent = pending || 0;
   if (overdueCount) overdueCount.textContent = overdue || 0;
+  if (sendQueueCount) {
+    var qCount = approvedQueue || 0;
+    sendQueueCount.textContent = qCount;
+    sendQueueCount.style.display = qCount > 0 ? '' : 'none';
+  }
 }
 
 // Refresh sidebar counts from API
@@ -1285,7 +1298,7 @@ function refreshSidebarCounts() {
   apiCall('getSidebarCounts', {})
     .then(result => {
       if (result.success) {
-        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0);
+        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
       }
     })
     .catch(err => console.error('Error refreshing sidebar counts:', err));

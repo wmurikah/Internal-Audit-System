@@ -204,6 +204,12 @@ function routeAction(action, data, user) {
       
     case 'sendToAuditee':
       return sendToAuditee(data.workPaperId, user);
+
+    case 'getSendQueue':
+      return getApprovedSendQueue(user);
+
+    case 'batchSendToAuditees':
+      return batchSendToAuditees(data.workPaperIds, user);
       
     // ========== WORK PAPER REQUIREMENTS ==========
     case 'addWorkPaperRequirement':

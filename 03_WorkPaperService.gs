@@ -1064,5 +1064,200 @@ function queueNotification(data) {
   }
 }
 
+/**
+ * Get approved work papers grouped by auditee for the Send Queue UI.
+ * Returns all work papers with status "Approved" that have responsible_ids assigned.
+ * Groups them by auditee so the UI can show a consolidated table per person.
+ */
+function getApprovedSendQueue(user) {
+  if (!user) throw new Error('User required');
+
+  // Only reviewers/admins can access the send queue
+  var reviewerRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR];
+  if (!reviewerRoles.includes(user.role_code)) {
+    return { success: false, error: 'Permission denied: Only reviewers can access the send queue' };
+  }
+
+  var approvedWPs = getWorkPapersRaw({ status: STATUS.WORK_PAPER.APPROVED }, null);
+
+  // Filter to only those with responsible_ids assigned
+  approvedWPs = approvedWPs.filter(function(wp) { return wp.responsible_ids; });
+
+  // Build grouped-by-auditee structure
+  var byAuditee = {};
+  var usersCache = {};
+
+  approvedWPs.forEach(function(wp) {
+    var ids = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    ids.forEach(function(userId) {
+      if (!byAuditee[userId]) {
+        // Resolve auditee info
+        if (!usersCache[userId]) {
+          var u = getUserById(userId);
+          usersCache[userId] = u ? { user_id: u.user_id, email: u.email, full_name: u.full_name } : { user_id: userId, email: '', full_name: userId };
+        }
+        byAuditee[userId] = { auditee: usersCache[userId], workPapers: [] };
+      }
+      byAuditee[userId].workPapers.push({
+        work_paper_id: wp.work_paper_id,
+        observation_title: wp.observation_title || '',
+        observation_description: wp.observation_description || '',
+        risk_rating: wp.risk_rating || '',
+        affiliate_code: wp.affiliate_code || '',
+        audit_area_id: wp.audit_area_id || '',
+        approved_date: wp.approved_date || '',
+        recommendation: wp.recommendation || '',
+        cc_recipients: wp.cc_recipients || ''
+      });
+    });
+  });
+
+  // Resolve affiliate and area names for display
+  var affiliates = {};
+  var areas = {};
+  try {
+    getAffiliatesDropdown().forEach(function(a) { affiliates[a.code] = a.name; });
+    getAuditAreasDropdown().forEach(function(a) { areas[a.id] = a.name; areas[a.code] = a.name; });
+  } catch (e) { /* non-fatal */ }
+
+  // Enrich work papers with display names
+  Object.keys(byAuditee).forEach(function(userId) {
+    byAuditee[userId].workPapers.forEach(function(wp) {
+      wp.affiliate_name = affiliates[wp.affiliate_code] || wp.affiliate_code;
+      wp.audit_area_name = areas[wp.audit_area_id] || wp.audit_area_id;
+    });
+  });
+
+  var groups = Object.keys(byAuditee).map(function(k) { return byAuditee[k]; });
+  var totalWPs = approvedWPs.length;
+
+  return sanitizeForClient({ success: true, groups: groups, totalWorkPapers: totalWPs });
+}
+
+/**
+ * Batch send approved work papers to auditees.
+ * Accepts an optional list of work paper IDs; if empty/null, sends ALL approved WPs.
+ * Groups by auditee and sends ONE combined email per person.
+ * Creates action plans, updates statuses, logs events.
+ */
+function batchSendToAuditees(workPaperIds, user) {
+  if (!user) throw new Error('User required');
+
+  var reviewerRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR];
+  if (!reviewerRoles.includes(user.role_code)) {
+    throw new Error('Permission denied: Only reviewers can batch-send to auditees');
+  }
+
+  // Get approved WPs
+  var allApproved = getWorkPapersRaw({ status: STATUS.WORK_PAPER.APPROVED }, null);
+
+  // Filter to selected IDs if provided
+  var toSend;
+  if (workPaperIds && workPaperIds.length > 0) {
+    var idSet = {};
+    workPaperIds.forEach(function(id) { idSet[id] = true; });
+    toSend = allApproved.filter(function(wp) { return idSet[wp.work_paper_id]; });
+  } else {
+    toSend = allApproved.filter(function(wp) { return wp.responsible_ids; });
+  }
+
+  if (toSend.length === 0) {
+    return { success: true, sent: 0, message: 'No approved work papers to send' };
+  }
+
+  var now = new Date();
+  var sheet = getSheet(SHEETS.WORK_PAPERS);
+  var sentCount = 0;
+  var errors = [];
+
+  // Process each work paper: update status, create action plans
+  toSend.forEach(function(wp) {
+    try {
+      if (!wp.responsible_ids) {
+        errors.push(wp.work_paper_id + ': No responsible parties assigned');
+        return;
+      }
+
+      // Update status to Sent to Auditee
+      var updates = {
+        status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
+        final_status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
+        sent_to_auditee_date: now,
+        updated_at: now
+      };
+
+      var updated = {};
+      for (var key in wp) { updated[key] = wp[key]; }
+      for (var key in updates) { updated[key] = updates[key]; }
+
+      var rowIndex = wp._rowIndex;
+      if (rowIndex) {
+        var row = objectToRow('WORK_PAPERS', updated);
+        sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+      }
+
+      // Add revision history
+      addWorkPaperRevision(wp.work_paper_id, 'Sent to Auditee', 'Batch sent to auditee', user);
+
+      // Update index
+      updateWorkPaperIndex(wp.work_paper_id, updated, rowIndex);
+
+      // Auto-create action plan
+      try {
+        var existingAPs = getActionPlansByWorkPaperRaw(wp.work_paper_id);
+        if (existingAPs.length === 0) {
+          var ownerIds = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+          var ownerNames = ownerIds.map(function(id) {
+            var u = getUserById(id);
+            return u ? u.full_name : id;
+          }).join(', ');
+
+          var defaultDue = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+          createActionPlan({
+            work_paper_id: wp.work_paper_id,
+            action_description: wp.recommendation || wp.observation_title || 'Respond to audit finding',
+            owner_ids: wp.responsible_ids,
+            owner_names: ownerNames,
+            due_date: defaultDue
+          }, user);
+        }
+      } catch (apErr) {
+        console.error('Auto-create AP failed for', wp.work_paper_id, ':', apErr.message);
+      }
+
+      // Log audit event
+      logAuditEvent('SEND_TO_AUDITEE', 'WORK_PAPER', wp.work_paper_id, wp, updated, user.user_id, user.email);
+
+      // Sync to Firestore (non-fatal)
+      syncToFirestore(SHEETS.WORK_PAPERS, wp.work_paper_id, updated);
+
+      // Store updated WP back for the email step
+      wp._updated = updated;
+      sentCount++;
+
+    } catch (wpErr) {
+      errors.push(wp.work_paper_id + ': ' + wpErr.message);
+    }
+  });
+
+  // Invalidate caches
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+  try { CacheService.getScriptCache().remove('sidebar_counts_all'); } catch (e) {}
+
+  // ── SEND BATCHED EMAILS (one per auditee) ──
+  var sentWPs = toSend.filter(function(wp) { return wp._updated; }).map(function(wp) { return wp._updated; });
+  if (sentWPs.length > 0) {
+    sendBatchedAuditeeNotifications(sentWPs);
+  }
+
+  return sanitizeForClient({
+    success: true,
+    sent: sentCount,
+    errors: errors.length > 0 ? errors : undefined,
+    message: sentCount + ' work paper(s) sent to auditees'
+  });
+}
+
 // sanitizeInput() is defined in 01_Core.gs (canonical)
 // sanitizeForClient() is defined in 01_Core.gs (canonical)
