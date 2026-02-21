@@ -80,10 +80,7 @@ function getFirestoreAccessToken_() {
   var tokenResponse = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
     method: 'post',
     contentType: 'application/x-www-form-urlencoded',
-    payload: {
-      grant_type: 'urn:ietf:params:oauth:grant_type:jwt-bearer',
-      assertion: jwt
-    },
+    payload: 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant_type:jwt-bearer') + '&assertion=' + encodeURIComponent(jwt),
     muteHttpExceptions: true
   });
 
