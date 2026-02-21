@@ -102,9 +102,12 @@ function createActionPlan(data, user) {
   // Add history entry
   addActionPlanHistory(actionPlanId, '', initialStatus, 'Action plan created', user);
   
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, actionPlan);
+
   // Log audit event
   logAuditEvent('CREATE', 'ACTION_PLAN', actionPlanId, null, actionPlan, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, actionPlanId: actionPlanId, actionPlan: actionPlan });
 }
 
@@ -200,9 +203,17 @@ function createActionPlansBatch(workPaperId, plansData, user) {
     updateActionPlanIndex(r.actionPlanId, r.actionPlan, startRow + idx);
   });
   
+  // Sync batch to Firestore (non-fatal)
+  try {
+    var fsWrites = results.map(function(r) {
+      return { sheetName: SHEETS.ACTION_PLANS, docId: r.actionPlanId, data: r.actionPlan };
+    });
+    firestoreBatchWrite(fsWrites);
+  } catch (e) { console.warn('Firestore batch sync failed:', e.message); }
+
   // Log audit event
   logAuditEvent('BATCH_CREATE', 'ACTION_PLAN', workPaperId, null, { count: results.length }, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, count: results.length, actionPlans: results });
 }
 
@@ -340,9 +351,12 @@ function updateActionPlan(actionPlanId, data, user) {
   // Update index
   updateActionPlanIndex(actionPlanId, updated, rowIndex);
 
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
+
   // Log audit event
   logAuditEvent('UPDATE', 'ACTION_PLAN', actionPlanId, existing, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
@@ -394,9 +408,12 @@ function deleteActionPlan(actionPlanId, user) {
   // Rebuild index (rows shifted)
   rebuildActionPlanIndex();
   
+  // Remove from Firestore (non-fatal)
+  deleteFromFirestore(SHEETS.ACTION_PLANS, actionPlanId);
+
   // Log audit event
   logAuditEvent('DELETE', 'ACTION_PLAN', actionPlanId, existing, null, user.user_id, user.email);
-  
+
   return { success: true };
 }
 
@@ -635,9 +652,12 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   // Queue notification to auditors for verification
   queueImplementationNotification(actionPlanId, updated, user);
   
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
+
   // Log audit event
   logAuditEvent('IMPLEMENT', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, actionPlan: updated, message: 'Marked as implemented. Awaiting auditor verification.' });
 }
 
@@ -714,9 +734,12 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   // Queue notification to owners
   queueVerificationNotification(actionPlanId, updated, action, user);
   
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
+
   // Log audit event
   logAuditEvent('VERIFY', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
@@ -774,9 +797,12 @@ function hoaReview(actionPlanId, action, comments, user) {
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updated.status, comments, user);
 
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
+
   // Log audit event
   logAuditEvent('HOA_REVIEW', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, actionPlan: updated });
 }
 
