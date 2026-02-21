@@ -5,112 +5,69 @@
 //
 // SETUP:
 //   1. Create a Firestore database in Native mode (Google Cloud Console).
-//   2. Create a service account with "Cloud Datastore User" role.
-//   3. Add these Script Properties:
-//      - FIRESTORE_PROJECT_ID
-//      - FIRESTORE_CLIENT_EMAIL
-//      - FIRESTORE_PRIVATE_KEY
-//   4. Run  migrateAllSheetsToFirestore()  once to seed the data.
+//   2. In Apps Script: Project Settings > check "Show appsscript.json manifest"
+//   3. Add "https://www.googleapis.com/auth/datastore" to oauthScopes in appsscript.json
+//   4. Set FIRESTORE_PROJECT_ID in Script Properties
+//   5. Run  testFirestoreConnection()  to verify, then  migrateAllSheetsToFirestore()
 
 // ─────────────────────────────────────────────────────────────
 // Auth & HTTP helpers
 // ─────────────────────────────────────────────────────────────
 
 var _firestoreTokenCache = null;
+var _firestoreDisabled = false; // runtime kill-switch if auth keeps failing
 
 /**
- * Check if Firestore is configured (credentials present in Script Properties)
+ * Check if Firestore is configured (project ID present in Script Properties)
  */
 function isFirestoreEnabled() {
+  if (_firestoreDisabled) return false;
   try {
     var props = PropertiesService.getScriptProperties();
     var projectId = props.getProperty('FIRESTORE_PROJECT_ID');
-    var email = props.getProperty('FIRESTORE_CLIENT_EMAIL');
-    var key = props.getProperty('FIRESTORE_PRIVATE_KEY');
-    return !!(projectId && email && key);
+    return !!projectId;
   } catch (e) {
     return false;
   }
 }
 
 /**
- * Get Firestore configuration from Script Properties
+ * Get Firestore project ID from Script Properties
  */
-function getFirestoreConfig_() {
-  var props = PropertiesService.getScriptProperties();
-  return {
-    projectId: props.getProperty('FIRESTORE_PROJECT_ID'),
-    clientEmail: props.getProperty('FIRESTORE_CLIENT_EMAIL'),
-    privateKey: props.getProperty('FIRESTORE_PRIVATE_KEY')
-  };
+function getFirestoreProjectId_() {
+  return PropertiesService.getScriptProperties().getProperty('FIRESTORE_PROJECT_ID');
 }
 
 /**
- * Build a signed JWT and exchange it for a Google OAuth2 access token.
- * Caches the token in memory for the duration of the execution (~6 s).
+ * Get an OAuth2 access token for Firestore.
+ * Uses ScriptApp.getOAuthToken() which leverages the script owner's credentials
+ * with the datastore scope declared in appsscript.json.
  */
 function getFirestoreAccessToken_() {
   if (_firestoreTokenCache && _firestoreTokenCache.expiry > Date.now()) {
     return _firestoreTokenCache.token;
   }
 
-  var config = getFirestoreConfig_();
-  if (!config.projectId || !config.clientEmail || !config.privateKey) {
-    throw new Error('Firestore credentials not configured. Set FIRESTORE_PROJECT_ID, FIRESTORE_CLIENT_EMAIL, FIRESTORE_PRIVATE_KEY in Script Properties.');
-  }
-
-  var now = Math.floor(Date.now() / 1000);
-  var claimSet = {
-    iss: config.clientEmail,
-    scope: 'https://www.googleapis.com/auth/datastore',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600
-  };
-
-  var header = { alg: 'RS256', typ: 'JWT' };
-
-  // Base64url encode WITHOUT padding (JWT spec requires no padding)
-  var headerEnc = Utilities.base64EncodeWebSafe(JSON.stringify(header)).replace(/=+$/, '');
-  var claimsEnc = Utilities.base64EncodeWebSafe(JSON.stringify(claimSet)).replace(/=+$/, '');
-  var toSign = headerEnc + '.' + claimsEnc;
-
-  // Clean up the private key (handle escaped newlines from Script Properties)
-  var cleanKey = config.privateKey.replace(/\\n/g, '\n');
-  var signature = Utilities.computeRsaSha256Signature(toSign, cleanKey);
-  var sigEnc = Utilities.base64EncodeWebSafe(signature).replace(/=+$/, '');
-  var jwt = toSign + '.' + sigEnc;
-
-  // Let GAS handle form encoding automatically (no explicit contentType)
-  var tokenResponse = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
-    method: 'post',
-    payload: {
-      grant_type: 'urn:ietf:params:oauth:grant_type:jwt-bearer',
-      assertion: jwt
-    },
-    muteHttpExceptions: true
-  });
-
-  var tokenData = JSON.parse(tokenResponse.getContentText());
-  if (!tokenData.access_token) {
-    throw new Error('Failed to get Firestore access token: ' + tokenResponse.getContentText());
+  var token = ScriptApp.getOAuthToken();
+  if (!token) {
+    throw new Error('Failed to get OAuth token. Ensure https://www.googleapis.com/auth/datastore is in appsscript.json oauthScopes.');
   }
 
   _firestoreTokenCache = {
-    token: tokenData.access_token,
-    expiry: Date.now() + (tokenData.expires_in - 60) * 1000  // refresh 60s early
+    token: token,
+    expiry: Date.now() + 45 * 60 * 1000  // refresh after 45 min
   };
 
-  return _firestoreTokenCache.token;
+  return token;
 }
 
 /**
  * Base URL for Firestore REST API v1
  */
 function getFirestoreBaseUrl_() {
-  var config = getFirestoreConfig_();
+  var projectId = getFirestoreProjectId_();
   return 'https://firestore.googleapis.com/v1/projects/' +
-         config.projectId + '/databases/(default)/documents';
+         projectId + '/databases/(default)/documents';
 }
 
 /**
@@ -136,13 +93,67 @@ function firestoreRequest_(method, path, payload) {
   var text = response.getContentText();
 
   if (code >= 400) {
-    // 404 = document not found — return null, don't throw
     if (code === 404) return null;
+    if (code === 403 || code === 401) {
+      console.error('Firestore auth error (' + code + '). Check that datastore scope is in appsscript.json and Firestore API is enabled.');
+    }
     console.error('Firestore error (' + code + '):', text);
     return null;
   }
 
   return text ? JSON.parse(text) : null;
+}
+
+/**
+ * Run this to verify Firestore connection works.
+ * Select testFirestoreConnection from the function dropdown and click Run.
+ */
+function testFirestoreConnection() {
+  var projectId = getFirestoreProjectId_();
+  if (!projectId) {
+    console.log('FAIL: FIRESTORE_PROJECT_ID not set in Script Properties');
+    return;
+  }
+  console.log('Project ID: ' + projectId);
+
+  try {
+    var token = ScriptApp.getOAuthToken();
+    console.log('OAuth token obtained: ' + (token ? 'YES (' + token.substring(0, 20) + '...)' : 'NO'));
+  } catch (e) {
+    console.log('FAIL: Could not get OAuth token: ' + e.message);
+    console.log('Make sure https://www.googleapis.com/auth/datastore is in appsscript.json oauthScopes');
+    return;
+  }
+
+  // Try to list documents from a collection
+  var url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+            '/databases/(default)/documents/users?pageSize=1';
+  try {
+    var response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+    var code = response.getResponseCode();
+    var body = response.getContentText();
+    console.log('Firestore response code: ' + code);
+    if (code === 200) {
+      console.log('SUCCESS! Firestore connection working.');
+      var data = JSON.parse(body);
+      console.log('Documents found: ' + (data.documents ? data.documents.length : 0));
+    } else if (code === 403) {
+      console.log('FAIL: 403 Forbidden. Enable the Firestore API in Google Cloud Console:');
+      console.log('https://console.cloud.google.com/apis/library/firestore.googleapis.com?project=' + projectId);
+      console.log('Response: ' + body);
+    } else if (code === 404) {
+      console.log('FAIL: 404 Not Found. Create a Firestore database in Native mode:');
+      console.log('https://console.cloud.google.com/firestore?project=' + projectId);
+    } else {
+      console.log('FAIL: Unexpected response: ' + body);
+    }
+  } catch (e) {
+    console.log('FAIL: Request error: ' + e.message);
+  }
 }
 
 
@@ -179,7 +190,7 @@ function toFirestoreValue_(value) {
   if (typeof value === 'object') {
     var fields = {};
     Object.keys(value).forEach(function(k) {
-      if (!k.startsWith('_')) {  // skip internal fields like _rowIndex
+      if (!k.startsWith('_')) {
         fields[k] = toFirestoreValue_(value[k]);
       }
     });
@@ -240,13 +251,9 @@ function firestoreDocToObject_(doc) {
 
 
 // ─────────────────────────────────────────────────────────────
-// CRUD operations
+// CRUD operations (all wrapped in try-catch for graceful fallback)
 // ─────────────────────────────────────────────────────────────
 
-/**
- * Collection names in Firestore (matching sheet names).
- * Using cleaner names than the sheet tab names.
- */
 var FIRESTORE_COLLECTIONS = {
   '05_Users':               'users',
   '06_Affiliates':          'affiliates',
@@ -265,9 +272,6 @@ var FIRESTORE_COLLECTIONS = {
   '02_Permissions':         'permissions'
 };
 
-/**
- * Primary key column for each sheet (used as Firestore document ID).
- */
 var FIRESTORE_DOC_ID_FIELD = {
   '05_Users':               'user_id',
   '06_Affiliates':          'affiliate_code',
@@ -286,146 +290,148 @@ var FIRESTORE_DOC_ID_FIELD = {
   '02_Permissions':         'permission_id'
 };
 
-/**
- * Get the Firestore collection name for a sheet tab name.
- */
 function getFirestoreCollection_(sheetName) {
   return FIRESTORE_COLLECTIONS[sheetName] || sheetName.replace(/^[0-9]+_/, '').toLowerCase();
 }
 
 /**
- * Get a single document by ID.
- * @param {string} sheetName - The sheet tab name (e.g., SHEETS.WORK_PAPERS)
- * @param {string} docId - The document ID (primary key value)
- * @return {Object|null} Plain JS object or null
+ * Get a single document by ID. Returns null on any failure (non-fatal).
  */
 function firestoreGet(sheetName, docId) {
   if (!isFirestoreEnabled()) return null;
-
-  var collection = getFirestoreCollection_(sheetName);
-  var doc = firestoreRequest_('get', collection + '/' + encodeURIComponent(docId));
-  return doc ? firestoreDocToObject_(doc) : null;
+  try {
+    var collection = getFirestoreCollection_(sheetName);
+    var doc = firestoreRequest_('get', collection + '/' + encodeURIComponent(docId));
+    return doc ? firestoreDocToObject_(doc) : null;
+  } catch (e) {
+    console.warn('firestoreGet failed for ' + sheetName + '/' + docId + ':', e.message);
+    _firestoreDisabled = true; // stop trying for this execution
+    return null;
+  }
 }
 
 /**
- * Get all documents in a collection.
- * @param {string} sheetName - The sheet tab name
- * @return {Array} Array of plain JS objects
+ * Get all documents in a collection. Returns null on any failure (non-fatal).
  */
 function firestoreGetAll(sheetName) {
   if (!isFirestoreEnabled()) return null;
+  try {
+    var collection = getFirestoreCollection_(sheetName);
+    var results = [];
+    var pageToken = null;
 
-  var collection = getFirestoreCollection_(sheetName);
-  var results = [];
-  var pageToken = null;
+    do {
+      var url = collection + '?pageSize=300';
+      if (pageToken) url += '&pageToken=' + pageToken;
 
-  do {
-    var url = collection + '?pageSize=300';
-    if (pageToken) url += '&pageToken=' + pageToken;
+      var response = firestoreRequest_('get', url);
+      if (!response) break;
 
-    var response = firestoreRequest_('get', url);
-    if (!response) break;
+      var docs = response.documents || [];
+      docs.forEach(function(doc) {
+        var obj = firestoreDocToObject_(doc);
+        if (obj) results.push(obj);
+      });
 
-    var docs = response.documents || [];
-    docs.forEach(function(doc) {
-      var obj = firestoreDocToObject_(doc);
-      if (obj) results.push(obj);
-    });
+      pageToken = response.nextPageToken || null;
+    } while (pageToken);
 
-    pageToken = response.nextPageToken || null;
-  } while (pageToken);
-
-  return results;
+    return results;
+  } catch (e) {
+    console.warn('firestoreGetAll failed for ' + sheetName + ':', e.message);
+    _firestoreDisabled = true;
+    return null;
+  }
 }
 
 /**
- * Query documents by a field value.
- * @param {string} sheetName - The sheet tab name
- * @param {string} field - Field name to filter on
- * @param {string} op - Operator: EQUAL, LESS_THAN, GREATER_THAN, etc.
- * @param {*} value - Value to compare against
- * @return {Array} Matching documents
+ * Query documents by a field value. Returns empty array on failure (non-fatal).
  */
 function firestoreQuery(sheetName, field, op, value) {
   if (!isFirestoreEnabled()) return null;
+  try {
+    var collection = getFirestoreCollection_(sheetName);
+    var projectId = getFirestoreProjectId_();
 
-  var collection = getFirestoreCollection_(sheetName);
-  var config = getFirestoreConfig_();
-
-  var queryPayload = {
-    structuredQuery: {
-      from: [{ collectionId: collection }],
-      where: {
-        fieldFilter: {
-          field: { fieldPath: field },
-          op: op,
-          value: toFirestoreValue_(value)
+    var queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: collection }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: field },
+            op: op,
+            value: toFirestoreValue_(value)
+          }
         }
       }
-    }
-  };
+    };
 
-  var url = 'https://firestore.googleapis.com/v1/projects/' +
-            config.projectId + '/databases/(default)/documents:runQuery';
+    var url = 'https://firestore.googleapis.com/v1/projects/' +
+              projectId + '/databases/(default)/documents:runQuery';
 
-  var response = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + getFirestoreAccessToken_() },
-    payload: JSON.stringify(queryPayload),
-    muteHttpExceptions: true
-  });
-
-  var results = [];
-  var data = JSON.parse(response.getContentText());
-  if (Array.isArray(data)) {
-    data.forEach(function(item) {
-      if (item.document) {
-        var obj = firestoreDocToObject_(item.document);
-        if (obj) results.push(obj);
-      }
+    var response = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + getFirestoreAccessToken_() },
+      payload: JSON.stringify(queryPayload),
+      muteHttpExceptions: true
     });
+
+    var results = [];
+    var data = JSON.parse(response.getContentText());
+    if (Array.isArray(data)) {
+      data.forEach(function(item) {
+        if (item.document) {
+          var obj = firestoreDocToObject_(item.document);
+          if (obj) results.push(obj);
+        }
+      });
+    }
+    return results;
+  } catch (e) {
+    console.warn('firestoreQuery failed:', e.message);
+    _firestoreDisabled = true;
+    return null;
   }
-  return results;
 }
 
 /**
- * Write a single document (create or overwrite).
- * @param {string} sheetName - The sheet tab name
- * @param {string} docId - Document ID
- * @param {Object} data - Plain JS object to store
+ * Write a single document. Non-fatal on failure.
  */
 function firestoreSet(sheetName, docId, data) {
   if (!isFirestoreEnabled()) return;
-
-  var collection = getFirestoreCollection_(sheetName);
-  var payload = { fields: objectToFirestoreFields_(data) };
-  firestoreRequest_('patch', collection + '/' + encodeURIComponent(docId), payload);
+  try {
+    var collection = getFirestoreCollection_(sheetName);
+    var payload = { fields: objectToFirestoreFields_(data) };
+    firestoreRequest_('patch', collection + '/' + encodeURIComponent(docId), payload);
+  } catch (e) {
+    console.warn('firestoreSet failed for ' + sheetName + '/' + docId + ':', e.message);
+  }
 }
 
 /**
- * Delete a single document.
- * @param {string} sheetName - The sheet tab name
- * @param {string} docId - Document ID
+ * Delete a single document. Non-fatal on failure.
  */
 function firestoreDelete(sheetName, docId) {
   if (!isFirestoreEnabled()) return;
-
-  var collection = getFirestoreCollection_(sheetName);
-  firestoreRequest_('delete', collection + '/' + encodeURIComponent(docId));
+  try {
+    var collection = getFirestoreCollection_(sheetName);
+    firestoreRequest_('delete', collection + '/' + encodeURIComponent(docId));
+  } catch (e) {
+    console.warn('firestoreDelete failed for ' + sheetName + '/' + docId + ':', e.message);
+  }
 }
 
 /**
- * Batch write multiple documents (max 500 per batch — Firestore limit).
- * @param {Array} writes - Array of { sheetName, docId, data } objects
+ * Batch write multiple documents (max 500 per batch). Non-fatal on failure.
  */
 function firestoreBatchWrite(writes) {
   if (!isFirestoreEnabled() || !writes || writes.length === 0) return;
 
-  var config = getFirestoreConfig_();
-  var baseUrl = 'projects/' + config.projectId + '/databases/(default)/documents';
+  var projectId = getFirestoreProjectId_();
+  var baseUrl = 'projects/' + projectId + '/databases/(default)/documents';
+  var token = getFirestoreAccessToken_();
 
-  // Firestore batch limit is 500 writes per commit
   var batchSize = 500;
   for (var i = 0; i < writes.length; i += batchSize) {
     var batch = writes.slice(i, i + batchSize);
@@ -441,12 +447,12 @@ function firestoreBatchWrite(writes) {
     });
 
     var url = 'https://firestore.googleapis.com/v1/projects/' +
-              config.projectId + '/databases/(default)/documents:batchWrite';
+              projectId + '/databases/(default)/documents:batchWrite';
 
     UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + getFirestoreAccessToken_() },
+      headers: { Authorization: 'Bearer ' + token },
       payload: JSON.stringify({ writes: batchWrites }),
       muteHttpExceptions: true
     });
@@ -458,13 +464,6 @@ function firestoreBatchWrite(writes) {
 // Dual-write helpers (keep Sheets + Firestore in sync)
 // ─────────────────────────────────────────────────────────────
 
-/**
- * After writing to a Google Sheet, call this to mirror the change to Firestore.
- * Non-fatal: if Firestore write fails, the Sheet write already succeeded.
- * @param {string} sheetName - Sheet tab name (e.g., SHEETS.WORK_PAPERS)
- * @param {string} docId - Primary key value
- * @param {Object} data - The full object that was written to the sheet
- */
 function syncToFirestore(sheetName, docId, data) {
   try {
     firestoreSet(sheetName, docId, data);
@@ -473,9 +472,6 @@ function syncToFirestore(sheetName, docId, data) {
   }
 }
 
-/**
- * After deleting from a Google Sheet, remove from Firestore too.
- */
 function deleteFromFirestore(sheetName, docId) {
   try {
     firestoreDelete(sheetName, docId);
@@ -489,12 +485,6 @@ function deleteFromFirestore(sheetName, docId) {
 // Migration: Seed Firestore from Google Sheets
 // ─────────────────────────────────────────────────────────────
 
-/**
- * One-time migration: reads every row from a Google Sheet tab and writes
- * it to the corresponding Firestore collection.
- * @param {string} sheetName - The sheet tab name to migrate
- * @return {number} Number of documents written
- */
 function migrateSheetToFirestore(sheetName) {
   var sheet = getSheet(sheetName);
   if (!sheet) {
@@ -513,7 +503,6 @@ function migrateSheetToFirestore(sheetName) {
   var idIdx = idField ? headers.indexOf(idField) : -1;
 
   if (idIdx === -1) {
-    // If no known primary key, use row index as ID
     console.warn('No primary key configured for ' + sheetName + ', using row index');
   }
 
@@ -545,13 +534,9 @@ function migrateSheetToFirestore(sheetName) {
   return writes.length;
 }
 
-/**
- * RUN THIS ONCE: Migrate all relevant sheets to Firestore.
- * Run from Script Editor: Run → migrateAllSheetsToFirestore
- */
 function migrateAllSheetsToFirestore() {
   if (!isFirestoreEnabled()) {
-    throw new Error('Firestore is not configured. Add FIRESTORE_PROJECT_ID, FIRESTORE_CLIENT_EMAIL, FIRESTORE_PRIVATE_KEY to Script Properties first.');
+    throw new Error('Firestore is not configured. Add FIRESTORE_PROJECT_ID to Script Properties first.');
   }
 
   var sheetsToMigrate = [
@@ -589,9 +574,6 @@ function migrateAllSheetsToFirestore() {
   return summary;
 }
 
-/**
- * Verify migration: compare Firestore document count vs Sheet row count.
- */
 function verifyFirestoreMigration() {
   if (!isFirestoreEnabled()) return 'Firestore not configured';
 
@@ -603,7 +585,7 @@ function verifyFirestoreMigration() {
 
   sheetsToCheck.forEach(function(sheetName) {
     var sheet = getSheet(sheetName);
-    var sheetRows = sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;  // exclude header
+    var sheetRows = sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;
     var fsDocs = firestoreGetAll(sheetName);
     var fsCount = fsDocs ? fsDocs.length : 0;
 
