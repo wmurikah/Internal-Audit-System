@@ -22,6 +22,9 @@
       <a class="nav-link" data-bs-toggle="tab" href="#systemConfig"><i class="bi bi-sliders me-1"></i>System Config</a>
     </li>
     <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#dataBackup"><i class="bi bi-database me-1"></i>Data & Backup</a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link" data-bs-toggle="tab" href="#auditLog"><i class="bi bi-journal-text me-1"></i>Audit Log</a>
     </li>
   </ul>
@@ -430,6 +433,129 @@
       </div>
     </div>
 
+    <!-- Data & Backup Tab -->
+    <div class="tab-pane fade" id="dataBackup">
+      <div class="row">
+        <div class="col-lg-8">
+          <!-- Backup Mode Card -->
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="bi bi-database-gear me-2"></i>Google Sheets Backup Mode
+            </div>
+            <div class="card-body">
+              <p class="text-muted small mb-3">
+                Firestore is the primary data store. Google Sheets can serve as a backup / audit trail.
+                Choose how Sheet backups are handled.
+              </p>
+              <div class="row g-3 align-items-end">
+                <div class="col-md-5">
+                  <label class="form-label">Backup Mode</label>
+                  <select class="form-select" id="backupModeSelect">
+                    <option value="realtime">Realtime (sync every write)</option>
+                    <option value="incremental">Incremental (periodic batch sync)</option>
+                    <option value="disabled">Disabled (Firestore only)</option>
+                  </select>
+                </div>
+                <div class="col-md-4" id="backupIntervalGroup" style="display:none;">
+                  <label class="form-label">Sync Interval (minutes)</label>
+                  <select class="form-select" id="backupIntervalSelect">
+                    <option value="5">Every 5 minutes</option>
+                    <option value="10">Every 10 minutes</option>
+                    <option value="15">Every 15 minutes</option>
+                    <option value="30">Every 30 minutes</option>
+                    <option value="60" selected>Every hour</option>
+                    <option value="360">Every 6 hours</option>
+                    <option value="1440">Daily</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <button class="btn btn-primary w-100" onclick="saveBackupSettings()">
+                    <i class="bi bi-save me-1"></i>Save
+                  </button>
+                </div>
+              </div>
+              <div class="mt-3">
+                <div class="alert alert-light border small mb-0" id="backupModeDescription">
+                  <strong>Realtime:</strong> Every create, update, and delete is mirrored to Google Sheets immediately after Firestore. Provides maximum data redundancy but uses more Sheets API quota.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Manual Backup Actions -->
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="bi bi-arrow-repeat me-2"></i>Manual Backup Actions
+            </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="d-grid">
+                    <button class="btn btn-outline-primary" onclick="runIncrementalBackupNow()" id="btnIncrementalBackup">
+                      <i class="bi bi-cloud-upload me-1"></i>Run Incremental Sync Now
+                    </button>
+                    <small class="text-muted mt-1">Sync only queued changes to Sheets.</small>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="d-grid">
+                    <button class="btn btn-outline-warning" onclick="runFullBackupNow()">
+                      <i class="bi bi-arrow-down-up me-1"></i>Full Backup (Firestore &rarr; Sheets)
+                    </button>
+                    <small class="text-muted mt-1">Overwrites all Sheet data from Firestore. Use after switching modes or if Sheets are out of sync.</small>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3" id="backupResultArea" style="display:none;">
+                <div class="alert alert-secondary mb-0 small" id="backupResultContent"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4">
+          <!-- Backup Status Card -->
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="bi bi-info-circle me-2"></i>Backup Status
+            </div>
+            <div class="card-body">
+              <ul class="list-group list-group-flush">
+                <li class="list-group-item d-flex justify-content-between px-0">
+                  <span>Firestore</span>
+                  <span class="badge" id="backupFirestoreStatus">Checking...</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0">
+                  <span>Current Mode</span>
+                  <span class="badge bg-secondary" id="backupCurrentMode">-</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0">
+                  <span>Last Backup</span>
+                  <span class="small text-muted" id="backupLastRun">-</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0" id="backupQueueRow" style="display:none;">
+                  <span>Queued Changes</span>
+                  <span class="badge bg-info" id="backupQueueSize">0</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Info Card -->
+          <div class="card">
+            <div class="card-header bg-info-subtle">
+              <i class="bi bi-lightbulb me-2"></i>About Backup Modes
+            </div>
+            <div class="card-body small">
+              <p class="mb-2"><strong>Realtime:</strong> Every write syncs to Sheets immediately. Best for redundancy, uses more API quota.</p>
+              <p class="mb-2"><strong>Incremental:</strong> Changes queue up and sync in batches on a schedule. Balances redundancy with performance.</p>
+              <p class="mb-0"><strong>Disabled:</strong> Sheets are not updated. All data lives in Firestore only. Use "Full Backup" to restore Sheets when needed.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="tab-pane fade" id="auditLog">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -486,7 +612,7 @@ function loadSettings() {
   const role = window.currentUser?.role_code;
   const cfgPerms = window.currentPermissions || {};
   if (role !== 'SUPER_ADMIN' && !cfgPerms.canManageSettings) {
-    const restrictedTabs = ['aiConfig', 'systemConfig', 'notificationConfig', 'auditLog'];
+    const restrictedTabs = ['aiConfig', 'systemConfig', 'notificationConfig', 'dataBackup', 'auditLog'];
     restrictedTabs.forEach(tabId => {
       const navLink = document.querySelector(`a[href="#${tabId}"]`);
       if (navLink) navLink.closest('li').style.display = 'none';
@@ -499,6 +625,7 @@ function loadSettings() {
   loadSystemConfig();
   loadOutlookConfig();
   loadNotificationConfig();
+  loadBackupStatus();
   loadAuditLog();
 }
 
@@ -1332,5 +1459,153 @@ function setupTriggers() {
     if (r.success) showToast('Triggers configured successfully', 'success');
     else showToast(r.error || 'Error', 'danger');
   }).catch(() => { hideLoading(); showToast('Error configuring triggers', 'danger'); });
+}
+
+// ========== Data & Backup ==========
+
+function loadBackupStatus() {
+  apiCall('getBackupStatus', {}).then(r => {
+    if (!r || !r.success) return;
+    var status = r.status;
+
+    // Firestore badge
+    var fsBadge = document.getElementById('backupFirestoreStatus');
+    if (status.firestoreEnabled) {
+      fsBadge.textContent = 'Connected';
+      fsBadge.className = 'badge bg-success';
+    } else {
+      fsBadge.textContent = 'Not Configured';
+      fsBadge.className = 'badge bg-danger';
+    }
+
+    // Current mode badge
+    var modeBadge = document.getElementById('backupCurrentMode');
+    var modeColors = { realtime: 'bg-success', incremental: 'bg-warning text-dark', disabled: 'bg-secondary' };
+    var modeLabels = { realtime: 'Realtime', incremental: 'Incremental', disabled: 'Disabled' };
+    modeBadge.textContent = modeLabels[status.mode] || status.mode;
+    modeBadge.className = 'badge ' + (modeColors[status.mode] || 'bg-secondary');
+
+    // Select current mode
+    document.getElementById('backupModeSelect').value = status.mode;
+    updateBackupModeUI(status.mode);
+
+    // Interval
+    if (status.interval) {
+      document.getElementById('backupIntervalSelect').value = String(status.interval);
+    }
+
+    // Last run
+    var lastRunEl = document.getElementById('backupLastRun');
+    if (status.lastRun) {
+      lastRunEl.textContent = formatDate(status.lastRun);
+    } else {
+      lastRunEl.textContent = 'Never';
+    }
+
+    // Queue size (only for incremental)
+    var queueRow = document.getElementById('backupQueueRow');
+    if (status.mode === 'incremental') {
+      queueRow.style.display = '';
+      document.getElementById('backupQueueSize').textContent = status.queueSize >= 0 ? status.queueSize : '?';
+    } else {
+      queueRow.style.display = 'none';
+    }
+  }).catch(function() {
+    document.getElementById('backupFirestoreStatus').textContent = 'Error';
+    document.getElementById('backupFirestoreStatus').className = 'badge bg-danger';
+  });
+}
+
+function updateBackupModeUI(mode) {
+  var intervalGroup = document.getElementById('backupIntervalGroup');
+  var descEl = document.getElementById('backupModeDescription');
+
+  intervalGroup.style.display = mode === 'incremental' ? '' : 'none';
+
+  var descriptions = {
+    realtime: '<strong>Realtime:</strong> Every create, update, and delete is mirrored to Google Sheets immediately after Firestore. Provides maximum data redundancy but uses more Sheets API quota.',
+    incremental: '<strong>Incremental:</strong> Changes are queued and batch-synced to Sheets on a schedule. Reduces API usage while maintaining a backup. You can also trigger a manual sync anytime.',
+    disabled: '<strong>Disabled:</strong> No data is written to Google Sheets. The system runs entirely on Firestore. Use "Full Backup" to restore Sheets if you need to re-enable backups later.'
+  };
+  descEl.innerHTML = descriptions[mode] || '';
+}
+
+document.getElementById('backupModeSelect').addEventListener('change', function() {
+  updateBackupModeUI(this.value);
+});
+
+function saveBackupSettings() {
+  var mode = document.getElementById('backupModeSelect').value;
+  var interval = document.getElementById('backupIntervalSelect').value;
+
+  if (mode === 'disabled') {
+    if (!confirm('Disabling Sheet backup means all data will only live in Firestore. Are you sure?')) return;
+  }
+
+  showLoading('Saving backup settings...');
+  apiCall('saveBackupSettings', { mode: mode, interval: parseInt(interval) }).then(r => {
+    hideLoading();
+    if (r.success) {
+      showToast('Backup settings saved. Mode: ' + (r.mode || mode), 'success');
+      loadBackupStatus();
+    } else {
+      showToast(r.error || 'Error saving settings', 'danger');
+    }
+  }).catch(() => { hideLoading(); showToast('Error saving backup settings', 'danger'); });
+}
+
+function runIncrementalBackupNow() {
+  showLoading('Running incremental backup...');
+  var resultArea = document.getElementById('backupResultArea');
+  var resultContent = document.getElementById('backupResultContent');
+  resultArea.style.display = 'block';
+  resultContent.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Syncing queued changes to Sheets...';
+
+  apiCall('runIncrementalBackup', {}).then(r => {
+    hideLoading();
+    if (r.success) {
+      resultContent.innerHTML = '<i class="bi bi-check-circle text-success me-2"></i>' +
+        '<strong>Sync complete.</strong> Processed: ' + (r.processed || 0) + ' changes.' +
+        (r.duration ? ' (' + r.duration + 'ms)' : '') +
+        (r.errors && r.errors.length > 0 ? '<br><small class="text-danger">Errors: ' + r.errors.join(', ') + '</small>' : '');
+      resultContent.className = 'alert alert-success mb-0 small';
+      loadBackupStatus();
+    } else {
+      resultContent.innerHTML = '<i class="bi bi-x-circle text-danger me-2"></i>' + (r.error || 'Sync failed');
+      resultContent.className = 'alert alert-danger mb-0 small';
+    }
+  }).catch(e => {
+    hideLoading();
+    resultContent.innerHTML = '<i class="bi bi-x-circle text-danger me-2"></i>Error: ' + (e.message || 'Unknown error');
+    resultContent.className = 'alert alert-danger mb-0 small';
+  });
+}
+
+function runFullBackupNow() {
+  if (!confirm('This will overwrite ALL Google Sheets data with current Firestore data. Continue?')) return;
+
+  showLoading('Running full backup from Firestore to Sheets...');
+  var resultArea = document.getElementById('backupResultArea');
+  var resultContent = document.getElementById('backupResultContent');
+  resultArea.style.display = 'block';
+  resultContent.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Full backup in progress... This may take a minute.';
+
+  apiCall('runFullSheetBackup', {}).then(r => {
+    hideLoading();
+    if (r.success) {
+      var reportHtml = r.report ? '<br><small>' + r.report.join('<br>') + '</small>' : '';
+      resultContent.innerHTML = '<i class="bi bi-check-circle text-success me-2"></i>' +
+        '<strong>Full backup complete.</strong> Total: ' + (r.totalDocs || 0) + ' documents.' + reportHtml;
+      resultContent.className = 'alert alert-success mb-0 small';
+      loadBackupStatus();
+    } else {
+      resultContent.innerHTML = '<i class="bi bi-x-circle text-danger me-2"></i>' + (r.error || 'Backup failed');
+      resultContent.className = 'alert alert-danger mb-0 small';
+    }
+  }).catch(e => {
+    hideLoading();
+    resultContent.innerHTML = '<i class="bi bi-x-circle text-danger me-2"></i>Error: ' + (e.message || 'Unknown error');
+    resultContent.className = 'alert alert-danger mb-0 small';
+  });
 }
 </script>

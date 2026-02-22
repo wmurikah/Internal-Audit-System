@@ -121,9 +121,11 @@ function postLoginCleanup(data) {
           const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
           const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
           
-          sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
-          sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
-          sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
+          if (shouldWriteToSheet()) {
+            sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
+            sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
+            sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
+          }
         }
         invalidateUserCache(userEmail, user.user_id);
       }
@@ -227,9 +229,11 @@ function updateLastLoginAsync(user) {
 
     if (rowIndex) {
       const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
-      sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
+      if (shouldWriteToSheet()) {
+        sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
+      }
     }
-    
+
     invalidateUserCache(user.email, user.user_id);
   } catch (e) {
     console.warn('updateLastLoginAsync failed:', e);
@@ -388,7 +392,9 @@ function createSession(user) {
   
   const sheet = getSheet(SHEETS.SESSIONS);
   const row = objectToRow('SESSIONS', session);
-  sheet.appendRow(row);
+  if (shouldWriteToSheet()) {
+    sheet.appendRow(row);
+  }
   
   const cache = CacheService.getScriptCache();
   const cacheKey = 'session_' + sessionToken.substring(0, 16);
@@ -425,8 +431,10 @@ function invalidateSession(sessionId) {
   
   for (let i = 1; i < data.length; i++) {
     if (data[i][idIdx] === sessionId) {
-      sheet.getRange(i + 1, validIdx + 1).setValue(false);
-      
+      if (shouldWriteToSheet()) {
+        sheet.getRange(i + 1, validIdx + 1).setValue(false);
+      }
+
       const token = data[i][headers.indexOf('session_token')];
       if (token) {
         const cache = CacheService.getScriptCache();
@@ -455,7 +463,9 @@ function cleanupExpiredSessions() {
     const isValid = data[i][validIdx];
     
     if (!isValid || (expiresAt && new Date(expiresAt) < now)) {
-      sheet.deleteRow(i + 1);
+      if (shouldWriteToSheet()) {
+        sheet.deleteRow(i + 1);
+      }
       cleaned++;
     }
   }
@@ -582,10 +592,12 @@ function changePassword(userId, currentPassword, newPassword) {
     return { success: false, error: 'Internal configuration error' };
   }
 
-  sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
-  sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
-  sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(false);
-  sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
+    sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
+    sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(false);
+    sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
+  }
 
   invalidateUserCache(user.email, user.user_id);
 
@@ -627,12 +639,14 @@ function resetPassword(userId, adminUser) {
   const attemptsIdx = getColumnIndex(sheetName, 'login_attempts');
   const lockedIdx = getColumnIndex(sheetName, 'locked_until');
 
-  sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
-  sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
-  sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
-  sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
-  sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
-  sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
+    sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
+    sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
+    sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
+    sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
+    sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
+  }
 
   invalidateUserCache(user.email, user.user_id);
 
@@ -695,12 +709,16 @@ function incrementFailedAttempts(user) {
   const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
   
   const attempts = (parseInt(user.login_attempts) || 0) + 1;
-  sheet.getRange(rowIndex, attemptsIdx + 1).setValue(attempts);
-  
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, attemptsIdx + 1).setValue(attempts);
+  }
+
   if (attempts >= AUTH_CONFIG.MAX_LOGIN_ATTEMPTS) {
     const lockUntil = new Date();
     lockUntil.setMinutes(lockUntil.getMinutes() + AUTH_CONFIG.LOCKOUT_DURATION_MINUTES);
-    sheet.getRange(rowIndex, lockedIdx + 1).setValue(lockUntil);
+    if (shouldWriteToSheet()) {
+      sheet.getRange(rowIndex, lockedIdx + 1).setValue(lockUntil);
+    }
     
     logAuditEvent('ACCOUNT_LOCKED', 'USER', user.user_id, null, { attempts: attempts }, '', user.email);
   }
@@ -717,9 +735,11 @@ function resetFailedAttempts(user) {
   const attemptsIdx = getColumnIndex(SHEETS.USERS, 'login_attempts');
   const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
   
-  sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
-  sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
-  
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
+    sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
+  }
+
   invalidateUserCache(user.email, user.user_id);
 }
 
@@ -730,8 +750,10 @@ function updateLastLogin(user) {
   if (!rowIndex) return;
 
   const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
-  sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
-  
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
+  }
+
   invalidateUserCache(user.email, user.user_id);
 }
 
@@ -794,7 +816,9 @@ function createUser(userData, adminUser) {
   let rowNum;
   try {
     lock.waitLock(15000);
-    sheet.appendRow(row);
+    if (shouldWriteToSheet()) {
+      sheet.appendRow(row);
+    }
     rowNum = sheet.getLastRow();
     lock.releaseLock();
   } catch (lockErr) {
@@ -892,8 +916,10 @@ function updateUser(userId, userData, adminUser) {
   const sheet = getSheet(SHEETS.USERS);
   const rowIndex = user._rowIndex;
   const row = objectToRow('USERS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
+
   invalidateUserCache(user.email, user.user_id);
   if (updates.email && updates.email !== user.email) {
     invalidateUserCache(updates.email);
@@ -931,13 +957,15 @@ function deactivateUser(userId, adminUser) {
   const rowIndex = user._rowIndex;
   const activeIdx = getColumnIndex(SHEETS.USERS, 'is_active');
   
-  sheet.getRange(rowIndex, activeIdx + 1).setValue(false);
-  
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, activeIdx + 1).setValue(false);
+  }
+
   invalidateUserSessions(userId);
-  
+
   invalidateUserCache(user.email, user.user_id);
   invalidateDropdownCache();
-  
+
   logAuditEvent('DEACTIVATE', 'USER', userId, user, null, adminUser.user_id, adminUser.email);
   
   return { success: true };
@@ -975,12 +1003,14 @@ function forgotPassword(email) {
   const attemptsIdx = getColumnIndex(sheetName, 'login_attempts');
   const lockedIdx = getColumnIndex(sheetName, 'locked_until');
 
-  sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
-  sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
-  sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
-  sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
-  sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
-  sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
+    sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
+    sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
+    sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
+    sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
+    sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
+  }
 
   invalidateUserCache(user.email, user.user_id);
   invalidateUserSessions(user.user_id);
@@ -1023,7 +1053,9 @@ function invalidateUserSessions(userId) {
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][userIdIdx] === userId) {
-      sheet.getRange(i + 1, validIdx + 1).setValue(false);
+      if (shouldWriteToSheet()) {
+        sheet.getRange(i + 1, validIdx + 1).setValue(false);
+      }
       // Also invalidate the session cache entry
       var token = data[i][tokenIdx];
       if (token) {

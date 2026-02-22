@@ -171,7 +171,9 @@ function queueEmail(data) {
     
     const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
     const row = objectToRow('NOTIFICATION_QUEUE', notification);
-    sheet.appendRow(row);
+    if (shouldWriteToSheet()) {
+      sheet.appendRow(row);
+    }
     
     return sanitizeForClient({ success: true, notificationId: notificationId });
   } catch (e) {
@@ -329,15 +331,19 @@ function processEmailQueue() {
       }
       
       // Update status to Sent
-      sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.SENT);
-      sheet.getRange(rowIndex, colMap['sent_at'] + 1).setValue(now);
-      
+      if (shouldWriteToSheet()) {
+        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.SENT);
+        sheet.getRange(rowIndex, colMap['sent_at'] + 1).setValue(now);
+      }
+
       sentCount++;
-      
+
     } catch (e) {
       // Align with database schema: mark as failed on send error
-      sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
-      sheet.getRange(rowIndex, colMap['error_message'] + 1).setValue(e.message);
+      if (shouldWriteToSheet()) {
+        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
+        sheet.getRange(rowIndex, colMap['error_message'] + 1).setValue(e.message);
+      }
 
       failedCount++;
       console.error('Failed to send email to', recipientEmail + ':', e.message);
@@ -685,8 +691,10 @@ function retryFailedEmails() {
     
     if (status === STATUS.NOTIFICATION.FAILED) {
       // Reset to pending for retry
-      sheet.getRange(i + 1, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.PENDING);
-      sheet.getRange(i + 1, colMap['error_message'] + 1).setValue('');
+      if (shouldWriteToSheet()) {
+        sheet.getRange(i + 1, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.PENDING);
+        sheet.getRange(i + 1, colMap['error_message'] + 1).setValue('');
+      }
       resetCount++;
     }
   }
@@ -1252,7 +1260,9 @@ function cleanupOldNotifications(daysOld) {
     if (status === STATUS.NOTIFICATION.SENT && sentAt) {
       const sentDate = new Date(sentAt);
       if (sentDate < cutoffDate) {
-        sheet.deleteRow(i + 1);
+        if (shouldWriteToSheet()) {
+          sheet.deleteRow(i + 1);
+        }
         deletedCount++;
       }
     }
@@ -1666,7 +1676,9 @@ function saveEmailTemplateAction(templateCode, updates, user) {
       if (updates.is_active !== undefined) existing.is_active = updates.is_active;
 
       var row = objectToRow('EMAIL_TEMPLATES', existing);
-      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      if (shouldWriteToSheet()) {
+        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      }
 
       // Clear template cache
       var cache = CacheService.getScriptCache();

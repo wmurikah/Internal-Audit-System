@@ -456,11 +456,14 @@ function firestoreBatchWrite(writes) {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * After writing to a Google Sheet, call this to mirror the change to Firestore.
- * Non-fatal: if Firestore write fails, the Sheet write already succeeded.
+ * Sync a record to Firestore (primary) and optionally queue/skip Sheet backup.
+ * Called by service files after building the data object.
+ * In the current architecture Firestore is the primary store;
+ * this function ensures Firestore has the data.
+ *
  * @param {string} sheetName - Sheet tab name (e.g., SHEETS.WORK_PAPERS)
  * @param {string} docId - Primary key value
- * @param {Object} data - The full object that was written to the sheet
+ * @param {Object} data - The full object to persist
  */
 function syncToFirestore(sheetName, docId, data) {
   try {
@@ -468,10 +471,14 @@ function syncToFirestore(sheetName, docId, data) {
   } catch (e) {
     console.warn('Firestore sync failed for ' + sheetName + '/' + docId + ':', e.message);
   }
+  // In incremental mode, queue this document for the next Sheet batch sync
+  if (typeof getSheetBackupMode === 'function' && getSheetBackupMode() === 'incremental') {
+    queueBackupChange_(sheetName, docId, 'upsert');
+  }
 }
 
 /**
- * After deleting from a Google Sheet, remove from Firestore too.
+ * Delete a record from Firestore and optionally queue/skip Sheet backup.
  */
 function deleteFromFirestore(sheetName, docId) {
   try {
@@ -479,6 +486,27 @@ function deleteFromFirestore(sheetName, docId) {
   } catch (e) {
     console.warn('Firestore delete failed for ' + sheetName + '/' + docId + ':', e.message);
   }
+  // In incremental mode, queue the delete for the next Sheet batch sync
+  if (typeof getSheetBackupMode === 'function' && getSheetBackupMode() === 'incremental') {
+    queueBackupChange_(sheetName, docId, 'delete');
+  }
+}
+
+/**
+ * Check whether the caller should proceed with a direct Sheet write.
+ * Service files can wrap their sheet.appendRow / sheet.getRange().setValues()
+ * calls with this check to respect the backup mode.
+ *
+ * Usage:
+ *   if (shouldWriteToSheet()) {
+ *     sheet.appendRow(row);
+ *   }
+ *
+ * @return {boolean} true if Sheet writes should happen (realtime mode), false otherwise
+ */
+function shouldWriteToSheet() {
+  if (typeof getSheetBackupMode !== 'function') return true; // Safety fallback
+  return getSheetBackupMode() === 'realtime';
 }
 
 
@@ -1074,4 +1102,484 @@ function purgeAndResyncFirestore() {
   var summary = '=== FIRESTORE RESYNC COMPLETE ===\n' + report.join('\n');
   console.log(summary);
   return summary;
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// Sheet Backup Settings & Incremental Sync
+// ─────────────────────────────────────────────────────────────
+// Backup modes:
+//   'realtime'     – Write to Sheets after every Firestore write (legacy, default)
+//   'incremental'  – Queue changes, batch-sync to Sheets periodically
+//   'disabled'     – No Sheet writes at all (Firestore-only)
+
+var _backupModeCache = null;
+
+/**
+ * Get the current Sheet backup mode from config.
+ * Cached in memory for the duration of the execution.
+ * @return {string} 'realtime' | 'incremental' | 'disabled'
+ */
+function getSheetBackupMode() {
+  if (_backupModeCache) return _backupModeCache;
+  try {
+    var mode = getConfigValue('SHEET_BACKUP_MODE');
+    _backupModeCache = (mode === 'incremental' || mode === 'disabled') ? mode : 'realtime';
+  } catch (e) {
+    _backupModeCache = 'realtime';
+  }
+  return _backupModeCache;
+}
+
+/**
+ * Check if Sheet backup should happen synchronously (realtime mode).
+ */
+function isRealtimeBackup() {
+  return getSheetBackupMode() === 'realtime';
+}
+
+/**
+ * Check if Sheet backup is enabled at all (realtime or incremental).
+ */
+function isSheetBackupEnabled() {
+  return getSheetBackupMode() !== 'disabled';
+}
+
+/**
+ * Perform a Sheet backup write – respects backup mode.
+ * In 'realtime' mode, executes the write function immediately.
+ * In 'incremental' mode, records the change for later batch sync.
+ * In 'disabled' mode, does nothing.
+ *
+ * @param {string} sheetName  – Sheet tab name (e.g. SHEETS.WORK_PAPERS)
+ * @param {string} docId      – Document/record ID
+ * @param {string} operation  – 'upsert' or 'delete'
+ * @param {Function} writeFn  – Function that performs the actual Sheet write (only called in realtime mode)
+ */
+function backupToSheet(sheetName, docId, operation, writeFn) {
+  var mode = getSheetBackupMode();
+
+  if (mode === 'disabled') return;
+
+  if (mode === 'realtime') {
+    try {
+      if (typeof writeFn === 'function') writeFn();
+    } catch (e) {
+      console.warn('Sheet backup failed for ' + sheetName + '/' + docId + ':', e.message);
+    }
+    return;
+  }
+
+  // incremental – queue the change
+  queueBackupChange_(sheetName, docId, operation);
+}
+
+/**
+ * Queue a change for incremental Sheet backup.
+ * Writes to Firestore collection '_backup_queue'.
+ */
+function queueBackupChange_(sheetName, docId, operation) {
+  if (!isFirestoreEnabled()) return;
+  try {
+    var queueId = sheetName + '__' + docId;
+    var queueDoc = {
+      sheet_name: sheetName,
+      doc_id: String(docId),
+      operation: operation || 'upsert',
+      queued_at: new Date().toISOString()
+    };
+    firestoreSet({ _collection: '_backup_queue' }, queueId, queueDoc);
+  } catch (e) {
+    console.warn('Failed to queue backup change:', e.message);
+  }
+}
+
+// Override firestoreSet routing for internal collections
+var _origFirestoreSet = firestoreSet;
+/**
+ * firestoreSet that handles the _backup_queue pseudo-collection.
+ */
+firestoreSet = function(sheetName, docId, data) {
+  if (sheetName && sheetName._collection) {
+    // Internal collection – write directly
+    var collection = sheetName._collection;
+    var payload = { fields: objectToFirestoreFields_(data) };
+    firestoreRequest_('patch', collection + '/' + encodeURIComponent(docId), payload);
+    return;
+  }
+  _origFirestoreSet(sheetName, docId, data);
+};
+
+/**
+ * Run incremental backup: process the _backup_queue and sync changed records to Sheets.
+ * Call this on a schedule (e.g. every 30-60 minutes) or manually from Settings.
+ * @return {Object} { success, processed, errors }
+ */
+function runIncrementalBackup() {
+  if (!isFirestoreEnabled()) {
+    return { success: false, error: 'Firestore not enabled' };
+  }
+
+  var mode = getSheetBackupMode();
+  if (mode === 'disabled') {
+    return { success: false, error: 'Sheet backup is disabled' };
+  }
+
+  var startTime = new Date();
+  var processed = 0;
+  var errors = [];
+
+  // Read all queued changes
+  var queueDocs = firestoreGetAll({ _collection: '_backup_queue' });
+
+  // firestoreGetAll also needs the same override
+  if (!queueDocs || queueDocs.length === 0) {
+    // No queued changes – update last run timestamp
+    setConfigValue('SHEET_BACKUP_LAST_RUN', startTime.toISOString());
+    return { success: true, processed: 0, message: 'No changes queued' };
+  }
+
+  // Group by sheet for efficient batch processing
+  var bySheet = {};
+  queueDocs.forEach(function(doc) {
+    var sn = doc.sheet_name;
+    if (!bySheet[sn]) bySheet[sn] = [];
+    bySheet[sn].push(doc);
+  });
+
+  Object.keys(bySheet).forEach(function(sheetName) {
+    var changes = bySheet[sheetName];
+    var sheet = getSheet(sheetName);
+    if (!sheet) {
+      errors.push('Sheet not found: ' + sheetName);
+      return;
+    }
+
+    var headers = getSheetHeaders(sheetName);
+    var idField = FIRESTORE_DOC_ID_FIELD[sheetName];
+    var idIdx = idField ? headers.indexOf(idField) : 0;
+
+    // Read current Sheet data for this sheet (once per sheet)
+    var sheetData = sheet.getDataRange().getValues();
+    var sheetIdMap = {};
+    for (var i = 1; i < sheetData.length; i++) {
+      var id = String(sheetData[i][idIdx]);
+      if (id) sheetIdMap[id] = i + 1; // row number (1-indexed)
+    }
+
+    changes.forEach(function(change) {
+      try {
+        if (change.operation === 'delete') {
+          // Delete from Sheet
+          var deleteRow = sheetIdMap[change.doc_id];
+          if (deleteRow) {
+            sheet.deleteRow(deleteRow);
+            // Adjust subsequent row numbers
+            Object.keys(sheetIdMap).forEach(function(key) {
+              if (sheetIdMap[key] > deleteRow) sheetIdMap[key]--;
+            });
+            delete sheetIdMap[change.doc_id];
+          }
+        } else {
+          // Upsert: get current data from Firestore and write to Sheet
+          var fsDoc = firestoreGet(sheetName, change.doc_id);
+          if (fsDoc) {
+            var rowArray = headers.map(function(h) {
+              var val = fsDoc[h];
+              if (val === undefined || val === null) return '';
+              return val;
+            });
+
+            var existingRow = sheetIdMap[change.doc_id];
+            if (existingRow) {
+              // Update existing row
+              sheet.getRange(existingRow, 1, 1, headers.length).setValues([rowArray]);
+            } else {
+              // Append new row
+              sheet.appendRow(rowArray);
+              sheetIdMap[change.doc_id] = sheet.getLastRow();
+            }
+          }
+        }
+
+        // Remove from queue
+        firestoreDelete({ _collection: '_backup_queue' }, sheetName + '__' + change.doc_id);
+        processed++;
+      } catch (e) {
+        errors.push(sheetName + '/' + change.doc_id + ': ' + e.message);
+      }
+    });
+
+    invalidateSheetData(sheetName);
+  });
+
+  // Update last run timestamp
+  setConfigValue('SHEET_BACKUP_LAST_RUN', startTime.toISOString());
+
+  return {
+    success: errors.length === 0,
+    processed: processed,
+    errors: errors,
+    duration: new Date().getTime() - startTime.getTime()
+  };
+}
+
+// Override firestoreGetAll for internal collections too
+var _origFirestoreGetAll = firestoreGetAll;
+firestoreGetAll = function(sheetName) {
+  if (sheetName && sheetName._collection) {
+    if (!isFirestoreEnabled()) return [];
+    var collection = sheetName._collection;
+    var results = [];
+    var pageToken = null;
+    do {
+      var url = collection + '?pageSize=300';
+      if (pageToken) url += '&pageToken=' + pageToken;
+      var response = firestoreRequest_('get', url);
+      if (!response) break;
+      var docs = response.documents || [];
+      docs.forEach(function(doc) {
+        var obj = firestoreDocToObject_(doc);
+        if (obj) results.push(obj);
+      });
+      pageToken = response.nextPageToken || null;
+    } while (pageToken);
+    return results;
+  }
+  return _origFirestoreGetAll(sheetName);
+};
+
+// Override firestoreDelete for internal collections too
+var _origFirestoreDelete = firestoreDelete;
+firestoreDelete = function(sheetName, docId) {
+  if (sheetName && sheetName._collection) {
+    if (!isFirestoreEnabled()) return;
+    var collection = sheetName._collection;
+    firestoreRequest_('delete', collection + '/' + encodeURIComponent(docId));
+    return;
+  }
+  _origFirestoreDelete(sheetName, docId);
+};
+
+/**
+ * Run a full backup: dump all Firestore collections to their corresponding Sheets.
+ * Clears existing Sheet data and re-writes from Firestore.
+ * Use when switching from 'disabled' back to 'realtime' or 'incremental',
+ * or when Sheets are out of sync.
+ * @return {Object} { success, report }
+ */
+function runFullSheetBackup() {
+  if (!isFirestoreEnabled()) {
+    return { success: false, error: 'Firestore not enabled' };
+  }
+
+  var report = [];
+  var totalDocs = 0;
+  var collections = Object.keys(FIRESTORE_COLLECTIONS);
+
+  collections.forEach(function(sheetName) {
+    try {
+      var fsDocs = firestoreGetAll(sheetName);
+      if (!fsDocs || fsDocs.length === 0) {
+        report.push(sheetName + ': 0 docs (skipped)');
+        return;
+      }
+
+      var sheet = getSheet(sheetName);
+      if (!sheet) {
+        report.push(sheetName + ': Sheet not found');
+        return;
+      }
+
+      var headers = getSheetHeaders(sheetName);
+      if (!headers || headers.length === 0) {
+        report.push(sheetName + ': No headers');
+        return;
+      }
+
+      // Clear existing data rows (keep header)
+      if (sheet.getLastRow() > 1) {
+        sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+        if (sheet.getLastRow() > 1) {
+          try { sheet.deleteRows(2, sheet.getLastRow() - 1); } catch (e) {}
+        }
+      }
+
+      // Build row arrays from Firestore docs
+      var rows = fsDocs.map(function(doc) {
+        return headers.map(function(h) {
+          var val = doc[h];
+          if (val === undefined || val === null) return '';
+          return val;
+        });
+      });
+
+      // Batch write
+      if (rows.length > 0) {
+        sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+      }
+
+      invalidateSheetData(sheetName);
+      totalDocs += rows.length;
+      report.push(sheetName + ': ' + rows.length + ' docs');
+    } catch (e) {
+      report.push(sheetName + ': ERROR - ' + e.message);
+    }
+  });
+
+  // Clear backup queue (everything is now synced)
+  try {
+    purgeFirestoreCollection({ _collection: '_backup_queue' });
+  } catch (e) {
+    report.push('Queue clear: ' + e.message);
+  }
+
+  // Override purgeFirestoreCollection for internal collections is not needed
+  // since we can just use the queue clear
+
+  setConfigValue('SHEET_BACKUP_LAST_RUN', new Date().toISOString());
+
+  return {
+    success: true,
+    totalDocs: totalDocs,
+    report: report
+  };
+}
+
+// Override purgeFirestoreCollection for internal collections
+var _origPurgeFirestoreCollection = purgeFirestoreCollection;
+purgeFirestoreCollection = function(sheetName) {
+  if (sheetName && sheetName._collection) {
+    if (!isFirestoreEnabled()) return 0;
+    var collection = sheetName._collection;
+    var deleted = 0;
+    var pageToken = null;
+    do {
+      var url = collection + '?pageSize=300&mask.fieldPaths=__name__';
+      if (pageToken) url += '&pageToken=' + pageToken;
+      var response = firestoreRequest_('get', url);
+      if (!response || !response.documents || response.documents.length === 0) break;
+      response.documents.forEach(function(doc) {
+        var parts = doc.name.split('/');
+        var docId = parts[parts.length - 1];
+        firestoreRequest_('delete', collection + '/' + encodeURIComponent(decodeURIComponent(docId)));
+        deleted++;
+      });
+      pageToken = response.nextPageToken || null;
+    } while (pageToken);
+    return deleted;
+  }
+  return _origPurgeFirestoreCollection(sheetName);
+};
+
+/**
+ * Get backup status for the Settings UI.
+ * @return {Object} { mode, lastRun, queueSize, firestoreEnabled }
+ */
+function getBackupStatus() {
+  var status = {
+    mode: getSheetBackupMode(),
+    lastRun: '',
+    queueSize: 0,
+    firestoreEnabled: isFirestoreEnabled(),
+    interval: 60
+  };
+
+  try {
+    status.lastRun = getConfigValue('SHEET_BACKUP_LAST_RUN') || '';
+  } catch (e) {}
+
+  try {
+    var interval = parseInt(getConfigValue('SHEET_BACKUP_INTERVAL'));
+    if (interval > 0) status.interval = interval;
+  } catch (e) {}
+
+  // Count queued changes (only if incremental mode)
+  if (status.mode === 'incremental' && isFirestoreEnabled()) {
+    try {
+      var queueDocs = firestoreGetAll({ _collection: '_backup_queue' });
+      status.queueSize = queueDocs ? queueDocs.length : 0;
+    } catch (e) {
+      status.queueSize = -1;
+    }
+  }
+
+  return status;
+}
+
+/**
+ * Save backup settings from the Settings UI.
+ * @param {Object} settings - { mode, interval }
+ * @return {Object} { success }
+ */
+function saveBackupSettings(settings) {
+  if (!settings) return { success: false, error: 'No settings provided' };
+
+  var validModes = ['realtime', 'incremental', 'disabled'];
+  var mode = validModes.indexOf(settings.mode) >= 0 ? settings.mode : 'realtime';
+
+  setConfigValue('SHEET_BACKUP_MODE', mode);
+  _backupModeCache = null; // Clear in-memory cache
+
+  if (settings.interval) {
+    var interval = parseInt(settings.interval);
+    if (interval >= 5 && interval <= 1440) {
+      setConfigValue('SHEET_BACKUP_INTERVAL', interval);
+    }
+  }
+
+  // If switching to incremental, set up the trigger
+  if (mode === 'incremental') {
+    setupBackupTrigger_();
+  } else {
+    removeBackupTrigger_();
+  }
+
+  return { success: true, mode: mode };
+}
+
+/**
+ * Set up a time-based trigger for incremental backups.
+ */
+function setupBackupTrigger_() {
+  // Remove existing backup trigger first
+  removeBackupTrigger_();
+
+  var interval = parseInt(getConfigValue('SHEET_BACKUP_INTERVAL')) || 60;
+
+  // Google Apps Script minimum trigger interval is 1 minute,
+  // but everyMinutes only supports 1, 5, 10, 15, 30
+  // For larger intervals, use everyHours
+  if (interval >= 60) {
+    var hours = Math.max(1, Math.round(interval / 60));
+    ScriptApp.newTrigger('runIncrementalBackup')
+      .timeBased()
+      .everyHours(hours)
+      .create();
+  } else {
+    // Snap to nearest valid minute interval
+    var validMinutes = [5, 10, 15, 30];
+    var nearestMin = 30;
+    for (var i = 0; i < validMinutes.length; i++) {
+      if (interval <= validMinutes[i]) { nearestMin = validMinutes[i]; break; }
+    }
+    ScriptApp.newTrigger('runIncrementalBackup')
+      .timeBased()
+      .everyMinutes(nearestMin)
+      .create();
+  }
+
+  console.log('Incremental backup trigger configured (interval: ' + interval + ' min)');
+}
+
+/**
+ * Remove the incremental backup trigger.
+ */
+function removeBackupTrigger_() {
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'runIncrementalBackup') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
 }
