@@ -34,9 +34,11 @@
       <option value="Not Due">Not Due</option>
       <option value="Pending">Pending</option>
       <option value="In Progress">In Progress</option>
-      <option value="Implemented">Implemented</option>
-      <option value="Verified">Verified</option>
       <option value="Overdue">Overdue</option>
+      <option value="Pending Verification">Pending Verification</option>
+      <option value="Verified">Verified</option>
+      <option value="Rejected">Rejected</option>
+      <option value="Closed">Closed</option>
     </select>
     <select class="form-select" id="apFilterOwner" onchange="filterActionPlans()">
       <option value="">All Owners</option>
@@ -120,14 +122,14 @@
         <div class="kanban-column-body" id="kanbanInProgress"></div>
       </div>
 
-      <div class="kanban-column" data-status="Implemented">
+      <div class="kanban-column" data-status="Pending Verification">
         <div class="kanban-column-header">
           <span class="kanban-column-title">
-            <i class="bi bi-check-circle text-info me-2"></i>Implemented
+            <i class="bi bi-hourglass-top text-info me-2"></i>Pending Verification
           </span>
-          <span class="kanban-column-count badge bg-info" id="kanbanCountImplemented">0</span>
+          <span class="kanban-column-count badge bg-info" id="kanbanCountPendingVerification">0</span>
         </div>
-        <div class="kanban-column-body" id="kanbanImplemented"></div>
+        <div class="kanban-column-body" id="kanbanPendingVerification"></div>
       </div>
 
       <div class="kanban-column" data-status="Verified">
@@ -360,8 +362,8 @@ function updateAPStats() {
   const total = actionPlansData.length;
   const pending = actionPlansData.filter(ap => ap.status === 'Pending' || ap.status === 'Not Due').length;
   const overdue = actionPlansData.filter(ap => ap.days_overdue > 0).length;
-  const implemented = actionPlansData.filter(ap => ap.status === 'Implemented').length;
-  const verified = actionPlansData.filter(ap => ap.status === 'Verified').length;
+  const implemented = actionPlansData.filter(ap => ap.status === 'Implemented' || ap.status === 'Pending Verification').length;
+  const verified = actionPlansData.filter(ap => ap.status === 'Verified' || ap.status === 'Closed').length;
 
   document.getElementById('statTotal').textContent = total;
   document.getElementById('statPending').textContent = pending;
@@ -375,7 +377,7 @@ function renderKanbanBoard() {
   const columns = {
     'Pending': [],
     'In Progress': [],
-    'Implemented': [],
+    'Pending Verification': [],
     'Verified': []
   };
 
@@ -384,6 +386,10 @@ function renderKanbanBoard() {
     const status = ap.status || 'Pending';
     if (status === 'Not Due' || status === 'Overdue') {
       columns['Pending'].push(ap);
+    } else if (status === 'Implemented' || status === 'Pending Verification') {
+      columns['Pending Verification'].push(ap);
+    } else if (status === 'Rejected') {
+      columns['In Progress'].push(ap);
     } else if (columns[status]) {
       columns[status].push(ap);
     } else {
