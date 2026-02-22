@@ -294,8 +294,13 @@
           <div class="row g-3 align-items-end">
             <div class="col-md-9">
               <label class="form-label">Recipient Emails</label>
-              <textarea class="form-control" id="cfgSummaryRecipients" rows="3"
-                placeholder="e.g. admin@company.com, cfo@company.com, auditor@company.com"></textarea>
+              <div class="autocomplete-container">
+                <input type="text" class="form-control" id="cfgSummaryRecipientsInput"
+                  placeholder="Start typing to search users or enter email..." autocomplete="off">
+                <div id="cfgSummaryRecipientsSuggestions" class="autocomplete-suggestions"></div>
+              </div>
+              <div id="cfgSummaryRecipientsTags" class="selected-tags mt-2"></div>
+              <input type="hidden" id="cfgSummaryRecipients">
             </div>
             <div class="col-md-3">
               <button type="button" class="btn btn-primary w-100" onclick="saveSummaryRecipients()">
@@ -1122,12 +1127,91 @@ function loadNotificationConfig() {
   loadEmailTemplates();
 }
 
+let summaryRecipientsList = [];
+
 function loadSummaryRecipients() {
   apiCall('getSummaryRecipients', {}).then(r => {
     if (r.success) {
-      document.getElementById('cfgSummaryRecipients').value = r.recipients || '';
+      var raw = r.recipients || '';
+      summaryRecipientsList = raw.split(',').map(e => e.trim()).filter(Boolean).map(email => {
+        // Try to match with known users for display names
+        var users = window.appDropdowns?.users || [];
+        var match = users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
+        return match ? { id: match.id, email: match.email, name: match.name } : { id: 'custom_' + email, email: email, name: email };
+      });
+      renderSummaryRecipientTags();
+      updateSummaryRecipientsHidden();
     }
   }).catch(() => {});
+  setupSummaryRecipientsAutocomplete();
+}
+
+function setupSummaryRecipientsAutocomplete() {
+  var input = document.getElementById('cfgSummaryRecipientsInput');
+  var suggestionsDiv = document.getElementById('cfgSummaryRecipientsSuggestions');
+  if (!input || !suggestionsDiv) return;
+
+  input.addEventListener('input', function() {
+    var query = this.value.toLowerCase().trim();
+    if (query.length < 2) { suggestionsDiv.style.display = 'none'; return; }
+
+    var users = window.appDropdowns?.users || [];
+    var filtered = users.filter(u => {
+      var nameMatch = (u.name || '').toLowerCase().includes(query);
+      var emailMatch = (u.email || '').toLowerCase().includes(query);
+      var alreadySelected = summaryRecipientsList.some(s => s.email === u.email);
+      return (nameMatch || emailMatch) && !alreadySelected;
+    }).slice(0, 10);
+
+    // Allow custom email entry
+    if (query.includes('@') && !filtered.some(f => f.email === query)) {
+      filtered.push({ id: 'custom_' + Date.now(), email: query, name: query, isCustom: true });
+    }
+
+    if (filtered.length === 0) { suggestionsDiv.style.display = 'none'; return; }
+
+    suggestionsDiv.innerHTML = filtered.map((s, i) =>
+      '<div class="autocomplete-suggestion" data-index="' + i + '">' +
+      '<div class="suggestion-name">' + escapeHtml(s.name || s.email) + '</div>' +
+      (!s.isCustom && s.email ? '<div class="suggestion-email">' + escapeHtml(s.email) + '</div>' : '') +
+      (s.isCustom ? '<div class="suggestion-email"><em>Add as custom email</em></div>' : '') +
+      '</div>'
+    ).join('');
+
+    suggestionsDiv.querySelectorAll('.autocomplete-suggestion').forEach((el, idx) => {
+      el.addEventListener('click', () => {
+        summaryRecipientsList.push({ id: filtered[idx].id, email: filtered[idx].email, name: filtered[idx].name || filtered[idx].email });
+        renderSummaryRecipientTags();
+        updateSummaryRecipientsHidden();
+        input.value = '';
+        suggestionsDiv.style.display = 'none';
+      });
+    });
+    suggestionsDiv.style.display = 'block';
+  });
+
+  input.addEventListener('blur', () => { setTimeout(() => { suggestionsDiv.style.display = 'none'; }, 200); });
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') suggestionsDiv.style.display = 'none'; });
+}
+
+function renderSummaryRecipientTags() {
+  var tagsDiv = document.getElementById('cfgSummaryRecipientsTags');
+  if (!tagsDiv) return;
+  tagsDiv.innerHTML = summaryRecipientsList.map((s, i) =>
+    '<span class="selected-tag">' + escapeHtml(s.name || s.email) +
+    ' <span class="remove-tag" data-index="' + i + '">&times;</span></span>'
+  ).join('');
+  tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
+    el.addEventListener('click', function() {
+      summaryRecipientsList.splice(parseInt(this.dataset.index), 1);
+      renderSummaryRecipientTags();
+      updateSummaryRecipientsHidden();
+    });
+  });
+}
+
+function updateSummaryRecipientsHidden() {
+  document.getElementById('cfgSummaryRecipients').value = summaryRecipientsList.map(s => s.email).join(', ');
 }
 
 function saveSummaryRecipients() {

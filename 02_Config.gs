@@ -73,7 +73,9 @@ const SCHEMAS = {
     'implementation_notes', 'implemented_date',
     'auditor_review_status', 'auditor_review_by', 'auditor_review_date', 'auditor_review_comments',
     'hoa_review_status', 'hoa_review_by', 'hoa_review_date', 'hoa_review_comments',
-    'days_overdue', 'created_at', 'created_by', 'updated_at', 'updated_by'
+    'days_overdue',
+    'delegated_by_id', 'delegated_by_name', 'delegated_date', 'delegation_notes', 'original_owner_ids',
+    'created_at', 'created_by', 'updated_at', 'updated_by'
   ],
   AP_EVIDENCE: [
     'evidence_id', 'action_plan_id', 'file_name', 'file_description',

@@ -70,6 +70,11 @@ function createActionPlan(data, user) {
     hoa_review_date: '',
     hoa_review_comments: '',
     days_overdue: 0,
+    delegated_by_id: '',
+    delegated_by_name: '',
+    delegated_date: '',
+    delegation_notes: '',
+    original_owner_ids: '',
     created_at: now,
     created_by: user.user_id,
     updated_at: now,
@@ -881,6 +886,120 @@ function updateOverdueStatuses() {
   
   console.log('Updated overdue statuses:', updatedCount);
   return updatedCount;
+}
+
+/**
+ * Delegate an action plan to different owner(s) for accountability.
+ * Preserves the original owner_ids and records who delegated.
+ */
+function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, user) {
+  if (!user) throw new Error('User required');
+
+  const actionPlan = getActionPlanRaw(actionPlanId);
+  if (!actionPlan) throw new Error('Action plan not found: ' + actionPlanId);
+
+  // Only current owners or auditors can delegate
+  var currentOwnerIds = String(actionPlan.owner_ids || '').split(',').map(function(s) { return s.trim(); });
+  var isCurrentOwner = currentOwnerIds.includes(user.user_id);
+  var isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
+
+  if (!isCurrentOwner && !isAuditor) {
+    throw new Error('Permission denied: Only current owners or auditors can delegate action plans');
+  }
+
+  // Cannot delegate closed/verified action plans
+  var closedStatuses = [STATUS.ACTION_PLAN.VERIFIED, STATUS.ACTION_PLAN.CLOSED, STATUS.ACTION_PLAN.NOT_IMPLEMENTED];
+  if (closedStatuses.includes(actionPlan.status)) {
+    throw new Error('Cannot delegate action plan with status: ' + actionPlan.status);
+  }
+
+  if (!newOwnerIds || String(newOwnerIds).trim() === '') {
+    throw new Error('New owner(s) required for delegation');
+  }
+
+  var now = new Date();
+  var previousStatus = actionPlan.status;
+
+  var updates = {
+    original_owner_ids: actionPlan.original_owner_ids || actionPlan.owner_ids,
+    owner_ids: String(newOwnerIds),
+    owner_names: String(newOwnerNames || ''),
+    delegated_by_id: user.user_id,
+    delegated_by_name: user.full_name || '',
+    delegated_date: now,
+    delegation_notes: sanitizeInput(notes || ''),
+    updated_at: now,
+    updated_by: user.user_id
+  };
+
+  // Update sheet
+  var sheet = getSheet(SHEETS.ACTION_PLANS);
+  var rowIndex = actionPlan._rowIndex;
+  var updated = {};
+  for (var k in actionPlan) { updated[k] = actionPlan[k]; }
+  for (var k2 in updates) { updated[k2] = updates[k2]; }
+
+  var row = objectToRow('ACTION_PLANS', updated);
+  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
+  // Update index
+  updateActionPlanIndex(actionPlanId, updated, rowIndex);
+
+  // Add history
+  var historyComment = 'Delegated from ' + (actionPlan.owner_names || 'previous owner') +
+    ' to ' + (newOwnerNames || newOwnerIds) +
+    (notes ? '. Reason: ' + notes : '');
+  addActionPlanHistory(actionPlanId, previousStatus, previousStatus, historyComment, user);
+
+  // Sync to Firestore (non-fatal)
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
+
+  // Log audit event
+  logAuditEvent('DELEGATE', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
+
+  // Notify new owners
+  queueDelegationNotification(actionPlanId, updated, actionPlan, user);
+
+  return sanitizeForClient({ success: true, actionPlan: updated, message: 'Action plan delegated successfully.' });
+}
+
+/**
+ * Send delegation notification to the new owner(s)
+ */
+function queueDelegationNotification(actionPlanId, actionPlan, previousVersion, delegator) {
+  var ownerIds = String(actionPlan.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
+  var observationTitle = parentWp ? parentWp.observation_title : '';
+  var loginUrl = ScriptApp.getService().getUrl();
+
+  ownerIds.forEach(function(ownerId) {
+    var owner = getUserById(ownerId);
+    if (!owner || !owner.email) return;
+
+    var subject = 'Action Plan Delegated to You - ' + actionPlanId;
+    var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
+    var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
+      '<strong>' + (delegator.full_name || 'A colleague') + '</strong> has delegated the following action plan to you:';
+
+    var headers = ['Field', 'Details'];
+    var rows = [
+      ['Observation', String(observationTitle || '-')],
+      ['Action Plan', truncateWords(actionPlan.action_description || '-', 15)],
+      ['Due Date', actionPlan.due_date ? new Date(actionPlan.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'],
+      ['Status', actionPlan.status || '-'],
+      ['Delegated By', String(delegator.full_name || '-')],
+      ['Previous Owner(s)', String(previousVersion.owner_names || '-')]
+    ];
+
+    if (actionPlan.delegation_notes) {
+      rows.push(['Delegation Notes', String(actionPlan.delegation_notes)]);
+    }
+
+    var outro = 'Please <a href="' + loginUrl + '">log in</a> to review and take action on this plan.';
+    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+  });
 }
 
 function addActionPlanEvidence(actionPlanId, evidenceData, user) {
