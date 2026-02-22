@@ -1013,12 +1013,23 @@ function logAuditEvent(action, entityType, entityId, oldData, newData, userId, u
 }
 
 function getConfigValue(key) {
+  // Firestore-primary: read from Firestore
+  if (isFirestoreEnabled()) {
+    try {
+      var doc = firestoreGet(SHEETS.CONFIG, key);
+      if (doc && doc.config_value !== undefined) return doc.config_value;
+    } catch (e) {
+      console.warn('Firestore getConfigValue failed:', e.message);
+    }
+  }
+
+  // Fallback: read from Sheet
   const sheet = getSheet(SHEETS.CONFIG);
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const keyIdx = headers.indexOf('config_key');
   const valueIdx = headers.indexOf('config_value');
-  
+
   for (let i = 1; i < data.length; i++) {
     if (data[i][keyIdx] === key) return data[i][valueIdx];
   }
@@ -1026,13 +1037,28 @@ function getConfigValue(key) {
 }
 
 function setConfigValue(key, value) {
+  // Firestore-primary: write to Firestore
+  if (isFirestoreEnabled()) {
+    try {
+      firestoreSet(SHEETS.CONFIG, key, {
+        config_key: key,
+        config_value: value,
+        description: '',
+        updated_at: new Date()
+      });
+    } catch (e) {
+      console.warn('Firestore setConfigValue failed:', e.message);
+    }
+  }
+
+  // Sheet backup write
   const sheet = getSheet(SHEETS.CONFIG);
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const keyIdx = headers.indexOf('config_key');
   const valueIdx = headers.indexOf('config_value');
   const updatedIdx = headers.indexOf('updated_at');
-  
+
   for (let i = 1; i < data.length; i++) {
     if (data[i][keyIdx] === key) {
       sheet.getRange(i + 1, valueIdx + 1).setValue(value);
@@ -1040,7 +1066,7 @@ function setConfigValue(key, value) {
       return true;
     }
   }
-  
+
   sheet.appendRow([key, value, '', new Date()]);
   return true;
 }

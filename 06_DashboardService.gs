@@ -994,12 +994,11 @@ function getComprehensiveReportData(filters) {
   var workPapers = getWorkPapers(filters, null);
   var actionPlans = getActionPlans(filters, null);
 
-  // Build area lookup: area_id -> area_name from Audit Areas sheet
+  // Build area lookup: area_id -> area_name (Firestore-primary via getSheetData)
   var areaLookup = {};
   try {
-    var areaSheet = getSheet(SHEETS.AUDIT_AREAS);
-    if (areaSheet && areaSheet.getLastRow() > 1) {
-      var areaData = areaSheet.getDataRange().getValues();
+    var areaData = getSheetData(SHEETS.AUDIT_AREAS);
+    if (areaData && areaData.length > 1) {
       var areaHeaders = areaData[0];
       var areaIdIdx = areaHeaders.indexOf('area_id');
       var areaNameIdx = areaHeaders.indexOf('area_name');
@@ -1009,7 +1008,6 @@ function getComprehensiveReportData(filters) {
         if (aid) {
           areaLookup[aid] = areaData[ai][areaNameIdx] || areaData[ai][areaCodeIdx] || aid;
         }
-        // Also map area_code -> area_name for fallback
         var acode = areaData[ai][areaCodeIdx];
         if (acode && !areaLookup[acode]) {
           areaLookup[acode] = areaData[ai][areaNameIdx] || acode;

@@ -168,11 +168,11 @@ function queueEmail(data) {
       error_message: '',
       created_at: now
     };
-    
-    const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-    const row = objectToRow('NOTIFICATION_QUEUE', notification);
-    sheet.appendRow(row);
-    
+
+    // ── Firestore-primary write ──
+    primaryWrite(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
+    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
+
     return sanitizeForClient({ success: true, notificationId: notificationId });
   } catch (e) {
     console.error('Failed to queue email:', e);
@@ -233,28 +233,28 @@ function queueTemplatedEmail(templateCode, recipientEmail, recipientUserId, vari
  * Get email template by code
  */
 function getEmailTemplate(templateCode) {
-  const cacheKey = 'email_template_' + templateCode;
-  const cache = CacheService.getScriptCache();
-  const cached = cache.get(cacheKey);
-  
+  var cacheKey = 'email_template_' + templateCode;
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(cacheKey);
+
   if (cached) {
     try { return JSON.parse(cached); } catch (e) {}
   }
-  
-  const sheet = getSheet(SHEETS.EMAIL_TEMPLATES);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const codeIdx = headers.indexOf('template_code');
-  const activeIdx = headers.indexOf('is_active');
-  
-  for (let i = 1; i < data.length; i++) {
+
+  var data = getSheetData(SHEETS.EMAIL_TEMPLATES);
+  if (!data || data.length < 2) return null;
+  var headers = data[0];
+  var codeIdx = headers.indexOf('template_code');
+  var activeIdx = headers.indexOf('is_active');
+
+  for (var i = 1; i < data.length; i++) {
     if (data[i][codeIdx] === templateCode && isActive(data[i][activeIdx])) {
-      const template = rowToObject(headers, data[i]);
-      cache.put(cacheKey, JSON.stringify(template), 3600); // 1 hour cache
+      var template = rowToObject(headers, data[i]);
+      cache.put(cacheKey, JSON.stringify(template), 3600);
       return template;
     }
   }
-  
+
   return null;
 }
 
@@ -262,18 +262,18 @@ function getEmailTemplate(templateCode) {
  * Get all active email templates
  */
 function getEmailTemplates() {
-  const sheet = getSheet(SHEETS.EMAIL_TEMPLATES);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const activeIdx = headers.indexOf('is_active');
-  
-  const templates = [];
-  for (let i = 1; i < data.length; i++) {
+  var data = getSheetData(SHEETS.EMAIL_TEMPLATES);
+  if (!data || data.length < 2) return sanitizeForClient([]);
+  var headers = data[0];
+  var activeIdx = headers.indexOf('is_active');
+
+  var templates = [];
+  for (var i = 1; i < data.length; i++) {
     if (isActive(data[i][activeIdx])) {
       templates.push(rowToObject(headers, data[i]));
     }
   }
-  
+
   return sanitizeForClient(templates);
 }
 
@@ -289,67 +289,83 @@ function processEmailQueue() {
   }
   
   try {
-  const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  
-  const colMap = {};
+  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  if (!data || data.length < 2) return { sent: 0, failed: 0 };
+  var headers = data[0];
+
+  var colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
-  
-  const now = new Date();
-  const fromName = 'Internal Audit Notification';
-  
-  let sentCount = 0;
-  let failedCount = 0;
-  
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const status = row[colMap['status']];
-    const scheduledFor = row[colMap['scheduled_for']];
-    
-    // Skip if not pending or scheduled for future
+
+  var now = new Date();
+  var fromName = 'Internal Audit Notification';
+  var notifIdIdx = colMap['notification_id'];
+
+  var sentCount = 0;
+  var failedCount = 0;
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var status = row[colMap['status']];
+    var scheduledFor = row[colMap['scheduled_for']];
+
     if (status !== STATUS.NOTIFICATION.PENDING) continue;
     if (scheduledFor && new Date(scheduledFor) > now) continue;
-    
-    const recipientEmail = row[colMap['recipient_email']];
-    const subject = row[colMap['subject']];
-    const body = row[colMap['body']];
-    
+
+    var recipientEmail = row[colMap['recipient_email']];
+    var subject = row[colMap['subject']];
+    var body = row[colMap['body']];
+
     if (!recipientEmail || !subject) continue;
-    
-    const rowIndex = i + 1;
-    const replyTo = 'hassaudit@outlook.com';
-    
+
+    var rowIndex = i + 1;
+    var replyTo = 'hassaudit@outlook.com';
+    var notifId = row[notifIdIdx];
+
     try {
-      // Send email via unified sender (Outlook Graph API with MailApp fallback)
-      const htmlBody = formatEmailHtml(subject, body);
-      const result = sendEmail(recipientEmail, subject, body, htmlBody, '', fromName, replyTo);
+      var htmlBody = formatEmailHtml(subject, body);
+      var result = sendEmail(recipientEmail, subject, body, htmlBody, '', fromName, replyTo);
       if (!result.success) {
         throw new Error(result.error || 'Email send failed');
       }
-      
-      // Update status to Sent
-      sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.SENT);
-      sheet.getRange(rowIndex, colMap['sent_at'] + 1).setValue(now);
-      
+
+      // ── Firestore-primary update ──
+      var sentUpdates = { status: STATUS.NOTIFICATION.SENT, sent_at: now };
+      if (isFirestoreEnabled() && notifId) {
+        try { firestoreUpdateDoc(SHEETS.NOTIFICATION_QUEUE, notifId, sentUpdates); } catch (fsErr) { /* ignore */ }
+      }
+      // Sheet backup (non-fatal)
+      try {
+        var sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
+        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.SENT);
+        sheet.getRange(rowIndex, colMap['sent_at'] + 1).setValue(now);
+      } catch (sheetErr) { /* ignore */ }
+
       sentCount++;
-      
+
     } catch (e) {
-      // Align with database schema: mark as failed on send error
-      sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
-      sheet.getRange(rowIndex, colMap['error_message'] + 1).setValue(e.message);
+      // ── Firestore-primary update ──
+      var failUpdates = { status: STATUS.NOTIFICATION.FAILED, error_message: e.message };
+      if (isFirestoreEnabled() && notifId) {
+        try { firestoreUpdateDoc(SHEETS.NOTIFICATION_QUEUE, notifId, failUpdates); } catch (fsErr) { /* ignore */ }
+      }
+      // Sheet backup (non-fatal)
+      try {
+        var sheetF = getSheet(SHEETS.NOTIFICATION_QUEUE);
+        sheetF.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
+        sheetF.getRange(rowIndex, colMap['error_message'] + 1).setValue(e.message);
+      } catch (sheetErr) { /* ignore */ }
 
       failedCount++;
       console.error('Failed to send email to', recipientEmail + ':', e.message);
     }
-    
-    // Rate limiting - don't send too many at once
+
     if (sentCount >= 50) {
       console.log('Batch limit reached, will continue in next run');
       break;
     }
   }
-  
+
+  if (sentCount > 0 || failedCount > 0) invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
   console.log('Email queue processed. Sent:', sentCount, 'Failed:', failedCount);
   return { sent: sentCount, failed: failedCount };
   } finally {
@@ -671,26 +687,37 @@ function ratingBadge(rating) {
  * Retry failed emails
  */
 function retryFailedEmails() {
-  const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  
-  const colMap = {};
+  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  if (!data || data.length < 2) return 0;
+  var headers = data[0];
+
+  var colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
-  
-  let resetCount = 0;
-  
-  for (let i = 1; i < data.length; i++) {
-    const status = data[i][colMap['status']];
-    
+  var notifIdIdx = colMap['notification_id'];
+
+  var resetCount = 0;
+
+  for (var i = 1; i < data.length; i++) {
+    var status = data[i][colMap['status']];
+
     if (status === STATUS.NOTIFICATION.FAILED) {
-      // Reset to pending for retry
-      sheet.getRange(i + 1, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.PENDING);
-      sheet.getRange(i + 1, colMap['error_message'] + 1).setValue('');
+      var notifId = data[i][notifIdIdx];
+      var retryUpdates = { status: STATUS.NOTIFICATION.PENDING, error_message: '' };
+      // ── Firestore-primary update ──
+      if (isFirestoreEnabled() && notifId) {
+        try { firestoreUpdateDoc(SHEETS.NOTIFICATION_QUEUE, notifId, retryUpdates); } catch (fsErr) { /* ignore */ }
+      }
+      // Sheet backup (non-fatal)
+      try {
+        var sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
+        sheet.getRange(i + 1, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.PENDING);
+        sheet.getRange(i + 1, colMap['error_message'] + 1).setValue('');
+      } catch (sheetErr) { /* ignore */ }
       resetCount++;
     }
   }
-  
+
+  if (resetCount > 0) invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
   console.log('Reset failed emails for retry:', resetCount);
   return resetCount;
 }
@@ -913,11 +940,11 @@ function sendOverdueReminders() {
  * Groups by owner and sends ONE table email per person.
  */
 function sendUpcomingDueReminders() {
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
+  var data = getSheetData(SHEETS.ACTION_PLANS);
+  if (!data || data.length < 2) { console.log('No action plan data'); return 0; }
+  var headers = data[0];
 
-  const colMap = {};
+  var colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
 
   const today = new Date();
@@ -1232,32 +1259,43 @@ function dailyMaintenance() {
  * Clean up old sent notifications
  */
 function cleanupOldNotifications(daysOld) {
-  const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  
-  const colMap = {};
+  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  if (!data || data.length < 2) return 0;
+  var headers = data[0];
+
+  var colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
-  
-  const cutoffDate = new Date();
+  var notifIdIdx = colMap['notification_id'];
+
+  var cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-  
-  let deletedCount = 0;
-  
+
+  var deletedCount = 0;
+
   // Delete from bottom to top
-  for (let i = data.length - 1; i >= 1; i--) {
-    const status = data[i][colMap['status']];
-    const sentAt = data[i][colMap['sent_at']];
-    
+  for (var i = data.length - 1; i >= 1; i--) {
+    var status = data[i][colMap['status']];
+    var sentAt = data[i][colMap['sent_at']];
+
     if (status === STATUS.NOTIFICATION.SENT && sentAt) {
-      const sentDate = new Date(sentAt);
+      var sentDate = new Date(sentAt);
       if (sentDate < cutoffDate) {
-        sheet.deleteRow(i + 1);
+        var notifId = data[i][notifIdIdx];
+        // ── Firestore-primary delete ──
+        if (notifId) {
+          try { primaryDelete(SHEETS.NOTIFICATION_QUEUE, notifId); } catch (e) { console.warn('Cleanup notification delete:', e.message); }
+        }
+        // Sheet row delete backup (non-fatal)
+        try {
+          var sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
+          sheet.deleteRow(i + 1);
+        } catch (sheetErr) { /* already deleted via primaryDelete */ }
         deletedCount++;
       }
     }
   }
-  
+
+  if (deletedCount > 0) invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
   return deletedCount;
 }
 
@@ -1284,27 +1322,22 @@ function sendImmediateEmail(recipientEmail, subject, body, ccEmails) {
  * Get notification queue status
  */
 function getNotificationQueueStatus() {
-  const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  
-  const colMap = {};
+  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  if (!data || data.length < 2) return sanitizeForClient({ pending: 0, sent: 0, failed: 0, total: 0 });
+  var headers = data[0];
+
+  var colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
-  
-  const counts = {
-    pending: 0,
-    sent: 0,
-    failed: 0,
-    total: data.length - 1
-  };
-  
-  for (let i = 1; i < data.length; i++) {
-    const status = data[i][colMap['status']];
+
+  var counts = { pending: 0, sent: 0, failed: 0, total: data.length - 1 };
+
+  for (var i = 1; i < data.length; i++) {
+    var status = data[i][colMap['status']];
     if (status === STATUS.NOTIFICATION.PENDING) counts.pending++;
     else if (status === STATUS.NOTIFICATION.SENT) counts.sent++;
     else if (status === STATUS.NOTIFICATION.FAILED) counts.failed++;
   }
-  
+
   return sanitizeForClient(counts);
 }
 
@@ -1313,22 +1346,22 @@ function getNotificationQueueStatus() {
  */
 function getUserNotifications(userId, limit) {
   limit = limit || 20;
-  
-  const sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  
-  const colMap = {};
+
+  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  if (!data || data.length < 2) return sanitizeForClient([]);
+  var headers = data[0];
+
+  var colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
-  
-  const notifications = [];
-  
-  for (let i = data.length - 1; i >= 1 && notifications.length < limit; i--) {
+
+  var notifications = [];
+
+  for (var i = data.length - 1; i >= 1 && notifications.length < limit; i--) {
     if (data[i][colMap['recipient_user_id']] === userId) {
       notifications.push(rowToObject(headers, data[i]));
     }
   }
-  
+
   return sanitizeForClient(notifications);
 }
 
@@ -1629,8 +1662,8 @@ function formatPasswordResetEmailHtml(opts) {
  * Returns all templates including inactive ones for admin editing.
  */
 function getEmailTemplatesAll() {
-  var sheet = getSheet(SHEETS.EMAIL_TEMPLATES);
-  var data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.EMAIL_TEMPLATES);
+  if (!data || data.length < 2) return sanitizeForClient([]);
   var headers = data[0];
 
   var templates = [];
@@ -1653,8 +1686,8 @@ function saveEmailTemplateAction(templateCode, updates, user) {
   }
   if (!templateCode) return { success: false, error: 'Template code required' };
 
-  var sheet = getSheet(SHEETS.EMAIL_TEMPLATES);
-  var data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.EMAIL_TEMPLATES);
+  if (!data || data.length < 2) return { success: false, error: 'Template not found: ' + templateCode };
   var headers = data[0];
   var codeIdx = headers.indexOf('template_code');
 
@@ -1665,8 +1698,18 @@ function saveEmailTemplateAction(templateCode, updates, user) {
       if (updates.body_template !== undefined) existing.body_template = sanitizeInput(updates.body_template);
       if (updates.is_active !== undefined) existing.is_active = updates.is_active;
 
-      var row = objectToRow('EMAIL_TEMPLATES', existing);
-      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      // ── Firestore-primary write ──
+      var templateForFs = { ...existing };
+      delete templateForFs._rowIndex;
+      primaryWrite(SHEETS.EMAIL_TEMPLATES, templateCode, templateForFs);
+      invalidateSheetData(SHEETS.EMAIL_TEMPLATES);
+
+      // Sheet backup (non-fatal)
+      try {
+        var sheet = getSheet(SHEETS.EMAIL_TEMPLATES);
+        var row = objectToRow('EMAIL_TEMPLATES', existing);
+        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      } catch (sheetErr) { console.warn('Sheet backup saveEmailTemplate:', sheetErr.message); }
 
       // Clear template cache
       var cache = CacheService.getScriptCache();

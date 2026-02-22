@@ -1,7 +1,7 @@
 // 00_FirestoreService.gs - Firestore Integration Layer
-// Provides a fast read/write cache backed by Cloud Firestore (free tier).
-// Google Sheets remains the canonical data store; Firestore acts as a
-// sub-100ms read cache that is kept in sync on every write.
+// Firestore is the PRIMARY data store. Google Sheets is kept as an
+// append-only audit trail / backup. All reads come from Firestore;
+// writes go to Firestore first, then are mirrored to the Sheet.
 //
 // SETUP:
 //   1. Create a Firestore database in Native mode (Google Cloud Console).
@@ -452,16 +452,186 @@ function firestoreBatchWrite(writes) {
 
 
 // ─────────────────────────────────────────────────────────────
-// Dual-write helpers (keep Sheets + Firestore in sync)
+// Firestore-primary data layer
+// All reads come from Firestore. Writes go to Firestore first,
+// then are mirrored to Google Sheets as a backup / audit trail.
 // ─────────────────────────────────────────────────────────────
 
 /**
- * After writing to a Google Sheet, call this to mirror the change to Firestore.
- * Non-fatal: if Firestore write fails, the Sheet write already succeeded.
- * @param {string} sheetName - Sheet tab name (e.g., SHEETS.WORK_PAPERS)
- * @param {string} docId - Primary key value
- * @param {Object} data - The full object that was written to the sheet
+ * Map a sheet tab name (e.g. '09_WorkPapers') to its SCHEMAS key ('WORK_PAPERS').
+ * Returns null if no matching schema exists.
  */
+function sheetToSchemaKey_(sheetName) {
+  if (typeof SHEETS === 'undefined') return null;
+  for (var key in SHEETS) {
+    if (SHEETS[key] === sheetName) return key;
+  }
+  return null;
+}
+
+/**
+ * Convert an array of Firestore document objects into the same format
+ * returned by getSheetData() — an array-of-arrays where the first row
+ * is headers and subsequent rows are values in column order.
+ *
+ * This allows existing service code that does:
+ *   var data = getSheetData(SHEETS.XYZ);
+ *   var headers = data[0]; var colMap = buildColumnMap(headers);
+ * to work transparently against Firestore data.
+ */
+function firestoreToSheetFormat_(sheetName, docs) {
+  if (!docs || docs.length === 0) return [];
+
+  // Determine column order from SCHEMAS (preferred) or doc keys (fallback)
+  var schemaKey = sheetToSchemaKey_(sheetName);
+  var headers;
+  if (schemaKey && typeof SCHEMAS !== 'undefined' && SCHEMAS[schemaKey]) {
+    headers = SCHEMAS[schemaKey];
+  } else {
+    // Collect all unique keys across all docs for completeness
+    var keySet = {};
+    docs.forEach(function(doc) {
+      Object.keys(doc).forEach(function(k) { keySet[k] = true; });
+    });
+    headers = Object.keys(keySet);
+  }
+
+  var result = [headers];
+  for (var i = 0; i < docs.length; i++) {
+    var row = [];
+    for (var j = 0; j < headers.length; j++) {
+      var val = docs[i][headers[j]];
+      row.push((val === undefined || val === null) ? '' : val);
+    }
+    result.push(row);
+  }
+  return result;
+}
+
+/**
+ * Read-modify-write a Firestore document with partial data.
+ * Reads current doc, merges partial fields, writes back.
+ * @param {string} sheetName - Sheet tab name
+ * @param {string} docId - Document ID
+ * @param {Object} partialData - Fields to update (merged into existing doc)
+ * @return {Object|null} The merged document, or null on failure
+ */
+function firestoreUpdateDoc(sheetName, docId, partialData) {
+  if (!isFirestoreEnabled()) return null;
+  var current = firestoreGet(sheetName, docId) || {};
+  var merged = {};
+  // Copy current
+  Object.keys(current).forEach(function(k) { merged[k] = current[k]; });
+  // Apply updates
+  Object.keys(partialData).forEach(function(k) { merged[k] = partialData[k]; });
+  firestoreSet(sheetName, docId, merged);
+  return merged;
+}
+
+/**
+ * Get a document ID field name for a given sheet.
+ */
+function getDocIdField_(sheetName) {
+  return FIRESTORE_DOC_ID_FIELD[sheetName] || null;
+}
+
+/**
+ * Write to Firestore as primary store, then mirror to Sheet as backup.
+ * If Firestore write fails, the error propagates (it IS the primary store).
+ * If Sheet write fails, it's logged but non-fatal.
+ *
+ * @param {string} sheetName - Sheet tab name
+ * @param {string} docId - Document ID (primary key)
+ * @param {Object} data - Full document data
+ */
+function primaryWrite(sheetName, docId, data) {
+  // 1. Write to Firestore (PRIMARY — must succeed)
+  firestoreSet(sheetName, docId, data);
+
+  // 2. Mirror to Google Sheets (BACKUP — non-fatal)
+  sheetBackupWrite_(sheetName, docId, data);
+}
+
+/**
+ * Delete from Firestore (primary) then from Sheet (backup).
+ */
+function primaryDelete(sheetName, docId) {
+  // 1. Delete from Firestore (PRIMARY)
+  firestoreDelete(sheetName, docId);
+
+  // 2. Remove from Sheet (BACKUP — non-fatal)
+  sheetBackupDelete_(sheetName, docId);
+}
+
+/**
+ * Non-fatal write to Sheet for backup/audit purposes.
+ * Finds existing row by document ID and updates it, or appends if not found.
+ */
+function sheetBackupWrite_(sheetName, docId, data) {
+  try {
+    var sheet = getSheet(sheetName);
+    if (!sheet) return;
+
+    var schemaKey = sheetToSchemaKey_(sheetName);
+    if (!schemaKey || typeof objectToRow !== 'function') return;
+
+    var row = objectToRow(schemaKey, data);
+    var idField = getDocIdField_(sheetName);
+    if (!idField) { sheet.appendRow(row); return; }
+
+    // Try to find existing row by ID in column 1 (IDs are always first col)
+    var allData = sheet.getDataRange().getValues();
+    var headers = allData[0];
+    var idIdx = headers.indexOf(idField);
+    if (idIdx < 0) { sheet.appendRow(row); return; }
+
+    for (var i = 1; i < allData.length; i++) {
+      if (String(allData[i][idIdx]) === String(docId)) {
+        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+        return;
+      }
+    }
+    // Not found — append new row
+    sheet.appendRow(row);
+  } catch (e) {
+    console.warn('Sheet backup write failed for ' + sheetName + '/' + docId + ':', e.message);
+  }
+}
+
+/**
+ * Non-fatal delete from Sheet.
+ */
+function sheetBackupDelete_(sheetName, docId) {
+  try {
+    var sheet = getSheet(sheetName);
+    if (!sheet) return;
+
+    var idField = getDocIdField_(sheetName);
+    if (!idField) return;
+
+    var allData = sheet.getDataRange().getValues();
+    var headers = allData[0];
+    var idIdx = headers.indexOf(idField);
+    if (idIdx < 0) return;
+
+    for (var i = 1; i < allData.length; i++) {
+      if (String(allData[i][idIdx]) === String(docId)) {
+        sheet.deleteRow(i + 1);
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('Sheet backup delete failed for ' + sheetName + '/' + docId + ':', e.message);
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// Legacy dual-write helpers (kept for backward compatibility)
+// These now just delegate to the primary write functions.
+// ─────────────────────────────────────────────────────────────
+
+/** @deprecated Use primaryWrite() instead */
 function syncToFirestore(sheetName, docId, data) {
   try {
     firestoreSet(sheetName, docId, data);
@@ -470,9 +640,7 @@ function syncToFirestore(sheetName, docId, data) {
   }
 }
 
-/**
- * After deleting from a Google Sheet, remove from Firestore too.
- */
+/** @deprecated Use primaryDelete() instead */
 function deleteFromFirestore(sheetName, docId) {
   try {
     firestoreDelete(sheetName, docId);

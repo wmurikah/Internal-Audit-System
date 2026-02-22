@@ -54,33 +54,21 @@ function createWorkPaper(data, user) {
     work_paper_ref: workPaperId
   };
 
-  // Insert into sheet with lock to make appendRow + getLastRow atomic
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  if (!sheet) {
-    return { success: false, error: 'Work papers sheet not found' };
-  }
-  const row = objectToRow('WORK_PAPERS', workPaper);
+  // ── Firestore-primary write ──
+  primaryWrite(SHEETS.WORK_PAPERS, workPaperId, workPaper);
+  invalidateSheetData(SHEETS.WORK_PAPERS);
 
-  const lock = LockService.getScriptLock();
-  let rowNum;
+  // Update index (for Sheet backup lookup)
   try {
-    lock.waitLock(15000);
-    sheet.appendRow(row);
-    rowNum = sheet.getLastRow();
-    lock.releaseLock();
-  } catch (lockErr) {
-    try { lock.releaseLock(); } catch (ignored) {}
-    throw lockErr;
-  }
+    var sheet = getSheet(SHEETS.WORK_PAPERS);
+    if (sheet) {
+      var rowNum = sheet.getLastRow();
+      updateWorkPaperIndex(workPaperId, workPaper, rowNum);
+    }
+  } catch (idxErr) { console.warn('Index update:', idxErr.message); }
 
-  // Update index
-  updateWorkPaperIndex(workPaperId, workPaper, rowNum);
-  
   // Log audit event
   logAuditEvent('CREATE', 'WORK_PAPER', workPaperId, null, workPaper, user.user_id, user.email);
-
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, workPaper);
 
   return sanitizeForClient({ success: true, workPaperId: workPaperId, workPaper: workPaper });
 }
@@ -167,19 +155,15 @@ function updateWorkPaper(workPaperId, data, user) {
   // Apply updates to existing
   const updated = { ...existing, ...updates };
   
-  // Update sheet
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  const rowIndex = existing._rowIndex;
-  
-  if (!rowIndex) {
-    throw new Error('Row index not found for work paper');
-  }
-  
-  const row = objectToRow('WORK_PAPERS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
-  // Update index
-  updateWorkPaperIndex(workPaperId, updated, rowIndex);
+  // ── Firestore-primary write ──
+  primaryWrite(SHEETS.WORK_PAPERS, workPaperId, updated);
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+
+  // Update index (for Sheet backup)
+  try {
+    var rowIndex = existing._rowIndex;
+    if (rowIndex) updateWorkPaperIndex(workPaperId, updated, rowIndex);
+  } catch (idxErr) { console.warn('Index update:', idxErr.message); }
   
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
@@ -208,23 +192,19 @@ function deleteWorkPaper(workPaperId, user) {
     throw new Error('Only draft work papers can be deleted');
   }
   
-  // Delete the row
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  const rowIndex = existing._rowIndex;
-  
-  if (rowIndex) {
-    sheet.deleteRow(rowIndex);
-    
-    // Remove from index
+  // ── Firestore-primary delete ──
+  primaryDelete(SHEETS.WORK_PAPERS, workPaperId);
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+
+  // Clean up Sheet index
+  try {
     removeFromIndex(SHEETS.INDEX_WORK_PAPERS, workPaperId);
-    
-    // Rebuild indexes for affected rows (rows after deleted one shifted up)
     rebuildWorkPaperIndex();
-  }
-  
+  } catch (idxErr) { console.warn('Index cleanup:', idxErr.message); }
+
   // Log audit event
   logAuditEvent('DELETE', 'WORK_PAPER', workPaperId, existing, null, user.user_id, user.email);
-  
+
   return { success: true };
 }
 
@@ -413,34 +393,26 @@ function submitWorkPaper(workPaperId, user) {
     updated_at: now
   };
   
-  // Update sheet
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  const rowIndex = workPaper._rowIndex;
-  
-  const statusIdx = getColumnIndex('WORK_PAPERS', 'status');
-  const submittedIdx = getColumnIndex('WORK_PAPERS', 'submitted_date');
-  const updatedIdx = getColumnIndex('WORK_PAPERS', 'updated_at');
-  
-  sheet.getRange(rowIndex, statusIdx + 1).setValue(updates.status);
-  sheet.getRange(rowIndex, submittedIdx + 1).setValue(updates.submitted_date);
-  sheet.getRange(rowIndex, updatedIdx + 1).setValue(updates.updated_at);
+  // ── Firestore-primary write ──
+  const updated = { ...workPaper, ...updates };
+  delete updated._rowIndex;
+  primaryWrite(SHEETS.WORK_PAPERS, workPaperId, updated);
   invalidateSheetData(SHEETS.WORK_PAPERS);
 
   // Add revision history
   addWorkPaperRevision(workPaperId, 'Submitted', 'Submitted for review', user);
-  
-  // Update index
-  const updated = { ...workPaper, ...updates };
-  updateWorkPaperIndex(workPaperId, updated, rowIndex);
-  
+
+  // Update index (Sheet backup)
+  try {
+    var rowIndex = workPaper._rowIndex;
+    if (rowIndex) updateWorkPaperIndex(workPaperId, updated, rowIndex);
+  } catch (e) { console.warn('Index update:', e.message); }
+
   // Queue notification to reviewers
   queueReviewNotification(workPaperId, updated, user);
-  
+
   // Log audit event
   logAuditEvent('SUBMIT', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
-
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }
@@ -517,28 +489,26 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
     updates.revision_count = (workPaper.revision_count || 0) + 1;
   }
   
-  // Update sheet
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  const rowIndex = workPaper._rowIndex;
+  // ── Firestore-primary write ──
   const updated = { ...workPaper, ...updates };
-  const row = objectToRow('WORK_PAPERS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  delete updated._rowIndex;
+  primaryWrite(SHEETS.WORK_PAPERS, workPaperId, updated);
   invalidateSheetData(SHEETS.WORK_PAPERS);
 
   // Add revision history
   addWorkPaperRevision(workPaperId, revisionAction, comments, user);
 
-  // Update index
-  updateWorkPaperIndex(workPaperId, updated, rowIndex);
+  // Update index (Sheet backup)
+  try {
+    var rowIndex = workPaper._rowIndex;
+    if (rowIndex) updateWorkPaperIndex(workPaperId, updated, rowIndex);
+  } catch (e) { console.warn('Index update:', e.message); }
 
   // Queue notification to preparer
   queueStatusNotification(workPaperId, updated, workPaper.status, user);
-  
+
   // Log audit event
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
-
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }
@@ -570,22 +540,20 @@ function sendToAuditee(workPaperId, user) {
     updated_at: now
   };
 
-  // Update sheet
-  const sheet = getSheet(SHEETS.WORK_PAPERS);
-  const rowIndex = workPaper._rowIndex;
+  // ── Firestore-primary write ──
   const updated = { ...workPaper, ...updates };
-  const row = objectToRow('WORK_PAPERS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-
-  // Invalidate in-memory cache so subsequent reads (e.g. createActionPlan)
-  // see the new SENT_TO_AUDITEE status instead of stale APPROVED status
+  delete updated._rowIndex;
+  primaryWrite(SHEETS.WORK_PAPERS, workPaperId, updated);
   invalidateSheetData(SHEETS.WORK_PAPERS);
 
   // Add revision history
   addWorkPaperRevision(workPaperId, 'Sent to Auditee', 'Work paper sent to auditee for response', user);
 
-  // Update index
-  updateWorkPaperIndex(workPaperId, updated, rowIndex);
+  // Update index (Sheet backup)
+  try {
+    var rowIndex = workPaper._rowIndex;
+    if (rowIndex) updateWorkPaperIndex(workPaperId, updated, rowIndex);
+  } catch (e) { console.warn('Index update:', e.message); }
 
   // ── AUTO-CREATE ACTION PLAN for auditees ──
   // Creates a skeleton action plan so that responsible parties see it
@@ -630,9 +598,6 @@ function sendToAuditee(workPaperId, user) {
 
   // Log audit event
   logAuditEvent('SEND_TO_AUDITEE', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
-
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }

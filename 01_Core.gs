@@ -56,14 +56,45 @@ function getSheet(sheetName) {
 var _sheetDataCache = {};
 
 /**
- * Get all values from a sheet, using an in-memory cache to avoid
- * redundant Google Sheets API calls within the same execution.
+ * Get all values from a data source, using an in-memory cache to avoid
+ * redundant API calls within the same execution.
+ *
+ * Firestore-primary: When Firestore is enabled, reads come from Firestore
+ * and are converted to the same array-of-arrays format that service code
+ * expects. Falls back to Google Sheets if Firestore is unavailable.
+ *
  * For write-heavy paths, pass skipCache = true.
  */
 function getSheetData(sheetName, skipCache) {
   if (!skipCache && _sheetDataCache[sheetName]) {
     return _sheetDataCache[sheetName];
   }
+
+  // Firestore-primary: try Firestore first
+  if (isFirestoreEnabled()) {
+    try {
+      var docs = firestoreGetAll(sheetName);
+      if (docs && docs.length > 0) {
+        var converted = firestoreToSheetFormat_(sheetName, docs);
+        if (converted && converted.length > 0) {
+          _sheetDataCache[sheetName] = converted;
+          return converted;
+        }
+      }
+      // Firestore returned empty — could be a genuinely empty collection.
+      // Check if schema exists to return headers-only result.
+      var schemaKey = sheetToSchemaKey_(sheetName);
+      if (schemaKey && typeof SCHEMAS !== 'undefined' && SCHEMAS[schemaKey]) {
+        var emptyResult = [SCHEMAS[schemaKey]];
+        _sheetDataCache[sheetName] = emptyResult;
+        return emptyResult;
+      }
+    } catch (fsErr) {
+      console.warn('Firestore read failed for ' + sheetName + ', falling back to Sheet:', fsErr.message);
+    }
+  }
+
+  // Fallback: read from Google Sheets
   var sheet = getSheet(sheetName);
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -370,23 +401,34 @@ const Index = {
 
 const DB = {
   getById: function(entityType, entityId) {
+    // Firestore-primary: get directly by document ID
+    if (isFirestoreEnabled()) {
+      var sheetName = CONFIG.DATA_SHEETS[entityType];
+      if (sheetName) {
+        try {
+          var doc = firestoreGet(sheetName, entityId);
+          if (doc) return doc;
+        } catch (e) {
+          console.warn('Firestore getById failed, falling back to Sheet:', e.message);
+        }
+      }
+    }
+
+    // Fallback: Index + Sheet lookup
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return null;
 
-    const sheetName = CONFIG.DATA_SHEETS[entityType];
-    const sheet = getSheet(sheetName);
+    const sheetNameFb = CONFIG.DATA_SHEETS[entityType];
+    const sheet = getSheet(sheetNameFb);
     if (!sheet) return null;
 
-    const headers = getSheetHeaders(sheetName);
+    const headers = getSheetHeaders(sheetNameFb);
     const rowData = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
 
-    // Convert to object
     const entity = {};
     headers.forEach((h, idx) => {
       entity[h] = rowData[idx];
     });
-
-    // CRITICAL: Include _rowIndex for update operations
     entity._rowIndex = rowNumber;
 
     return entity;
@@ -445,19 +487,30 @@ const DB = {
   },
 
   getAll: function(sheetName) {
+    // Firestore-primary: get all documents
+    if (isFirestoreEnabled()) {
+      try {
+        var docs = firestoreGetAll(sheetName);
+        if (docs) return docs;
+      } catch (e) {
+        console.warn('Firestore getAll failed, falling back to Sheet:', e.message);
+      }
+    }
+
+    // Fallback: read from Sheet
     const sheet = getSheet(sheetName);
     if (!sheet || sheet.getLastRow() < 2) return [];
-    
+
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const results = [];
-    
+
     for (let i = 1; i < data.length; i++) {
       const row = {};
       headers.forEach((h, idx) => row[h] = data[i][idx]);
       results.push(row);
     }
-    
+
     return results;
   },
 
@@ -508,18 +561,30 @@ const DB = {
 
 const DBWrite = {
   insert: function(sheetName, data) {
+    // Firestore-primary: write to Firestore first
+    if (isFirestoreEnabled()) {
+      try {
+        var idField = getDocIdField_(sheetName);
+        var docId = idField ? data[idField] : null;
+        if (docId) {
+          firestoreSet(sheetName, docId, data);
+        }
+      } catch (e) {
+        console.error('Firestore insert failed for ' + sheetName + ':', e.message);
+        // Continue to Sheet write as fallback
+      }
+    }
+
+    // Sheet backup write
     const sheet = getSheet(sheetName);
     if (!sheet) return -1;
 
     const headers = getSheetHeaders(sheetName);
-
-    // Build row array from data object
     const rowArray = headers.map(header => {
       const value = data[header];
       return sanitizeValue(value !== undefined ? value : '');
     });
 
-    // Use lock to make appendRow + getLastRow atomic
     const lock = LockService.getScriptLock();
     try {
       lock.waitLock(15000);
@@ -530,7 +595,6 @@ const DBWrite = {
     } catch (e) {
       try { lock.releaseLock(); } catch (ignored) {}
       console.error('DBWrite.insert lock error:', e.message);
-      // Fallback without lock
       sheet.appendRow(rowArray);
       return sheet.getLastRow();
     }
@@ -562,30 +626,42 @@ const DBWrite = {
   },
 
   updateById: function(entityType, entityId, data) {
+    // Firestore-primary: update document directly
+    if (isFirestoreEnabled()) {
+      try {
+        var sheetNameFs = CONFIG.DATA_SHEETS[entityType];
+        if (sheetNameFs) {
+          firestoreUpdateDoc(sheetNameFs, entityId, data);
+        }
+      } catch (e) {
+        console.error('Firestore updateById failed:', e.message);
+      }
+    }
+
+    // Sheet backup update
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return false;
-    
+
     const sheetName = CONFIG.DATA_SHEETS[entityType];
     const result = this.updateRow(sheetName, rowNumber, data);
-    
-    // Update index if relevant fields changed
+
     if (result) {
       const indexHeaders = getSheetHeaders(CONFIG.INDEX_SHEETS[entityType]);
       const indexFields = {};
       let needsIndexUpdate = false;
-      
+
       indexHeaders.forEach(header => {
         if (data[header] !== undefined) {
           indexFields[header] = data[header];
           needsIndexUpdate = true;
         }
       });
-      
+
       if (needsIndexUpdate) {
         Index.updateEntry(entityType, entityId, rowNumber, indexFields);
       }
     }
-    
+
     return result;
   },
 
@@ -600,18 +676,29 @@ const DBWrite = {
   },
 
   deleteById: function(entityType, entityId) {
+    // Firestore-primary: delete document
+    if (isFirestoreEnabled()) {
+      try {
+        var sheetNameFs = CONFIG.DATA_SHEETS[entityType];
+        if (sheetNameFs) {
+          firestoreDelete(sheetNameFs, entityId);
+        }
+      } catch (e) {
+        console.error('Firestore deleteById failed:', e.message);
+      }
+    }
+
+    // Sheet backup delete
     const rowNumber = Index.getRowNumber(entityType, entityId);
-    if (rowNumber < 2) return false;
+    if (rowNumber < 2) return isFirestoreEnabled(); // OK if Firestore deleted it
 
     const sheetName = CONFIG.DATA_SHEETS[entityType];
 
-    // Use lock to prevent concurrent reads from seeing stale index during rebuild
     const lock = LockService.getScriptLock();
     try {
       lock.waitLock(30000);
       const result = this.deleteRow(sheetName, rowNumber);
       if (result) {
-        // Remove just this entry from the index instead of full rebuild
         Index.removeEntry(entityType, entityId);
       }
       lock.releaseLock();
@@ -794,38 +881,60 @@ const Transaction = {
 
 function getNextId(prefix) {
   const lock = LockService.getScriptLock();
-  
+  const counterKey = 'NEXT_' + prefix + '_ID';
+
   try {
     lock.waitLock(10000);
-    
+
+    var currentVal = 1;
+
+    // Firestore-primary: read/write counter from Firestore
+    if (isFirestoreEnabled()) {
+      try {
+        var counterDoc = firestoreGet('00_Config', counterKey);
+        if (counterDoc && counterDoc.config_value) {
+          currentVal = parseInt(counterDoc.config_value) || 1;
+        }
+        // Increment in Firestore
+        firestoreSet('00_Config', counterKey, {
+          config_key: counterKey,
+          config_value: currentVal + 1,
+          description: 'Auto-generated counter',
+          updated_at: new Date()
+        });
+      } catch (fsErr) {
+        console.warn('Firestore counter failed, falling back to Sheet:', fsErr.message);
+        currentVal = null; // Signal to use Sheet fallback
+      }
+    }
+
+    // Sheet fallback (or backup sync)
     const sheet = getSheet('00_Config');
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const keyIdx = headers.indexOf('config_key');
     const valueIdx = headers.indexOf('config_value');
-    
-    const counterKey = 'NEXT_' + prefix + '_ID';
-    
+
     for (let i = 1; i < data.length; i++) {
       if (data[i][keyIdx] === counterKey) {
-        const currentVal = parseInt(data[i][valueIdx]) || 1;
+        if (currentVal === null) {
+          // Firestore failed — use Sheet value
+          currentVal = parseInt(data[i][valueIdx]) || 1;
+        }
+        // Update Sheet to match (backup)
         sheet.getRange(i + 1, valueIdx + 1).setValue(currentVal + 1);
         lock.releaseLock();
-        
-        // Clear config cache
         Cache.remove('config_all');
-        
-        const padded = String(currentVal).padStart(5, '0');
-        return getIdPrefix(prefix) + padded;
+        return getIdPrefix(prefix) + String(currentVal).padStart(5, '0');
       }
     }
-    
-    // Counter doesn't exist, create it
-    sheet.appendRow([counterKey, 2, 'Auto-generated counter', new Date()]);
+
+    // Counter doesn't exist — create it
+    if (currentVal === null) currentVal = 1;
+    sheet.appendRow([counterKey, currentVal + 1, 'Auto-generated counter', new Date()]);
     lock.releaseLock();
-    
-    return getIdPrefix(prefix) + '00001';
-    
+    return getIdPrefix(prefix) + String(currentVal).padStart(5, '0');
+
   } catch (e) {
     try { lock.releaseLock(); } catch (ignored) {}
     throw e;
@@ -853,35 +962,65 @@ function getConfig(key) {
 
 function getAllConfig() {
   const cacheKey = 'config_all';
-  
-  // Check cache
+
+  // Check in-memory cache
   let config = Cache.get(cacheKey);
   if (config) return config;
-  
-  // Load from sheet
+
+  // Firestore-primary: read config collection
+  if (isFirestoreEnabled()) {
+    try {
+      var docs = firestoreGetAll('00_Config');
+      if (docs && docs.length > 0) {
+        config = {};
+        docs.forEach(function(doc) {
+          if (doc.config_key) config[doc.config_key] = doc.config_value;
+        });
+        Cache.set(cacheKey, config, CONFIG.CACHE_TTL.CONFIG);
+        return config;
+      }
+    } catch (e) {
+      console.warn('Firestore config read failed:', e.message);
+    }
+  }
+
+  // Fallback: load from Sheet
   const data = DB.getAll('00_Config');
   config = {};
-  
+
   data.forEach(row => {
     if (row.config_key) {
       config[row.config_key] = row.config_value;
     }
   });
-  
-  // Cache for 1 hour
+
   Cache.set(cacheKey, config, CONFIG.CACHE_TTL.CONFIG);
-  
   return config;
 }
 
 function setConfig(key, value) {
+  // Firestore-primary: write config to Firestore
+  if (isFirestoreEnabled()) {
+    try {
+      firestoreSet('00_Config', key, {
+        config_key: key,
+        config_value: value,
+        description: '',
+        updated_at: new Date()
+      });
+    } catch (e) {
+      console.warn('Firestore config write failed:', e.message);
+    }
+  }
+
+  // Sheet backup write
   const sheet = getSheet('00_Config');
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const keyIdx = headers.indexOf('config_key');
   const valueIdx = headers.indexOf('config_value');
   const updatedIdx = headers.indexOf('updated_at');
-  
+
   for (let i = 1; i < data.length; i++) {
     if (data[i][keyIdx] === key) {
       sheet.getRange(i + 1, valueIdx + 1).setValue(value);
@@ -892,8 +1031,7 @@ function setConfig(key, value) {
       return true;
     }
   }
-  
-  // Key doesn't exist, create it
+
   sheet.appendRow([key, value, '', new Date()]);
   Cache.remove('config_all');
   return true;
