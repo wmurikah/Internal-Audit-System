@@ -998,14 +998,37 @@ function purgeAndSeedTestData() {
   report.push('Action plans seeded: ' + apCount);
   report.push('AP history records seeded: ' + apCount);
 
-  // ── STEP 7: Rebuild indexes ──
-  console.log('Step 6: Rebuilding indexes...');
+  // ── STEP 7: Reset ID counters so new records don't collide with seeded IDs ──
+  console.log('Step 6: Resetting ID counters...');
+  var idCounterResets = {
+    'NEXT_WP_ID': 11,     // seeded WP-00001 to WP-00010
+    'NEXT_AP_ID': apCount + 1,
+    'NEXT_HISTORY_ID': apCount + 1,
+    'NEXT_REQ_ID': 1,
+    'NEXT_FILE_ID': 1,
+    'NEXT_REV_ID': 1,
+    'NEXT_EVIDENCE_ID': 1,
+    'NEXT_LOG_ID': 1,
+    'NEXT_SESSION_ID': 1,
+    'NEXT_NOTIF_ID': 1
+  };
+  Object.keys(idCounterResets).forEach(function(key) {
+    try {
+      setConfigValue(key, idCounterResets[key]);
+      report.push('Reset counter ' + key + ' = ' + idCounterResets[key]);
+    } catch (e) {
+      report.push('Counter reset ' + key + ': ERROR - ' + e.message);
+    }
+  });
+
+  // ── STEP 8: Rebuild indexes ──
+  console.log('Step 7: Rebuilding indexes...');
   try { rebuildWorkPaperIndex(); } catch (e) { console.warn('WP index rebuild:', e); }
   try { rebuildActionPlanIndex(); } catch (e) { console.warn('AP index rebuild:', e); }
   report.push('Indexes rebuilt');
 
-  // ── STEP 8: Re-migrate system tables to Firestore ──
-  console.log('Step 7: Syncing system tables to Firestore...');
+  // ── STEP 9: Re-migrate system tables to Firestore ──
+  console.log('Step 8: Syncing system tables to Firestore...');
   [SHEETS.CONFIG, SHEETS.ROLES, SHEETS.PERMISSIONS, SHEETS.AFFILIATES,
    SHEETS.AUDIT_AREAS, SHEETS.SUB_AREAS, SHEETS.EMAIL_TEMPLATES].forEach(function(sn) {
     try {

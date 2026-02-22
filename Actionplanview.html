@@ -389,11 +389,12 @@ function renderActionPlanView() {
   // Setup upload zone drag and drop
   setupAPUploadZone();
 
-  // Show review card for auditors if implemented (driven by DB permissions)
+  // Show review card for auditors if implemented/pending verification (driven by DB permissions)
   const user = window.currentUser;
   const p = window.currentPermissions || {};
   const isAuditor = user?.role_code === 'SUPER_ADMIN' || p.canVerifyActionPlan;
-  document.getElementById('apReviewCard').style.display = (isAuditor && ap.status === 'Implemented') ? 'block' : 'none';
+  const reviewableStatuses = ['Implemented', 'Pending Verification'];
+  document.getElementById('apReviewCard').style.display = (isAuditor && reviewableStatuses.includes(ap.status)) ? 'block' : 'none';
 }
 
 function renderDelegationCard(ap) {

@@ -187,12 +187,17 @@ function createActionPlansBatch(workPaperId, plansData, user) {
       hoa_review_date: '',
       hoa_review_comments: '',
       days_overdue: 0,
+      delegated_by_id: '',
+      delegated_by_name: '',
+      delegated_date: '',
+      delegation_notes: '',
+      original_owner_ids: '',
       created_at: now,
       created_by: user.user_id,
       updated_at: now,
       updated_by: user.user_id
     };
-    
+
     rows.push(objectToRow('ACTION_PLANS', actionPlan));
     results.push({ actionPlanId: ids[idx], actionPlan: actionPlan });
   });
