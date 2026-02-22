@@ -92,24 +92,17 @@ function createWorkPaper(data, user) {
  */
 function getWorkPaper(workPaperId, includeRelated) {
   if (!workPaperId) return null;
-  
-  // Try index lookup first
-  let workPaper = null;
-  if (typeof DB !== 'undefined' && DB.getById) {
-    workPaper = DB.getById('WORK_PAPER', workPaperId);
-  } else {
-    workPaper = getWorkPaperById(workPaperId);
-  }
-  
+
+  var workPaper = getWorkPaperById(workPaperId);
   if (!workPaper) return null;
-  
+
   if (includeRelated) {
     workPaper.requirements = getWorkPaperRequirements(workPaperId);
     workPaper.files = getWorkPaperFiles(workPaperId);
     workPaper.revisions = getWorkPaperRevisions(workPaperId);
     workPaper.actionPlans = getActionPlansByWorkPaper(workPaperId);
   }
-  
+
   return sanitizeForClient(workPaper);
 }
 
@@ -239,15 +232,7 @@ function deleteWorkPaper(workPaperId, user) {
  */
 function getWorkPaperRaw(workPaperId) {
   if (!workPaperId) return null;
-  
-  let workPaper = null;
-  if (typeof DB !== 'undefined' && DB.getById) {
-    workPaper = DB.getById('WORK_PAPER', workPaperId);
-  } else {
-    workPaper = getWorkPaperById(workPaperId);
-  }
-  
-  return workPaper;
+  return getWorkPaperById(workPaperId);
 }
 
 function getWorkPapers(filters, user) {
@@ -690,33 +675,38 @@ function addWorkPaperRequirement(workPaperId, requirementData, user) {
  */
 function updateWorkPaperRequirement(requirementId, data, user) {
   if (!user) throw new Error('User required');
-  
-  const sheet = getSheet(SHEETS.WP_REQUIREMENTS);
-  const allData = sheet.getDataRange().getValues();
-  const headers = allData[0];
-  const idIdx = headers.indexOf('requirement_id');
-  
+
+  var allData = getSheetData(SHEETS.WP_REQUIREMENTS);
+  if (!allData || allData.length < 2) throw new Error('Requirement not found: ' + requirementId);
+  var headers = allData[0];
+  var idIdx = headers.indexOf('requirement_id');
+
   for (let i = 1; i < allData.length; i++) {
     if (allData[i][idIdx] === requirementId) {
       const existing = rowToObject(headers, allData[i]);
-      
+
       // Update fields
       const updated = { ...existing };
       if (data.requirement_description !== undefined) updated.requirement_description = sanitizeInput(data.requirement_description);
       if (data.status !== undefined) updated.status = data.status;
       if (data.notes !== undefined) updated.notes = sanitizeInput(data.notes);
-      
-      const row = objectToRow('WP_REQUIREMENTS', updated);
+
+      // Sync to Firestore
+      syncToFirestore(SHEETS.WP_REQUIREMENTS, requirementId, updated);
+
       if (shouldWriteToSheet()) {
+        var sheet = getSheet(SHEETS.WP_REQUIREMENTS);
+        const row = objectToRow('WP_REQUIREMENTS', updated);
         sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
       }
+      invalidateSheetData(SHEETS.WP_REQUIREMENTS);
 
       logAuditEvent('UPDATE_REQUIREMENT', 'WORK_PAPER', existing.work_paper_id, existing, updated, user.user_id, user.email);
-      
+
       return sanitizeForClient({ success: true, requirement: updated });
     }
   }
-  
+
   throw new Error('Requirement not found: ' + requirementId);
 }
 
@@ -725,25 +715,31 @@ function updateWorkPaperRequirement(requirementId, data, user) {
  */
 function deleteWorkPaperRequirement(requirementId, user) {
   if (!user) throw new Error('User required');
-  
-  const sheet = getSheet(SHEETS.WP_REQUIREMENTS);
-  const allData = sheet.getDataRange().getValues();
-  const headers = allData[0];
-  const idIdx = headers.indexOf('requirement_id');
-  
+
+  var allData = getSheetData(SHEETS.WP_REQUIREMENTS);
+  if (!allData || allData.length < 2) throw new Error('Requirement not found: ' + requirementId);
+  var headers = allData[0];
+  var idIdx = headers.indexOf('requirement_id');
+
   for (let i = 1; i < allData.length; i++) {
     if (allData[i][idIdx] === requirementId) {
       const existing = rowToObject(headers, allData[i]);
+
+      // Delete from Firestore
+      deleteFromFirestore(SHEETS.WP_REQUIREMENTS, requirementId);
+
       if (shouldWriteToSheet()) {
+        var sheet = getSheet(SHEETS.WP_REQUIREMENTS);
         sheet.deleteRow(i + 1);
       }
+      invalidateSheetData(SHEETS.WP_REQUIREMENTS);
 
       logAuditEvent('DELETE_REQUIREMENT', 'WORK_PAPER', existing.work_paper_id, existing, null, user.user_id, user.email);
-      
+
       return { success: true };
     }
   }
-  
+
   throw new Error('Requirement not found: ' + requirementId);
 }
 
@@ -786,16 +782,16 @@ function addWorkPaperFile(workPaperId, fileData, user) {
  */
 function deleteWorkPaperFile(fileId, user) {
   if (!user) throw new Error('User required');
-  
-  const sheet = getSheet(SHEETS.WP_FILES);
-  const allData = sheet.getDataRange().getValues();
-  const headers = allData[0];
-  const idIdx = headers.indexOf('file_id');
-  
-  for (let i = 1; i < allData.length; i++) {
+
+  var allData = getSheetData(SHEETS.WP_FILES);
+  if (!allData || allData.length < 2) throw new Error('File not found: ' + fileId);
+  var headers = allData[0];
+  var idIdx = headers.indexOf('file_id');
+
+  for (var i = 1; i < allData.length; i++) {
     if (allData[i][idIdx] === fileId) {
-      const existing = rowToObject(headers, allData[i]);
-      
+      var existing = rowToObject(headers, allData[i]);
+
       // Optionally delete from Drive
       if (existing.drive_file_id) {
         try {
@@ -804,17 +800,22 @@ function deleteWorkPaperFile(fileId, user) {
           console.warn('Could not trash Drive file:', e);
         }
       }
-      
+
+      // Delete from Firestore
+      deleteFromFirestore(SHEETS.WP_FILES, fileId);
+
       if (shouldWriteToSheet()) {
+        var sheet = getSheet(SHEETS.WP_FILES);
         sheet.deleteRow(i + 1);
       }
+      invalidateSheetData(SHEETS.WP_FILES);
 
       logAuditEvent('DELETE_FILE', 'WORK_PAPER', existing.work_paper_id, existing, null, user.user_id, user.email);
-      
+
       return { success: true };
     }
   }
-  
+
   throw new Error('File not found: ' + fileId);
 }
 
@@ -848,11 +849,12 @@ function addWorkPaperRevision(workPaperId, action, comments, user) {
 }
 
 function updateWorkPaperIndex(workPaperId, workPaper, rowNumber) {
+  if (!shouldWriteToSheet()) return;
   const indexSheet = getSheet(SHEETS.INDEX_WORK_PAPERS);
   const data = indexSheet.getDataRange().getValues();
   const headers = data[0];
   const idIdx = headers.indexOf('work_paper_id');
-  
+
   // Check if entry exists
   for (let i = 1; i < data.length; i++) {
     if (data[i][idIdx] === workPaperId) {
@@ -862,7 +864,7 @@ function updateWorkPaperIndex(workPaperId, workPaper, rowNumber) {
       return;
     }
   }
-  
+
   // Add new entry
   const row = buildIndexRow(workPaperId, workPaper, rowNumber);
   indexSheet.appendRow(row);
@@ -889,10 +891,11 @@ function buildIndexRow(workPaperId, workPaper, rowNumber) {
  * Remove entry from index
  */
 function removeFromIndex(indexSheetName, entityId) {
+  if (!shouldWriteToSheet()) return false;
   const sheet = getSheet(indexSheetName);
   const data = sheet.getDataRange().getValues();
   const idIdx = 0; // ID is always first column
-  
+
   for (let i = 1; i < data.length; i++) {
     if (data[i][idIdx] === entityId) {
       sheet.deleteRow(i + 1);
@@ -906,9 +909,10 @@ function removeFromIndex(indexSheetName, entityId) {
  * Rebuild entire work paper index
  */
 function rebuildWorkPaperIndex() {
+  if (!shouldWriteToSheet()) return;
   const dataSheet = getSheet(SHEETS.WORK_PAPERS);
   const indexSheet = getSheet(SHEETS.INDEX_WORK_PAPERS);
-  
+
   const data = dataSheet.getDataRange().getValues();
   const headers = data[0];
   

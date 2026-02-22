@@ -5,8 +5,8 @@ function getAnalyticsData(year, user) {
 
   try {
     // Get all work papers for the year
-    const wpSheet = getSheet(SHEETS.WORK_PAPERS);
-    const wpData = wpSheet.getDataRange().getValues();
+    var wpData = getSheetData(SHEETS.WORK_PAPERS);
+    if (!wpData || wpData.length < 2) return sanitizeForClient({ success: true, data: { workPapers: {total:0}, actionPlans: {total:0}, trends: {monthly:[]}, highRiskFindings: [], overdueActionPlans: [], auditorPerformance: [] } });
     const wpHeaders = wpData[0];
 
     const yearIdx = wpHeaders.indexOf('year');
@@ -22,8 +22,7 @@ function getAnalyticsData(year, user) {
     const titleIdx = wpHeaders.indexOf('observation_title');
 
     // Get all action plans
-    const apSheet = getSheet(SHEETS.ACTION_PLANS);
-    const apData = apSheet.getDataRange().getValues();
+    var apData = getSheetData(SHEETS.ACTION_PLANS);
     const apHeaders = apData[0];
 
     const apIdIdx = apHeaders.indexOf('action_plan_id');
@@ -242,8 +241,8 @@ function getAnalyticsData(year, user) {
 }
 
 function getUserStats() {
-  const sheet = getSheet(SHEETS.USERS);
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.USERS);
+  if (!data || data.length < 2) return sanitizeForClient({ total: 0, active: 0, locked: 0, inactive: 0 });
   const headers = data[0];
 
   const activeIdx = headers.indexOf('is_active');
@@ -270,8 +269,8 @@ function updatePermissions(roleCode, permissions, user) {
     return { success: false, error: 'Permission denied' };
   }
 
-  const sheet = getSheet(SHEETS.PERMISSIONS);
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.PERMISSIONS);
+  if (!data || data.length < 2) data = [['role_code','module','can_create','can_read','can_update','can_delete','can_approve','can_export','permission_id','field_restrictions']];
   const headers = data[0];
 
   const roleIdx = headers.indexOf('role_code');
@@ -283,41 +282,63 @@ function updatePermissions(roleCode, permissions, user) {
   const approveIdx = headers.indexOf('can_approve');
   const exportIdx = headers.indexOf('can_export');
 
-  // Update or insert each module's permissions
-  Object.entries(permissions).forEach(([module, perms]) => {
-    let found = false;
-    
-    // Try to find existing row
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][roleIdx] === roleCode && data[i][moduleIdx] === module) {
-        // Update existing row
-        if (createIdx >= 0) sheet.getRange(i + 1, createIdx + 1).setValue(perms.can_create === true);
-        if (readIdx >= 0) sheet.getRange(i + 1, readIdx + 1).setValue(perms.can_read === true);
-        if (updateIdx >= 0) sheet.getRange(i + 1, updateIdx + 1).setValue(perms.can_update === true);
-        if (deleteIdx >= 0) sheet.getRange(i + 1, deleteIdx + 1).setValue(perms.can_delete === true);
-        if (approveIdx >= 0) sheet.getRange(i + 1, approveIdx + 1).setValue(perms.can_approve === true);
-        if (exportIdx >= 0) sheet.getRange(i + 1, exportIdx + 1).setValue(perms.can_export === true);
-        found = true;
-        console.log('Updated permissions for', roleCode, module);
-        break;
+  // Update or insert each module's permissions (Sheet backup)
+  if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
+    var sheet = getSheet(SHEETS.PERMISSIONS);
+    Object.entries(permissions).forEach(([module, perms]) => {
+      let found = false;
+
+      // Try to find existing row
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][roleIdx] === roleCode && data[i][moduleIdx] === module) {
+          // Update existing row
+          if (createIdx >= 0) sheet.getRange(i + 1, createIdx + 1).setValue(perms.can_create === true);
+          if (readIdx >= 0) sheet.getRange(i + 1, readIdx + 1).setValue(perms.can_read === true);
+          if (updateIdx >= 0) sheet.getRange(i + 1, updateIdx + 1).setValue(perms.can_update === true);
+          if (deleteIdx >= 0) sheet.getRange(i + 1, deleteIdx + 1).setValue(perms.can_delete === true);
+          if (approveIdx >= 0) sheet.getRange(i + 1, approveIdx + 1).setValue(perms.can_approve === true);
+          if (exportIdx >= 0) sheet.getRange(i + 1, exportIdx + 1).setValue(perms.can_export === true);
+          found = true;
+          console.log('Updated permissions for', roleCode, module);
+          break;
+        }
       }
-    }
-    
-    // If not found, insert new row
-    if (!found) {
-      const newRow = new Array(headers.length).fill('');
-      newRow[roleIdx] = roleCode;
-      newRow[moduleIdx] = module;
-      if (createIdx >= 0) newRow[createIdx] = perms.can_create === true;
-      if (readIdx >= 0) newRow[readIdx] = perms.can_read === true;
-      if (updateIdx >= 0) newRow[updateIdx] = perms.can_update === true;
-      if (deleteIdx >= 0) newRow[deleteIdx] = perms.can_delete === true;
-      if (approveIdx >= 0) newRow[approveIdx] = perms.can_approve === true;
-      if (exportIdx >= 0) newRow[exportIdx] = perms.can_export === true;
-      sheet.appendRow(newRow);
-      console.log('Inserted new permissions for', roleCode, module);
-    }
-  });
+
+      // If not found, insert new row
+      if (!found) {
+        const newRow = new Array(headers.length).fill('');
+        newRow[roleIdx] = roleCode;
+        newRow[moduleIdx] = module;
+        if (createIdx >= 0) newRow[createIdx] = perms.can_create === true;
+        if (readIdx >= 0) newRow[readIdx] = perms.can_read === true;
+        if (updateIdx >= 0) newRow[updateIdx] = perms.can_update === true;
+        if (deleteIdx >= 0) newRow[deleteIdx] = perms.can_delete === true;
+        if (approveIdx >= 0) newRow[approveIdx] = perms.can_approve === true;
+        if (exportIdx >= 0) newRow[exportIdx] = perms.can_export === true;
+        sheet.appendRow(newRow);
+        console.log('Inserted new permissions for', roleCode, module);
+      }
+    });
+  }
+
+  // Write to Firestore (primary)
+  if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+    Object.entries(permissions).forEach(([module, perms]) => {
+      var permId = roleCode + '_' + module;
+      firestoreSet('02_Permissions', permId, {
+        permission_id: permId,
+        role_code: roleCode,
+        module: module,
+        can_create: perms.can_create === true,
+        can_read: perms.can_read === true,
+        can_update: perms.can_update === true,
+        can_delete: perms.can_delete === true,
+        can_approve: perms.can_approve === true,
+        can_export: perms.can_export === true,
+        field_restrictions: ''
+      });
+    });
+  }
 
   // Invalidate ALL permission caches to ensure changes take effect immediately
   try {
@@ -383,10 +404,8 @@ function saveSystemConfigValues(config, user) {
  * Get audit log entries
  */
 function getAuditLogs(actionFilter, page, pageSize) {
-  const sheet = getSheet(SHEETS.AUDIT_LOG);
-  if (!sheet || sheet.getLastRow() < 2) return [];
-
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.AUDIT_LOG);
+  if (!data || data.length < 2) return [];
   const headers = data[0];
 
   page = page || 1;
@@ -413,23 +432,17 @@ function getAuditLogs(actionFilter, page, pageSize) {
  * Get audit log count
  */
 function getAuditLogCount(actionFilter) {
-  const sheet = getSheet(SHEETS.AUDIT_LOG);
-  if (!sheet || sheet.getLastRow() < 2) return 0;
+  var data = getSheetData(SHEETS.AUDIT_LOG);
+  if (!data || data.length < 2) return 0;
 
-  if (!actionFilter) {
-    return sheet.getLastRow() - 1;
-  }
+  if (!actionFilter) return data.length - 1;
 
-  // Count with filter
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const actionIdx = headers.indexOf('action');
-
-  let count = 0;
-  for (let i = 1; i < data.length; i++) {
+  var headers = data[0];
+  var actionIdx = headers.indexOf('action');
+  var count = 0;
+  for (var i = 1; i < data.length; i++) {
     if (data[i][actionIdx] === actionFilter) count++;
   }
-
   return count;
 }
 

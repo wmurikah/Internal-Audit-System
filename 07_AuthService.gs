@@ -182,12 +182,17 @@ function getUserByEmailCached(email) {
 }
 
 function findUserRowIndex(userId) {
-  const sheet = getSheet(SHEETS.USERS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idIdx = headers.indexOf('user_id');
-  
-  for (let i = 1; i < data.length; i++) {
+  // Only needed for Sheet backup writes in realtime mode
+  if (typeof shouldWriteToSheet === 'function' && !shouldWriteToSheet()) {
+    return null;
+  }
+  var sheet = getSheet(SHEETS.USERS);
+  if (!sheet) return null;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idIdx = headers.indexOf('user_id');
+
+  for (var i = 1; i < data.length; i++) {
     if (data[i][idIdx] === userId) {
       return i + 1;
     }
@@ -405,71 +410,89 @@ function createSession(user) {
 
 function getSessionByToken(token) {
   if (!token) return null;
-  
-  const sheet = getSheet(SHEETS.SESSIONS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const tokenIdx = headers.indexOf('session_token');
-  
-  for (let i = 1; i < data.length; i++) {
+
+  // Read from Firestore via getSheetData (Firestore-primary)
+  var data = getSheetData(SHEETS.SESSIONS);
+  if (!data || data.length < 2) return null;
+  var headers = data[0];
+  var tokenIdx = headers.indexOf('session_token');
+
+  for (var i = 1; i < data.length; i++) {
     if (data[i][tokenIdx] === token) {
-      const session = rowToObject(headers, data[i]);
-      session._rowIndex = i + 1;
-      return session;
+      return rowToObject(headers, data[i]);
     }
   }
-  
+
   return null;
 }
 
 function invalidateSession(sessionId) {
-  const sheet = getSheet(SHEETS.SESSIONS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idIdx = headers.indexOf('session_id');
-  const validIdx = headers.indexOf('is_valid');
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][idIdx] === sessionId) {
-      if (shouldWriteToSheet()) {
-        sheet.getRange(i + 1, validIdx + 1).setValue(false);
+  // Invalidate in Firestore (primary)
+  if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+    var session = firestoreGet(SHEETS.SESSIONS, sessionId);
+    if (session) {
+      session.is_valid = false;
+      firestoreSet(SHEETS.SESSIONS, sessionId, session);
+      if (session.session_token) {
+        CacheService.getScriptCache().remove('session_' + session.session_token.substring(0, 16));
       }
-
-      const token = data[i][headers.indexOf('session_token')];
-      if (token) {
-        const cache = CacheService.getScriptCache();
-        cache.remove('session_' + token.substring(0, 16));
-      }
-      
-      return true;
     }
   }
-  
-  return false;
+
+  // Sheet backup
+  if (typeof shouldWriteToSheet === 'function' && shouldWriteToSheet()) {
+    var sheet = getSheet(SHEETS.SESSIONS);
+    if (sheet) {
+      var data = sheet.getDataRange().getValues();
+      var headers = data[0];
+      var idIdx = headers.indexOf('session_id');
+      var validIdx = headers.indexOf('is_valid');
+      for (var i = 1; i < data.length; i++) {
+        if (data[i][idIdx] === sessionId) {
+          sheet.getRange(i + 1, validIdx + 1).setValue(false);
+          break;
+        }
+      }
+    }
+  }
+
+  return true;
 }
 
 function cleanupExpiredSessions() {
-  const sheet = getSheet(SHEETS.SESSIONS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const expiresIdx = headers.indexOf('expires_at');
-  const validIdx = headers.indexOf('is_valid');
-  
-  const now = new Date();
-  let cleaned = 0;
-  
-  for (let i = data.length - 1; i >= 1; i--) {
-    const expiresAt = data[i][expiresIdx];
-    const isValid = data[i][validIdx];
-    
-    if (!isValid || (expiresAt && new Date(expiresAt) < now)) {
-      if (shouldWriteToSheet()) {
-        sheet.deleteRow(i + 1);
-      }
-      cleaned++;
+  var now = new Date();
+  var cleaned = 0;
+
+  // Read from Firestore (primary)
+  if (typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+    var sessions = firestoreGetAll(SHEETS.SESSIONS);
+    if (sessions) {
+      sessions.forEach(function(session) {
+        var expired = !session.is_valid || (session.expires_at && new Date(session.expires_at) < now);
+        if (expired && session.session_id) {
+          firestoreDelete(SHEETS.SESSIONS, session.session_id);
+          cleaned++;
+        }
+      });
     }
   }
-  
+
+  // Sheet backup cleanup
+  if (typeof shouldWriteToSheet === 'function' && shouldWriteToSheet()) {
+    var sheet = getSheet(SHEETS.SESSIONS);
+    if (sheet && sheet.getLastRow() > 1) {
+      var data = sheet.getDataRange().getValues();
+      var headers = data[0];
+      var expiresIdx = headers.indexOf('expires_at');
+      var validIdx = headers.indexOf('is_valid');
+      for (var i = data.length - 1; i >= 1; i--) {
+        if (!data[i][validIdx] || (data[i][expiresIdx] && new Date(data[i][expiresIdx]) < now)) {
+          sheet.deleteRow(i + 1);
+        }
+      }
+    }
+  }
+
   console.log('Cleaned up sessions:', cleaned);
   return cleaned;
 }
@@ -1043,25 +1066,44 @@ function forgotPassword(email) {
 }
 
 function invalidateUserSessions(userId) {
-  const sheet = getSheet(SHEETS.SESSIONS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const userIdIdx = headers.indexOf('user_id');
-  const validIdx = headers.indexOf('is_valid');
-  const tokenIdx = headers.indexOf('session_token');
-  const cache = CacheService.getScriptCache();
+  var cache = CacheService.getScriptCache();
 
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][userIdIdx] === userId) {
-      if (shouldWriteToSheet()) {
+  // Read sessions from Firestore
+  var sessions = getSheetData(SHEETS.SESSIONS);
+  if (sessions.length < 2) return;
+
+  var headers = sessions[0];
+  var userIdIdx = headers.indexOf('user_id');
+  var validIdx = headers.indexOf('is_valid');
+  var tokenIdx = headers.indexOf('session_token');
+
+  var sheet = shouldWriteToSheet() ? getSheet(SHEETS.SESSIONS) : null;
+
+  for (var i = 1; i < sessions.length; i++) {
+    if (sessions[i][userIdIdx] === userId) {
+      // Update in Firestore
+      var token = sessions[i][tokenIdx];
+      if (token && typeof syncToFirestore === 'function' && isFirestoreEnabled()) {
+        var sessionDoc = firestoreGet(SHEETS.SESSIONS, token);
+        if (sessionDoc) {
+          sessionDoc.is_valid = false;
+          syncToFirestore(SHEETS.SESSIONS, sessionDoc);
+        }
+      }
+      // Backup to Sheet
+      if (sheet) {
         sheet.getRange(i + 1, validIdx + 1).setValue(false);
       }
-      // Also invalidate the session cache entry
-      var token = data[i][tokenIdx];
+      // Invalidate session cache entry
       if (token) {
         try { cache.remove('session_' + String(token).substring(0, 16)); } catch (e) {}
       }
     }
+  }
+
+  // Clear the sheet data cache for sessions
+  if (typeof _sheetDataCache !== 'undefined') {
+    _sheetDataCache[SHEETS.SESSIONS] = null;
   }
 }
 
@@ -1076,10 +1118,12 @@ function getUsers(filters, adminUser) {
   }
 
   filters = filters || {};
-  
-  const sheet = getSheet(SHEETS.USERS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
+
+  var data = getSheetData(SHEETS.USERS);
+  if (!data || data.length < 2) {
+    return sanitizeForClient({ success: true, users: [], total: 0 });
+  }
+  var headers = data[0];
   
   const colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
@@ -1123,21 +1167,24 @@ function getUsers(filters, adminUser) {
 }
 
 function updateUserIndex(userId, user, rowNumber) {
-  const indexSheet = getSheet(SHEETS.INDEX_USERS);
-  const data = indexSheet.getDataRange().getValues();
-  const headers = data[0];
-  const idIdx = headers.indexOf('user_id');
-  
-  for (let i = 1; i < data.length; i++) {
+  if (!shouldWriteToSheet()) return; // Index is backup-only
+
+  var indexSheet = getSheet(SHEETS.INDEX_USERS);
+  if (!indexSheet) return;
+  var data = indexSheet.getDataRange().getValues();
+  var headers = data[0];
+  var idIdx = headers.indexOf('user_id');
+
+  for (var i = 1; i < data.length; i++) {
     if (data[i][idIdx] === userId) {
-      const row = [userId, rowNumber, user.email, user.role_code, user.is_active, new Date()];
-      indexSheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      var updateRow = [userId, rowNumber, user.email, user.role_code, user.is_active, new Date()];
+      indexSheet.getRange(i + 1, 1, 1, updateRow.length).setValues([updateRow]);
       return;
     }
   }
-  
-  const row = [userId, rowNumber, user.email, user.role_code, user.is_active, new Date()];
-  indexSheet.appendRow(row);
+
+  var newRow = [userId, rowNumber, user.email, user.role_code, user.is_active, new Date()];
+  indexSheet.appendRow(newRow);
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)

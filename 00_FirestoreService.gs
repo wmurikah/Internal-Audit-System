@@ -259,7 +259,10 @@ var FIRESTORE_COLLECTIONS = {
   '20_Sessions':            'sessions',
   '00_Config':              'config',
   '01_Roles':               'roles',
-  '02_Permissions':         'permissions'
+  '02_Permissions':         'permissions',
+  '16_AuditLog':            'audit_log',
+  '21_NotificationQueue':   'notification_queue',
+  '22_EmailTemplates':      'email_templates'
 };
 
 /**
@@ -280,7 +283,10 @@ var FIRESTORE_DOC_ID_FIELD = {
   '20_Sessions':            'session_id',
   '00_Config':              'config_key',
   '01_Roles':               'role_code',
-  '02_Permissions':         'permission_id'
+  '02_Permissions':         'permission_id',
+  '16_AuditLog':            'log_id',
+  '21_NotificationQueue':   'notification_id',
+  '22_EmailTemplates':      'template_code'
 };
 
 /**
