@@ -804,39 +804,6 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
 }
 
 /**
- * Resolve affiliate name and audit area name from a batch of work papers.
- * Uses the first work paper's affiliate_code and audit_area_id to look up display names from dropdowns.
- * @param {Object[]} workPapers
- * @returns {{ affiliate: string, auditArea: string }}
- */
-function resolveAuditContext(workPapers) {
-  var result = { affiliate: '', auditArea: '' };
-  if (!workPapers || workPapers.length === 0) return result;
-
-  var wp = workPapers[0]; // use first work paper for context
-
-  // Resolve affiliate name
-  if (wp.affiliate_code) {
-    try {
-      var affiliates = getAffiliatesDropdown();
-      var match = affiliates.find(function(a) { return a.code === wp.affiliate_code; });
-      if (match) result.affiliate = match.name || match.code;
-    } catch (e) { result.affiliate = wp.affiliate_code; }
-  }
-
-  // Resolve audit area name (audit_area_id stores the area code/id)
-  if (wp.audit_area_id) {
-    try {
-      var areas = getAuditAreasDropdown();
-      var areaMatch = areas.find(function(a) { return a.id === wp.audit_area_id || a.code === wp.audit_area_id; });
-      if (areaMatch) result.auditArea = areaMatch.name || areaMatch.code;
-    } catch (e) { result.auditArea = wp.audit_area_id; }
-  }
-
-  return result;
-}
-
-/**
  * Send overdue reminders with professional table (called by weekly Monday trigger).
  * Groups overdue action plans by owner and sends ONE table email per person.
  * Also sends auditor summary.
@@ -1081,7 +1048,9 @@ function sendBiweeklySummary() {
 
   // For the AP table, embed it manually after the WP section
   var apTableIntro = '';
-  var apOutro = '<br>' + loginUrl;
+  var apOutro = loginUrl
+    ? '<br>Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to review and take action on outstanding items.'
+    : '<br>Please log in to review and take action on outstanding items.';
   var apTableHtml = formatTableEmailHtml(subject, apTableIntro, apHeaders, apRows, apOutro);
 
   // Use the WP table email as the main body (it includes both sections)
