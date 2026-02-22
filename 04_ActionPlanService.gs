@@ -459,7 +459,13 @@ function getActionPlansRaw(filters, user) {
       const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
       if (!ownerIds.includes(filters.owner_id)) match = false;
     }
-    
+
+    // "My Action Plans" filter: only show action plans owned by the current user
+    if (filters.mine && user) {
+      const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
+      if (!ownerIds.includes(user.user_id)) match = false;
+    }
+
     if (filters.overdue_only) {
       const dueDate = row[colMap['due_date']];
       const status = row[colMap['status']];

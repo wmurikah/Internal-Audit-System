@@ -410,8 +410,7 @@ function renderDelegationCard(ap) {
     // Populate user dropdown (auditees who could take over)
     const select = document.getElementById('apDelegateOwner');
     select.innerHTML = '<option value="">Select new owner...</option>';
-    const dropdowns = window.dropdownData || {};
-    const users = dropdowns.users || [];
+    const users = (window.appDropdowns && window.appDropdowns.users) || [];
     users.forEach(function(u) {
       if (u.id !== user.user_id) {
         var opt = document.createElement('option');

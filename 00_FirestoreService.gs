@@ -652,6 +652,33 @@ function purgeFirestoreCollection(sheetName) {
 }
 
 /**
+ * Ensure sheet header row matches the current schema.
+ * Adds any missing columns to the end of the header row.
+ * This prevents schema/header mismatch when new fields are added to the code
+ * but not yet reflected in the Google Sheet.
+ */
+function syncSheetHeaders(sheetName, schemaKey) {
+  var sheet = getSheet(sheetName);
+  if (!sheet) return;
+
+  var schema = SCHEMAS[schemaKey];
+  if (!schema) return;
+
+  var headerRange = sheet.getRange(1, 1, 1, sheet.getMaxColumns());
+  var currentHeaders = headerRange.getValues()[0].filter(function(h) { return h !== ''; });
+
+  // Find missing columns
+  var missing = schema.filter(function(col) { return currentHeaders.indexOf(col) === -1; });
+
+  if (missing.length > 0) {
+    // Append missing columns to the header row
+    var startCol = currentHeaders.length + 1;
+    sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
+    console.log('syncSheetHeaders: Added ' + missing.length + ' columns to ' + sheetName + ': ' + missing.join(', '));
+  }
+}
+
+/**
  * Clear all data rows from a Google Sheet (keep header row).
  */
 function purgeSheetData(sheetName) {
@@ -791,6 +818,15 @@ function purgeAndSeedTestData() {
     if (subAreas[c][saIdIdx]) subAreaIds.push(subAreas[c][saIdIdx]);
   }
   if (subAreaIds.length === 0) subAreaIds = ['SA-001'];
+
+  // ── STEP 4b: Sync sheet headers to match current schemas ──
+  console.log('Step 4b: Syncing sheet headers...');
+  syncSheetHeaders(SHEETS.WORK_PAPERS, 'WORK_PAPERS');
+  syncSheetHeaders(SHEETS.ACTION_PLANS, 'ACTION_PLANS');
+  syncSheetHeaders(SHEETS.AP_EVIDENCE, 'AP_EVIDENCE');
+  syncSheetHeaders(SHEETS.AP_HISTORY, 'AP_HISTORY');
+  syncSheetHeaders(SHEETS.USERS, 'USERS');
+  report.push('Sheet headers synced to current schemas');
 
   // Categorise active users by role
   var auditors = activeUsers.filter(function(u) {
