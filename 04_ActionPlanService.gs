@@ -92,7 +92,9 @@ function createActionPlan(data, user) {
   let rowNum;
   try {
     lock.waitLock(15000);
-    sheet.appendRow(row);
+    if (shouldWriteToSheet()) {
+      sheet.appendRow(row);
+    }
     invalidateSheetData(SHEETS.ACTION_PLANS);
     rowNum = sheet.getLastRow();
     lock.releaseLock();
@@ -205,7 +207,9 @@ function createActionPlansBatch(workPaperId, plansData, user) {
   // Batch insert
   const sheet = getSheet(SHEETS.ACTION_PLANS);
   const startRow = sheet.getLastRow() + 1;
-  sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+  }
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
   // Update indexes
@@ -355,7 +359,9 @@ function updateActionPlan(actionPlanId, data, user) {
   if (!rowIndex) throw new Error('Row index not found');
   
   const row = objectToRow('ACTION_PLANS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
   // Update index
@@ -402,13 +408,17 @@ function deleteActionPlan(actionPlanId, user) {
   });
   
   // Delete from sheets (in reverse order of dependencies)
-  deleteRelatedRows(SHEETS.AP_EVIDENCE, 'action_plan_id', actionPlanId);
-  deleteRelatedRows(SHEETS.AP_HISTORY, 'action_plan_id', actionPlanId);
-  
+  if (shouldWriteToSheet()) {
+    deleteRelatedRows(SHEETS.AP_EVIDENCE, 'action_plan_id', actionPlanId);
+    deleteRelatedRows(SHEETS.AP_HISTORY, 'action_plan_id', actionPlanId);
+  }
+
   // Delete main record
   const sheet = getSheet(SHEETS.ACTION_PLANS);
   if (existing._rowIndex) {
-    sheet.deleteRow(existing._rowIndex);
+    if (shouldWriteToSheet()) {
+      sheet.deleteRow(existing._rowIndex);
+    }
     invalidateSheetData(SHEETS.ACTION_PLANS);
   }
 
@@ -650,7 +660,9 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   const rowIndex = actionPlan._rowIndex;
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
   // Update index
@@ -732,7 +744,9 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   const rowIndex = actionPlan._rowIndex;
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
   // Update index
@@ -796,7 +810,9 @@ function hoaReview(actionPlanId, action, comments, user) {
   const rowIndex = actionPlan._rowIndex;
   const updated = { ...actionPlan, ...updates };
   const row = objectToRow('ACTION_PLANS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
   // Update index if status changed
@@ -857,11 +873,15 @@ function updateOverdueStatuses() {
     
     // Update days overdue
     if (daysOverdue > 0) {
-      sheet.getRange(i + 1, daysOverdueIdx + 1).setValue(daysOverdue);
-      
+      if (shouldWriteToSheet()) {
+        sheet.getRange(i + 1, daysOverdueIdx + 1).setValue(daysOverdue);
+      }
+
       // Update status to Overdue if past due
       if (currentStatus !== STATUS.ACTION_PLAN.OVERDUE && daysOverdue > 0) {
-        sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.OVERDUE);
+        if (shouldWriteToSheet()) {
+          sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.OVERDUE);
+        }
         if (actionPlanIdIdx !== undefined) {
           const actionPlanId = row[actionPlanIdIdx];
           if (actionPlanId) {
@@ -875,7 +895,9 @@ function updateOverdueStatuses() {
       }
     } else if (currentStatus === STATUS.ACTION_PLAN.NOT_DUE && daysOverdue <= 0 && daysOverdue >= -30) {
       // Update to Pending if due within 30 days
-      sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.PENDING);
+      if (shouldWriteToSheet()) {
+        sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.PENDING);
+      }
       if (actionPlanIdIdx !== undefined) {
         const actionPlanId = row[actionPlanIdIdx];
         if (actionPlanId) {
@@ -945,7 +967,9 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
   for (var k2 in updates) { updated[k2] = updates[k2]; }
 
   var row = objectToRow('ACTION_PLANS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
   // Update index
@@ -1042,7 +1066,9 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   
   const sheet = getSheet(SHEETS.AP_EVIDENCE);
   const row = objectToRow('AP_EVIDENCE', evidence);
-  sheet.appendRow(row);
+  if (shouldWriteToSheet()) {
+    sheet.appendRow(row);
+  }
   invalidateSheetData(SHEETS.AP_EVIDENCE);
 
   // Add history entry
@@ -1078,7 +1104,9 @@ function deleteActionPlanEvidence(evidenceId, user) {
         }
       }
       
-      sheet.deleteRow(i + 1);
+      if (shouldWriteToSheet()) {
+        sheet.deleteRow(i + 1);
+      }
       invalidateSheetData(SHEETS.AP_EVIDENCE);
 
       logAuditEvent('DELETE_EVIDENCE', 'ACTION_PLAN', existing.action_plan_id, existing, null, user.user_id, user.email);
@@ -1107,8 +1135,10 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
   
   const sheet = getSheet(SHEETS.AP_HISTORY);
   const row = objectToRow('AP_HISTORY', history);
-  sheet.appendRow(row);
-  
+  if (shouldWriteToSheet()) {
+    sheet.appendRow(row);
+  }
+
   return history;
 }
 
@@ -1255,7 +1285,9 @@ function deleteRelatedRows(sheetName, foreignKeyColumn, foreignKeyValue) {
   // Delete from bottom to top to avoid index shifting issues
   for (let i = data.length - 1; i >= 1; i--) {
     if (data[i][fkIdx] === foreignKeyValue) {
-      sheet.deleteRow(i + 1);
+      if (shouldWriteToSheet()) {
+        sheet.deleteRow(i + 1);
+      }
     }
   }
 }

@@ -65,7 +65,9 @@ function createWorkPaper(data, user) {
   let rowNum;
   try {
     lock.waitLock(15000);
-    sheet.appendRow(row);
+    if (shouldWriteToSheet()) {
+      sheet.appendRow(row);
+    }
     rowNum = sheet.getLastRow();
     lock.releaseLock();
   } catch (lockErr) {
@@ -176,11 +178,13 @@ function updateWorkPaper(workPaperId, data, user) {
   }
   
   const row = objectToRow('WORK_PAPERS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
+
   // Update index
   updateWorkPaperIndex(workPaperId, updated, rowIndex);
-  
+
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
 
@@ -213,11 +217,13 @@ function deleteWorkPaper(workPaperId, user) {
   const rowIndex = existing._rowIndex;
   
   if (rowIndex) {
-    sheet.deleteRow(rowIndex);
-    
+    if (shouldWriteToSheet()) {
+      sheet.deleteRow(rowIndex);
+    }
+
     // Remove from index
     removeFromIndex(SHEETS.INDEX_WORK_PAPERS, workPaperId);
-    
+
     // Rebuild indexes for affected rows (rows after deleted one shifted up)
     rebuildWorkPaperIndex();
   }
@@ -421,9 +427,11 @@ function submitWorkPaper(workPaperId, user) {
   const submittedIdx = getColumnIndex('WORK_PAPERS', 'submitted_date');
   const updatedIdx = getColumnIndex('WORK_PAPERS', 'updated_at');
   
-  sheet.getRange(rowIndex, statusIdx + 1).setValue(updates.status);
-  sheet.getRange(rowIndex, submittedIdx + 1).setValue(updates.submitted_date);
-  sheet.getRange(rowIndex, updatedIdx + 1).setValue(updates.updated_at);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, statusIdx + 1).setValue(updates.status);
+    sheet.getRange(rowIndex, submittedIdx + 1).setValue(updates.submitted_date);
+    sheet.getRange(rowIndex, updatedIdx + 1).setValue(updates.updated_at);
+  }
   invalidateSheetData(SHEETS.WORK_PAPERS);
 
   // Add revision history
@@ -522,7 +530,9 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   const rowIndex = workPaper._rowIndex;
   const updated = { ...workPaper, ...updates };
   const row = objectToRow('WORK_PAPERS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
   invalidateSheetData(SHEETS.WORK_PAPERS);
 
   // Add revision history
@@ -575,7 +585,9 @@ function sendToAuditee(workPaperId, user) {
   const rowIndex = workPaper._rowIndex;
   const updated = { ...workPaper, ...updates };
   const row = objectToRow('WORK_PAPERS', updated);
-  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  if (shouldWriteToSheet()) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
 
   // Invalidate in-memory cache so subsequent reads (e.g. createActionPlan)
   // see the new SENT_TO_AUDITEE status instead of stale APPROVED status
@@ -664,8 +676,10 @@ function addWorkPaperRequirement(workPaperId, requirementData, user) {
   
   const sheet = getSheet(SHEETS.WP_REQUIREMENTS);
   const row = objectToRow('WP_REQUIREMENTS', requirement);
-  sheet.appendRow(row);
-  
+  if (shouldWriteToSheet()) {
+    sheet.appendRow(row);
+  }
+
   logAuditEvent('ADD_REQUIREMENT', 'WORK_PAPER', workPaperId, null, requirement, user.user_id, user.email);
   
   return sanitizeForClient({ success: true, requirementId: requirementId, requirement: requirement });
@@ -693,8 +707,10 @@ function updateWorkPaperRequirement(requirementId, data, user) {
       if (data.notes !== undefined) updated.notes = sanitizeInput(data.notes);
       
       const row = objectToRow('WP_REQUIREMENTS', updated);
-      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
-      
+      if (shouldWriteToSheet()) {
+        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      }
+
       logAuditEvent('UPDATE_REQUIREMENT', 'WORK_PAPER', existing.work_paper_id, existing, updated, user.user_id, user.email);
       
       return sanitizeForClient({ success: true, requirement: updated });
@@ -718,8 +734,10 @@ function deleteWorkPaperRequirement(requirementId, user) {
   for (let i = 1; i < allData.length; i++) {
     if (allData[i][idIdx] === requirementId) {
       const existing = rowToObject(headers, allData[i]);
-      sheet.deleteRow(i + 1);
-      
+      if (shouldWriteToSheet()) {
+        sheet.deleteRow(i + 1);
+      }
+
       logAuditEvent('DELETE_REQUIREMENT', 'WORK_PAPER', existing.work_paper_id, existing, null, user.user_id, user.email);
       
       return { success: true };
@@ -754,8 +772,10 @@ function addWorkPaperFile(workPaperId, fileData, user) {
   
   const sheet = getSheet(SHEETS.WP_FILES);
   const row = objectToRow('WP_FILES', file);
-  sheet.appendRow(row);
-  
+  if (shouldWriteToSheet()) {
+    sheet.appendRow(row);
+  }
+
   logAuditEvent('ADD_FILE', 'WORK_PAPER', workPaperId, null, file, user.user_id, user.email);
   
   return sanitizeForClient({ success: true, fileId: fileId, file: file });
@@ -785,8 +805,10 @@ function deleteWorkPaperFile(fileId, user) {
         }
       }
       
-      sheet.deleteRow(i + 1);
-      
+      if (shouldWriteToSheet()) {
+        sheet.deleteRow(i + 1);
+      }
+
       logAuditEvent('DELETE_FILE', 'WORK_PAPER', existing.work_paper_id, existing, null, user.user_id, user.email);
       
       return { success: true };
@@ -818,8 +840,10 @@ function addWorkPaperRevision(workPaperId, action, comments, user) {
   
   const sheet = getSheet(SHEETS.WP_REVISIONS);
   const row = objectToRow('WP_REVISIONS', revision);
-  sheet.appendRow(row);
-  
+  if (shouldWriteToSheet()) {
+    sheet.appendRow(row);
+  }
+
   return revision;
 }
 
@@ -1193,7 +1217,9 @@ function batchSendToAuditees(workPaperIds, user) {
       var rowIndex = wp._rowIndex;
       if (rowIndex) {
         var row = objectToRow('WORK_PAPERS', updated);
-        sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+        if (shouldWriteToSheet()) {
+          sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+        }
       }
 
       // Add revision history

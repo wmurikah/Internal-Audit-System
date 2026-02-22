@@ -395,6 +395,31 @@ function routeAction(action, data, user) {
       }
       return { success: true, report: purgeAndResyncFirestore() };
 
+    // ========== DATA & BACKUP ==========
+    case 'getBackupStatus':
+      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return { success: true, status: getBackupStatus() };
+
+    case 'saveBackupSettings':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can change backup settings' };
+      }
+      return saveBackupSettings(data);
+
+    case 'runIncrementalBackup':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can trigger backups' };
+      }
+      return runIncrementalBackup();
+
+    case 'runFullSheetBackup':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can trigger full backups' };
+      }
+      return runFullSheetBackup();
+
     // ========== AI SERVICE ==========
     case 'getAIConfigStatus':
       if (!canUserPerform(user, 'read', 'CONFIG', null)) {
@@ -1137,6 +1162,16 @@ function runScheduledMaintenance() {
     const emailResult = processEmailQueue();
     console.log('Emails sent:', emailResult.sent);
     
+    // Run incremental backup if in incremental mode
+    try {
+      if (typeof getSheetBackupMode === 'function' && getSheetBackupMode() === 'incremental') {
+        var backupResult = runIncrementalBackup();
+        console.log('Incremental backup:', backupResult.processed, 'changes synced');
+      }
+    } catch (backupErr) {
+      console.warn('Incremental backup during maintenance failed:', backupErr.message);
+    }
+
     // Warm caches after maintenance
     warmAllCaches();
     
@@ -1160,7 +1195,7 @@ function runScheduledMaintenance() {
  */
 function setupAllTriggers() {
   // Only delete triggers for known handler functions - preserve any custom triggers
-  const knownHandlers = ['processEmailQueue', 'dailyMaintenance', 'sendWeeklySummary', 'warmAllCaches'];
+  const knownHandlers = ['processEmailQueue', 'dailyMaintenance', 'sendWeeklySummary', 'warmAllCaches', 'runIncrementalBackup'];
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(trigger => {
     if (knownHandlers.includes(trigger.getHandlerFunction())) {

@@ -508,6 +508,17 @@ const DB = {
 
 const DBWrite = {
   insert: function(sheetName, data) {
+    // Respect backup mode: skip Sheet write if backup is not realtime
+    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
+      // In incremental/disabled mode, queue for later or skip
+      if (typeof backupToSheet === 'function') {
+        var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
+        var docId = idField ? data[idField] : '';
+        backupToSheet(sheetName, docId, 'upsert', null);
+      }
+      return -1; // No Sheet row created
+    }
+
     const sheet = getSheet(sheetName);
     if (!sheet) return -1;
 
@@ -537,16 +548,26 @@ const DBWrite = {
   },
 
   updateRow: function(sheetName, rowNumber, data) {
+    // Respect backup mode: skip Sheet write if backup is not realtime
+    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
+      if (typeof backupToSheet === 'function') {
+        var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
+        var docId = idField && data[idField] ? data[idField] : 'row_' + rowNumber;
+        backupToSheet(sheetName, docId, 'upsert', null);
+      }
+      return true; // Pretend success since Firestore is primary
+    }
+
     if (rowNumber < 2) return false;
-    
+
     const sheet = getSheet(sheetName);
     if (!sheet) return false;
-    
+
     const headers = getSheetHeaders(sheetName);
-    
+
     // Get current row data
     const currentData = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
-    
+
     // Merge with new data
     const newRowArray = headers.map((header, idx) => {
       if (data[header] !== undefined) {
@@ -554,52 +575,78 @@ const DBWrite = {
       }
       return currentData[idx];
     });
-    
+
     // Write back
     sheet.getRange(rowNumber, 1, 1, headers.length).setValues([newRowArray]);
-    
+
     return true;
   },
 
   updateById: function(entityType, entityId, data) {
+    // In non-realtime backup mode, skip index + sheet operations
+    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
+      var sheetName = CONFIG.DATA_SHEETS[entityType];
+      if (typeof backupToSheet === 'function') {
+        backupToSheet(sheetName, entityId, 'upsert', null);
+      }
+      return true;
+    }
+
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return false;
-    
+
     const sheetName = CONFIG.DATA_SHEETS[entityType];
     const result = this.updateRow(sheetName, rowNumber, data);
-    
+
     // Update index if relevant fields changed
     if (result) {
       const indexHeaders = getSheetHeaders(CONFIG.INDEX_SHEETS[entityType]);
       const indexFields = {};
       let needsIndexUpdate = false;
-      
+
       indexHeaders.forEach(header => {
         if (data[header] !== undefined) {
           indexFields[header] = data[header];
           needsIndexUpdate = true;
         }
       });
-      
+
       if (needsIndexUpdate) {
         Index.updateEntry(entityType, entityId, rowNumber, indexFields);
       }
     }
-    
+
     return result;
   },
 
   deleteRow: function(sheetName, rowNumber) {
+    // Respect backup mode
+    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
+      if (typeof backupToSheet === 'function') {
+        backupToSheet(sheetName, 'row_' + rowNumber, 'delete', null);
+      }
+      return true;
+    }
+
     if (rowNumber < 2) return false;
-    
+
     const sheet = getSheet(sheetName);
     if (!sheet) return false;
-    
+
     sheet.deleteRow(rowNumber);
     return true;
   },
 
   deleteById: function(entityType, entityId) {
+    // In non-realtime backup mode, skip index + sheet operations
+    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
+      var sheetName = CONFIG.DATA_SHEETS[entityType];
+      if (typeof backupToSheet === 'function') {
+        backupToSheet(sheetName, entityId, 'delete', null);
+      }
+      return true;
+    }
+
     const rowNumber = Index.getRowNumber(entityType, entityId);
     if (rowNumber < 2) return false;
 
@@ -624,13 +671,25 @@ const DBWrite = {
 
   batchInsert: function(sheetName, dataArray) {
     if (!dataArray || dataArray.length === 0) return [];
-    
+
+    // Respect backup mode
+    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
+      if (typeof backupToSheet === 'function') {
+        var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
+        dataArray.forEach(function(d) {
+          var docId = idField && d[idField] ? d[idField] : '';
+          backupToSheet(sheetName, docId, 'upsert', null);
+        });
+      }
+      return [];
+    }
+
     const sheet = getSheet(sheetName);
     if (!sheet) return [];
-    
+
     const headers = getSheetHeaders(sheetName);
     const startRow = sheet.getLastRow() + 1;
-    
+
     // Convert data objects to row arrays
     const rowArrays = dataArray.map(data => {
       return headers.map(header => {
@@ -638,39 +697,51 @@ const DBWrite = {
         return sanitizeValue(value !== undefined ? value : '');
       });
     });
-    
+
     // Single batch write
     sheet.getRange(startRow, 1, rowArrays.length, headers.length).setValues(rowArrays);
-    
+
     // Return row numbers
     return rowArrays.map((_, idx) => startRow + idx);
   },
 
   batchUpdate: function(sheetName, updates) {
     if (!updates || updates.length === 0) return true;
-    
+
+    // Respect backup mode
+    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
+      if (typeof backupToSheet === 'function') {
+        var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
+        updates.forEach(function(u) {
+          var docId = idField && u.data[idField] ? u.data[idField] : 'row_' + u.rowNumber;
+          backupToSheet(sheetName, docId, 'upsert', null);
+        });
+      }
+      return true;
+    }
+
     const sheet = getSheet(sheetName);
     if (!sheet) return false;
-    
+
     const headers = getSheetHeaders(sheetName);
-    
+
     // Process each update
     // TODO: Optimize by grouping contiguous rows
     updates.forEach(update => {
       if (update.rowNumber >= 2) {
         const currentData = sheet.getRange(update.rowNumber, 1, 1, headers.length).getValues()[0];
-        
+
         const newRowArray = headers.map((header, idx) => {
           if (update.data[header] !== undefined) {
             return sanitizeValue(update.data[header]);
           }
           return currentData[idx];
         });
-        
+
         sheet.getRange(update.rowNumber, 1, 1, headers.length).setValues([newRowArray]);
       }
     });
-    
+
     return true;
   }
 };
