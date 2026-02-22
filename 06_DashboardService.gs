@@ -997,9 +997,8 @@ function getComprehensiveReportData(filters) {
   // Build area lookup: area_id -> area_name from Audit Areas sheet
   var areaLookup = {};
   try {
-    var areaSheet = getSheet(SHEETS.AUDIT_AREAS);
-    if (areaSheet && areaSheet.getLastRow() > 1) {
-      var areaData = areaSheet.getDataRange().getValues();
+    var areaData = getSheetData(SHEETS.AUDIT_AREAS);
+    if (areaData && areaData.length > 1) {
       var areaHeaders = areaData[0];
       var areaIdIdx = areaHeaders.indexOf('area_id');
       var areaNameIdx = areaHeaders.indexOf('area_name');
@@ -1015,7 +1014,6 @@ function getComprehensiveReportData(filters) {
           areaLookup[acode] = areaData[ai][areaNameIdx] || acode;
         }
       }
-    }
   } catch(e) { console.warn('Failed to load audit areas lookup:', e); }
 
   // Enrich work papers with area_name from lookup

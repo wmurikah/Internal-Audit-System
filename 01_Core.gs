@@ -56,14 +56,45 @@ function getSheet(sheetName) {
 var _sheetDataCache = {};
 
 /**
- * Get all values from a sheet, using an in-memory cache to avoid
- * redundant Google Sheets API calls within the same execution.
+ * Get all values from a collection, using Firestore as the primary read source.
+ * Returns data in array-of-arrays format: [[headers], [row1], [row2], ...]
+ * for backward compatibility with existing callers.
+ * Falls back to Sheet for collections not in Firestore.
  * For write-heavy paths, pass skipCache = true.
  */
 function getSheetData(sheetName, skipCache) {
   if (!skipCache && _sheetDataCache[sheetName]) {
     return _sheetDataCache[sheetName];
   }
+
+  // Firestore-primary: read from Firestore for sheets that have collections
+  if (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined' && FIRESTORE_DOC_ID_FIELD[sheetName] &&
+      typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+    try {
+      var fsDocs = firestoreGetAll(sheetName);
+      if (fsDocs && fsDocs.length > 0) {
+        var headers = Object.keys(fsDocs[0]);
+        var data = [headers];
+        for (var d = 0; d < fsDocs.length; d++) {
+          var row = [];
+          for (var h = 0; h < headers.length; h++) {
+            var val = fsDocs[d][headers[h]];
+            row.push(val !== undefined && val !== null ? val : '');
+          }
+          data.push(row);
+        }
+        _sheetDataCache[sheetName] = data;
+        return data;
+      }
+      // Empty Firestore collection
+      _sheetDataCache[sheetName] = [];
+      return [];
+    } catch (e) {
+      console.warn('Firestore read failed for ' + sheetName + ', falling back to Sheet:', e.message);
+    }
+  }
+
+  // Fallback to Sheet for non-Firestore collections or Firestore errors
   var sheet = getSheet(sheetName);
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -370,533 +401,327 @@ const Index = {
 
 const DB = {
   getById: function(entityType, entityId) {
-    const rowNumber = Index.getRowNumber(entityType, entityId);
-    if (rowNumber < 2) return null;
+    var sheetName = CONFIG.DATA_SHEETS[entityType];
+    if (!sheetName) return null;
 
-    const sheetName = CONFIG.DATA_SHEETS[entityType];
-    const sheet = getSheet(sheetName);
-    if (!sheet) return null;
+    // Read from Firestore (primary)
+    if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      var doc = firestoreGet(sheetName, entityId);
+      if (doc) return doc;
+    }
 
-    const headers = getSheetHeaders(sheetName);
-    const rowData = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
-
-    // Convert to object
-    const entity = {};
-    headers.forEach((h, idx) => {
-      entity[h] = rowData[idx];
-    });
-
-    // CRITICAL: Include _rowIndex for update operations
-    entity._rowIndex = rowNumber;
-
-    return entity;
+    return null;
   },
 
   getByIds: function(entityType, entityIds) {
     if (!entityIds || entityIds.length === 0) return [];
-    
-    const indexMap = Index.getIndexMap(entityType);
-    const sheetName = CONFIG.DATA_SHEETS[entityType];
-    const sheet = getSheet(sheetName);
-    if (!sheet) return [];
-    
-    const headers = getSheetHeaders(sheetName);
-    const results = [];
-    
-    // Group by row ranges for batch read
-    const rowsToFetch = entityIds
-      .map(id => indexMap[id]?.rowNumber)
-      .filter(r => r && r >= 2)
-      .sort((a, b) => a - b);
-    
-    if (rowsToFetch.length === 0) return [];
-    
-    // For small sets, read individually
-    // For large sets, read entire sheet (more efficient)
-    if (rowsToFetch.length > 50) {
-      // Batch read entire sheet
-      const allData = sheet.getDataRange().getValues();
-      const idSet = new Set(entityIds);
-      const idIdx = headers.indexOf(headers[0]); // Assumes first column is ID
-      
-      for (let i = 1; i < allData.length; i++) {
-        if (idSet.has(allData[i][idIdx])) {
-          const entity = {};
-          headers.forEach((h, idx) => entity[h] = allData[i][idx]);
-          results.push(entity);
-        }
-      }
-    } else {
-      // Batch range read: fetch one range covering min to max row, then pick needed rows
-      var minRow = rowsToFetch[0];
-      var maxRow = rowsToFetch[rowsToFetch.length - 1];
-      var rangeData = sheet.getRange(minRow, 1, maxRow - minRow + 1, headers.length).getValues();
-      var rowSet = new Set(rowsToFetch);
-      for (var r = minRow; r <= maxRow; r++) {
-        if (rowSet.has(r)) {
-          var entity = {};
-          headers.forEach(function(h, idx) { entity[h] = rangeData[r - minRow][idx]; });
-          results.push(entity);
-        }
-      }
+
+    var sheetName = CONFIG.DATA_SHEETS[entityType];
+    if (!sheetName) return [];
+
+    // Read all from Firestore and filter by ID set
+    if (typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      var allDocs = firestoreGetAll(sheetName);
+      if (!allDocs) return [];
+      var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
+      if (!idField) return [];
+      var idSet = {};
+      entityIds.forEach(function(id) { idSet[id] = true; });
+      return allDocs.filter(function(doc) { return idSet[doc[idField]]; });
     }
-    
-    return results;
+
+    return [];
   },
 
   getAll: function(sheetName) {
-    const sheet = getSheet(sheetName);
+    // Read from Firestore for sheets with collections
+    if (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined' && FIRESTORE_DOC_ID_FIELD[sheetName] &&
+        typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      return firestoreGetAll(sheetName) || [];
+    }
+
+    // Fallback for non-Firestore sheets
+    var sheet = getSheet(sheetName);
     if (!sheet || sheet.getLastRow() < 2) return [];
-    
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const results = [];
-    
-    for (let i = 1; i < data.length; i++) {
-      const row = {};
-      headers.forEach((h, idx) => row[h] = data[i][idx]);
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0];
+    var results = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = {};
+      headers.forEach(function(h, idx) { row[h] = data[i][idx]; });
       results.push(row);
     }
-    
     return results;
   },
 
   getFiltered: function(entityType, filters) {
-    const indexMap = Index.getIndexMap(entityType);
-    const matchingIds = [];
-    
-    // Filter using index metadata
-    Object.entries(indexMap).forEach(([id, entry]) => {
-      let matches = true;
-      
-      for (const [key, value] of Object.entries(filters)) {
-        if (entry[key] !== undefined && entry[key] !== value) {
-          matches = false;
-          break;
+    var sheetName = CONFIG.DATA_SHEETS[entityType];
+    if (!sheetName) return [];
+
+    // Read from Firestore and filter in memory
+    if (typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      var allDocs = firestoreGetAll(sheetName);
+      if (!allDocs) return [];
+      return allDocs.filter(function(doc) {
+        for (var key in filters) {
+          if (filters.hasOwnProperty(key) && filters[key] !== undefined && doc[key] !== filters[key]) {
+            return false;
+          }
         }
-      }
-      
-      if (matches) {
-        matchingIds.push(id);
-      }
-    });
-    
-    // Fetch full records for matching IDs
-    return this.getByIds(entityType, matchingIds);
+        return true;
+      });
+    }
+
+    return [];
   },
 
   count: function(entityType, filters) {
-    const indexMap = Index.getIndexMap(entityType);
-    let count = 0;
-    
-    Object.values(indexMap).forEach(entry => {
-      let matches = true;
-      
-      for (const [key, value] of Object.entries(filters || {})) {
-        if (entry[key] !== undefined && entry[key] !== value) {
-          matches = false;
-          break;
-        }
-      }
-      
-      if (matches) count++;
-    });
-    
-    return count;
+    return this.getFiltered(entityType, filters).length;
   }
 };
 
+// ── DBWrite: Sheet backup layer ──
+// Firestore is the primary write store (via syncToFirestore in service files).
+// DBWrite handles Sheet backup only: realtime writes, incremental queuing, or skip.
 const DBWrite = {
   insert: function(sheetName, data) {
-    // Respect backup mode: skip Sheet write if backup is not realtime
-    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-      // In incremental/disabled mode, queue for later or skip
-      if (typeof backupToSheet === 'function') {
+    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
+      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
+        try {
+          var sheet = getSheet(sheetName);
+          if (sheet) {
+            var headers = getSheetHeaders(sheetName);
+            var rowArray = headers.map(function(header) {
+              var value = data[header];
+              return sanitizeValue(value !== undefined ? value : '');
+            });
+            sheet.appendRow(rowArray);
+          }
+        } catch (e) {
+          console.warn('Sheet backup insert failed for ' + sheetName + ':', e.message);
+        }
+      } else {
         var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
         var docId = idField ? data[idField] : '';
-        backupToSheet(sheetName, docId, 'upsert', null);
+        if (typeof backupToSheet === 'function') backupToSheet(sheetName, docId, 'upsert', null);
       }
-      return -1; // No Sheet row created
     }
-
-    const sheet = getSheet(sheetName);
-    if (!sheet) return -1;
-
-    const headers = getSheetHeaders(sheetName);
-
-    // Build row array from data object
-    const rowArray = headers.map(header => {
-      const value = data[header];
-      return sanitizeValue(value !== undefined ? value : '');
-    });
-
-    // Use lock to make appendRow + getLastRow atomic
-    const lock = LockService.getScriptLock();
-    try {
-      lock.waitLock(15000);
-      sheet.appendRow(rowArray);
-      const newRowNumber = sheet.getLastRow();
-      lock.releaseLock();
-      return newRowNumber;
-    } catch (e) {
-      try { lock.releaseLock(); } catch (ignored) {}
-      console.error('DBWrite.insert lock error:', e.message);
-      // Fallback without lock
-      sheet.appendRow(rowArray);
-      return sheet.getLastRow();
-    }
+    return -1; // No Sheet row (Firestore is primary)
   },
 
   updateRow: function(sheetName, rowNumber, data) {
-    // Respect backup mode: skip Sheet write if backup is not realtime
-    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-      if (typeof backupToSheet === 'function') {
+    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
+      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup() && rowNumber >= 2) {
+        try {
+          var sheet = getSheet(sheetName);
+          if (sheet) {
+            var headers = getSheetHeaders(sheetName);
+            var currentData = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
+            var newRowArray = headers.map(function(header, idx) {
+              if (data[header] !== undefined) return sanitizeValue(data[header]);
+              return currentData[idx];
+            });
+            sheet.getRange(rowNumber, 1, 1, headers.length).setValues([newRowArray]);
+          }
+        } catch (e) {
+          console.warn('Sheet backup updateRow failed for ' + sheetName + ':', e.message);
+        }
+      } else if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
         var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
         var docId = idField && data[idField] ? data[idField] : 'row_' + rowNumber;
-        backupToSheet(sheetName, docId, 'upsert', null);
+        if (typeof backupToSheet === 'function') backupToSheet(sheetName, docId, 'upsert', null);
       }
-      return true; // Pretend success since Firestore is primary
     }
-
-    if (rowNumber < 2) return false;
-
-    const sheet = getSheet(sheetName);
-    if (!sheet) return false;
-
-    const headers = getSheetHeaders(sheetName);
-
-    // Get current row data
-    const currentData = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
-
-    // Merge with new data
-    const newRowArray = headers.map((header, idx) => {
-      if (data[header] !== undefined) {
-        return sanitizeValue(data[header]);
-      }
-      return currentData[idx];
-    });
-
-    // Write back
-    sheet.getRange(rowNumber, 1, 1, headers.length).setValues([newRowArray]);
-
     return true;
   },
 
   updateById: function(entityType, entityId, data) {
-    // In non-realtime backup mode, skip index + sheet operations
-    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-      var sheetName = CONFIG.DATA_SHEETS[entityType];
-      if (typeof backupToSheet === 'function') {
-        backupToSheet(sheetName, entityId, 'upsert', null);
-      }
-      return true;
-    }
-
-    const rowNumber = Index.getRowNumber(entityType, entityId);
-    if (rowNumber < 2) return false;
-
-    const sheetName = CONFIG.DATA_SHEETS[entityType];
-    const result = this.updateRow(sheetName, rowNumber, data);
-
-    // Update index if relevant fields changed
-    if (result) {
-      const indexHeaders = getSheetHeaders(CONFIG.INDEX_SHEETS[entityType]);
-      const indexFields = {};
-      let needsIndexUpdate = false;
-
-      indexHeaders.forEach(header => {
-        if (data[header] !== undefined) {
-          indexFields[header] = data[header];
-          needsIndexUpdate = true;
+    var sheetName = CONFIG.DATA_SHEETS[entityType];
+    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
+      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
+        var rowNumber = Index.getRowNumber(entityType, entityId);
+        if (rowNumber >= 2) {
+          this.updateRow(sheetName, rowNumber, data);
+          // Update index for backup consistency
+          try {
+            var indexHeaders = getSheetHeaders(CONFIG.INDEX_SHEETS[entityType]);
+            var indexFields = {};
+            var needsIndexUpdate = false;
+            indexHeaders.forEach(function(header) {
+              if (data[header] !== undefined) { indexFields[header] = data[header]; needsIndexUpdate = true; }
+            });
+            if (needsIndexUpdate) Index.updateEntry(entityType, entityId, rowNumber, indexFields);
+          } catch (e) {}
         }
-      });
-
-      if (needsIndexUpdate) {
-        Index.updateEntry(entityType, entityId, rowNumber, indexFields);
+      } else {
+        if (typeof backupToSheet === 'function') backupToSheet(sheetName, entityId, 'upsert', null);
       }
     }
-
-    return result;
+    return true;
   },
 
   deleteRow: function(sheetName, rowNumber) {
-    // Respect backup mode
-    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-      if (typeof backupToSheet === 'function') {
-        backupToSheet(sheetName, 'row_' + rowNumber, 'delete', null);
+    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
+      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup() && rowNumber >= 2) {
+        try {
+          var sheet = getSheet(sheetName);
+          if (sheet) sheet.deleteRow(rowNumber);
+        } catch (e) {
+          console.warn('Sheet backup deleteRow failed for ' + sheetName + ':', e.message);
+        }
+      } else if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
+        if (typeof backupToSheet === 'function') backupToSheet(sheetName, 'row_' + rowNumber, 'delete', null);
       }
-      return true;
     }
-
-    if (rowNumber < 2) return false;
-
-    const sheet = getSheet(sheetName);
-    if (!sheet) return false;
-
-    sheet.deleteRow(rowNumber);
     return true;
   },
 
   deleteById: function(entityType, entityId) {
-    // In non-realtime backup mode, skip index + sheet operations
-    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-      var sheetName = CONFIG.DATA_SHEETS[entityType];
-      if (typeof backupToSheet === 'function') {
-        backupToSheet(sheetName, entityId, 'delete', null);
+    var sheetName = CONFIG.DATA_SHEETS[entityType];
+    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
+      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
+        var rowNumber = Index.getRowNumber(entityType, entityId);
+        if (rowNumber >= 2) {
+          try {
+            var sheet = getSheet(sheetName);
+            if (sheet) sheet.deleteRow(rowNumber);
+            Index.removeEntry(entityType, entityId);
+          } catch (e) {
+            console.warn('Sheet backup deleteById failed:', e.message);
+          }
+        }
+      } else {
+        if (typeof backupToSheet === 'function') backupToSheet(sheetName, entityId, 'delete', null);
       }
-      return true;
     }
-
-    const rowNumber = Index.getRowNumber(entityType, entityId);
-    if (rowNumber < 2) return false;
-
-    const sheetName = CONFIG.DATA_SHEETS[entityType];
-
-    // Use lock to prevent concurrent reads from seeing stale index during rebuild
-    const lock = LockService.getScriptLock();
-    try {
-      lock.waitLock(30000);
-      const result = this.deleteRow(sheetName, rowNumber);
-      if (result) {
-        // Remove just this entry from the index instead of full rebuild
-        Index.removeEntry(entityType, entityId);
-      }
-      lock.releaseLock();
-      return result;
-    } catch (e) {
-      try { lock.releaseLock(); } catch (ignored) {}
-      throw e;
-    }
+    return true;
   },
 
   batchInsert: function(sheetName, dataArray) {
     if (!dataArray || dataArray.length === 0) return [];
-
-    // Respect backup mode
-    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-      if (typeof backupToSheet === 'function') {
+    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
+      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
+        try {
+          var sheet = getSheet(sheetName);
+          if (sheet) {
+            var headers = getSheetHeaders(sheetName);
+            var startRow = sheet.getLastRow() + 1;
+            var rowArrays = dataArray.map(function(d) {
+              return headers.map(function(header) {
+                var value = d[header];
+                return sanitizeValue(value !== undefined ? value : '');
+              });
+            });
+            sheet.getRange(startRow, 1, rowArrays.length, headers.length).setValues(rowArrays);
+          }
+        } catch (e) {
+          console.warn('Sheet backup batchInsert failed:', e.message);
+        }
+      } else {
         var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
         dataArray.forEach(function(d) {
           var docId = idField && d[idField] ? d[idField] : '';
-          backupToSheet(sheetName, docId, 'upsert', null);
+          if (typeof backupToSheet === 'function') backupToSheet(sheetName, docId, 'upsert', null);
         });
       }
-      return [];
     }
-
-    const sheet = getSheet(sheetName);
-    if (!sheet) return [];
-
-    const headers = getSheetHeaders(sheetName);
-    const startRow = sheet.getLastRow() + 1;
-
-    // Convert data objects to row arrays
-    const rowArrays = dataArray.map(data => {
-      return headers.map(header => {
-        const value = data[header];
-        return sanitizeValue(value !== undefined ? value : '');
-      });
-    });
-
-    // Single batch write
-    sheet.getRange(startRow, 1, rowArrays.length, headers.length).setValues(rowArrays);
-
-    // Return row numbers
-    return rowArrays.map((_, idx) => startRow + idx);
+    return [];
   },
 
   batchUpdate: function(sheetName, updates) {
     if (!updates || updates.length === 0) return true;
-
-    // Respect backup mode
-    if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-      if (typeof backupToSheet === 'function') {
+    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
+      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
+        try {
+          var sheet = getSheet(sheetName);
+          if (sheet) {
+            var headers = getSheetHeaders(sheetName);
+            updates.forEach(function(update) {
+              if (update.rowNumber >= 2) {
+                var currentData = sheet.getRange(update.rowNumber, 1, 1, headers.length).getValues()[0];
+                var newRowArray = headers.map(function(header, idx) {
+                  if (update.data[header] !== undefined) return sanitizeValue(update.data[header]);
+                  return currentData[idx];
+                });
+                sheet.getRange(update.rowNumber, 1, 1, headers.length).setValues([newRowArray]);
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Sheet backup batchUpdate failed:', e.message);
+        }
+      } else {
         var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
         updates.forEach(function(u) {
           var docId = idField && u.data[idField] ? u.data[idField] : 'row_' + u.rowNumber;
-          backupToSheet(sheetName, docId, 'upsert', null);
+          if (typeof backupToSheet === 'function') backupToSheet(sheetName, docId, 'upsert', null);
         });
       }
-      return true;
     }
-
-    const sheet = getSheet(sheetName);
-    if (!sheet) return false;
-
-    const headers = getSheetHeaders(sheetName);
-
-    // Process each update
-    // TODO: Optimize by grouping contiguous rows
-    updates.forEach(update => {
-      if (update.rowNumber >= 2) {
-        const currentData = sheet.getRange(update.rowNumber, 1, 1, headers.length).getValues()[0];
-
-        const newRowArray = headers.map((header, idx) => {
-          if (update.data[header] !== undefined) {
-            return sanitizeValue(update.data[header]);
-          }
-          return currentData[idx];
-        });
-
-        sheet.getRange(update.rowNumber, 1, 1, headers.length).setValues([newRowArray]);
-      }
-    });
-
     return true;
   }
 };
 
+// Transaction is no longer needed with Firestore-primary.
+// Firestore writes are atomic per document. For multi-document atomicity,
+// use firestoreBatchWrite() in 00_FirestoreService.gs.
 const Transaction = {
   execute: function(operations) {
-    const results = [];
-    const rollbackOps = [];
-    
-    try {
-      const lock = LockService.getScriptLock();
-      lock.waitLock(30000); // Wait up to 30 seconds
-      
-      try {
-        for (const op of operations) {
-          let result;
-          
-          switch (op.type) {
-            case 'insert':
-              result = DBWrite.insert(op.sheet, op.data);
-              if (result > 0) {
-                rollbackOps.push({ type: 'delete', sheet: op.sheet, rowNumber: result });
-                results.push({ success: true, rowNumber: result });
-              } else {
-                throw new Error('Insert failed for sheet: ' + op.sheet);
-              }
-              break;
-              
-            case 'update':
-              // Store original data for rollback
-              const originalData = getSheet(op.sheet)
-                .getRange(op.rowNumber, 1, 1, getSheetHeaders(op.sheet).length)
-                .getValues()[0];
-              
-              result = DBWrite.updateRow(op.sheet, op.rowNumber, op.data);
-              if (result) {
-                const headers = getSheetHeaders(op.sheet);
-                const originalObj = {};
-                headers.forEach((h, idx) => originalObj[h] = originalData[idx]);
-                rollbackOps.push({ type: 'update', sheet: op.sheet, rowNumber: op.rowNumber, data: originalObj });
-                results.push({ success: true });
-              } else {
-                throw new Error('Update failed for sheet: ' + op.sheet);
-              }
-              break;
-              
-            case 'delete':
-              // Store data for rollback
-              const deleteData = getSheet(op.sheet)
-                .getRange(op.rowNumber, 1, 1, getSheetHeaders(op.sheet).length)
-                .getValues()[0];
-              const deleteHeaders = getSheetHeaders(op.sheet);
-              const deleteObj = {};
-              deleteHeaders.forEach((h, idx) => deleteObj[h] = deleteData[idx]);
-              
-              result = DBWrite.deleteRow(op.sheet, op.rowNumber);
-              if (result) {
-                rollbackOps.push({ type: 'insert', sheet: op.sheet, data: deleteObj, atRow: op.rowNumber });
-                results.push({ success: true });
-              } else {
-                throw new Error('Delete failed for sheet: ' + op.sheet);
-              }
-              break;
-              
-            default:
-              throw new Error('Unknown operation type: ' + op.type);
-          }
-        }
-        
-        lock.releaseLock();
-        return { success: true, results: results };
-        
-      } catch (opError) {
-        // Attempt rollback
-        console.error('Transaction failed, rolling back:', opError.message);
-        
-        for (let i = rollbackOps.length - 1; i >= 0; i--) {
-          const rollback = rollbackOps[i];
-          try {
-            switch (rollback.type) {
-              case 'delete':
-                DBWrite.deleteRow(rollback.sheet, rollback.rowNumber);
-                break;
-              case 'update':
-                DBWrite.updateRow(rollback.sheet, rollback.rowNumber, rollback.data);
-                break;
-              case 'insert':
-                // Re-insert the deleted data - row number may differ
-                DBWrite.insert(rollback.sheet, rollback.data);
-                // Schedule index rebuild after rollback since row positions changed
-                rollback._needsIndexRebuild = true;
-                break;
-            }
-          } catch (rollbackError) {
-            console.error('Rollback failed:', rollbackError.message);
-          }
-        }
-
-        // Rebuild indexes for any entities that had row position changes during rollback
-        var rebuiltTypes = {};
-        rollbackOps.forEach(function(rb) {
-          if (rb._needsIndexRebuild) {
-            Object.keys(CONFIG.DATA_SHEETS).forEach(function(entityType) {
-              if (CONFIG.DATA_SHEETS[entityType] === rb.sheet && !rebuiltTypes[entityType]) {
-                try { Index.rebuild(entityType); } catch (e) {}
-                rebuiltTypes[entityType] = true;
-              }
-            });
-          }
-        });
-
-        lock.releaseLock();
-        throw opError;
-      }
-      
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+    console.warn('Transaction.execute is deprecated in Firestore-primary mode. Use firestoreBatchWrite() instead.');
+    return { success: false, error: 'Transaction.execute is deprecated. Use Firestore writes directly.' };
   }
 };
 
 function getNextId(prefix) {
-  const lock = LockService.getScriptLock();
-  
+  var lock = LockService.getScriptLock();
+
   try {
     lock.waitLock(10000);
-    
-    const sheet = getSheet('00_Config');
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const keyIdx = headers.indexOf('config_key');
-    const valueIdx = headers.indexOf('config_value');
-    
-    const counterKey = 'NEXT_' + prefix + '_ID';
-    
-    for (let i = 1; i < data.length; i++) {
+
+    var counterKey = 'NEXT_' + prefix + '_ID';
+
+    // Read from Firestore (primary)
+    if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      var configDoc = firestoreGet('00_Config', counterKey);
+      var currentVal = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
+
+      // Write incremented value to Firestore
+      firestoreSet('00_Config', counterKey, {
+        config_key: counterKey,
+        config_value: currentVal + 1,
+        description: 'Auto-generated counter',
+        updated_at: new Date().toISOString()
+      });
+
+      lock.releaseLock();
+      Cache.remove('config_all');
+
+      var padded = String(currentVal).padStart(5, '0');
+      return getIdPrefix(prefix) + padded;
+    }
+
+    // Fallback to Sheet
+    var sheet = getSheet('00_Config');
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0];
+    var keyIdx = headers.indexOf('config_key');
+    var valueIdx = headers.indexOf('config_value');
+
+    for (var i = 1; i < data.length; i++) {
       if (data[i][keyIdx] === counterKey) {
-        const currentVal = parseInt(data[i][valueIdx]) || 1;
-        sheet.getRange(i + 1, valueIdx + 1).setValue(currentVal + 1);
+        var val = parseInt(data[i][valueIdx]) || 1;
+        sheet.getRange(i + 1, valueIdx + 1).setValue(val + 1);
         lock.releaseLock();
-        
-        // Clear config cache
         Cache.remove('config_all');
-        
-        const padded = String(currentVal).padStart(5, '0');
-        return getIdPrefix(prefix) + padded;
+        return getIdPrefix(prefix) + String(val).padStart(5, '0');
       }
     }
-    
+
     // Counter doesn't exist, create it
     sheet.appendRow([counterKey, 2, 'Auto-generated counter', new Date()]);
     lock.releaseLock();
-    
     return getIdPrefix(prefix) + '00001';
-    
+
   } catch (e) {
     try { lock.releaseLock(); } catch (ignored) {}
     throw e;
@@ -946,26 +771,41 @@ function getAllConfig() {
 }
 
 function setConfig(key, value) {
-  const sheet = getSheet('00_Config');
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const keyIdx = headers.indexOf('config_key');
-  const valueIdx = headers.indexOf('config_value');
-  const updatedIdx = headers.indexOf('updated_at');
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][keyIdx] === key) {
-      sheet.getRange(i + 1, valueIdx + 1).setValue(value);
-      if (updatedIdx >= 0) {
-        sheet.getRange(i + 1, updatedIdx + 1).setValue(new Date());
+  // Write to Firestore (primary)
+  if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+    firestoreSet('00_Config', key, {
+      config_key: key,
+      config_value: value,
+      description: '',
+      updated_at: new Date().toISOString()
+    });
+  }
+
+  // Sheet backup (if enabled)
+  if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
+    var sheet = getSheet('00_Config');
+    if (sheet) {
+      var data = sheet.getDataRange().getValues();
+      var headers = data[0];
+      var keyIdx = headers.indexOf('config_key');
+      var valueIdx = headers.indexOf('config_value');
+      var updatedIdx = headers.indexOf('updated_at');
+
+      var found = false;
+      for (var i = 1; i < data.length; i++) {
+        if (data[i][keyIdx] === key) {
+          sheet.getRange(i + 1, valueIdx + 1).setValue(value);
+          if (updatedIdx >= 0) sheet.getRange(i + 1, updatedIdx + 1).setValue(new Date());
+          found = true;
+          break;
+        }
       }
-      Cache.remove('config_all');
-      return true;
+      if (!found) {
+        sheet.appendRow([key, value, '', new Date()]);
+      }
     }
   }
-  
-  // Key doesn't exist, create it
-  sheet.appendRow([key, value, '', new Date()]);
+
   Cache.remove('config_all');
   return true;
 }
@@ -1108,23 +948,37 @@ function formatStringArray(arr) {
 
 function logAudit(action, entityType, entityId, oldData, newData, userId) {
   try {
-    const sheet = getSheet('16_AuditLog');
-    if (!sheet) return;
-    
-    const logId = getNextId('LOG');
-    
-    sheet.appendRow([
-      logId,
-      action,
-      entityType,
-      entityId,
-      oldData ? JSON.stringify(oldData) : '',
-      newData ? JSON.stringify(newData) : '',
-      userId || '',
-      '', // user_email - filled by caller if available
-      new Date(),
-      '' // ip_address - not available in Apps Script
-    ]);
+    var logId = getNextId('LOG');
+    var logData = {
+      log_id: logId,
+      action: action,
+      entity_type: entityType,
+      entity_id: entityId,
+      old_data: oldData ? JSON.stringify(oldData) : '',
+      new_data: newData ? JSON.stringify(newData) : '',
+      user_id: userId || '',
+      user_email: '',
+      timestamp: new Date().toISOString(),
+      ip_address: ''
+    };
+
+    // Write to Firestore (primary)
+    if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      firestoreSet('16_AuditLog', logId, logData);
+    }
+
+    // Sheet backup
+    if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
+      var sheet = getSheet('16_AuditLog');
+      if (sheet) {
+        sheet.appendRow([
+          logId, action, entityType, entityId,
+          logData.old_data, logData.new_data,
+          logData.user_id, logData.user_email,
+          new Date(), logData.ip_address
+        ]);
+      }
+    }
   } catch (e) {
     console.warn('Audit log error:', e.message);
   }

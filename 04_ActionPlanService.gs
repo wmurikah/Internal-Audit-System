@@ -236,13 +236,8 @@ function createActionPlansBatch(workPaperId, plansData, user) {
  */
 function getActionPlan(actionPlanId, includeRelated) {
   if (!actionPlanId) return null;
-  
-  let actionPlan = null;
-  if (typeof DB !== 'undefined' && DB.getById) {
-    actionPlan = DB.getById('ACTION_PLAN', actionPlanId);
-  } else {
-    actionPlan = getActionPlanById(actionPlanId);
-  }
+
+  var actionPlan = getActionPlanById(actionPlanId);
   
   if (!actionPlan) return null;
   
@@ -276,13 +271,8 @@ function getActionPlan(actionPlanId, includeRelated) {
  */
 function getActionPlanRaw(actionPlanId) {
   if (!actionPlanId) return null;
-  
-  let actionPlan = null;
-  if (typeof DB !== 'undefined' && DB.getById) {
-    actionPlan = DB.getById('ACTION_PLAN', actionPlanId);
-  } else {
-    actionPlan = getActionPlanById(actionPlanId);
-  }
+
+  var actionPlan = getActionPlanById(actionPlanId);
   
   if (!actionPlan) return null;
   
@@ -836,21 +826,21 @@ function hoaReview(actionPlanId, action, comments, user) {
  * Update status based on due date (called by daily trigger)
  */
 function updateOverdueStatuses() {
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  
+  var data = getSheetData(SHEETS.ACTION_PLANS);
+  if (!data || data.length < 2) return 0;
+  var headers = data[0];
+
   const colMap = {};
   headers.forEach((h, i) => colMap[h] = i);
-  
+
   const statusIdx = colMap['status'];
   const daysOverdueIdx = colMap['days_overdue'];
   const dueDateIdx = colMap['due_date'];
   const actionPlanIdIdx = colMap['action_plan_id'];
-  
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   let updatedCount = 0;
   const activeStatuses = [STATUS.ACTION_PLAN.NOT_DUE, STATUS.ACTION_PLAN.PENDING, STATUS.ACTION_PLAN.IN_PROGRESS];
   const systemUser = {
@@ -858,30 +848,27 @@ function updateOverdueStatuses() {
     full_name: 'System Trigger',
     email: 'system@internal-audit.local'
   };
-  
+
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const currentStatus = row[statusIdx];
     const dueDate = row[dueDateIdx];
-    
+
     if (!dueDate || !activeStatuses.includes(currentStatus)) continue;
-    
+
     const due = new Date(dueDate);
     due.setHours(0, 0, 0, 0);
-    
+
     const daysOverdue = Math.floor((today - due) / (1000 * 60 * 60 * 24));
-    
+
     // Update days overdue
     if (daysOverdue > 0) {
-      if (shouldWriteToSheet()) {
-        sheet.getRange(i + 1, daysOverdueIdx + 1).setValue(daysOverdue);
-      }
+      var updatedObj = rowToObject(headers, row);
+      updatedObj.days_overdue = daysOverdue;
 
       // Update status to Overdue if past due
       if (currentStatus !== STATUS.ACTION_PLAN.OVERDUE && daysOverdue > 0) {
-        if (shouldWriteToSheet()) {
-          sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.OVERDUE);
-        }
+        updatedObj.status = STATUS.ACTION_PLAN.OVERDUE;
         if (actionPlanIdIdx !== undefined) {
           const actionPlanId = row[actionPlanIdIdx];
           if (actionPlanId) {
@@ -889,15 +876,25 @@ function updateOverdueStatuses() {
             addActionPlanHistory(actionPlanId, currentStatus, STATUS.ACTION_PLAN.OVERDUE, notes, systemUser);
             logAuditEvent('AUTO_STATUS_UPDATE', 'ACTION_PLAN', actionPlanId, { status: currentStatus },
               { status: STATUS.ACTION_PLAN.OVERDUE, reason: 'AUTO_OVERDUE' }, systemUser.user_id, systemUser.email);
+            syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updatedObj);
           }
         }
         updatedCount++;
       }
+
+      // Write to Sheet inside guard
+      if (shouldWriteToSheet()) {
+        var sheet = getSheet(SHEETS.ACTION_PLANS);
+        sheet.getRange(i + 1, daysOverdueIdx + 1).setValue(daysOverdue);
+        if (updatedObj.status === STATUS.ACTION_PLAN.OVERDUE) {
+          sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.OVERDUE);
+        }
+      }
     } else if (currentStatus === STATUS.ACTION_PLAN.NOT_DUE && daysOverdue <= 0 && daysOverdue >= -30) {
       // Update to Pending if due within 30 days
-      if (shouldWriteToSheet()) {
-        sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.PENDING);
-      }
+      var pendingObj = rowToObject(headers, row);
+      pendingObj.status = STATUS.ACTION_PLAN.PENDING;
+
       if (actionPlanIdIdx !== undefined) {
         const actionPlanId = row[actionPlanIdIdx];
         if (actionPlanId) {
@@ -905,12 +902,19 @@ function updateOverdueStatuses() {
           addActionPlanHistory(actionPlanId, currentStatus, STATUS.ACTION_PLAN.PENDING, notes, systemUser);
           logAuditEvent('AUTO_STATUS_UPDATE', 'ACTION_PLAN', actionPlanId, { status: currentStatus },
             { status: STATUS.ACTION_PLAN.PENDING, reason: 'AUTO_DUE_WINDOW' }, systemUser.user_id, systemUser.email);
+          syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, pendingObj);
         }
+      }
+
+      if (shouldWriteToSheet()) {
+        var sheet = getSheet(SHEETS.ACTION_PLANS);
+        sheet.getRange(i + 1, statusIdx + 1).setValue(STATUS.ACTION_PLAN.PENDING);
       }
       updatedCount++;
     }
   }
-  
+
+  if (updatedCount > 0) invalidateSheetData(SHEETS.ACTION_PLANS);
   console.log('Updated overdue statuses:', updatedCount);
   return updatedCount;
 }
@@ -1085,16 +1089,16 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
  */
 function deleteActionPlanEvidence(evidenceId, user) {
   if (!user) throw new Error('User required');
-  
-  const sheet = getSheet(SHEETS.AP_EVIDENCE);
-  const allData = sheet.getDataRange().getValues();
-  const headers = allData[0];
-  const idIdx = headers.indexOf('evidence_id');
-  
+
+  var allData = getSheetData(SHEETS.AP_EVIDENCE);
+  if (!allData || allData.length < 2) throw new Error('Evidence not found: ' + evidenceId);
+  var headers = allData[0];
+  var idIdx = headers.indexOf('evidence_id');
+
   for (let i = 1; i < allData.length; i++) {
     if (allData[i][idIdx] === evidenceId) {
       const existing = rowToObject(headers, allData[i]);
-      
+
       // Trash from Drive
       if (existing.drive_file_id) {
         try {
@@ -1103,18 +1107,22 @@ function deleteActionPlanEvidence(evidenceId, user) {
           console.warn('Could not trash evidence file:', e);
         }
       }
-      
+
+      // Delete from Firestore
+      deleteFromFirestore(SHEETS.AP_EVIDENCE, evidenceId);
+
       if (shouldWriteToSheet()) {
+        var sheet = getSheet(SHEETS.AP_EVIDENCE);
         sheet.deleteRow(i + 1);
       }
       invalidateSheetData(SHEETS.AP_EVIDENCE);
 
       logAuditEvent('DELETE_EVIDENCE', 'ACTION_PLAN', existing.action_plan_id, existing, null, user.user_id, user.email);
-      
+
       return { success: true };
     }
   }
-  
+
   throw new Error('Evidence not found: ' + evidenceId);
 }
 
@@ -1143,6 +1151,7 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
 }
 
 function updateActionPlanIndex(actionPlanId, actionPlan, rowNumber) {
+  if (!shouldWriteToSheet()) return;
   const indexSheet = getSheet(SHEETS.INDEX_ACTION_PLANS);
   const data = indexSheet.getDataRange().getValues();
   const headers = data[0];
@@ -1181,6 +1190,7 @@ function buildActionPlanIndexRow(actionPlanId, actionPlan, rowNumber) {
  * Rebuild action plan index
  */
 function rebuildActionPlanIndex() {
+  if (!shouldWriteToSheet()) return;
   const dataSheet = getSheet(SHEETS.ACTION_PLANS);
   const indexSheet = getSheet(SHEETS.INDEX_ACTION_PLANS);
   
@@ -1277,19 +1287,34 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
 }
 
 function deleteRelatedRows(sheetName, foreignKeyColumn, foreignKeyValue) {
-  const sheet = getSheet(sheetName);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const fkIdx = headers.indexOf(foreignKeyColumn);
-  
-  // Delete from bottom to top to avoid index shifting issues
-  for (let i = data.length - 1; i >= 1; i--) {
+  var data = getSheetData(sheetName);
+  if (!data || data.length < 2) return;
+  var headers = data[0];
+  var fkIdx = headers.indexOf(foreignKeyColumn);
+
+  // Collect IDs to delete from Firestore (assume first column is the entity ID)
+  for (var i = 1; i < data.length; i++) {
     if (data[i][fkIdx] === foreignKeyValue) {
-      if (shouldWriteToSheet()) {
-        sheet.deleteRow(i + 1);
+      var entityId = data[i][0];
+      if (entityId) {
+        deleteFromFirestore(sheetName, entityId);
       }
     }
   }
+
+  // Delete from Sheet (bottom to top to avoid index shifting issues)
+  if (shouldWriteToSheet()) {
+    var sheet = getSheet(sheetName);
+    var sheetData = sheet.getDataRange().getValues();
+    var sheetHeaders = sheetData[0];
+    var sheetFkIdx = sheetHeaders.indexOf(foreignKeyColumn);
+    for (var j = sheetData.length - 1; j >= 1; j--) {
+      if (sheetData[j][sheetFkIdx] === foreignKeyValue) {
+        sheet.deleteRow(j + 1);
+      }
+    }
+  }
+  invalidateSheetData(sheetName);
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)

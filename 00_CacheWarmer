@@ -171,12 +171,11 @@ function warmAllCachesOnDeploy() {
     const headerStart = new Date().getTime();
     sheetNames.forEach(sheetKey => {
       try {
-        const sheetName = SHEETS[sheetKey];
+        var sheetName = SHEETS[sheetKey];
         if (sheetName) {
-          const sheet = getSheet(sheetName);
-          if (sheet && sheet.getLastRow() > 0) {
-            const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-            cache.put('headers_' + sheetKey, JSON.stringify(headers), 3600);
+          var sheetData = getSheetData(sheetName);
+          if (sheetData && sheetData.length > 0) {
+            cache.put('headers_' + sheetKey, JSON.stringify(sheetData[0]), 3600);
           }
         }
       } catch (e) {
@@ -262,19 +261,18 @@ function getDropdownDataFresh() {
   
   // Get affiliates
   try {
-    const affSheet = getSheet(SHEETS.AFFILIATES);
-    if (affSheet && affSheet.getLastRow() > 1) {
-      const data = affSheet.getDataRange().getValues();
-      const headers = data[0];
-      const codeIdx = headers.indexOf('affiliate_code');
-      const nameIdx = headers.indexOf('affiliate_name');
-      const activeIdx = headers.indexOf('is_active');
-      
-      for (let i = 1; i < data.length; i++) {
-        if (isActive(data[i][activeIdx])) {
+    var affData = getSheetData(SHEETS.AFFILIATES);
+    if (affData && affData.length > 1) {
+      var affHeaders = affData[0];
+      var codeIdx = affHeaders.indexOf('affiliate_code');
+      var nameIdx = affHeaders.indexOf('affiliate_name');
+      var activeIdx = affHeaders.indexOf('is_active');
+
+      for (var i = 1; i < affData.length; i++) {
+        if (isActive(affData[i][activeIdx])) {
           dropdowns.affiliates.push({
-            code: data[i][codeIdx],
-            name: data[i][nameIdx]
+            code: affData[i][codeIdx],
+            name: affData[i][nameIdx]
           });
         }
       }
@@ -285,19 +283,18 @@ function getDropdownDataFresh() {
   
   // Get audit areas
   try {
-    const areaSheet = getSheet(SHEETS.AUDIT_AREAS);
-    if (areaSheet && areaSheet.getLastRow() > 1) {
-      const data = areaSheet.getDataRange().getValues();
-      const headers = data[0];
-      const idIdx = headers.indexOf('audit_area_id');
-      const nameIdx = headers.indexOf('audit_area_name');
-      const activeIdx = headers.indexOf('is_active');
-      
-      for (let i = 1; i < data.length; i++) {
-        if (isActive(data[i][activeIdx])) {
+    var areaData = getSheetData(SHEETS.AUDIT_AREAS);
+    if (areaData && areaData.length > 1) {
+      var areaHeaders = areaData[0];
+      var idIdx = areaHeaders.indexOf('audit_area_id');
+      var areaNameIdx = areaHeaders.indexOf('audit_area_name');
+      var areaActiveIdx = areaHeaders.indexOf('is_active');
+
+      for (var i = 1; i < areaData.length; i++) {
+        if (isActive(areaData[i][areaActiveIdx])) {
           dropdowns.auditAreas.push({
-            id: data[i][idIdx],
-            name: data[i][nameIdx]
+            id: areaData[i][idIdx],
+            name: areaData[i][areaNameIdx]
           });
         }
       }
@@ -308,21 +305,20 @@ function getDropdownDataFresh() {
   
   // Get sub areas
   try {
-    const subSheet = getSheet(SHEETS.PROCESS_SUB_AREAS);
-    if (subSheet && subSheet.getLastRow() > 1) {
-      const data = subSheet.getDataRange().getValues();
-      const headers = data[0];
-      const idIdx = headers.indexOf('sub_area_id');
-      const nameIdx = headers.indexOf('sub_area_name');
-      const parentIdx = headers.indexOf('audit_area_id');
-      const activeIdx = headers.indexOf('is_active');
-      
-      for (let i = 1; i < data.length; i++) {
-        if (isActive(data[i][activeIdx])) {
+    var subData = getSheetData(SHEETS.PROCESS_SUB_AREAS);
+    if (subData && subData.length > 1) {
+      var subHeaders = subData[0];
+      var subIdIdx = subHeaders.indexOf('sub_area_id');
+      var subNameIdx = subHeaders.indexOf('sub_area_name');
+      var parentIdx = subHeaders.indexOf('audit_area_id');
+      var subActiveIdx = subHeaders.indexOf('is_active');
+
+      for (var i = 1; i < subData.length; i++) {
+        if (isActive(subData[i][subActiveIdx])) {
           dropdowns.subAreas.push({
-            id: data[i][idIdx],
-            name: data[i][nameIdx],
-            parentId: data[i][parentIdx]
+            id: subData[i][subIdIdx],
+            name: subData[i][subNameIdx],
+            parentId: subData[i][parentIdx]
           });
         }
       }
@@ -333,23 +329,22 @@ function getDropdownDataFresh() {
   
   // Get users (for dropdowns - minimal data)
   try {
-    const userSheet = getSheet(SHEETS.USERS);
-    if (userSheet && userSheet.getLastRow() > 1) {
-      const data = userSheet.getDataRange().getValues();
-      const headers = data[0];
-      const idIdx = headers.indexOf('user_id');
-      const nameIdx = headers.indexOf('full_name');
-      const emailIdx = headers.indexOf('email');
-      const roleIdx = headers.indexOf('role_code');
-      const activeIdx = headers.indexOf('is_active');
-      
-      for (let i = 1; i < data.length; i++) {
-        if (isActive(data[i][activeIdx])) {
+    var userData = getSheetData(SHEETS.USERS);
+    if (userData && userData.length > 1) {
+      var userHeaders = userData[0];
+      var userIdIdx = userHeaders.indexOf('user_id');
+      var userNameIdx = userHeaders.indexOf('full_name');
+      var emailIdx = userHeaders.indexOf('email');
+      var roleIdx = userHeaders.indexOf('role_code');
+      var userActiveIdx = userHeaders.indexOf('is_active');
+
+      for (var i = 1; i < userData.length; i++) {
+        if (isActive(userData[i][userActiveIdx])) {
           dropdowns.users.push({
-            id: data[i][idIdx],
-            name: data[i][nameIdx],
-            email: data[i][emailIdx],
-            roleCode: data[i][roleIdx]
+            id: userData[i][userIdIdx],
+            name: userData[i][userNameIdx],
+            email: userData[i][emailIdx],
+            roleCode: userData[i][roleIdx]
           });
         }
       }
@@ -360,19 +355,18 @@ function getDropdownDataFresh() {
   
   // Get roles
   try {
-    const roleSheet = getSheet(SHEETS.ROLES);
-    if (roleSheet && roleSheet.getLastRow() > 1) {
-      const data = roleSheet.getDataRange().getValues();
-      const headers = data[0];
-      const codeIdx = headers.indexOf('role_code');
-      const nameIdx = headers.indexOf('role_name');
-      const activeIdx = headers.indexOf('is_active');
-      
-      for (let i = 1; i < data.length; i++) {
-        if (isActive(data[i][activeIdx])) {
+    var roleData = getSheetData(SHEETS.ROLES);
+    if (roleData && roleData.length > 1) {
+      var roleHeaders = roleData[0];
+      var roleCodeIdx = roleHeaders.indexOf('role_code');
+      var roleNameIdx = roleHeaders.indexOf('role_name');
+      var roleActiveIdx = roleHeaders.indexOf('is_active');
+
+      for (var i = 1; i < roleData.length; i++) {
+        if (isActive(roleData[i][roleActiveIdx])) {
           dropdowns.roles.push({
-            code: data[i][codeIdx],
-            name: data[i][nameIdx]
+            code: roleData[i][roleCodeIdx],
+            name: roleData[i][roleNameIdx]
           });
         }
       }
@@ -393,24 +387,22 @@ function getPermissionsFresh(roleCode) {
   const permissions = {};
   
   try {
-    const sheet = getSheet(SHEETS.PERMISSIONS);
-    if (sheet && sheet.getLastRow() > 1) {
-      const data = sheet.getDataRange().getValues();
-      const headers = data[0];
-      const roleIdx = headers.indexOf('role_code');
-      const moduleIdx = headers.indexOf('module');
-      const createIdx = headers.indexOf('can_create');
-      const readIdx = headers.indexOf('can_read');
-      const updateIdx = headers.indexOf('can_update');
-      const deleteIdx = headers.indexOf('can_delete');
-      const approveIdx = headers.indexOf('can_approve');
-      const exportIdx = headers.indexOf('can_export');
-      
+    var data = getSheetData(SHEETS.PERMISSIONS);
+    if (data && data.length > 1) {
+      var headers = data[0];
+      var roleIdx = headers.indexOf('role_code');
+      var moduleIdx = headers.indexOf('module');
+      var createIdx = headers.indexOf('can_create');
+      var readIdx = headers.indexOf('can_read');
+      var updateIdx = headers.indexOf('can_update');
+      var deleteIdx = headers.indexOf('can_delete');
+      var approveIdx = headers.indexOf('can_approve');
+      var exportIdx = headers.indexOf('can_export');
       var fieldRestIdx = headers.indexOf('field_restrictions');
 
-      for (let i = 1; i < data.length; i++) {
+      for (var i = 1; i < data.length; i++) {
         if (data[i][roleIdx] === roleCode) {
-          const module = data[i][moduleIdx];
+          var module = data[i][moduleIdx];
           permissions[module] = {
             can_create: isActive(data[i][createIdx]),
             can_read: isActive(data[i][readIdx]),
@@ -437,14 +429,13 @@ function getRoleNameFresh(roleCode) {
   if (!roleCode) return '';
   
   try {
-    const sheet = getSheet(SHEETS.ROLES);
-    if (sheet && sheet.getLastRow() > 1) {
-      const data = sheet.getDataRange().getValues();
-      const headers = data[0];
-      const codeIdx = headers.indexOf('role_code');
-      const nameIdx = headers.indexOf('role_name');
-      
-      for (let i = 1; i < data.length; i++) {
+    var data = getSheetData(SHEETS.ROLES);
+    if (data && data.length > 1) {
+      var headers = data[0];
+      var codeIdx = headers.indexOf('role_code');
+      var nameIdx = headers.indexOf('role_name');
+
+      for (var i = 1; i < data.length; i++) {
         if (data[i][codeIdx] === roleCode) {
           return data[i][nameIdx] || roleCode;
         }
@@ -464,14 +455,13 @@ function getConfigValueFresh(key) {
   if (!key) return null;
   
   try {
-    const sheet = getSheet(SHEETS.CONFIG);
-    if (sheet && sheet.getLastRow() > 1) {
-      const data = sheet.getDataRange().getValues();
-      const headers = data[0];
-      const keyIdx = headers.indexOf('config_key');
-      const valueIdx = headers.indexOf('config_value');
-      
-      for (let i = 1; i < data.length; i++) {
+    var data = getSheetData(SHEETS.CONFIG);
+    if (data && data.length > 1) {
+      var headers = data[0];
+      var keyIdx = headers.indexOf('config_key');
+      var valueIdx = headers.indexOf('config_value');
+
+      for (var i = 1; i < data.length; i++) {
         if (data[i][keyIdx] === key) {
           return data[i][valueIdx];
         }

@@ -150,18 +150,12 @@ const ROLES = {
 };
 
 function generateId(entityType) {
-  const lock = LockService.getScriptLock();
-  
+  var lock = LockService.getScriptLock();
+
   try {
     lock.waitLock(10000);
-    
-    const configSheet = getSheet(SHEETS.CONFIG);
-    const data = configSheet.getDataRange().getValues();
-    const headers = data[0];
-    const keyIdx = headers.indexOf('config_key');
-    const valueIdx = headers.indexOf('config_value');
-    
-    const configKeyMap = {
+
+    var configKeyMap = {
       'WORK_PAPER': 'NEXT_WP_ID',
       'ACTION_PLAN': 'NEXT_AP_ID',
       'USER': 'NEXT_USER_ID',
@@ -174,8 +168,8 @@ function generateId(entityType) {
       'NOTIFICATION': 'NEXT_NOTIF_ID',
       'LOG': 'NEXT_LOG_ID'
     };
-    
-    const prefixMap = {
+
+    var prefixMap = {
       'WORK_PAPER': 'WP-',
       'ACTION_PLAN': 'AP-',
       'USER': 'USR-',
@@ -188,36 +182,47 @@ function generateId(entityType) {
       'NOTIFICATION': 'NOTIF-',
       'LOG': 'LOG-'
     };
-    
-    const configKey = configKeyMap[entityType];
-    const prefix = prefixMap[entityType];
-    
-    if (!configKey || !prefix) {
-      throw new Error('Unknown entity type: ' + entityType);
+
+    var configKey = configKeyMap[entityType];
+    var prefix = prefixMap[entityType];
+    if (!configKey || !prefix) throw new Error('Unknown entity type: ' + entityType);
+
+    var currentValue = 1;
+
+    // Read from Firestore (primary)
+    if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
+      currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
+
+      // Write incremented value to Firestore
+      firestoreSet(SHEETS.CONFIG, configKey, {
+        config_key: configKey,
+        config_value: currentValue + 1,
+        description: 'Auto-generated ID counter',
+        updated_at: new Date().toISOString()
+      });
+
+      return prefix + String(currentValue).padStart(6, '0');
     }
-    
-    let rowIndex = -1;
-    let currentValue = 1;
-    
-    for (let i = 1; i < data.length; i++) {
+
+    // Fallback to Sheet
+    var configSheet = getSheet(SHEETS.CONFIG);
+    var data = configSheet.getDataRange().getValues();
+    var headers = data[0];
+    var keyIdx = headers.indexOf('config_key');
+    var valueIdx = headers.indexOf('config_value');
+
+    for (var i = 1; i < data.length; i++) {
       if (data[i][keyIdx] === configKey) {
-        rowIndex = i + 1;
         currentValue = parseInt(data[i][valueIdx]) || 1;
-        break;
+        configSheet.getRange(i + 1, valueIdx + 1).setValue(currentValue + 1);
+        return prefix + String(currentValue).padStart(6, '0');
       }
     }
-    
-    if (rowIndex === -1) {
-      configSheet.appendRow([configKey, 2, 'Auto-generated ID counter', new Date()]);
-      return prefix + '000001';
-    }
-    
-    const nextValue = currentValue + 1;
-    configSheet.getRange(rowIndex, valueIdx + 1).setValue(nextValue);
-    
-    const paddedNum = String(currentValue).padStart(6, '0');
-    return prefix + paddedNum;
-    
+
+    configSheet.appendRow([configKey, 2, 'Auto-generated ID counter', new Date()]);
+    return prefix + '000001';
+
   } finally {
     lock.releaseLock();
   }
@@ -226,68 +231,75 @@ function generateId(entityType) {
 function generateIds(entityType, count) {
   if (count <= 0) return [];
   if (count === 1) return [generateId(entityType)];
-  
-  const lock = LockService.getScriptLock();
-  
+
+  var lock = LockService.getScriptLock();
+
   try {
     lock.waitLock(10000);
-    
-    const configSheet = getSheet(SHEETS.CONFIG);
-    const data = configSheet.getDataRange().getValues();
-    const headers = data[0];
-    const keyIdx = headers.indexOf('config_key');
-    const valueIdx = headers.indexOf('config_value');
-    
-    const configKeyMap = {
+
+    var configKeyMap = {
       'WORK_PAPER': 'NEXT_WP_ID',
       'ACTION_PLAN': 'NEXT_AP_ID',
       'FILE': 'NEXT_FILE_ID',
       'REQUIREMENT': 'NEXT_REQ_ID',
       'EVIDENCE': 'NEXT_EVIDENCE_ID'
     };
-    
-    const prefixMap = {
+
+    var prefixMap = {
       'WORK_PAPER': 'WP-',
       'ACTION_PLAN': 'AP-',
       'FILE': 'FILE-',
       'REQUIREMENT': 'REQ-',
       'EVIDENCE': 'EVI-'
     };
-    
-    const configKey = configKeyMap[entityType];
-    const prefix = prefixMap[entityType];
-    
-    if (!configKey || !prefix) {
-      throw new Error('Unknown entity type for batch: ' + entityType);
-    }
-    
-    let rowIndex = -1;
-    let currentValue = 1;
-    
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][keyIdx] === configKey) {
-        rowIndex = i + 1;
-        currentValue = parseInt(data[i][valueIdx]) || 1;
-        break;
+
+    var configKey = configKeyMap[entityType];
+    var prefix = prefixMap[entityType];
+    if (!configKey || !prefix) throw new Error('Unknown entity type for batch: ' + entityType);
+
+    var currentValue = 1;
+
+    // Read/write from Firestore (primary)
+    if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
+      currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
+
+      firestoreSet(SHEETS.CONFIG, configKey, {
+        config_key: configKey,
+        config_value: currentValue + count,
+        description: 'Auto-generated ID counter',
+        updated_at: new Date().toISOString()
+      });
+    } else {
+      // Fallback to Sheet
+      var configSheet = getSheet(SHEETS.CONFIG);
+      var data = configSheet.getDataRange().getValues();
+      var headers = data[0];
+      var keyIdx = headers.indexOf('config_key');
+      var valueIdx = headers.indexOf('config_value');
+
+      var rowIndex = -1;
+      for (var i = 1; i < data.length; i++) {
+        if (data[i][keyIdx] === configKey) {
+          rowIndex = i + 1;
+          currentValue = parseInt(data[i][valueIdx]) || 1;
+          break;
+        }
+      }
+
+      if (rowIndex === -1) {
+        configSheet.appendRow([configKey, count + 1, 'Auto-generated ID counter', new Date()]);
+      } else {
+        configSheet.getRange(rowIndex, valueIdx + 1).setValue(currentValue + count);
       }
     }
-    
-    if (rowIndex === -1) {
-      configSheet.appendRow([configKey, count + 1, 'Auto-generated ID counter', new Date()]);
-      currentValue = 1;
-    } else {
-      const nextValue = currentValue + count;
-      configSheet.getRange(rowIndex, valueIdx + 1).setValue(nextValue);
+
+    var ids = [];
+    for (var j = 0; j < count; j++) {
+      ids.push(prefix + String(currentValue + j).padStart(6, '0'));
     }
-    
-    const ids = [];
-    for (let i = 0; i < count; i++) {
-      const paddedNum = String(currentValue + i).padStart(6, '0');
-      ids.push(prefix + paddedNum);
-    }
-    
     return ids;
-    
+
   } finally {
     lock.releaseLock();
   }
@@ -385,10 +397,10 @@ function getRolesDropdown() {
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   
-  const sheet = getSheet(SHEETS.ROLES);
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.ROLES);
+  if (!data || data.length < 2) return [];
   const headers = data[0];
-  
+
   const codeIdx = headers.indexOf('role_code');
   const nameIdx = headers.indexOf('role_name');
   const levelIdx = headers.indexOf('role_level');
@@ -413,10 +425,10 @@ function getAffiliatesDropdown() {
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   
-  const sheet = getSheet(SHEETS.AFFILIATES);
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.AFFILIATES);
+  if (!data || data.length < 2) return [];
   const headers = data[0];
-  
+
   const codeIdx = headers.indexOf('affiliate_code');
   const nameIdx = headers.indexOf('affiliate_name');
   const countryIdx = headers.indexOf('country');
@@ -448,10 +460,10 @@ function getAuditAreasDropdown() {
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   
-  const sheet = getSheet(SHEETS.AUDIT_AREAS);
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.AUDIT_AREAS);
+  if (!data || data.length < 2) return [];
   const headers = data[0];
-  
+
   const idIdx = headers.indexOf('area_id');
   const codeIdx = headers.indexOf('area_code');
   const nameIdx = headers.indexOf('area_name');
@@ -483,10 +495,10 @@ function getSubAreasDropdown() {
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   
-  const sheet = getSheet(SHEETS.SUB_AREAS);
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.SUB_AREAS);
+  if (!data || data.length < 2) return [];
   const headers = data[0];
-  
+
   const idIdx = headers.indexOf('sub_area_id');
   const areaIdIdx = headers.indexOf('area_id');
   const codeIdx = headers.indexOf('sub_area_code');
@@ -527,10 +539,10 @@ function getUsersDropdown() {
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   
-  const sheet = getSheet(SHEETS.USERS);
-  const data = sheet.getDataRange().getValues();
+  var data = getSheetData(SHEETS.USERS);
+  if (!data || data.length < 2) return [];
   const headers = data[0];
-  
+
   const idIdx = headers.indexOf('user_id');
   const emailIdx = headers.indexOf('email');
   const nameIdx = headers.indexOf('full_name');
@@ -649,79 +661,38 @@ function invalidateUserCache(email, userId) {
 function getUserById(userId) {
   if (!userId) return null;
 
-  // Try Firestore first (sub-100ms)
-  if (isFirestoreEnabled()) {
-    var fsUser = firestoreGet(SHEETS.USERS, userId);
-    if (fsUser) return fsUser;
+  // Firestore is the primary data store
+  if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
+    var user = firestoreGet(SHEETS.USERS, userId);
+    if (user) return user;
   }
 
-  if (typeof DB !== 'undefined' && DB.getById) {
-    const user = DB.getById('USER', userId);
-    if (user && user._rowIndex) {
-      return user;
-    }
-    console.log('getUserById: DB.getById returned null or no _rowIndex, using direct lookup');
-  }
-
-  var data = getSheetData(SHEETS.USERS);
-  if (!data || data.length < 2) {
-    console.error('getUserById: Users sheet empty');
-    return null;
-  }
-  var headers = data[0];
-  var idIdx = headers.indexOf('user_id');
-
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][idIdx] === userId) {
-      var user = rowToObject(headers, data[i]);
-      user._rowIndex = i + 1;
-      return user;
-    }
-  }
-
-  console.log('getUserById: User not found:', userId);
+  console.log('getUserById: User not found in Firestore:', userId);
   return null;
 }
 
 function getWorkPaperById(workPaperId) {
-  // Try Firestore first (sub-100ms)
-  if (isFirestoreEnabled()) {
-    var fsWp = firestoreGet(SHEETS.WORK_PAPERS, workPaperId);
-    if (fsWp) return fsWp;
+  if (!workPaperId) return null;
+
+  // Firestore is the primary data store
+  if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
+    return firestoreGet(SHEETS.WORK_PAPERS, workPaperId);
   }
 
-  var data = getSheetData(SHEETS.WORK_PAPERS);
-  if (!data || data.length < 2) return null;
-  var headers = data[0];
-  var idIdx = headers.indexOf('work_paper_id');
-
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][idIdx] === workPaperId) {
-      var wp = rowToObject(headers, data[i]);
-      wp._rowIndex = i + 1;
-      return wp;
-    }
-  }
   return null;
 }
 
 function getWorkPaperFull(workPaperId) {
   if (!workPaperId) return null;
-  
-  let workPaper;
-  if (typeof DB !== 'undefined' && DB.getById) {
-    workPaper = DB.getById('WORK_PAPER', workPaperId);
-  } else {
-    workPaper = getWorkPaperById(workPaperId);
-  }
-  
+
+  var workPaper = getWorkPaperById(workPaperId);
   if (!workPaper) return null;
-  
+
   workPaper.requirements = getWorkPaperRequirements(workPaperId);
   workPaper.files = getWorkPaperFiles(workPaperId);
   workPaper.revisions = getWorkPaperRevisions(workPaperId);
   workPaper.actionPlans = getActionPlansByWorkPaper(workPaperId);
-  
+
   return workPaper;
 }
 
@@ -792,26 +763,11 @@ function getActionPlansByWorkPaper(workPaperId) {
 function getActionPlanById(actionPlanId) {
   if (!actionPlanId) return null;
 
-  // Try Firestore first (sub-100ms)
-  if (isFirestoreEnabled()) {
-    var fsPlan = firestoreGet(SHEETS.ACTION_PLANS, actionPlanId);
-    if (fsPlan) return fsPlan;
+  // Firestore is the primary data store
+  if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
+    return firestoreGet(SHEETS.ACTION_PLANS, actionPlanId);
   }
 
-  if (typeof DB !== 'undefined' && DB.getById) {
-    return DB.getById('ACTION_PLAN', actionPlanId);
-  }
-  var data = getSheetData(SHEETS.ACTION_PLANS);
-  if (!data || data.length < 2) return null;
-  var headers = data[0];
-  var idIdx = headers.indexOf('action_plan_id');
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][idIdx] === actionPlanId) {
-      var plan = rowToObject(headers, data[i]);
-      plan._rowIndex = i + 1;
-      return plan;
-    }
-  }
   return null;
 }
 
@@ -995,52 +951,97 @@ function isPastDue(dueDate) {
 
 function logAuditEvent(action, entityType, entityId, oldData, newData, userId, userEmail) {
   try {
-    const sheet = getSheet(SHEETS.AUDIT_LOG);
-    const logId = generateId('LOG');
-    
-    const row = [
-      logId, action, entityType, entityId || '',
-      oldData ? JSON.stringify(oldData) : '',
-      newData ? JSON.stringify(newData) : '',
-      userId || '', userEmail || Session.getActiveUser().getEmail() || '',
-      new Date(), ''
-    ];
-    
-    sheet.appendRow(row);
+    var logId = generateId('LOG');
+    var logData = {
+      log_id: logId,
+      action: action,
+      entity_type: entityType,
+      entity_id: entityId || '',
+      old_data: oldData ? JSON.stringify(oldData) : '',
+      new_data: newData ? JSON.stringify(newData) : '',
+      user_id: userId || '',
+      user_email: userEmail || Session.getActiveUser().getEmail() || '',
+      timestamp: new Date().toISOString(),
+      ip_address: ''
+    };
+
+    // Write to Firestore (primary)
+    if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+      firestoreSet(SHEETS.AUDIT_LOG, logId, logData);
+    }
+
+    // Sheet backup
+    if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
+      var sheet = getSheet(SHEETS.AUDIT_LOG);
+      if (sheet) {
+        sheet.appendRow([
+          logId, action, entityType, entityId || '',
+          logData.old_data, logData.new_data,
+          logData.user_id, logData.user_email,
+          new Date(), ''
+        ]);
+      }
+    }
   } catch (e) {
     console.error('Failed to log audit event:', e);
   }
 }
 
 function getConfigValue(key) {
-  const sheet = getSheet(SHEETS.CONFIG);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const keyIdx = headers.indexOf('config_key');
-  const valueIdx = headers.indexOf('config_value');
-  
-  for (let i = 1; i < data.length; i++) {
+  // Read from Firestore (primary)
+  if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+    var doc = firestoreGet(SHEETS.CONFIG, key);
+    if (doc) return doc.config_value;
+  }
+
+  // Fallback to Sheet
+  var sheet = getSheet(SHEETS.CONFIG);
+  if (!sheet) return null;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var keyIdx = headers.indexOf('config_key');
+  var valueIdx = headers.indexOf('config_value');
+
+  for (var i = 1; i < data.length; i++) {
     if (data[i][keyIdx] === key) return data[i][valueIdx];
   }
   return null;
 }
 
 function setConfigValue(key, value) {
-  const sheet = getSheet(SHEETS.CONFIG);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const keyIdx = headers.indexOf('config_key');
-  const valueIdx = headers.indexOf('config_value');
-  const updatedIdx = headers.indexOf('updated_at');
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][keyIdx] === key) {
-      sheet.getRange(i + 1, valueIdx + 1).setValue(value);
-      if (updatedIdx >= 0) sheet.getRange(i + 1, updatedIdx + 1).setValue(new Date());
-      return true;
+  // Write to Firestore (primary)
+  if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
+    firestoreSet(SHEETS.CONFIG, key, {
+      config_key: key,
+      config_value: value,
+      description: '',
+      updated_at: new Date().toISOString()
+    });
+  }
+
+  // Sheet backup
+  if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
+    var sheet = getSheet(SHEETS.CONFIG);
+    if (sheet) {
+      var data = sheet.getDataRange().getValues();
+      var headers = data[0];
+      var keyIdx = headers.indexOf('config_key');
+      var valueIdx = headers.indexOf('config_value');
+      var updatedIdx = headers.indexOf('updated_at');
+
+      var found = false;
+      for (var i = 1; i < data.length; i++) {
+        if (data[i][keyIdx] === key) {
+          sheet.getRange(i + 1, valueIdx + 1).setValue(value);
+          if (updatedIdx >= 0) sheet.getRange(i + 1, updatedIdx + 1).setValue(new Date());
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        sheet.appendRow([key, value, '', new Date()]);
+      }
     }
   }
-  
-  sheet.appendRow([key, value, '', new Date()]);
   return true;
 }
