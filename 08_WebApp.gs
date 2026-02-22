@@ -250,6 +250,9 @@ function routeAction(action, data, user) {
     case 'deleteActionPlan':
       return deleteActionPlan(data.actionPlanId, user);
       
+    case 'delegateActionPlan':
+      return delegateActionPlan(data.actionPlanId, data.newOwnerIds, data.newOwnerNames, data.notes, user);
+
     case 'markAsImplemented':
       return markAsImplemented(data.actionPlanId, data.implementationNotes, user);
       
@@ -379,6 +382,18 @@ function routeAction(action, data, user) {
       Index.rebuild('ACTION_PLAN');
       Index.rebuild('USER');
       return { success: true, message: 'All indexes rebuilt' };
+
+    case 'purgeAndSeedTestData':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can purge and seed test data' };
+      }
+      return { success: true, report: purgeAndSeedTestData() };
+
+    case 'purgeAndResyncFirestore':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Super Admin can resync Firestore' };
+      }
+      return { success: true, report: purgeAndResyncFirestore() };
 
     // ========== AI SERVICE ==========
     case 'getAIConfigStatus':

@@ -612,3 +612,443 @@ function verifyFirestoreMigration() {
   console.log(summary);
   return summary;
 }
+
+
+// ─────────────────────────────────────────────────────────────
+// Purge & Seed: Reset Firestore + Sheets for testing
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Delete ALL documents in a Firestore collection.
+ * Uses pagination to handle large collections.
+ */
+function purgeFirestoreCollection(sheetName) {
+  if (!isFirestoreEnabled()) return 0;
+
+  var collection = getFirestoreCollection_(sheetName);
+  var deleted = 0;
+  var pageToken = null;
+
+  do {
+    var url = collection + '?pageSize=300&mask.fieldPaths=__name__';
+    if (pageToken) url += '&pageToken=' + pageToken;
+
+    var response = firestoreRequest_('get', url);
+    if (!response || !response.documents || response.documents.length === 0) break;
+
+    response.documents.forEach(function(doc) {
+      // Extract document ID from the full path
+      var parts = doc.name.split('/');
+      var docId = parts[parts.length - 1];
+      firestoreDelete(sheetName, decodeURIComponent(docId));
+      deleted++;
+    });
+
+    pageToken = response.nextPageToken || null;
+  } while (pageToken);
+
+  console.log('Purged ' + deleted + ' docs from Firestore collection: ' + collection);
+  return deleted;
+}
+
+/**
+ * Clear all data rows from a Google Sheet (keep header row).
+ */
+function purgeSheetData(sheetName) {
+  var sheet = getSheet(sheetName);
+  if (!sheet) return 0;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return 0;
+
+  var rowsDeleted = lastRow - 1;
+  sheet.getRange(2, 1, rowsDeleted, sheet.getLastColumn()).clearContent();
+  // Actually delete rows to avoid blank rows
+  if (lastRow > 1) {
+    sheet.deleteRows(2, lastRow - 1);
+  }
+  invalidateSheetData(sheetName);
+  return rowsDeleted;
+}
+
+/**
+ * PURGE ALL DATA except active users.
+ * Clears both Google Sheets and Firestore, keeping:
+ * - Config, Roles, Permissions (system tables)
+ * - Active users only (is_active = true/TRUE)
+ * - Email templates
+ *
+ * Then seeds 10 test records per data table with a realistic
+ * workflow: work papers in various statuses, action plans, etc.
+ *
+ * RUN: Script Editor → Run → purgeAndSeedTestData
+ */
+function purgeAndSeedTestData() {
+  if (!isFirestoreEnabled()) {
+    throw new Error('Firestore must be enabled. Configure credentials first.');
+  }
+
+  var report = [];
+  var now = new Date();
+
+  // ── STEP 1: Preserve active users ──
+  console.log('Step 1: Preserving active users...');
+  var usersSheet = getSheet(SHEETS.USERS);
+  var usersData = usersSheet.getDataRange().getValues();
+  var userHeaders = usersData[0];
+  var activeCol = userHeaders.indexOf('is_active');
+  var activeUsers = [];
+  for (var i = 1; i < usersData.length; i++) {
+    var isActive = usersData[i][activeCol];
+    if (isActive === true || isActive === 'true' || isActive === 'TRUE' || isActive === 1) {
+      var userObj = {};
+      for (var j = 0; j < userHeaders.length; j++) {
+        if (userHeaders[j]) userObj[userHeaders[j]] = usersData[i][j];
+      }
+      activeUsers.push(userObj);
+    }
+  }
+  report.push('Active users preserved: ' + activeUsers.length);
+  console.log('Active users found: ' + activeUsers.length);
+
+  // ── STEP 2: Purge data tables (Sheets + Firestore) ──
+  console.log('Step 2: Purging data tables...');
+  var dataTables = [
+    SHEETS.WORK_PAPERS,
+    SHEETS.WP_REQUIREMENTS,
+    SHEETS.WP_FILES,
+    SHEETS.WP_REVISIONS,
+    SHEETS.ACTION_PLANS,
+    SHEETS.AP_EVIDENCE,
+    SHEETS.AP_HISTORY,
+    SHEETS.AUDIT_LOG,
+    SHEETS.SESSIONS,
+    SHEETS.NOTIFICATION_QUEUE,
+    SHEETS.STAGING_AREA,
+    SHEETS.INDEX_WORK_PAPERS,
+    SHEETS.INDEX_ACTION_PLANS,
+    SHEETS.INDEX_USERS,
+    SHEETS.USERS  // Will re-populate with active users
+  ];
+
+  dataTables.forEach(function(tableName) {
+    try {
+      var sheetRows = purgeSheetData(tableName);
+      report.push('Sheet ' + tableName + ': purged ' + sheetRows + ' rows');
+    } catch (e) {
+      report.push('Sheet ' + tableName + ': ERROR - ' + e.message);
+    }
+    try {
+      var fsDocs = purgeFirestoreCollection(tableName);
+      report.push('Firestore ' + getFirestoreCollection_(tableName) + ': purged ' + fsDocs + ' docs');
+    } catch (e) {
+      report.push('Firestore ' + tableName + ': ERROR - ' + e.message);
+    }
+  });
+
+  // ── STEP 3: Re-insert active users ──
+  console.log('Step 3: Re-inserting active users...');
+  if (activeUsers.length > 0) {
+    var rows = activeUsers.map(function(u) { return objectToRow('USERS', u); });
+    usersSheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+    invalidateSheetData(SHEETS.USERS);
+
+    // Sync to Firestore
+    var userWrites = activeUsers.map(function(u) {
+      return { sheetName: SHEETS.USERS, docId: u.user_id, data: u };
+    });
+    firestoreBatchWrite(userWrites);
+    report.push('Users restored: ' + activeUsers.length);
+  }
+
+  // Rebuild user index
+  try { Index.rebuild('USER'); } catch (e) { console.warn('User index rebuild:', e); }
+
+  // ── STEP 4: Get reference data for seeding ──
+  var affiliates = getSheetData(SHEETS.AFFILIATES);
+  var affHeaders = affiliates[0];
+  var affCodeIdx = affHeaders.indexOf('affiliate_code');
+  var affiliateCodes = [];
+  for (var a = 1; a < affiliates.length; a++) {
+    if (affiliates[a][affCodeIdx]) affiliateCodes.push(affiliates[a][affCodeIdx]);
+  }
+  if (affiliateCodes.length === 0) affiliateCodes = ['HQ'];
+
+  var areas = getSheetData(SHEETS.AUDIT_AREAS);
+  var areaHeaders = areas[0];
+  var areaIdIdx = areaHeaders.indexOf('area_id');
+  var areaIds = [];
+  for (var b = 1; b < areas.length; b++) {
+    if (areas[b][areaIdIdx]) areaIds.push(areas[b][areaIdIdx]);
+  }
+  if (areaIds.length === 0) areaIds = ['AREA-001'];
+
+  var subAreas = getSheetData(SHEETS.SUB_AREAS);
+  var saHeaders = subAreas[0];
+  var saIdIdx = saHeaders.indexOf('sub_area_id');
+  var subAreaIds = [];
+  for (var c = 1; c < subAreas.length; c++) {
+    if (subAreas[c][saIdIdx]) subAreaIds.push(subAreas[c][saIdIdx]);
+  }
+  if (subAreaIds.length === 0) subAreaIds = ['SA-001'];
+
+  // Categorise active users by role
+  var auditors = activeUsers.filter(function(u) {
+    return ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'].indexOf(u.role_code) >= 0;
+  });
+  var auditees = activeUsers.filter(function(u) {
+    return u.role_code === 'AUDITEE';
+  });
+
+  if (auditors.length === 0) auditors = activeUsers.slice(0, 1);
+  if (auditees.length === 0) auditees = activeUsers.slice(0, 1);
+
+  // ── STEP 5: Seed 10 Work Papers ──
+  console.log('Step 4: Seeding 10 work papers...');
+  var wpStatuses = [
+    'Draft', 'Draft',
+    'Submitted', 'Under Review',
+    'Revision Required', 'Approved', 'Approved',
+    'Sent to Auditee', 'Sent to Auditee', 'Sent to Auditee'
+  ];
+  var riskRatings = ['High', 'High', 'Medium', 'Medium', 'Medium', 'Low', 'Low', 'High', 'Medium', 'Low'];
+  var observations = [
+    'Segregation of duties not enforced in procurement',
+    'Incomplete vendor due diligence documentation',
+    'Access controls bypass in financial system',
+    'Manual journal entries lack dual approval',
+    'Inventory reconciliation discrepancies',
+    'Travel expense claims without receipts',
+    'IT password policy non-compliance',
+    'Contract renewals processed without competitive bidding',
+    'Fixed asset register not updated quarterly',
+    'Petty cash fund not reconciled monthly'
+  ];
+  var recommendations = [
+    'Implement system-enforced SoD controls with compensating detective controls',
+    'Develop a standardised vendor onboarding checklist with mandatory documents',
+    'Deploy role-based access controls with quarterly access reviews',
+    'Configure ERP to require dual sign-off for manual journal entries above threshold',
+    'Automate inventory count reconciliation with perpetual system',
+    'Mandate receipt uploads before expense claim submission',
+    'Enforce 90-day password rotation with complexity requirements',
+    'Establish a tender committee for all renewals exceeding USD 50,000',
+    'Assign asset custodians and schedule quarterly physical verification',
+    'Implement daily petty cash reconciliation with surprise counts'
+  ];
+
+  var wpSheet = getSheet(SHEETS.WORK_PAPERS);
+  var wpWrites = [];
+  var seededWPs = [];
+
+  for (var w = 0; w < 10; w++) {
+    var wpId = 'WP-' + String(w + 1).padStart(5, '0');
+    var preparer = auditors[w % auditors.length];
+    var reviewer = auditors[(w + 1) % auditors.length];
+    var auditee = auditees[w % auditees.length];
+    var daysAgo = 30 - (w * 3);
+    var createdDate = new Date(now.getTime() - daysAgo * 86400000);
+
+    var wp = {
+      work_paper_id: wpId,
+      year: String(now.getFullYear()),
+      affiliate_code: affiliateCodes[w % affiliateCodes.length],
+      audit_area_id: areaIds[w % areaIds.length],
+      sub_area_id: subAreaIds[w % subAreaIds.length],
+      work_paper_date: createdDate,
+      audit_period_from: new Date(now.getFullYear(), 0, 1),
+      audit_period_to: new Date(now.getFullYear(), 11, 31),
+      control_objectives: 'Ensure adequate controls over ' + observations[w].toLowerCase(),
+      control_classification: w % 2 === 0 ? 'Preventive' : 'Detective',
+      control_type: w % 3 === 0 ? 'Manual' : 'Automated',
+      control_frequency: ['Daily', 'Weekly', 'Monthly', 'Quarterly'][w % 4],
+      control_standards: 'IIA Standard 2300',
+      risk_description: 'Risk of material misstatement or loss due to ' + observations[w].toLowerCase(),
+      test_objective: 'Verify that ' + observations[w].toLowerCase() + ' is adequately controlled',
+      testing_steps: '1. Obtain sample of transactions\n2. Test controls\n3. Document exceptions\n4. Conclude on effectiveness',
+      observation_title: observations[w],
+      observation_description: 'During our audit we observed that ' + observations[w].toLowerCase() + '. This was identified through sample testing of transactions in the audit period.',
+      risk_rating: riskRatings[w],
+      risk_summary: riskRatings[w] + ' risk finding requiring ' + (riskRatings[w] === 'High' ? 'immediate' : 'timely') + ' remediation',
+      recommendation: recommendations[w],
+      management_response: wpStatuses[w] === 'Sent to Auditee' ? 'Management acknowledges the finding and will implement corrective actions.' : '',
+      responsible_ids: auditee.user_id,
+      cc_recipients: '',
+      status: wpStatuses[w],
+      final_status: '',
+      revision_count: wpStatuses[w] === 'Revision Required' ? 1 : 0,
+      prepared_by_id: preparer.user_id,
+      prepared_by_name: preparer.full_name || '',
+      prepared_date: createdDate,
+      submitted_date: ['Submitted', 'Under Review', 'Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + 86400000) : '',
+      reviewed_by_id: ['Under Review', 'Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? reviewer.user_id : '',
+      reviewed_by_name: ['Under Review', 'Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? (reviewer.full_name || '') : '',
+      review_date: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + 2 * 86400000) : '',
+      review_comments: wpStatuses[w] === 'Revision Required' ? 'Please provide more supporting evidence.' : '',
+      approved_by_id: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? reviewer.user_id : '',
+      approved_by_name: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? (reviewer.full_name || '') : '',
+      approved_date: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + 3 * 86400000) : '',
+      sent_to_auditee_date: wpStatuses[w] === 'Sent to Auditee' ? new Date(createdDate.getTime() + 4 * 86400000) : '',
+      created_at: createdDate,
+      updated_at: now,
+      work_paper_ref: affiliateCodes[w % affiliateCodes.length] + '/WP/' + String(w + 1).padStart(3, '0')
+    };
+
+    seededWPs.push(wp);
+    var row = objectToRow('WORK_PAPERS', wp);
+    wpSheet.appendRow(row);
+    wpWrites.push({ sheetName: SHEETS.WORK_PAPERS, docId: wpId, data: wp });
+  }
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+  firestoreBatchWrite(wpWrites);
+  report.push('Work papers seeded: 10');
+
+  // ── STEP 6: Seed Action Plans (for the 3 "Sent to Auditee" WPs) ──
+  console.log('Step 5: Seeding action plans...');
+  var apSheet = getSheet(SHEETS.ACTION_PLANS);
+  var apHistSheet = getSheet(SHEETS.AP_HISTORY);
+  var apWrites = [];
+  var apHistWrites = [];
+  var apStatuses = [
+    STATUS.ACTION_PLAN.PENDING,
+    STATUS.ACTION_PLAN.IN_PROGRESS,
+    STATUS.ACTION_PLAN.PENDING_VERIFICATION,
+    STATUS.ACTION_PLAN.NOT_DUE,
+    STATUS.ACTION_PLAN.PENDING,
+    STATUS.ACTION_PLAN.OVERDUE,
+    STATUS.ACTION_PLAN.VERIFIED,
+    STATUS.ACTION_PLAN.IN_PROGRESS,
+    STATUS.ACTION_PLAN.PENDING,
+    STATUS.ACTION_PLAN.REJECTED
+  ];
+  var apCount = 0;
+
+  var sentWPs = seededWPs.filter(function(wp) { return wp.status === 'Sent to Auditee'; });
+
+  for (var s = 0; s < sentWPs.length; s++) {
+    var parentWp = sentWPs[s];
+    // Create 3-4 action plans per sent work paper
+    var planCount = 3 + (s % 2);
+    for (var p = 0; p < planCount; p++) {
+      var apIdx = apCount % apStatuses.length;
+      var apId = 'AP-' + String(apCount + 1).padStart(5, '0');
+      var dueOffset = (apStatuses[apIdx] === STATUS.ACTION_PLAN.OVERDUE) ? -10 : 30 + (p * 15);
+      var dueDate = new Date(now.getTime() + dueOffset * 86400000);
+      var apOwner = auditees[apCount % auditees.length];
+      var daysOvd = apStatuses[apIdx] === STATUS.ACTION_PLAN.OVERDUE ? Math.abs(dueOffset) : 0;
+
+      var ap = {
+        action_plan_id: apId,
+        work_paper_id: parentWp.work_paper_id,
+        action_number: p + 1,
+        action_description: recommendations[apCount % recommendations.length],
+        owner_ids: apOwner.user_id,
+        owner_names: apOwner.full_name || '',
+        due_date: dueDate,
+        status: apStatuses[apIdx],
+        final_status: '',
+        implementation_notes: apStatuses[apIdx] === STATUS.ACTION_PLAN.PENDING_VERIFICATION ? 'Controls have been implemented as recommended.' : '',
+        implemented_date: apStatuses[apIdx] === STATUS.ACTION_PLAN.PENDING_VERIFICATION ? new Date(now.getTime() - 2 * 86400000) : '',
+        auditor_review_status: apStatuses[apIdx] === STATUS.ACTION_PLAN.VERIFIED ? 'Approved' : (apStatuses[apIdx] === STATUS.ACTION_PLAN.REJECTED ? 'Rejected' : ''),
+        auditor_review_by: apStatuses[apIdx] === STATUS.ACTION_PLAN.VERIFIED ? auditors[0].user_id : '',
+        auditor_review_date: apStatuses[apIdx] === STATUS.ACTION_PLAN.VERIFIED ? new Date(now.getTime() - 86400000) : '',
+        auditor_review_comments: apStatuses[apIdx] === STATUS.ACTION_PLAN.REJECTED ? 'Evidence provided is insufficient. Please provide system screenshots.' : '',
+        hoa_review_status: '',
+        hoa_review_by: '',
+        hoa_review_date: '',
+        hoa_review_comments: '',
+        days_overdue: daysOvd,
+        delegated_by_id: '',
+        delegated_by_name: '',
+        delegated_date: '',
+        delegation_notes: '',
+        original_owner_ids: '',
+        created_at: parentWp.sent_to_auditee_date || now,
+        created_by: auditors[0].user_id,
+        updated_at: now,
+        updated_by: auditors[0].user_id
+      };
+
+      apSheet.appendRow(objectToRow('ACTION_PLANS', ap));
+      apWrites.push({ sheetName: SHEETS.ACTION_PLANS, docId: apId, data: ap });
+
+      // Add creation history
+      var histId = 'HIST-' + String(apCount + 1).padStart(5, '0');
+      var hist = {
+        history_id: histId,
+        action_plan_id: apId,
+        previous_status: '',
+        new_status: apStatuses[apIdx],
+        comments: 'Action plan created from audit finding',
+        user_id: auditors[0].user_id,
+        user_name: auditors[0].full_name || '',
+        changed_at: parentWp.sent_to_auditee_date || now
+      };
+      apHistSheet.appendRow(objectToRow('AP_HISTORY', hist));
+      apHistWrites.push({ sheetName: SHEETS.AP_HISTORY, docId: histId, data: hist });
+
+      apCount++;
+    }
+  }
+
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+  invalidateSheetData(SHEETS.AP_HISTORY);
+  firestoreBatchWrite(apWrites);
+  firestoreBatchWrite(apHistWrites);
+  report.push('Action plans seeded: ' + apCount);
+  report.push('AP history records seeded: ' + apCount);
+
+  // ── STEP 7: Rebuild indexes ──
+  console.log('Step 6: Rebuilding indexes...');
+  try { rebuildWorkPaperIndex(); } catch (e) { console.warn('WP index rebuild:', e); }
+  try { rebuildActionPlanIndex(); } catch (e) { console.warn('AP index rebuild:', e); }
+  report.push('Indexes rebuilt');
+
+  // ── STEP 8: Re-migrate system tables to Firestore ──
+  console.log('Step 7: Syncing system tables to Firestore...');
+  [SHEETS.CONFIG, SHEETS.ROLES, SHEETS.PERMISSIONS, SHEETS.AFFILIATES,
+   SHEETS.AUDIT_AREAS, SHEETS.SUB_AREAS, SHEETS.EMAIL_TEMPLATES].forEach(function(sn) {
+    try {
+      migrateSheetToFirestore(sn);
+      report.push('Re-synced to Firestore: ' + sn);
+    } catch (e) {
+      report.push('Firestore sync ' + sn + ': ERROR - ' + e.message);
+    }
+  });
+
+  // ── DONE ──
+  var summary = '=== PURGE & SEED COMPLETE ===\n' + report.join('\n');
+  console.log(summary);
+  return summary;
+}
+
+/**
+ * Purge ONLY Firestore (leave Sheets intact) and re-migrate.
+ * Useful when Firestore is out of sync with Sheets.
+ */
+function purgeAndResyncFirestore() {
+  if (!isFirestoreEnabled()) {
+    throw new Error('Firestore must be enabled.');
+  }
+
+  var collections = Object.keys(FIRESTORE_COLLECTIONS);
+  var report = [];
+
+  // Purge all Firestore collections
+  collections.forEach(function(sheetName) {
+    try {
+      var count = purgeFirestoreCollection(sheetName);
+      report.push('Purged ' + getFirestoreCollection_(sheetName) + ': ' + count + ' docs');
+    } catch (e) {
+      report.push('Error purging ' + sheetName + ': ' + e.message);
+    }
+  });
+
+  // Re-migrate everything from Sheets
+  var migrationSummary = migrateAllSheetsToFirestore();
+  report.push('\n' + migrationSummary);
+
+  var summary = '=== FIRESTORE RESYNC COMPLETE ===\n' + report.join('\n');
+  console.log(summary);
+  return summary;
+}
