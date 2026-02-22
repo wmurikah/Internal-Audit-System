@@ -996,7 +996,9 @@ function queueDelegationNotification(actionPlanId, actionPlan, previousVersion, 
       rows.push(['Delegation Notes', String(actionPlan.delegation_notes)]);
     }
 
-    var outro = 'Please <a href="' + loginUrl + '">log in</a> to review and take action on this plan.';
+    var outro = loginUrl
+      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to review and take action on this plan.'
+      : 'Please log in to review and take action on this plan.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
     sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
   });
