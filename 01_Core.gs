@@ -84,10 +84,12 @@ function _sheetNameToSchemaKey(sheetName) {
 }
 
 /**
- * Get all values from a collection, using Firestore as the primary read source.
+ * Get all values from a collection. Firestore is the source of truth.
  * Returns data in array-of-arrays format: [[headers], [row1], [row2], ...]
  * for backward compatibility with existing callers.
- * Falls back to Sheet for collections not in Firestore.
+ *
+ * For Firestore-backed collections: reads only from Firestore. No Sheet fallback.
+ * For non-Firestore collections (no mapping in FIRESTORE_DOC_ID_FIELD): reads from Sheet.
  * For write-heavy paths, pass skipCache = true.
  */
 function getSheetData(sheetName, skipCache) {
@@ -95,39 +97,42 @@ function getSheetData(sheetName, skipCache) {
     return _sheetDataCache[sheetName];
   }
 
-  // Firestore-primary: read from Firestore for sheets that have collections
-  if (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined' && FIRESTORE_DOC_ID_FIELD[sheetName] &&
-      typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-    try {
-      var fsDocs = firestoreGetAll(sheetName);
-      if (fsDocs && fsDocs.length > 0) {
-        // Use canonical SCHEMAS as headers when available for consistent column ordering.
-        // Falling back to document keys only when no schema is defined.
-        var schemaKey = _sheetNameToSchemaKey(sheetName);
-        var headers = (schemaKey && typeof SCHEMAS !== 'undefined' && SCHEMAS[schemaKey])
-          ? SCHEMAS[schemaKey]
-          : Object.keys(fsDocs[0]);
-        var data = [headers];
-        for (var d = 0; d < fsDocs.length; d++) {
-          var row = [];
-          for (var h = 0; h < headers.length; h++) {
-            var val = fsDocs[d][headers[h]];
-            row.push(val !== undefined && val !== null ? val : '');
-          }
-          data.push(row);
-        }
-        _sheetDataCache[sheetName] = data;
-        return data;
-      }
-      // Empty Firestore collection — fall through to Sheet
-      // (collection may not have been migrated yet)
-      console.log('Firestore collection empty for ' + sheetName + ', falling back to Sheet');
-    } catch (e) {
-      console.warn('Firestore read failed for ' + sheetName + ', falling back to Sheet:', e.message);
+  // Firestore-backed collection — Firestore is the sole source of truth
+  var isFirestoreBacked = typeof FIRESTORE_DOC_ID_FIELD !== 'undefined' && FIRESTORE_DOC_ID_FIELD[sheetName] &&
+      typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled();
+
+  if (isFirestoreBacked) {
+    // Let errors propagate — no silent fallback to Sheets
+    var fsDocs = firestoreGetAll(sheetName);
+
+    // Determine headers from schema or document keys
+    var schemaKey = _sheetNameToSchemaKey(sheetName);
+    var headers = (schemaKey && typeof SCHEMAS !== 'undefined' && SCHEMAS[schemaKey])
+      ? SCHEMAS[schemaKey]
+      : (fsDocs && fsDocs.length > 0 ? Object.keys(fsDocs[0]) : []);
+
+    // Empty collection is valid — return just headers
+    if (!fsDocs || fsDocs.length === 0) {
+      var emptyData = headers.length > 0 ? [headers] : [];
+      _sheetDataCache[sheetName] = emptyData;
+      return emptyData;
     }
+
+    var data = [headers];
+    for (var d = 0; d < fsDocs.length; d++) {
+      var row = [];
+      for (var h = 0; h < headers.length; h++) {
+        var val = fsDocs[d][headers[h]];
+        row.push(val !== undefined && val !== null ? val : '');
+      }
+      data.push(row);
+    }
+    _sheetDataCache[sheetName] = data;
+    return data;
   }
 
-  // Fallback to Sheet for non-Firestore collections or Firestore errors
+  // Non-Firestore collection (e.g. sheets without a FIRESTORE_DOC_ID_FIELD mapping)
+  // — read from Sheet directly
   var sheet = getSheet(sheetName);
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -437,13 +442,9 @@ const DB = {
     var sheetName = CONFIG.DATA_SHEETS[entityType];
     if (!sheetName) return null;
 
-    // Read from Firestore (primary)
-    if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      var doc = firestoreGet(sheetName, entityId);
-      if (doc) return doc;
-    }
-
-    return null;
+    // Firestore is the source of truth
+    var doc = firestoreGet(sheetName, entityId);
+    return doc || null;
   },
 
   getByIds: function(entityType, entityIds) {
@@ -452,28 +453,24 @@ const DB = {
     var sheetName = CONFIG.DATA_SHEETS[entityType];
     if (!sheetName) return [];
 
-    // Read all from Firestore and filter by ID set
-    if (typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      var allDocs = firestoreGetAll(sheetName);
-      if (!allDocs) return [];
-      var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
-      if (!idField) return [];
-      var idSet = {};
-      entityIds.forEach(function(id) { idSet[id] = true; });
-      return allDocs.filter(function(doc) { return idSet[doc[idField]]; });
-    }
-
-    return [];
+    // Firestore is the source of truth
+    var allDocs = firestoreGetAll(sheetName);
+    if (!allDocs) return [];
+    var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
+    if (!idField) return [];
+    var idSet = {};
+    entityIds.forEach(function(id) { idSet[id] = true; });
+    return allDocs.filter(function(doc) { return idSet[doc[idField]]; });
   },
 
   getAll: function(sheetName) {
-    // Read from Firestore for sheets with collections
+    // Firestore-backed collections — Firestore is the sole source of truth
     if (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined' && FIRESTORE_DOC_ID_FIELD[sheetName] &&
         typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
       return firestoreGetAll(sheetName) || [];
     }
 
-    // Fallback for non-Firestore sheets
+    // Non-Firestore sheets only (no FIRESTORE_DOC_ID_FIELD mapping)
     var sheet = getSheet(sheetName);
     if (!sheet || sheet.getLastRow() < 2) return [];
     var data = sheet.getDataRange().getValues();
@@ -491,21 +488,17 @@ const DB = {
     var sheetName = CONFIG.DATA_SHEETS[entityType];
     if (!sheetName) return [];
 
-    // Read from Firestore and filter in memory
-    if (typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      var allDocs = firestoreGetAll(sheetName);
-      if (!allDocs) return [];
-      return allDocs.filter(function(doc) {
-        for (var key in filters) {
-          if (filters.hasOwnProperty(key) && filters[key] !== undefined && doc[key] !== filters[key]) {
-            return false;
-          }
+    // Firestore is the source of truth — filter in memory
+    var allDocs = firestoreGetAll(sheetName);
+    if (!allDocs) return [];
+    return allDocs.filter(function(doc) {
+      for (var key in filters) {
+        if (filters.hasOwnProperty(key) && filters[key] !== undefined && doc[key] !== filters[key]) {
+          return false;
         }
-        return true;
-      });
-    }
-
-    return [];
+      }
+      return true;
+    });
   },
 
   count: function(entityType, filters) {
@@ -713,47 +706,23 @@ function getNextId(prefix) {
 
     var counterKey = 'NEXT_' + prefix + '_ID';
 
-    // Read from Firestore (primary)
-    if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      var configDoc = firestoreGet('00_Config', counterKey);
-      var currentVal = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
+    // Firestore is the source of truth for ID counters
+    var configDoc = firestoreGet('00_Config', counterKey);
+    var currentVal = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
 
-      // Write incremented value to Firestore
-      firestoreSet('00_Config', counterKey, {
-        config_key: counterKey,
-        config_value: currentVal + 1,
-        description: 'Auto-generated counter',
-        updated_at: new Date().toISOString()
-      });
+    // Write incremented value to Firestore
+    firestoreSet('00_Config', counterKey, {
+      config_key: counterKey,
+      config_value: currentVal + 1,
+      description: 'Auto-generated counter',
+      updated_at: new Date().toISOString()
+    });
 
-      lock.releaseLock();
-      Cache.remove('config_all');
-
-      var padded = String(currentVal).padStart(5, '0');
-      return getIdPrefix(prefix) + padded;
-    }
-
-    // Fallback to Sheet
-    var sheet = getSheet('00_Config');
-    var data = sheet.getDataRange().getValues();
-    var headers = data[0];
-    var keyIdx = headers.indexOf('config_key');
-    var valueIdx = headers.indexOf('config_value');
-
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][keyIdx] === counterKey) {
-        var val = parseInt(data[i][valueIdx]) || 1;
-        sheet.getRange(i + 1, valueIdx + 1).setValue(val + 1);
-        lock.releaseLock();
-        Cache.remove('config_all');
-        return getIdPrefix(prefix) + String(val).padStart(5, '0');
-      }
-    }
-
-    // Counter doesn't exist, create it
-    sheet.appendRow([counterKey, 2, 'Auto-generated counter', new Date()]);
     lock.releaseLock();
-    return getIdPrefix(prefix) + '00001';
+    Cache.remove('config_all');
+
+    var padded = String(currentVal).padStart(5, '0');
+    return getIdPrefix(prefix) + padded;
 
   } catch (e) {
     try { lock.releaseLock(); } catch (ignored) {}
@@ -804,40 +773,13 @@ function getAllConfig() {
 }
 
 function setConfig(key, value) {
-  // Write to Firestore (primary)
-  if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-    firestoreSet('00_Config', key, {
-      config_key: key,
-      config_value: value,
-      description: '',
-      updated_at: new Date().toISOString()
-    });
-  }
-
-  // Sheet backup (if enabled)
-  if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
-    var sheet = getSheet('00_Config');
-    if (sheet) {
-      var data = sheet.getDataRange().getValues();
-      var headers = data[0];
-      var keyIdx = headers.indexOf('config_key');
-      var valueIdx = headers.indexOf('config_value');
-      var updatedIdx = headers.indexOf('updated_at');
-
-      var found = false;
-      for (var i = 1; i < data.length; i++) {
-        if (data[i][keyIdx] === key) {
-          sheet.getRange(i + 1, valueIdx + 1).setValue(value);
-          if (updatedIdx >= 0) sheet.getRange(i + 1, updatedIdx + 1).setValue(new Date());
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        sheet.appendRow([key, value, '', new Date()]);
-      }
-    }
-  }
+  // Firestore is the source of truth
+  firestoreSet('00_Config', key, {
+    config_key: key,
+    config_value: value,
+    description: '',
+    updated_at: new Date().toISOString()
+  });
 
   Cache.remove('config_all');
   return true;
@@ -995,23 +937,8 @@ function logAudit(action, entityType, entityId, oldData, newData, userId) {
       ip_address: ''
     };
 
-    // Write to Firestore (primary)
-    if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      firestoreSet('16_AuditLog', logId, logData);
-    }
-
-    // Sheet backup
-    if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
-      var sheet = getSheet('16_AuditLog');
-      if (sheet) {
-        sheet.appendRow([
-          logId, action, entityType, entityId,
-          logData.old_data, logData.new_data,
-          logData.user_id, logData.user_email,
-          new Date(), logData.ip_address
-        ]);
-      }
-    }
+    // Firestore is the source of truth
+    firestoreSet('16_AuditLog', logId, logData);
   } catch (e) {
     console.warn('Audit log error:', e.message);
   }

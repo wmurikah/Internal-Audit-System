@@ -179,13 +179,28 @@ function routeAction(action, data, user) {
       
     // ========== WORK PAPERS ==========
     case 'getWorkPapers':
-      return { success: true, workPapers: getWorkPapers(data.filters, user) };
-      
+      try {
+        return { success: true, workPapers: getWorkPapers(data.filters, user) };
+      } catch (wpErr) {
+        console.error('getWorkPapers failed:', wpErr);
+        return { success: false, error: wpErr.message, workPapers: [] };
+      }
+
     case 'getWorkPaper':
-      return { success: true, workPaper: getWorkPaper(data.workPaperId, data.includeRelated !== false) };
-      
+      try {
+        return { success: true, workPaper: getWorkPaper(data.workPaperId, data.includeRelated !== false) };
+      } catch (wpErr) {
+        console.error('getWorkPaper failed:', wpErr);
+        return { success: false, error: wpErr.message };
+      }
+
     case 'getWorkPaperCounts':
-      return { success: true, counts: getWorkPaperCounts(data.filters, user) };
+      try {
+        return { success: true, counts: getWorkPaperCounts(data.filters, user) };
+      } catch (wpErr) {
+        console.error('getWorkPaperCounts failed:', wpErr);
+        return { success: false, error: wpErr.message, counts: {} };
+      }
       
     case 'createWorkPaper':
       return createWorkPaper(data, user);
@@ -230,13 +245,28 @@ function routeAction(action, data, user) {
       
     // ========== ACTION PLANS ==========
     case 'getActionPlans':
-      return { success: true, actionPlans: getActionPlans(data.filters, user) };
-      
+      try {
+        return { success: true, actionPlans: getActionPlans(data.filters, user) };
+      } catch (apErr) {
+        console.error('getActionPlans failed:', apErr);
+        return { success: false, error: apErr.message, actionPlans: [] };
+      }
+
     case 'getActionPlan':
-      return { success: true, actionPlan: getActionPlan(data.actionPlanId, data.includeRelated !== false) };
-      
+      try {
+        return { success: true, actionPlan: getActionPlan(data.actionPlanId, data.includeRelated !== false) };
+      } catch (apErr) {
+        console.error('getActionPlan failed:', apErr);
+        return { success: false, error: apErr.message };
+      }
+
     case 'getActionPlanCounts':
-      return { success: true, counts: getActionPlanCounts(data.filters, user) };
+      try {
+        return { success: true, counts: getActionPlanCounts(data.filters, user) };
+      } catch (apErr) {
+        console.error('getActionPlanCounts failed:', apErr);
+        return { success: false, error: apErr.message, counts: {} };
+      }
       
     case 'createActionPlan':
       return createActionPlan(data, user);
