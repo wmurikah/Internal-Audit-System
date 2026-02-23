@@ -132,8 +132,14 @@ function firestoreRequest_(method, path, payload) {
   var text = response.getContentText();
 
   if (code >= 400) {
-    // 404 = document not found — return null, don't throw
-    if (code === 404) return null;
+    if (code === 404) {
+      // "Database does not exist" is a fatal config error — throw immediately
+      if (text.indexOf('does not exist') !== -1 && text.indexOf('database') !== -1) {
+        throw new Error('Firestore database not created. Visit Google Cloud Console > Firestore to create it. Details: ' + text);
+      }
+      // Normal 404 = single document not found — return null
+      return null;
+    }
     // All other errors must throw — Firestore is the source of truth,
     // so callers must know when it fails (no silent fallback).
     throw new Error('Firestore HTTP ' + code + ': ' + text);
@@ -446,13 +452,19 @@ function firestoreBatchWrite(writes) {
     var url = 'https://firestore.googleapis.com/v1/projects/' +
               config.projectId + '/databases/(default)/documents:batchWrite';
 
-    UrlFetchApp.fetch(url, {
+    var response = UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
       headers: { Authorization: 'Bearer ' + getFirestoreAccessToken_() },
       payload: JSON.stringify({ writes: batchWrites }),
       muteHttpExceptions: true
     });
+
+    var batchCode = response.getResponseCode();
+    if (batchCode >= 400) {
+      var batchText = response.getContentText();
+      throw new Error('Firestore batchWrite failed (HTTP ' + batchCode + '): ' + batchText.substring(0, 300));
+    }
   }
 }
 
