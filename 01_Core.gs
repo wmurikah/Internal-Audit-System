@@ -86,9 +86,9 @@ function getSheetData(sheetName, skipCache) {
         _sheetDataCache[sheetName] = data;
         return data;
       }
-      // Empty Firestore collection
-      _sheetDataCache[sheetName] = [];
-      return [];
+      // Empty Firestore collection — fall through to Sheet
+      // (collection may not have been migrated yet)
+      console.log('Firestore collection empty for ' + sheetName + ', falling back to Sheet');
     } catch (e) {
       console.warn('Firestore read failed for ' + sheetName + ', falling back to Sheet:', e.message);
     }
