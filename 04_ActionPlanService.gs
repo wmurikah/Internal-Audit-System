@@ -509,6 +509,17 @@ function getActionPlansRaw(filters, user) {
       const ap = rowToObject(headers, row);
       ap._rowIndex = i + 1;
       ap.days_overdue = calculateDaysOverdue(ap.due_date);
+      // Compute days until due for UI (Kanban "due soon" indicator)
+      if (ap.due_date) {
+        var _due = ap.due_date instanceof Date ? new Date(ap.due_date) : new Date(ap.due_date);
+        var _today = new Date();
+        _due.setHours(0, 0, 0, 0);
+        _today.setHours(0, 0, 0, 0);
+        var _diffMs = _due.getTime() - _today.getTime();
+        ap.days_until_due = Math.ceil(_diffMs / (1000 * 60 * 60 * 24));
+      } else {
+        ap.days_until_due = 999;
+      }
       results.push(ap);
     }
   }

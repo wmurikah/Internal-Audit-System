@@ -724,29 +724,38 @@ function purgeAndSeedTestData() {
 
   var report = [];
   var now = new Date();
+  var DAY = 86400000;
 
-  // ── STEP 1: Preserve active users ──
-  console.log('Step 1: Preserving active users...');
+  // ══════════════════════════════════════════════════════════════
+  // STEP 1: Snapshot data we MUST preserve (Users + Roles)
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 1: Preserving users and roles...');
+
+  // ── Preserve ALL users (active and inactive) ──
   var usersSheet = getSheet(SHEETS.USERS);
   var usersData = usersSheet.getDataRange().getValues();
   var userHeaders = usersData[0];
-  var activeCol = userHeaders.indexOf('is_active');
-  var activeUsers = [];
+  var allUsers = [];
   for (var i = 1; i < usersData.length; i++) {
-    var isActive = usersData[i][activeCol];
-    if (isActive === true || isActive === 'true' || isActive === 'TRUE' || isActive === 1) {
-      var userObj = {};
-      for (var j = 0; j < userHeaders.length; j++) {
-        if (userHeaders[j]) userObj[userHeaders[j]] = usersData[i][j];
-      }
-      activeUsers.push(userObj);
+    var userObj = {};
+    for (var j = 0; j < userHeaders.length; j++) {
+      if (userHeaders[j]) userObj[userHeaders[j]] = usersData[i][j];
     }
+    if (userObj.user_id) allUsers.push(userObj);
   }
-  report.push('Active users preserved: ' + activeUsers.length);
-  console.log('Active users found: ' + activeUsers.length);
+  report.push('Users preserved: ' + allUsers.length);
 
-  // ── STEP 2: Purge data tables (Sheets + Firestore) ──
-  console.log('Step 2: Purging data tables...');
+  // ── Preserve Roles (from Sheet since it is the canonical copy) ──
+  var rolesSheet = getSheet(SHEETS.ROLES);
+  var rolesData = rolesSheet ? rolesSheet.getDataRange().getValues() : [];
+  report.push('Roles preserved: ' + Math.max(0, rolesData.length - 1));
+
+  // ══════════════════════════════════════════════════════════════
+  // STEP 2: Purge ALL data tables (both Sheets AND Firestore)
+  //         Preserve: Users, Roles, Config, Permissions, Affiliates,
+  //         Audit Areas, Sub Areas, Email Templates, Field Defs, Workflows
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 2: Purging all data tables...');
   var dataTables = [
     SHEETS.WORK_PAPERS,
     SHEETS.WP_REQUIREMENTS,
@@ -762,7 +771,7 @@ function purgeAndSeedTestData() {
     SHEETS.INDEX_WORK_PAPERS,
     SHEETS.INDEX_ACTION_PLANS,
     SHEETS.INDEX_USERS,
-    SHEETS.USERS  // Will re-populate with active users
+    SHEETS.USERS  // Will re-populate immediately
   ];
 
   dataTables.forEach(function(tableName) {
@@ -770,82 +779,94 @@ function purgeAndSeedTestData() {
       var sheetRows = purgeSheetData(tableName);
       report.push('Sheet ' + tableName + ': purged ' + sheetRows + ' rows');
     } catch (e) {
-      report.push('Sheet ' + tableName + ': ERROR - ' + e.message);
+      report.push('Sheet ' + tableName + ': SKIP - ' + e.message);
     }
     try {
       var fsDocs = purgeFirestoreCollection(tableName);
       report.push('Firestore ' + getFirestoreCollection_(tableName) + ': purged ' + fsDocs + ' docs');
     } catch (e) {
-      report.push('Firestore ' + tableName + ': ERROR - ' + e.message);
+      report.push('Firestore ' + tableName + ': SKIP - ' + e.message);
     }
   });
 
-  // ── STEP 3: Re-insert active users ──
-  console.log('Step 3: Re-inserting active users...');
-  if (activeUsers.length > 0) {
-    var rows = activeUsers.map(function(u) { return objectToRow('USERS', u); });
+  // Invalidate ALL in-memory and script caches
+  if (typeof invalidateAllSheetData === 'function') invalidateAllSheetData();
+  if (typeof Cache !== 'undefined' && Cache.clearAll) Cache.clearAll();
+
+  // ══════════════════════════════════════════════════════════════
+  // STEP 3: Restore Users
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 3: Restoring users...');
+  if (allUsers.length > 0) {
+    var rows = allUsers.map(function(u) { return objectToRow('USERS', u); });
     usersSheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
     invalidateSheetData(SHEETS.USERS);
 
-    // Sync to Firestore
-    var userWrites = activeUsers.map(function(u) {
+    var userWrites = allUsers.map(function(u) {
       return { sheetName: SHEETS.USERS, docId: u.user_id, data: u };
     });
     firestoreBatchWrite(userWrites);
-    report.push('Users restored: ' + activeUsers.length);
+    report.push('Users restored: ' + allUsers.length);
   }
-
-  // Rebuild user index
   try { Index.rebuild('USER'); } catch (e) { console.warn('User index rebuild:', e); }
 
-  // ── STEP 4: Get reference data for seeding ──
+  // ══════════════════════════════════════════════════════════════
+  // STEP 4: Gather reference data for seeding
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 4: Reading reference data...');
   var affiliates = getSheetData(SHEETS.AFFILIATES);
-  var affHeaders = affiliates[0];
-  var affCodeIdx = affHeaders.indexOf('affiliate_code');
+  var affHeaders = (affiliates && affiliates.length > 0) ? affiliates[0] : [];
+  var affCodeIdx = affHeaders.indexOf ? affHeaders.indexOf('affiliate_code') : -1;
   var affiliateCodes = [];
-  for (var a = 1; a < affiliates.length; a++) {
+  for (var a = 1; a < (affiliates ? affiliates.length : 0); a++) {
     if (affiliates[a][affCodeIdx]) affiliateCodes.push(affiliates[a][affCodeIdx]);
   }
   if (affiliateCodes.length === 0) affiliateCodes = ['HQ'];
 
   var areas = getSheetData(SHEETS.AUDIT_AREAS);
-  var areaHeaders = areas[0];
-  var areaIdIdx = areaHeaders.indexOf('area_id');
+  var areaHeaders = (areas && areas.length > 0) ? areas[0] : [];
+  var areaIdIdx = areaHeaders.indexOf ? areaHeaders.indexOf('area_id') : -1;
   var areaIds = [];
-  for (var b = 1; b < areas.length; b++) {
+  for (var b = 1; b < (areas ? areas.length : 0); b++) {
     if (areas[b][areaIdIdx]) areaIds.push(areas[b][areaIdIdx]);
   }
   if (areaIds.length === 0) areaIds = ['AREA-001'];
 
   var subAreas = getSheetData(SHEETS.SUB_AREAS);
-  var saHeaders = subAreas[0];
-  var saIdIdx = saHeaders.indexOf('sub_area_id');
+  var saHeaders = (subAreas && subAreas.length > 0) ? subAreas[0] : [];
+  var saIdIdx = saHeaders.indexOf ? saHeaders.indexOf('sub_area_id') : -1;
   var subAreaIds = [];
-  for (var c = 1; c < subAreas.length; c++) {
+  for (var c = 1; c < (subAreas ? subAreas.length : 0); c++) {
     if (subAreas[c][saIdIdx]) subAreaIds.push(subAreas[c][saIdIdx]);
   }
   if (subAreaIds.length === 0) subAreaIds = ['SA-001'];
 
-  // Categorise active users by role
+  // Categorise users by role
+  var activeUsers = allUsers.filter(function(u) {
+    var act = u.is_active;
+    return act === true || act === 'true' || act === 'TRUE' || act === 1;
+  });
   var auditors = activeUsers.filter(function(u) {
     return ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'].indexOf(u.role_code) >= 0;
   });
   var auditees = activeUsers.filter(function(u) {
     return u.role_code === 'AUDITEE';
   });
-
   if (auditors.length === 0) auditors = activeUsers.slice(0, 1);
   if (auditees.length === 0) auditees = activeUsers.slice(0, 1);
 
-  // ── STEP 5: Seed 10 Work Papers ──
-  console.log('Step 4: Seeding 10 work papers...');
+  // ══════════════════════════════════════════════════════════════
+  // STEP 5: Seed 12 Work Papers (realistic status distribution)
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 5: Seeding work papers...');
   var wpStatuses = [
     'Draft', 'Draft',
     'Submitted', 'Under Review',
-    'Revision Required', 'Approved', 'Approved',
-    'Sent to Auditee', 'Sent to Auditee', 'Sent to Auditee'
+    'Revision Required',
+    'Approved', 'Approved',
+    'Sent to Auditee', 'Sent to Auditee', 'Sent to Auditee', 'Sent to Auditee', 'Sent to Auditee'
   ];
-  var riskRatings = ['High', 'High', 'Medium', 'Medium', 'Medium', 'Low', 'Low', 'High', 'Medium', 'Low'];
+  var riskRatings = ['High', 'High', 'Medium', 'Medium', 'Medium', 'Low', 'Low', 'High', 'Medium', 'Low', 'High', 'Medium'];
   var observations = [
     'Segregation of duties not enforced in procurement',
     'Incomplete vendor due diligence documentation',
@@ -856,7 +877,9 @@ function purgeAndSeedTestData() {
     'IT password policy non-compliance',
     'Contract renewals processed without competitive bidding',
     'Fixed asset register not updated quarterly',
-    'Petty cash fund not reconciled monthly'
+    'Petty cash fund not reconciled monthly',
+    'Bank reconciliation performed with excessive delays',
+    'Payroll processing lacks independent verification'
   ];
   var recommendations = [
     'Implement system-enforced SoD controls with compensating detective controls',
@@ -868,20 +891,22 @@ function purgeAndSeedTestData() {
     'Enforce 90-day password rotation with complexity requirements',
     'Establish a tender committee for all renewals exceeding USD 50,000',
     'Assign asset custodians and schedule quarterly physical verification',
-    'Implement daily petty cash reconciliation with surprise counts'
+    'Implement daily petty cash reconciliation with surprise counts',
+    'Complete bank reconciliation within 5 business days of month-end',
+    'Introduce payroll sign-off by both HR and Finance before disbursement'
   ];
 
   var wpSheet = getSheet(SHEETS.WORK_PAPERS);
   var wpWrites = [];
   var seededWPs = [];
 
-  for (var w = 0; w < 10; w++) {
+  for (var w = 0; w < 12; w++) {
     var wpId = 'WP-' + String(w + 1).padStart(5, '0');
     var preparer = auditors[w % auditors.length];
     var reviewer = auditors[(w + 1) % auditors.length];
     var auditee = auditees[w % auditees.length];
-    var daysAgo = 30 - (w * 3);
-    var createdDate = new Date(now.getTime() - daysAgo * 86400000);
+    var daysAgo = 45 - (w * 3);
+    var createdDate = new Date(now.getTime() - daysAgo * DAY);
 
     var wp = {
       work_paper_id: wpId,
@@ -914,130 +939,181 @@ function purgeAndSeedTestData() {
       prepared_by_id: preparer.user_id,
       prepared_by_name: preparer.full_name || '',
       prepared_date: createdDate,
-      submitted_date: ['Submitted', 'Under Review', 'Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + 86400000) : '',
+      submitted_date: ['Submitted', 'Under Review', 'Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + DAY) : '',
       reviewed_by_id: ['Under Review', 'Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? reviewer.user_id : '',
       reviewed_by_name: ['Under Review', 'Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? (reviewer.full_name || '') : '',
-      review_date: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + 2 * 86400000) : '',
+      review_date: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + 2 * DAY) : '',
       review_comments: wpStatuses[w] === 'Revision Required' ? 'Please provide more supporting evidence.' : '',
       approved_by_id: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? reviewer.user_id : '',
       approved_by_name: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? (reviewer.full_name || '') : '',
-      approved_date: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + 3 * 86400000) : '',
-      sent_to_auditee_date: wpStatuses[w] === 'Sent to Auditee' ? new Date(createdDate.getTime() + 4 * 86400000) : '',
+      approved_date: ['Approved', 'Sent to Auditee'].indexOf(wpStatuses[w]) >= 0 ? new Date(createdDate.getTime() + 3 * DAY) : '',
+      sent_to_auditee_date: wpStatuses[w] === 'Sent to Auditee' ? new Date(createdDate.getTime() + 4 * DAY) : '',
       created_at: createdDate,
       updated_at: now,
       work_paper_ref: affiliateCodes[w % affiliateCodes.length] + '/WP/' + String(w + 1).padStart(3, '0')
     };
 
     seededWPs.push(wp);
-    var row = objectToRow('WORK_PAPERS', wp);
-    wpSheet.appendRow(row);
+    wpSheet.appendRow(objectToRow('WORK_PAPERS', wp));
     wpWrites.push({ sheetName: SHEETS.WORK_PAPERS, docId: wpId, data: wp });
   }
   invalidateSheetData(SHEETS.WORK_PAPERS);
   firestoreBatchWrite(wpWrites);
-  report.push('Work papers seeded: 10');
+  report.push('Work papers seeded: 12');
 
-  // ── STEP 6: Seed Action Plans (for the 3 "Sent to Auditee" WPs) ──
-  console.log('Step 5: Seeding action plans...');
+  // ══════════════════════════════════════════════════════════════
+  // STEP 6: Seed Action Plans (comprehensive status coverage)
+  //         Every status is represented so every role and UI view works.
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 6: Seeding action plans with full status coverage...');
   var apSheet = getSheet(SHEETS.ACTION_PLANS);
   var apHistSheet = getSheet(SHEETS.AP_HISTORY);
   var apWrites = [];
   var apHistWrites = [];
-  var apStatuses = [
-    STATUS.ACTION_PLAN.PENDING,
-    STATUS.ACTION_PLAN.IN_PROGRESS,
-    STATUS.ACTION_PLAN.PENDING_VERIFICATION,
-    STATUS.ACTION_PLAN.NOT_DUE,
-    STATUS.ACTION_PLAN.PENDING,
-    STATUS.ACTION_PLAN.OVERDUE,
-    STATUS.ACTION_PLAN.VERIFIED,
-    STATUS.ACTION_PLAN.IN_PROGRESS,
-    STATUS.ACTION_PLAN.PENDING,
-    STATUS.ACTION_PLAN.REJECTED
+
+  // Explicit status list covering EVERY status in the system.
+  // Each entry: [status, dueOffset in days from now, has implementation notes, auditor review status]
+  var apBlueprints = [
+    // ── Active / Actionable ──
+    { status: 'Not Due',                dueOffset: 90,  implNotes: '',                             reviewStatus: '' },
+    { status: 'Not Due',                dueOffset: 60,  implNotes: '',                             reviewStatus: '' },
+    { status: 'Pending',                dueOffset: 14,  implNotes: '',                             reviewStatus: '' },
+    { status: 'Pending',                dueOffset: 7,   implNotes: '',                             reviewStatus: '' },
+    { status: 'Pending',                dueOffset: 3,   implNotes: '',                             reviewStatus: '' },
+    { status: 'In Progress',            dueOffset: 21,  implNotes: 'Working on implementing SoD controls in ERP.', reviewStatus: '' },
+    { status: 'In Progress',            dueOffset: 10,  implNotes: 'Vendor checklist drafted, pending management sign-off.', reviewStatus: '' },
+    // ── Overdue (past due, not closed) ──
+    { status: 'Overdue',                dueOffset: -15, implNotes: '',                             reviewStatus: '' },
+    { status: 'Overdue',                dueOffset: -30, implNotes: '',                             reviewStatus: '' },
+    { status: 'Overdue',                dueOffset: -7,  implNotes: 'Delayed due to system upgrade.', reviewStatus: '' },
+    // ── Implementation in progress ──
+    { status: 'Implemented',            dueOffset: 5,   implNotes: 'RBAC deployed and access review completed for Q1.', reviewStatus: '' },
+    { status: 'Pending Verification',   dueOffset: -2,  implNotes: 'Controls have been implemented as recommended. Screenshots attached.', reviewStatus: '' },
+    { status: 'Pending Verification',   dueOffset: 8,   implNotes: 'Dual approval workflow configured in ERP.', reviewStatus: '' },
+    // ── Reviewed / Final ──
+    { status: 'Verified',               dueOffset: -20, implNotes: 'Inventory reconciliation automated.', reviewStatus: 'Approved' },
+    { status: 'Verified',               dueOffset: -10, implNotes: 'Receipt mandate enforced in expense system.', reviewStatus: 'Approved' },
+    { status: 'Rejected',               dueOffset: -5,  implNotes: 'Password policy updated.',      reviewStatus: 'Rejected' },
+    { status: 'Closed',                 dueOffset: -45, implNotes: 'Tender committee established and operational.', reviewStatus: 'Approved' },
+    { status: 'Closed',                 dueOffset: -60, implNotes: 'Asset custodians assigned, quarterly verification on track.', reviewStatus: 'Approved' },
+    { status: 'Not Implemented',        dueOffset: -90, implNotes: 'Management decided to accept the risk.', reviewStatus: '' }
   ];
-  var apCount = 0;
 
   var sentWPs = seededWPs.filter(function(wp) { return wp.status === 'Sent to Auditee'; });
+  var apCount = 0;
+  var histCount = 0;
 
-  for (var s = 0; s < sentWPs.length; s++) {
-    var parentWp = sentWPs[s];
-    // Create 3-4 action plans per sent work paper
-    var planCount = 3 + (s % 2);
-    for (var p = 0; p < planCount; p++) {
-      var apIdx = apCount % apStatuses.length;
-      var apId = 'AP-' + String(apCount + 1).padStart(5, '0');
-      var dueOffset = (apStatuses[apIdx] === STATUS.ACTION_PLAN.OVERDUE) ? -10 : 30 + (p * 15);
-      var dueDate = new Date(now.getTime() + dueOffset * 86400000);
-      var apOwner = auditees[apCount % auditees.length];
-      var daysOvd = apStatuses[apIdx] === STATUS.ACTION_PLAN.OVERDUE ? Math.abs(dueOffset) : 0;
+  for (var bp = 0; bp < apBlueprints.length; bp++) {
+    var blueprint = apBlueprints[bp];
+    var parentWp = sentWPs[bp % sentWPs.length];
+    var apId = 'AP-' + String(apCount + 1).padStart(5, '0');
+    var dueDate = new Date(now.getTime() + blueprint.dueOffset * DAY);
+    var apOwner = auditees[apCount % auditees.length];
+    var daysOvd = blueprint.dueOffset < 0 ? Math.abs(blueprint.dueOffset) : 0;
+    // For closed/verified statuses, days_overdue should be 0
+    if (['Verified', 'Closed', 'Not Implemented'].indexOf(blueprint.status) >= 0) daysOvd = 0;
 
-      var ap = {
-        action_plan_id: apId,
-        work_paper_id: parentWp.work_paper_id,
-        action_number: p + 1,
-        action_description: recommendations[apCount % recommendations.length],
-        owner_ids: apOwner.user_id,
-        owner_names: apOwner.full_name || '',
-        due_date: dueDate,
-        status: apStatuses[apIdx],
-        final_status: '',
-        implementation_notes: apStatuses[apIdx] === STATUS.ACTION_PLAN.PENDING_VERIFICATION ? 'Controls have been implemented as recommended.' : '',
-        implemented_date: apStatuses[apIdx] === STATUS.ACTION_PLAN.PENDING_VERIFICATION ? new Date(now.getTime() - 2 * 86400000) : '',
-        auditor_review_status: apStatuses[apIdx] === STATUS.ACTION_PLAN.VERIFIED ? 'Approved' : (apStatuses[apIdx] === STATUS.ACTION_PLAN.REJECTED ? 'Rejected' : ''),
-        auditor_review_by: apStatuses[apIdx] === STATUS.ACTION_PLAN.VERIFIED ? auditors[0].user_id : '',
-        auditor_review_date: apStatuses[apIdx] === STATUS.ACTION_PLAN.VERIFIED ? new Date(now.getTime() - 86400000) : '',
-        auditor_review_comments: apStatuses[apIdx] === STATUS.ACTION_PLAN.REJECTED ? 'Evidence provided is insufficient. Please provide system screenshots.' : '',
-        hoa_review_status: '',
-        hoa_review_by: '',
-        hoa_review_date: '',
-        hoa_review_comments: '',
-        days_overdue: daysOvd,
-        delegated_by_id: '',
-        delegated_by_name: '',
-        delegated_date: '',
-        delegation_notes: '',
-        original_owner_ids: '',
-        created_at: parentWp.sent_to_auditee_date || now,
-        created_by: auditors[0].user_id,
-        updated_at: now,
-        updated_by: auditors[0].user_id
+    var isImpl = ['Implemented', 'Pending Verification', 'Verified', 'Closed'].indexOf(blueprint.status) >= 0;
+    var isVerified = ['Verified', 'Closed'].indexOf(blueprint.status) >= 0;
+    var isClosed = blueprint.status === 'Closed';
+    var isRejected = blueprint.status === 'Rejected';
+
+    var ap = {
+      action_plan_id: apId,
+      work_paper_id: parentWp.work_paper_id,
+      action_number: bp + 1,
+      action_description: recommendations[bp % recommendations.length],
+      owner_ids: apOwner.user_id,
+      owner_names: apOwner.full_name || '',
+      due_date: dueDate,
+      status: blueprint.status,
+      final_status: isClosed ? 'Closed' : (blueprint.status === 'Not Implemented' ? 'Not Implemented' : ''),
+      implementation_notes: blueprint.implNotes,
+      implemented_date: isImpl ? new Date(now.getTime() - 5 * DAY) : '',
+      auditor_review_status: blueprint.reviewStatus,
+      auditor_review_by: (isVerified || isRejected) ? auditors[0].user_id : '',
+      auditor_review_date: (isVerified || isRejected) ? new Date(now.getTime() - 3 * DAY) : '',
+      auditor_review_comments: isRejected ? 'Evidence provided is insufficient. Please provide system screenshots showing the control in action.' : (isVerified ? 'Implementation verified. Control is operating effectively.' : ''),
+      hoa_review_status: isClosed ? 'Approved' : '',
+      hoa_review_by: isClosed ? auditors[0].user_id : '',
+      hoa_review_date: isClosed ? new Date(now.getTime() - 1 * DAY) : '',
+      hoa_review_comments: isClosed ? 'Final review complete. Action plan closed.' : '',
+      days_overdue: daysOvd,
+      delegated_by_id: '',
+      delegated_by_name: '',
+      delegated_date: '',
+      delegation_notes: '',
+      original_owner_ids: '',
+      created_at: parentWp.sent_to_auditee_date || now,
+      created_by: auditors[0].user_id,
+      updated_at: now,
+      updated_by: auditors[0].user_id
+    };
+
+    apSheet.appendRow(objectToRow('ACTION_PLANS', ap));
+    apWrites.push({ sheetName: SHEETS.ACTION_PLANS, docId: apId, data: ap });
+
+    // ── History: creation entry ──
+    var histId1 = 'HIST-' + String(++histCount).padStart(5, '0');
+    var hist1 = {
+      history_id: histId1,
+      action_plan_id: apId,
+      previous_status: '',
+      new_status: 'Not Due',
+      comments: 'Action plan created from audit finding',
+      user_id: auditors[0].user_id,
+      user_name: auditors[0].full_name || '',
+      changed_at: parentWp.sent_to_auditee_date || now
+    };
+    apHistSheet.appendRow(objectToRow('AP_HISTORY', hist1));
+    apHistWrites.push({ sheetName: SHEETS.AP_HISTORY, docId: histId1, data: hist1 });
+
+    // ── History: current-status entry (if not the creation status) ──
+    if (blueprint.status !== 'Not Due') {
+      var histId2 = 'HIST-' + String(++histCount).padStart(5, '0');
+      var statusComment = {
+        'Pending': 'Due date approaching, status changed to Pending',
+        'In Progress': 'Auditee began work on implementation',
+        'Overdue': 'Due date passed without implementation',
+        'Implemented': 'Auditee marked action plan as implemented',
+        'Pending Verification': 'Awaiting auditor verification of implementation',
+        'Verified': 'Auditor verified implementation is effective',
+        'Rejected': 'Auditor rejected - insufficient evidence provided',
+        'Closed': 'HOA final review approved. Action plan closed.',
+        'Not Implemented': 'Management accepted risk. Action plan closed as not implemented.'
       };
-
-      apSheet.appendRow(objectToRow('ACTION_PLANS', ap));
-      apWrites.push({ sheetName: SHEETS.ACTION_PLANS, docId: apId, data: ap });
-
-      // Add creation history
-      var histId = 'HIST-' + String(apCount + 1).padStart(5, '0');
-      var hist = {
-        history_id: histId,
+      var hist2 = {
+        history_id: histId2,
         action_plan_id: apId,
-        previous_status: '',
-        new_status: apStatuses[apIdx],
-        comments: 'Action plan created from audit finding',
-        user_id: auditors[0].user_id,
-        user_name: auditors[0].full_name || '',
-        changed_at: parentWp.sent_to_auditee_date || now
+        previous_status: 'Not Due',
+        new_status: blueprint.status,
+        comments: statusComment[blueprint.status] || 'Status updated',
+        user_id: isVerified ? auditors[0].user_id : apOwner.user_id,
+        user_name: isVerified ? (auditors[0].full_name || '') : (apOwner.full_name || ''),
+        changed_at: new Date(now.getTime() - 2 * DAY)
       };
-      apHistSheet.appendRow(objectToRow('AP_HISTORY', hist));
-      apHistWrites.push({ sheetName: SHEETS.AP_HISTORY, docId: histId, data: hist });
-
-      apCount++;
+      apHistSheet.appendRow(objectToRow('AP_HISTORY', hist2));
+      apHistWrites.push({ sheetName: SHEETS.AP_HISTORY, docId: histId2, data: hist2 });
     }
+
+    apCount++;
   }
 
   invalidateSheetData(SHEETS.ACTION_PLANS);
   invalidateSheetData(SHEETS.AP_HISTORY);
   firestoreBatchWrite(apWrites);
   firestoreBatchWrite(apHistWrites);
-  report.push('Action plans seeded: ' + apCount);
-  report.push('AP history records seeded: ' + apCount);
+  report.push('Action plans seeded: ' + apCount + ' (covering all ' + Object.keys(STATUS.ACTION_PLAN).length + ' statuses)');
+  report.push('AP history records seeded: ' + histCount);
 
-  // ── STEP 7: Reset ID counters so new records don't collide with seeded IDs ──
-  console.log('Step 6: Resetting ID counters...');
+  // ══════════════════════════════════════════════════════════════
+  // STEP 7: Reset ID counters
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 7: Resetting ID counters...');
   var idCounterResets = {
-    'NEXT_WP_ID': 11,     // seeded WP-00001 to WP-00010
+    'NEXT_WP_ID': 13,
     'NEXT_AP_ID': apCount + 1,
-    'NEXT_HISTORY_ID': apCount + 1,
+    'NEXT_HISTORY_ID': histCount + 1,
     'NEXT_REQ_ID': 1,
     'NEXT_FILE_ID': 1,
     'NEXT_REV_ID': 1,
@@ -1049,32 +1125,52 @@ function purgeAndSeedTestData() {
   Object.keys(idCounterResets).forEach(function(key) {
     try {
       setConfigValue(key, idCounterResets[key]);
-      report.push('Reset counter ' + key + ' = ' + idCounterResets[key]);
+      report.push('Counter ' + key + ' = ' + idCounterResets[key]);
     } catch (e) {
-      report.push('Counter reset ' + key + ': ERROR - ' + e.message);
+      report.push('Counter ' + key + ': ERROR - ' + e.message);
     }
   });
 
-  // ── STEP 8: Rebuild indexes ──
-  console.log('Step 7: Rebuilding indexes...');
-  try { rebuildWorkPaperIndex(); } catch (e) { console.warn('WP index rebuild:', e); }
-  try { rebuildActionPlanIndex(); } catch (e) { console.warn('AP index rebuild:', e); }
-  report.push('Indexes rebuilt');
+  // ══════════════════════════════════════════════════════════════
+  // STEP 8: Rebuild ALL indexes
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 8: Rebuilding indexes...');
+  try { rebuildWorkPaperIndex(); report.push('Work paper index rebuilt'); } catch (e) { report.push('WP index: ' + e.message); }
+  try { rebuildActionPlanIndex(); report.push('Action plan index rebuilt'); } catch (e) { report.push('AP index: ' + e.message); }
 
-  // ── STEP 9: Re-migrate system tables to Firestore ──
-  console.log('Step 8: Syncing system tables to Firestore...');
+  // ══════════════════════════════════════════════════════════════
+  // STEP 9: Re-sync system/reference tables to Firestore
+  //         This ensures Firestore has clean copies of all config
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 9: Syncing system tables to Firestore...');
   [SHEETS.CONFIG, SHEETS.ROLES, SHEETS.PERMISSIONS, SHEETS.AFFILIATES,
    SHEETS.AUDIT_AREAS, SHEETS.SUB_AREAS, SHEETS.EMAIL_TEMPLATES].forEach(function(sn) {
     try {
       migrateSheetToFirestore(sn);
-      report.push('Re-synced to Firestore: ' + sn);
+      report.push('Firestore synced: ' + sn);
     } catch (e) {
-      report.push('Firestore sync ' + sn + ': ERROR - ' + e.message);
+      report.push('Firestore sync ' + sn + ': ' + e.message);
     }
   });
 
-  // ── DONE ──
-  var summary = '=== PURGE & SEED COMPLETE ===\n' + report.join('\n');
+  // ══════════════════════════════════════════════════════════════
+  // STEP 10: Clear all caches so the UI gets fresh data
+  // ══════════════════════════════════════════════════════════════
+  console.log('Step 10: Clearing all caches...');
+  if (typeof invalidateAllSheetData === 'function') invalidateAllSheetData();
+  if (typeof Cache !== 'undefined' && Cache.clearAll) Cache.clearAll();
+  try {
+    var scriptCache = CacheService.getScriptCache();
+    scriptCache.remove('sidebar_counts_all');
+  } catch (e) {}
+  report.push('All caches cleared');
+
+  // ══════════════════════════════════════════════════════════════
+  // DONE
+  // ══════════════════════════════════════════════════════════════
+  var summary = '=== PURGE & RESTRUCTURE COMPLETE ===\n' +
+    'Users: ' + allUsers.length + ' | Work Papers: 12 | Action Plans: ' + apCount + ' | History: ' + histCount + '\n\n' +
+    report.join('\n');
   console.log(summary);
   return summary;
 }
