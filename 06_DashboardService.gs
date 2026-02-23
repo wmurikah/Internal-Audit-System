@@ -1014,6 +1014,7 @@ function getComprehensiveReportData(filters) {
           areaLookup[acode] = areaData[ai][areaNameIdx] || acode;
         }
       }
+    }
   } catch(e) { console.warn('Failed to load audit areas lookup:', e); }
 
   // Enrich work papers with area_name from lookup
