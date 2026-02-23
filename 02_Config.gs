@@ -631,6 +631,7 @@ function getUserByEmail(email) {
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   
   var data = getSheetData(SHEETS.USERS);
+  if (!data || data.length < 2) return null;
   var headers = data[0];
   var emailIdx = headers.indexOf('email');
 

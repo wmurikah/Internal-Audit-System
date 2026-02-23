@@ -189,6 +189,7 @@ function findUserRowIndex(userId) {
   var sheet = getSheet(SHEETS.USERS);
   if (!sheet) return null;
   var data = sheet.getDataRange().getValues();
+  if (!data || data.length < 2) return null;
   var headers = data[0];
   var idIdx = headers.indexOf('user_id');
 
@@ -1070,7 +1071,7 @@ function invalidateUserSessions(userId) {
 
   // Read sessions from Firestore
   var sessions = getSheetData(SHEETS.SESSIONS);
-  if (sessions.length < 2) return;
+  if (!sessions || sessions.length < 2) return;
 
   var headers = sessions[0];
   var userIdIdx = headers.indexOf('user_id');
@@ -1172,6 +1173,7 @@ function updateUserIndex(userId, user, rowNumber) {
   var indexSheet = getSheet(SHEETS.INDEX_USERS);
   if (!indexSheet) return;
   var data = indexSheet.getDataRange().getValues();
+  if (!data || data.length < 1) return;
   var headers = data[0];
   var idIdx = headers.indexOf('user_id');
 
