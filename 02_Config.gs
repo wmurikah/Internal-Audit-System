@@ -248,7 +248,6 @@ function generateIds(entityType, count) {
       description: 'Auto-generated ID counter',
       updated_at: new Date().toISOString()
     });
-    }
 
     var ids = [];
     for (var j = 0; j < count; j++) {
