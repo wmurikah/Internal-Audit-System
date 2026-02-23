@@ -56,6 +56,34 @@ function getSheet(sheetName) {
 var _sheetDataCache = {};
 
 /**
+ * Map a sheet tab name (e.g. '13_ActionPlans') to its SCHEMAS key (e.g. 'ACTION_PLANS').
+ * Returns null if no mapping exists.
+ */
+var _schemaKeyMap = {
+  '00_Config': 'CONFIG',
+  '01_Roles': 'ROLES',
+  '05_Users': 'USERS',
+  '06_Affiliates': 'AFFILIATES',
+  '07_AuditAreas': 'AUDIT_AREAS',
+  '08_ProcessSubAreas': 'SUB_AREAS',
+  '09_WorkPapers': 'WORK_PAPERS',
+  '10_WorkPaperRequirements': 'WP_REQUIREMENTS',
+  '11_WorkPaperFiles': 'WP_FILES',
+  '12_WorkPaperRevisions': 'WP_REVISIONS',
+  '13_ActionPlans': 'ACTION_PLANS',
+  '14_ActionPlanEvidence': 'AP_EVIDENCE',
+  '15_ActionPlanHistory': 'AP_HISTORY',
+  '16_AuditLog': 'AUDIT_LOG',
+  '20_Sessions': 'SESSIONS',
+  '21_NotificationQueue': 'NOTIFICATION_QUEUE',
+  '22_EmailTemplates': 'EMAIL_TEMPLATES'
+};
+
+function _sheetNameToSchemaKey(sheetName) {
+  return _schemaKeyMap[sheetName] || null;
+}
+
+/**
  * Get all values from a collection, using Firestore as the primary read source.
  * Returns data in array-of-arrays format: [[headers], [row1], [row2], ...]
  * for backward compatibility with existing callers.
@@ -73,7 +101,12 @@ function getSheetData(sheetName, skipCache) {
     try {
       var fsDocs = firestoreGetAll(sheetName);
       if (fsDocs && fsDocs.length > 0) {
-        var headers = Object.keys(fsDocs[0]);
+        // Use canonical SCHEMAS as headers when available for consistent column ordering.
+        // Falling back to document keys only when no schema is defined.
+        var schemaKey = _sheetNameToSchemaKey(sheetName);
+        var headers = (schemaKey && typeof SCHEMAS !== 'undefined' && SCHEMAS[schemaKey])
+          ? SCHEMAS[schemaKey]
+          : Object.keys(fsDocs[0]);
         var data = [headers];
         for (var d = 0; d < fsDocs.length; d++) {
           var row = [];
