@@ -540,28 +540,29 @@ function loadActionPlans(filters) {
     '<tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>'
   ).join('');
 
-  // Timeout wrapper: if API takes >15s, show empty state instead of infinite skeleton
+  // Timeout: if API takes >20s, show error instead of infinite skeleton
   var apLoadTimer = setTimeout(function() {
-    console.warn('Action plans load timed out after 15s');
+    console.error('Action plans load timed out after 20s');
     actionPlansData = [];
     updateAPStats();
     if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
-    showToast('Loading took too long. Please try refreshing.', 'warning');
-  }, 15000);
+    showToast('Loading timed out. Check Firestore connection and try again.', 'danger');
+  }, 20000);
 
   apiCall('getActionPlans', { filters: { ...filters, search, status, owner_id: owner, overdue_only: overdueOnly } })
     .then(r => {
       clearTimeout(apLoadTimer);
-      if (r && r.success !== false && r.actionPlans) {
+      if (r && r.success !== false && Array.isArray(r.actionPlans)) {
         actionPlansData = r.actionPlans;
         updateAPStats();
         if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
       } else {
-        console.error('Action plans load error:', r?.error);
+        var errMsg = (r && r.error) ? r.error : 'Unexpected response from server';
+        console.error('Action plans load error:', errMsg);
         actionPlansData = [];
         updateAPStats();
         if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
-        if (r?.error) showToast(r.error, 'danger');
+        showToast(errMsg, 'danger');
       }
     })
     .catch(err => {
@@ -570,7 +571,7 @@ function loadActionPlans(filters) {
       actionPlansData = [];
       updateAPStats();
       if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
-      showToast('Error loading action plans', 'danger');
+      showToast('Failed to load action plans: ' + (err.message || err), 'danger');
     });
 }
 

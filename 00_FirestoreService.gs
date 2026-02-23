@@ -1,7 +1,6 @@
 // 00_FirestoreService.gs - Firestore Integration Layer
-// Provides a fast read/write cache backed by Cloud Firestore (free tier).
-// Google Sheets remains the canonical data store; Firestore acts as a
-// sub-100ms read cache that is kept in sync on every write.
+// Cloud Firestore is the single source of truth for all data.
+// Google Sheets is used only for optional backup (configurable via SHEET_BACKUP_MODE).
 //
 // SETUP:
 //   1. Create a Firestore database in Native mode (Google Cloud Console).
@@ -135,8 +134,9 @@ function firestoreRequest_(method, path, payload) {
   if (code >= 400) {
     // 404 = document not found — return null, don't throw
     if (code === 404) return null;
-    console.error('Firestore error (' + code + '):', text);
-    return null;
+    // All other errors must throw — Firestore is the source of truth,
+    // so callers must know when it fails (no silent fallback).
+    throw new Error('Firestore HTTP ' + code + ': ' + text);
   }
 
   return text ? JSON.parse(text) : null;

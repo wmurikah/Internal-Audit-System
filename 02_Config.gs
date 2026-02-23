@@ -189,39 +189,18 @@ function generateId(entityType) {
 
     var currentValue = 1;
 
-    // Read from Firestore (primary)
-    if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
-      currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
+    // Firestore is the source of truth for ID counters
+    var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
+    currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
 
-      // Write incremented value to Firestore
-      firestoreSet(SHEETS.CONFIG, configKey, {
-        config_key: configKey,
-        config_value: currentValue + 1,
-        description: 'Auto-generated ID counter',
-        updated_at: new Date().toISOString()
-      });
+    firestoreSet(SHEETS.CONFIG, configKey, {
+      config_key: configKey,
+      config_value: currentValue + 1,
+      description: 'Auto-generated ID counter',
+      updated_at: new Date().toISOString()
+    });
 
-      return prefix + String(currentValue).padStart(6, '0');
-    }
-
-    // Fallback to Sheet
-    var configSheet = getSheet(SHEETS.CONFIG);
-    var data = configSheet.getDataRange().getValues();
-    var headers = data[0];
-    var keyIdx = headers.indexOf('config_key');
-    var valueIdx = headers.indexOf('config_value');
-
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][keyIdx] === configKey) {
-        currentValue = parseInt(data[i][valueIdx]) || 1;
-        configSheet.getRange(i + 1, valueIdx + 1).setValue(currentValue + 1);
-        return prefix + String(currentValue).padStart(6, '0');
-      }
-    }
-
-    configSheet.appendRow([configKey, 2, 'Auto-generated ID counter', new Date()]);
-    return prefix + '000001';
+    return prefix + String(currentValue).padStart(6, '0');
 
   } finally {
     lock.releaseLock();
@@ -259,39 +238,16 @@ function generateIds(entityType, count) {
 
     var currentValue = 1;
 
-    // Read/write from Firestore (primary)
-    if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
-      currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
+    // Firestore is the source of truth for ID counters
+    var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
+    currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
 
-      firestoreSet(SHEETS.CONFIG, configKey, {
-        config_key: configKey,
-        config_value: currentValue + count,
-        description: 'Auto-generated ID counter',
-        updated_at: new Date().toISOString()
-      });
-    } else {
-      // Fallback to Sheet
-      var configSheet = getSheet(SHEETS.CONFIG);
-      var data = configSheet.getDataRange().getValues();
-      var headers = data[0];
-      var keyIdx = headers.indexOf('config_key');
-      var valueIdx = headers.indexOf('config_value');
-
-      var rowIndex = -1;
-      for (var i = 1; i < data.length; i++) {
-        if (data[i][keyIdx] === configKey) {
-          rowIndex = i + 1;
-          currentValue = parseInt(data[i][valueIdx]) || 1;
-          break;
-        }
-      }
-
-      if (rowIndex === -1) {
-        configSheet.appendRow([configKey, count + 1, 'Auto-generated ID counter', new Date()]);
-      } else {
-        configSheet.getRange(rowIndex, valueIdx + 1).setValue(currentValue + count);
-      }
+    firestoreSet(SHEETS.CONFIG, configKey, {
+      config_key: configKey,
+      config_value: currentValue + count,
+      description: 'Auto-generated ID counter',
+      updated_at: new Date().toISOString()
+    });
     }
 
     var ids = [];
@@ -991,60 +947,18 @@ function logAuditEvent(action, entityType, entityId, oldData, newData, userId, u
 }
 
 function getConfigValue(key) {
-  // Read from Firestore (primary)
-  if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-    var doc = firestoreGet(SHEETS.CONFIG, key);
-    if (doc) return doc.config_value;
-  }
-
-  // Fallback to Sheet
-  var sheet = getSheet(SHEETS.CONFIG);
-  if (!sheet) return null;
-  var data = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var keyIdx = headers.indexOf('config_key');
-  var valueIdx = headers.indexOf('config_value');
-
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][keyIdx] === key) return data[i][valueIdx];
-  }
-  return null;
+  // Firestore is the source of truth
+  var doc = firestoreGet(SHEETS.CONFIG, key);
+  return doc ? doc.config_value : null;
 }
 
 function setConfigValue(key, value) {
-  // Write to Firestore (primary)
-  if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-    firestoreSet(SHEETS.CONFIG, key, {
-      config_key: key,
-      config_value: value,
-      description: '',
-      updated_at: new Date().toISOString()
-    });
-  }
-
-  // Sheet backup
-  if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
-    var sheet = getSheet(SHEETS.CONFIG);
-    if (sheet) {
-      var data = sheet.getDataRange().getValues();
-      var headers = data[0];
-      var keyIdx = headers.indexOf('config_key');
-      var valueIdx = headers.indexOf('config_value');
-      var updatedIdx = headers.indexOf('updated_at');
-
-      var found = false;
-      for (var i = 1; i < data.length; i++) {
-        if (data[i][keyIdx] === key) {
-          sheet.getRange(i + 1, valueIdx + 1).setValue(value);
-          if (updatedIdx >= 0) sheet.getRange(i + 1, updatedIdx + 1).setValue(new Date());
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        sheet.appendRow([key, value, '', new Date()]);
-      }
-    }
-  }
+  // Firestore is the source of truth
+  firestoreSet(SHEETS.CONFIG, key, {
+    config_key: key,
+    config_value: value,
+    description: '',
+    updated_at: new Date().toISOString()
+  });
   return true;
 }
