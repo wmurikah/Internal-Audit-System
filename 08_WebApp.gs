@@ -179,13 +179,29 @@ function routeAction(action, data, user) {
       
     // ========== WORK PAPERS ==========
     case 'getWorkPapers':
-      return { success: true, workPapers: getWorkPapers(data.filters, user) };
-      
+      try {
+        var wpList = getWorkPapers(data.filters, user);
+        return { success: true, workPapers: wpList || [] };
+      } catch (wpListErr) {
+        console.error('getWorkPapers failed:', wpListErr);
+        return { success: false, error: 'Failed to load work papers: ' + wpListErr.message, workPapers: [] };
+      }
+
     case 'getWorkPaper':
-      return { success: true, workPaper: getWorkPaper(data.workPaperId, data.includeRelated !== false) };
-      
+      try {
+        return { success: true, workPaper: getWorkPaper(data.workPaperId, data.includeRelated !== false) };
+      } catch (wpDetailErr) {
+        console.error('getWorkPaper failed:', wpDetailErr);
+        return { success: false, error: 'Failed to load work paper: ' + wpDetailErr.message };
+      }
+
     case 'getWorkPaperCounts':
-      return { success: true, counts: getWorkPaperCounts(data.filters, user) };
+      try {
+        return { success: true, counts: getWorkPaperCounts(data.filters, user) };
+      } catch (wpCountErr) {
+        console.error('getWorkPaperCounts failed:', wpCountErr);
+        return { success: false, error: wpCountErr.message, counts: { total: 0, byStatus: {}, highRisk: 0 } };
+      }
       
     case 'createWorkPaper':
       return createWorkPaper(data, user);
@@ -230,13 +246,30 @@ function routeAction(action, data, user) {
       
     // ========== ACTION PLANS ==========
     case 'getActionPlans':
-      return { success: true, actionPlans: getActionPlans(data.filters, user) };
-      
+      try {
+        var apList = getActionPlans(data.filters, user);
+        return { success: true, actionPlans: apList || [] };
+      } catch (apListErr) {
+        console.error('getActionPlans failed:', apListErr);
+        return { success: false, error: 'Failed to load action plans: ' + apListErr.message, actionPlans: [] };
+      }
+
     case 'getActionPlan':
-      return { success: true, actionPlan: getActionPlan(data.actionPlanId, data.includeRelated !== false) };
-      
+      try {
+        var apDetail = getActionPlan(data.actionPlanId, data.includeRelated !== false);
+        return { success: true, actionPlan: apDetail };
+      } catch (apDetailErr) {
+        console.error('getActionPlan failed:', apDetailErr);
+        return { success: false, error: 'Failed to load action plan: ' + apDetailErr.message };
+      }
+
     case 'getActionPlanCounts':
-      return { success: true, counts: getActionPlanCounts(data.filters, user) };
+      try {
+        return { success: true, counts: getActionPlanCounts(data.filters, user) };
+      } catch (apCountErr) {
+        console.error('getActionPlanCounts failed:', apCountErr);
+        return { success: false, error: apCountErr.message, counts: { total: 0, byStatus: {}, overdue: 0, dueThisWeek: 0, dueThisMonth: 0 } };
+      }
       
     case 'createActionPlan':
       return createActionPlan(data, user);

@@ -111,7 +111,10 @@ function getFirestoreBaseUrl_() {
 }
 
 /**
- * Generic Firestore REST call
+ * Generic Firestore REST call.
+ * Throws on 4xx/5xx errors (except 404 which returns null) so callers
+ * can distinguish "no data" from "Firestore is broken" and fall back
+ * to Sheets properly.
  */
 function firestoreRequest_(method, path, payload) {
   var url = getFirestoreBaseUrl_() + (path ? '/' + path : '');
@@ -135,8 +138,9 @@ function firestoreRequest_(method, path, payload) {
   if (code >= 400) {
     // 404 = document not found — return null, don't throw
     if (code === 404) return null;
-    console.error('Firestore error (' + code + '):', text);
-    return null;
+    var errMsg = 'Firestore error (' + code + '): ' + (text || '').substring(0, 200);
+    console.error(errMsg);
+    throw new Error(errMsg);
   }
 
   return text ? JSON.parse(text) : null;
@@ -312,8 +316,10 @@ function firestoreGet(sheetName, docId) {
 
 /**
  * Get all documents in a collection.
+ * Returns [] for a genuinely empty collection (successful response with no documents).
+ * Throws on Firestore errors so the caller can fall back to Sheets.
  * @param {string} sheetName - The sheet tab name
- * @return {Array} Array of plain JS objects
+ * @return {Array|null} Array of plain JS objects, null if Firestore disabled
  */
 function firestoreGetAll(sheetName) {
   if (!isFirestoreEnabled()) return null;
@@ -326,6 +332,8 @@ function firestoreGetAll(sheetName) {
     var url = collection + '?pageSize=300';
     if (pageToken) url += '&pageToken=' + pageToken;
 
+    // firestoreRequest_ now throws on 4xx/5xx (except 404).
+    // A null response means the collection path itself returned 404 (empty).
     var response = firestoreRequest_('get', url);
     if (!response) break;
 

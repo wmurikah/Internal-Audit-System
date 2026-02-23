@@ -100,28 +100,35 @@ function getSheetData(sheetName, skipCache) {
       typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
     try {
       var fsDocs = firestoreGetAll(sheetName);
-      if (fsDocs && fsDocs.length > 0) {
+      // fsDocs is null when Firestore is disabled, [] when collection is empty,
+      // or a populated array. All three are valid — only null should fall through.
+      if (fsDocs !== null) {
         // Use canonical SCHEMAS as headers when available for consistent column ordering.
         // Falling back to document keys only when no schema is defined.
         var schemaKey = _sheetNameToSchemaKey(sheetName);
         var headers = (schemaKey && typeof SCHEMAS !== 'undefined' && SCHEMAS[schemaKey])
           ? SCHEMAS[schemaKey]
-          : Object.keys(fsDocs[0]);
-        var data = [headers];
-        for (var d = 0; d < fsDocs.length; d++) {
-          var row = [];
-          for (var h = 0; h < headers.length; h++) {
-            var val = fsDocs[d][headers[h]];
-            row.push(val !== undefined && val !== null ? val : '');
+          : (fsDocs.length > 0 ? Object.keys(fsDocs[0]) : []);
+
+        // If we have headers (from schema or docs), return the data.
+        // An empty collection returns [headers] (just the header row) so callers
+        // see "no data rows" instead of falling through to a slow Sheet read.
+        if (headers.length > 0) {
+          var data = [headers];
+          for (var d = 0; d < fsDocs.length; d++) {
+            var row = [];
+            for (var h = 0; h < headers.length; h++) {
+              var val = fsDocs[d][headers[h]];
+              row.push(val !== undefined && val !== null ? val : '');
+            }
+            data.push(row);
           }
-          data.push(row);
+          _sheetDataCache[sheetName] = data;
+          return data;
         }
-        _sheetDataCache[sheetName] = data;
-        return data;
+        // Empty collection with no schema — fall through to Sheet
+        console.log('Firestore collection empty (no schema) for ' + sheetName + ', falling back to Sheet');
       }
-      // Empty Firestore collection — fall through to Sheet
-      // (collection may not have been migrated yet)
-      console.log('Firestore collection empty for ' + sheetName + ', falling back to Sheet');
     } catch (e) {
       console.warn('Firestore read failed for ' + sheetName + ', falling back to Sheet:', e.message);
     }

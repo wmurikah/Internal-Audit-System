@@ -429,6 +429,10 @@ function deleteActionPlan(actionPlanId, user) {
 
 function getActionPlans(filters, user) {
   var results = getActionPlansRaw(filters, user);
+  if (!results || !Array.isArray(results)) {
+    console.warn('getActionPlans: getActionPlansRaw returned non-array:', typeof results);
+    return [];
+  }
   return sanitizeForClient(applyFieldRestrictions(results, user ? user.role_code : null, 'ACTION_PLAN'));
 }
 
