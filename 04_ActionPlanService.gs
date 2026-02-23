@@ -475,18 +475,21 @@ function getActionPlansRaw(filters, user) {
     
     if (user) {
       const roleCode = user.role_code;
-      
-      if (roleCode === ROLES.AUDITEE) {
-        const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
-        if (!ownerIds.includes(user.user_id)) {
-          match = false;
-        }
-      }
+
+      // Roles that see ALL action plans (no ownership filter)
+      const seeAllRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR, ROLES.SENIOR_MGMT];
 
       // OBSERVER and EXTERNAL_AUDITOR: read-only, only see closed/verified action plans
       if (roleCode === ROLES.OBSERVER || roleCode === ROLES.EXTERNAL_AUDITOR) {
         const viewableStatuses = ['Implemented', 'Verified', 'Closed'];
         if (!viewableStatuses.includes(row[colMap['status']])) {
+          match = false;
+        }
+      }
+      // All other roles not in seeAllRoles: only see action plans assigned to them
+      else if (!seeAllRoles.includes(roleCode)) {
+        const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
+        if (!ownerIds.includes(user.user_id)) {
           match = false;
         }
       }
@@ -1060,13 +1063,17 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
     uploaded_by: user.user_id,
     uploaded_at: now
   };
-  
-  const sheet = getSheet(SHEETS.AP_EVIDENCE);
-  const row = objectToRow('AP_EVIDENCE', evidence);
+
+  // Firestore is the primary write
+  syncToFirestore(SHEETS.AP_EVIDENCE, evidenceId, evidence);
+  invalidateSheetData(SHEETS.AP_EVIDENCE);
+
+  // Sheet backup (if enabled)
   if (shouldWriteToSheet()) {
+    const sheet = getSheet(SHEETS.AP_EVIDENCE);
+    const row = objectToRow('AP_EVIDENCE', evidence);
     sheet.appendRow(row);
   }
-  invalidateSheetData(SHEETS.AP_EVIDENCE);
 
   // Add history entry
   addActionPlanHistory(actionPlanId, actionPlan.status, actionPlan.status, 
@@ -1122,7 +1129,7 @@ function deleteActionPlanEvidence(evidenceId, user) {
 function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments, user) {
   const historyId = generateId('HISTORY');
   const now = new Date();
-  
+
   const history = {
     history_id: historyId,
     action_plan_id: actionPlanId,
@@ -1133,10 +1140,15 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
     user_name: user.full_name,
     changed_at: now
   };
-  
-  const sheet = getSheet(SHEETS.AP_HISTORY);
-  const row = objectToRow('AP_HISTORY', history);
+
+  // Firestore is the primary write
+  syncToFirestore(SHEETS.AP_HISTORY, historyId, history);
+  invalidateSheetData(SHEETS.AP_HISTORY);
+
+  // Sheet backup (if enabled)
   if (shouldWriteToSheet()) {
+    const sheet = getSheet(SHEETS.AP_HISTORY);
+    const row = objectToRow('AP_HISTORY', history);
     sheet.appendRow(row);
   }
 
