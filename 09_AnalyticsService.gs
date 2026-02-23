@@ -23,9 +23,10 @@ function getAnalyticsData(year, user) {
 
     // Get all action plans
     var apData = getSheetData(SHEETS.ACTION_PLANS);
+    if (!apData || apData.length < 1) apData = [[]];
     const apHeaders = apData[0];
 
-    const apIdIdx = apHeaders.indexOf('action_plan_id');
+    const apIdIdx = apHeaders.indexOf ? apHeaders.indexOf('action_plan_id') : -1;
     const apWpIdIdx = apHeaders.indexOf('work_paper_id');
     const apStatusIdx = apHeaders.indexOf('status');
     const apDueDateIdx = apHeaders.indexOf('due_date');

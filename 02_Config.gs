@@ -631,8 +631,11 @@ function getUserByEmail(email) {
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   
   var data = getSheetData(SHEETS.USERS);
+  if (!data || data.length < 1) return null;
   var headers = data[0];
+  if (!headers || typeof headers.indexOf !== 'function') return null;
   var emailIdx = headers.indexOf('email');
+  if (emailIdx === -1) return null;
 
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][emailIdx]).toLowerCase().trim() === normalizedEmail) {

@@ -177,22 +177,22 @@ function getSidebarCounts(user) {
     if (!allCounts) {
       // Compute counts ONCE for all roles, cache for 20 seconds
       var wpData = getSheetData(SHEETS.WORK_PAPERS);
-      var wpHeaders = wpData[0];
-      var wpStatusIdx = wpHeaders.indexOf('status');
+      var wpHeaders = (wpData && wpData.length > 0) ? wpData[0] : [];
+      var wpStatusIdx = wpHeaders.indexOf ? wpHeaders.indexOf('status') : -1;
 
       var pendingReviewAll = 0;
       var approvedQueueAll = 0;
-      var wpResponsibleIdx = wpHeaders.indexOf('responsible_ids');
-      for (var wi = 1; wi < wpData.length; wi++) {
-        if (wpData[wi][wpStatusIdx] === 'Submitted') pendingReviewAll++;
-        if (wpData[wi][wpStatusIdx] === 'Approved' && wpData[wi][wpResponsibleIdx]) approvedQueueAll++;
+      var wpResponsibleIdx = wpHeaders.indexOf ? wpHeaders.indexOf('responsible_ids') : -1;
+      for (var wi = 1; wi < (wpData ? wpData.length : 0); wi++) {
+        if (wpStatusIdx >= 0 && wpData[wi][wpStatusIdx] === 'Submitted') pendingReviewAll++;
+        if (wpStatusIdx >= 0 && wpData[wi][wpStatusIdx] === 'Approved' && wpResponsibleIdx >= 0 && wpData[wi][wpResponsibleIdx]) approvedQueueAll++;
       }
 
       var apData = getSheetData(SHEETS.ACTION_PLANS);
-      var apHeaders = apData[0];
-      var apStatusIdx = apHeaders.indexOf('status');
-      var apDueDateIdx = apHeaders.indexOf('due_date');
-      var apOwnerIdx = apHeaders.indexOf('owner_ids');
+      var apHeaders = (apData && apData.length > 0) ? apData[0] : [];
+      var apStatusIdx = apHeaders.indexOf ? apHeaders.indexOf('status') : -1;
+      var apDueDateIdx = apHeaders.indexOf ? apHeaders.indexOf('due_date') : -1;
+      var apOwnerIdx = apHeaders.indexOf ? apHeaders.indexOf('owner_ids') : -1;
 
       var today = new Date();
       today.setHours(0, 0, 0, 0);
