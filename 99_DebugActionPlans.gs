@@ -277,8 +277,12 @@ function diagnoseActionPlansVisibility() {
           '. This will hide action plan data in the UI.');
       }
 
-      if (!apPerm.can_read && ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'SENIOR_MGMT'].indexOf(role) !== -1) {
-        report.errors.push('CRITICAL: Role ' + role + ' does NOT have can_read permission for ACTION_PLAN module!');
+      // SUPER_ADMIN bypasses all permission checks in code, so missing DB entry is OK
+      if (!apPerm.can_read && ['SENIOR_AUDITOR', 'AUDITOR'].indexOf(role) !== -1) {
+        report.warnings.push('Role ' + role + ' has no can_read in 02_Permissions for ACTION_PLAN (code fallback handles this).');
+      }
+      if (!apPerm.can_read && role === 'SUPER_ADMIN') {
+        report.checks.push({ check: 'SUPER_ADMIN AP permission', result: 'OK (bypasses all checks in code)' });
       }
     } catch (e) {
       report.warnings.push('Permission check for ' + role + ' failed: ' + e.message);
@@ -289,15 +293,44 @@ function diagnoseActionPlansVisibility() {
   // CHECK 9: Test with different roles (data visibility)
   // ─────────────────────────────────────────────
   console.log('\n--- CHECK 9: Data Visibility by Role ---');
-  ['SUPER_ADMIN', 'AUDITOR', 'SENIOR_MGMT', 'AUDITEE'].forEach(function(role) {
+
+  // For AUDITEE test, find a real owner_id from the data so we get a meaningful result
+  var realOwnerId = 'DIAG_AUDITEE';
+  try {
+    var sampleData = getSheetData(SHEETS.ACTION_PLANS);
+    if (sampleData && sampleData.length > 1) {
+      var ownerCol = sampleData[0].indexOf('owner_ids');
+      if (ownerCol !== -1) {
+        for (var oi = 1; oi < sampleData.length; oi++) {
+          var oid = String(sampleData[oi][ownerCol] || '').split(',')[0].trim();
+          if (oid) { realOwnerId = oid; break; }
+        }
+      }
+    }
+  } catch (e) { /* use fallback */ }
+  console.log('Using real owner_id for AUDITEE test:', realOwnerId);
+
+  var visibilityTests = [
+    { role: 'SUPER_ADMIN', userId: 'DIAG_SUPER_ADMIN' },
+    { role: 'AUDITOR', userId: 'DIAG_AUDITOR' },
+    { role: 'SENIOR_MGMT', userId: 'DIAG_SENIOR_MGMT' },
+    { role: 'AUDITEE', userId: realOwnerId },
+    { role: 'OBSERVER', userId: 'DIAG_OBSERVER' }
+  ];
+
+  visibilityTests.forEach(function(test) {
     try {
-      var mockUser = { user_id: 'DIAG_' + role, email: 'diag@test', role_code: role, full_name: 'Test ' + role };
+      var mockUser = { user_id: test.userId, email: 'diag@test', role_code: test.role, full_name: 'Test ' + test.role };
       invalidateSheetData(SHEETS.ACTION_PLANS);
       var plans = getActionPlansRaw({}, mockUser);
-      console.log(role + ': sees', plans.length, 'action plans');
-      report.checks.push({ check: 'Visibility for ' + role, count: plans.length });
+      console.log(test.role + ' (user_id=' + test.userId + '): sees', plans.length, 'action plans');
+      report.checks.push({ check: 'Visibility for ' + test.role, count: plans.length });
+
+      if (test.role === 'AUDITEE' && plans.length === 0 && realOwnerId !== 'DIAG_AUDITEE') {
+        report.warnings.push('AUDITEE with owner_id ' + realOwnerId + ' sees 0 plans. Check owner_ids field format in action plans.');
+      }
     } catch (e) {
-      report.warnings.push('Visibility test for ' + role + ' failed: ' + e.message);
+      report.warnings.push('Visibility test for ' + test.role + ' failed: ' + e.message);
     }
   });
 
@@ -316,6 +349,38 @@ function diagnoseActionPlansVisibility() {
   } catch (e) {
     report.warnings.push('SCHEMAS check error: ' + e.message);
   }
+
+  // ─────────────────────────────────────────────
+  // CHECK 11: canUserPerform for ACTION_PLAN CRUD (tests the fallback)
+  // ─────────────────────────────────────────────
+  console.log('\n--- CHECK 11: canUserPerform for ACTION_PLAN CRUD ---');
+  var crudTests = [
+    { role: 'SENIOR_AUDITOR', action: 'create', expected: true },
+    { role: 'SENIOR_AUDITOR', action: 'update', expected: true },
+    { role: 'AUDITOR', action: 'create', expected: true },
+    { role: 'AUDITOR', action: 'update', expected: true },
+    { role: 'AUDITOR', action: 'delete', expected: true },
+    { role: 'AUDITEE', action: 'read', expected: true },
+    { role: 'AUDITEE', action: 'update', expected: true },
+    { role: 'AUDITEE', action: 'create', expected: false },
+    { role: 'MANAGEMENT', action: 'read', expected: true }
+  ];
+
+  crudTests.forEach(function(test) {
+    try {
+      var mockUser = { user_id: 'DIAG_TEST', email: 'diag@test', role_code: test.role, full_name: 'Test ' + test.role };
+      var result = canUserPerform(mockUser, test.action, 'ACTION_PLAN', null);
+      var pass = result === test.expected;
+      console.log(test.role + ' ' + test.action + ' ACTION_PLAN: ' + result + (pass ? ' OK' : ' FAIL (expected ' + test.expected + ')'));
+      report.checks.push({ check: 'canUserPerform ' + test.role + ' ' + test.action, result: result, expected: test.expected });
+
+      if (!pass) {
+        report.errors.push('canUserPerform mismatch: ' + test.role + ' ' + test.action + ' ACTION_PLAN returned ' + result + ', expected ' + test.expected);
+      }
+    } catch (e) {
+      report.errors.push('canUserPerform test failed for ' + test.role + ' ' + test.action + ': ' + e.message);
+    }
+  });
 
   // ─────────────────────────────────────────────
   // SUMMARY
