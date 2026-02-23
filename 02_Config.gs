@@ -822,16 +822,30 @@ function canUserPerform(user, action, entityType, entity) {
   // Check database permissions first
   if (typeof checkPermission === 'function') {
     if (!checkPermission(roleCode, entityType, action)) {
-      // Fallback: auditor roles should always be able to create/update/read work papers
-      // This prevents lockouts when the 02_Permissions sheet is missing entries
+               // Fallback: prevent lockouts when the 02_Permissions sheet is missing entries
       var auditorRoles = [ROLES.AUDITOR, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF];
       var wpFallbackActions = ['create', 'read', 'update'];
       if (entityType === 'WORK_PAPER' && auditorRoles.indexOf(roleCode) !== -1 && wpFallbackActions.indexOf(action) !== -1) {
-        console.log('Permission granted via auditor fallback:', roleCode, entityType, action);
-      } else {
+        console.log('Permission granted via auditor WP fallback:', roleCode, entityType, action);
+      }
+      // Fallback for ACTION_PLAN: auditor roles need full CRUD + approve access
+      else if (entityType === 'ACTION_PLAN' && auditorRoles.indexOf(roleCode) !== -1) {
+        console.log('Permission granted via auditor AP fallback:', roleCode, entityType, action);
+      }
+      // Fallback for ACTION_PLAN: auditees need read + update (for implementation notes)
+      else if (entityType === 'ACTION_PLAN' && roleCode === ROLES.AUDITEE && (action === 'read' || action === 'update')) {
+        console.log('Permission granted via auditee AP fallback:', roleCode, entityType, action);
+      }
+      // Fallback for ACTION_PLAN: management/observer roles need read access
+      else if (entityType === 'ACTION_PLAN' && action === 'read' &&
+        [ROLES.MANAGEMENT, ROLES.SENIOR_MGMT, ROLES.BOARD, ROLES.OBSERVER, ROLES.EXTERNAL_AUDITOR, ROLES.UNIT_MANAGER].indexOf(roleCode) !== -1) {
+        console.log('Permission granted via read-only AP fallback:', roleCode, entityType, action);
+      }
+      else {
         console.log('Permission denied by database:', roleCode, entityType, action);
         return false;
       }
+
     }
   }
   
