@@ -81,36 +81,34 @@ function createActionPlan(data, user) {
     updated_by: user.user_id
   };
   
-  // Insert into sheet with lock to make appendRow + getLastRow atomic
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  if (!sheet) {
-    return { success: false, error: 'Action plans sheet not found' };
-  }
-  const row = objectToRow('ACTION_PLANS', actionPlan);
+  // Firestore is the primary write
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, actionPlan);
+  invalidateSheetData(SHEETS.ACTION_PLANS);
 
-  const lock = LockService.getScriptLock();
-  let rowNum;
-  try {
-    lock.waitLock(15000);
-    if (shouldWriteToSheet()) {
-      sheet.appendRow(row);
+  // Sheet backup (if enabled)
+  if (shouldWriteToSheet()) {
+    const sheet = getSheet(SHEETS.ACTION_PLANS);
+    if (sheet) {
+      const row = objectToRow('ACTION_PLANS', actionPlan);
+      const lock = LockService.getScriptLock();
+      let rowNum;
+      try {
+        lock.waitLock(15000);
+        sheet.appendRow(row);
+        rowNum = sheet.getLastRow();
+        lock.releaseLock();
+      } catch (lockErr) {
+        try { lock.releaseLock(); } catch (ignored) {}
+        console.warn('Sheet backup for action plan create failed:', lockErr.message);
+      }
+      if (rowNum) {
+        updateActionPlanIndex(actionPlanId, actionPlan, rowNum);
+      }
     }
-    invalidateSheetData(SHEETS.ACTION_PLANS);
-    rowNum = sheet.getLastRow();
-    lock.releaseLock();
-  } catch (lockErr) {
-    try { lock.releaseLock(); } catch (ignored) {}
-    throw lockErr;
   }
 
-  // Update index
-  updateActionPlanIndex(actionPlanId, actionPlan, rowNum);
-  
   // Add history entry
   addActionPlanHistory(actionPlanId, '', initialStatus, 'Action plan created', user);
-  
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, actionPlan);
 
   // Log audit event
   logAuditEvent('CREATE', 'ACTION_PLAN', actionPlanId, null, actionPlan, user.user_id, user.email);
@@ -204,26 +202,22 @@ function createActionPlansBatch(workPaperId, plansData, user) {
     results.push({ actionPlanId: ids[idx], actionPlan: actionPlan });
   });
   
-  // Batch insert
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const startRow = sheet.getLastRow() + 1;
-  if (shouldWriteToSheet()) {
-    sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
-  }
+  // Firestore is the primary write (batch)
+  var fsWrites = results.map(function(r) {
+    return { sheetName: SHEETS.ACTION_PLANS, docId: r.actionPlanId, data: r.actionPlan };
+  });
+  firestoreBatchWrite(fsWrites);
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
-  // Update indexes
-  results.forEach((r, idx) => {
-    updateActionPlanIndex(r.actionPlanId, r.actionPlan, startRow + idx);
-  });
-  
-  // Sync batch to Firestore (non-fatal)
-  try {
-    var fsWrites = results.map(function(r) {
-      return { sheetName: SHEETS.ACTION_PLANS, docId: r.actionPlanId, data: r.actionPlan };
+  // Sheet backup (if enabled)
+  if (shouldWriteToSheet()) {
+    const sheet = getSheet(SHEETS.ACTION_PLANS);
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+    results.forEach((r, idx) => {
+      updateActionPlanIndex(r.actionPlanId, r.actionPlan, startRow + idx);
     });
-    firestoreBatchWrite(fsWrites);
-  } catch (e) { console.warn('Firestore batch sync failed:', e.message); }
+  }
 
   // Log audit event
   logAuditEvent('BATCH_CREATE', 'ACTION_PLAN', workPaperId, null, { count: results.length }, user.user_id, user.email);
@@ -341,24 +335,23 @@ function updateActionPlan(actionPlanId, data, user) {
   
   // Apply updates
   const updated = { ...existing, ...updates };
-  
-  // Update sheet
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const rowIndex = existing._rowIndex;
-  
-  if (!rowIndex) throw new Error('Row index not found');
-  
-  const row = objectToRow('ACTION_PLANS', updated);
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  }
+
+  // Firestore is the primary write
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
-  // Update index
-  updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  // Sheet backup (only if row index is known and backup is enabled)
+  const rowIndex = existing._rowIndex;
+  if (rowIndex && shouldWriteToSheet()) {
+    const sheet = getSheet(SHEETS.ACTION_PLANS);
+    const row = objectToRow('ACTION_PLANS', updated);
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  }
 
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
+  // Update index (if Sheet backup is active)
+  if (rowIndex && shouldWriteToSheet()) {
+    updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  }
 
   // Log audit event
   logAuditEvent('UPDATE', 'ACTION_PLAN', actionPlanId, existing, updated, user.user_id, user.email);
@@ -397,29 +390,23 @@ function deleteActionPlan(actionPlanId, user) {
     }
   });
   
-  // Delete from sheets (in reverse order of dependencies)
+  // Delete from Firestore (primary)
+  deleteFromFirestore(SHEETS.ACTION_PLANS, actionPlanId);
+  deleteFromFirestore(SHEETS.AP_EVIDENCE, actionPlanId);
+  deleteFromFirestore(SHEETS.AP_HISTORY, actionPlanId);
+  invalidateSheetData(SHEETS.ACTION_PLANS);
+
+  // Delete from Sheets backup (if enabled)
   if (shouldWriteToSheet()) {
     deleteRelatedRows(SHEETS.AP_EVIDENCE, 'action_plan_id', actionPlanId);
     deleteRelatedRows(SHEETS.AP_HISTORY, 'action_plan_id', actionPlanId);
-  }
-
-  // Delete main record
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  if (existing._rowIndex) {
-    if (shouldWriteToSheet()) {
+    if (existing._rowIndex) {
+      const sheet = getSheet(SHEETS.ACTION_PLANS);
       sheet.deleteRow(existing._rowIndex);
     }
-    invalidateSheetData(SHEETS.ACTION_PLANS);
+    removeFromIndex(SHEETS.INDEX_ACTION_PLANS, actionPlanId);
+    rebuildActionPlanIndex();
   }
-
-  // Remove from index
-  removeFromIndex(SHEETS.INDEX_ACTION_PLANS, actionPlanId);
-  
-  // Rebuild index (rows shifted)
-  rebuildActionPlanIndex();
-  
-  // Remove from Firestore (non-fatal)
-  deleteFromFirestore(SHEETS.ACTION_PLANS, actionPlanId);
 
   // Log audit event
   logAuditEvent('DELETE', 'ACTION_PLAN', actionPlanId, existing, null, user.user_id, user.email);
@@ -656,27 +643,26 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
     updated_by: user.user_id
   };
   
-  // Update sheet
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const rowIndex = actionPlan._rowIndex;
   const updated = { ...actionPlan, ...updates };
-  const row = objectToRow('ACTION_PLANS', updated);
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  }
+
+  // Firestore is the primary write
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
-  // Update index
-  updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  // Sheet backup (only if row index is known and backup is enabled)
+  const rowIndex = actionPlan._rowIndex;
+  if (rowIndex && shouldWriteToSheet()) {
+    const sheet = getSheet(SHEETS.ACTION_PLANS);
+    const row = objectToRow('ACTION_PLANS', updated);
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+    updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  }
 
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updates.status, implementationNotes, user);
 
   // Queue notification to auditors for verification
   queueImplementationNotification(actionPlanId, updated, user);
-  
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
 
   // Log audit event
   logAuditEvent('IMPLEMENT', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
@@ -740,27 +726,26 @@ function verifyImplementation(actionPlanId, action, comments, user) {
     throw new Error('Invalid action: ' + action + '. Use approve, reject, or return.');
   }
   
-  // Update sheet
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const rowIndex = actionPlan._rowIndex;
   const updated = { ...actionPlan, ...updates };
-  const row = objectToRow('ACTION_PLANS', updated);
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  }
+
+  // Firestore is the primary write
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
-  // Update index
-  updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  // Sheet backup (only if row index is known and backup is enabled)
+  const rowIndex = actionPlan._rowIndex;
+  if (rowIndex && shouldWriteToSheet()) {
+    const sheet = getSheet(SHEETS.ACTION_PLANS);
+    const row = objectToRow('ACTION_PLANS', updated);
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+    updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  }
 
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updates.status, comments, user);
 
   // Queue notification to owners
   queueVerificationNotification(actionPlanId, updated, action, user);
-  
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
 
   // Log audit event
   logAuditEvent('VERIFY', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
@@ -806,26 +791,25 @@ function hoaReview(actionPlanId, action, comments, user) {
     updates.status = STATUS.ACTION_PLAN.IN_PROGRESS;
   }
 
-  // Update sheet
-  const sheet = getSheet(SHEETS.ACTION_PLANS);
-  const rowIndex = actionPlan._rowIndex;
   const updated = { ...actionPlan, ...updates };
-  const row = objectToRow('ACTION_PLANS', updated);
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  }
+
+  // Firestore is the primary write
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
-  // Update index if status changed
-  if (updates.status && updates.status !== previousStatus) {
-    updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  // Sheet backup (only if row index is known and backup is enabled)
+  const rowIndex = actionPlan._rowIndex;
+  if (rowIndex && shouldWriteToSheet()) {
+    const sheet = getSheet(SHEETS.ACTION_PLANS);
+    const row = objectToRow('ACTION_PLANS', updated);
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+    if (updates.status && updates.status !== previousStatus) {
+      updateActionPlanIndex(actionPlanId, updated, rowIndex);
+    }
   }
 
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updated.status, comments, user);
-
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
 
   // Log audit event
   logAuditEvent('HOA_REVIEW', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
@@ -974,30 +958,28 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
     updated_by: user.user_id
   };
 
-  // Update sheet
-  var sheet = getSheet(SHEETS.ACTION_PLANS);
-  var rowIndex = actionPlan._rowIndex;
   var updated = {};
   for (var k in actionPlan) { updated[k] = actionPlan[k]; }
   for (var k2 in updates) { updated[k2] = updates[k2]; }
 
-  var row = objectToRow('ACTION_PLANS', updated);
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  }
+  // Firestore is the primary write
+  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
   invalidateSheetData(SHEETS.ACTION_PLANS);
 
-  // Update index
-  updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  // Sheet backup (only if row index is known and backup is enabled)
+  var rowIndex = actionPlan._rowIndex;
+  if (rowIndex && shouldWriteToSheet()) {
+    var sheet = getSheet(SHEETS.ACTION_PLANS);
+    var row = objectToRow('ACTION_PLANS', updated);
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+    updateActionPlanIndex(actionPlanId, updated, rowIndex);
+  }
 
   // Add history
   var historyComment = 'Delegated from ' + (actionPlan.owner_names || 'previous owner') +
     ' to ' + (newOwnerNames || newOwnerIds) +
     (notes ? '. Reason: ' + notes : '');
   addActionPlanHistory(actionPlanId, previousStatus, previousStatus, historyComment, user);
-
-  // Sync to Firestore (non-fatal)
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
 
   // Log audit event
   logAuditEvent('DELEGATE', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
