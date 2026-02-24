@@ -340,54 +340,86 @@
 </style>
 
 <script>
-let actionPlansData = [];
-let apCurrentPage = 1;
-let apPageSize = 20;
-let apViewMode = 'table';
-let apSearchTimeout = null;
+// =============================================
+// UNIQUE variable names to avoid collision with
+// other included files (Reports.html, Actionplanview.html)
+// that may also declare _apListData in the same
+// global scope when GAS concatenates all includes.
+// =============================================
+var _apListData = [];        // was: actionPlansData
+var _apListPage = 1;         // was: _apListPage
+var _apListPageSize = 20;    // was: _apListPageSize
+var _apListViewMode = 'table'; // was: _apListViewMode
+var _apListSearchTimer = null; // was: _apListSearchTimer
+
+// =============================================
+// SAFE DOM HELPER — prevents the "Cannot set
+// properties of undefined" crash that was causing
+// infinite-loading.  Every getElementById in this
+// file now goes through this wrapper.
+// =============================================
+function _apEl(id) {
+  var el = document.getElementById(id);
+  if (!el) {
+    console.warn('[AP-DOM] Element not found: #' + id);
+  }
+  return el;
+}
 
 // Debounce search
 function debounceAPSearch() {
-  if (apSearchTimeout) clearTimeout(apSearchTimeout);
-  apSearchTimeout = setTimeout(filterActionPlans, 300);
+  if (_apListSearchTimer) clearTimeout(_apListSearchTimer);
+  _apListSearchTimer = setTimeout(filterActionPlans, 300);
 }
 
 // Set view mode
 function setAPView(mode) {
-  apViewMode = mode;
+  _apListViewMode = mode;
 
-  document.getElementById('btnAPViewTable').classList.toggle('active', mode === 'table');
-  document.getElementById('btnAPViewKanban').classList.toggle('active', mode === 'kanban');
-  document.getElementById('apTableView').style.display = mode === 'table' ? 'block' : 'none';
-  document.getElementById('apKanbanView').style.display = mode === 'kanban' ? 'block' : 'none';
-  document.getElementById('apPagination').style.display = mode === 'table' ? 'block' : 'none';
+  var btnTable = _apEl('btnAPViewTable');
+  var btnKanban = _apEl('btnAPViewKanban');
+  var tableView = _apEl('apTableView');
+  var kanbanView = _apEl('apKanbanView');
+  var pagination = _apEl('apPagination');
+
+  if (btnTable) btnTable.classList.toggle('active', mode === 'table');
+  if (btnKanban) btnKanban.classList.toggle('active', mode === 'kanban');
+  if (tableView) tableView.style.display = mode === 'table' ? 'block' : 'none';
+  if (kanbanView) kanbanView.style.display = mode === 'kanban' ? 'block' : 'none';
+  if (pagination) pagination.style.display = mode === 'table' ? 'block' : 'none';
 
   if (mode === 'kanban') {
-    renderKanbanBoard();
+    _apListRenderKanban();
   } else {
-    renderActionPlans();
+    _apListRender();
   }
 }
 
-// Update stats
-function updateAPStats() {
-  const total = actionPlansData.length;
-  const pending = actionPlansData.filter(ap => ap.status === 'Pending' || ap.status === 'Not Due' || ap.status === 'In Progress').length;
-  const closedStatuses = ['Implemented', 'Pending Verification', 'Verified', 'Closed', 'Not Implemented'];
-  const overdue = actionPlansData.filter(ap => ap.days_overdue > 0 && !closedStatuses.includes(ap.status)).length;
-  const implemented = actionPlansData.filter(ap => ap.status === 'Implemented' || ap.status === 'Pending Verification').length;
-  const verified = actionPlansData.filter(ap => ap.status === 'Verified' || ap.status === 'Closed').length;
+// Update stats — null-safe
+function _apListUpdateStats() {
+  var total = _apListData.length;
+  var pending = _apListData.filter(function(ap) { return ap.status === 'Pending' || ap.status === 'Not Due' || ap.status === 'In Progress'; }).length;
+  var closedStatuses = ['Implemented', 'Pending Verification', 'Verified', 'Closed', 'Not Implemented'];
+  var overdue = _apListData.filter(function(ap) { return ap.days_overdue > 0 && closedStatuses.indexOf(ap.status) === -1; }).length;
+  var implemented = _apListData.filter(function(ap) { return ap.status === 'Implemented' || ap.status === 'Pending Verification'; }).length;
+  var verified = _apListData.filter(function(ap) { return ap.status === 'Verified' || ap.status === 'Closed'; }).length;
 
-  document.getElementById('statTotal').textContent = total;
-  document.getElementById('statPending').textContent = pending;
-  document.getElementById('statOverdue').textContent = overdue;
-  document.getElementById('statImplemented').textContent = implemented;
-  document.getElementById('statVerified').textContent = verified;
+  var elTotal = _apEl('statTotal');
+  var elPending = _apEl('statPending');
+  var elOverdue = _apEl('statOverdue');
+  var elImpl = _apEl('statImplemented');
+  var elVerified = _apEl('statVerified');
+
+  if (elTotal) elTotal.textContent = total;
+  if (elPending) elPending.textContent = pending;
+  if (elOverdue) elOverdue.textContent = overdue;
+  if (elImpl) elImpl.textContent = implemented;
+  if (elVerified) elVerified.textContent = verified;
 }
 
-// Render Kanban board
-function renderKanbanBoard() {
-  const columns = {
+// Render Kanban board — null-safe
+function _apListRenderKanban() {
+  var columns = {
     'Pending': [],
     'Overdue': [],
     'In Progress': [],
@@ -395,11 +427,9 @@ function renderKanbanBoard() {
     'Verified': []
   };
 
-  // Sort action plans into columns
-  actionPlansData.forEach(ap => {
-    const status = ap.status || 'Pending';
-    // Overdue gets its own column (status-based OR date-based)
-    if (status === 'Overdue' || (ap.days_overdue > 0 && !['Implemented', 'Pending Verification', 'Verified', 'Closed', 'Not Implemented'].includes(status))) {
+  _apListData.forEach(function(ap) {
+    var status = ap.status || 'Pending';
+    if (status === 'Overdue' || (ap.days_overdue > 0 && ['Implemented', 'Pending Verification', 'Verified', 'Closed', 'Not Implemented'].indexOf(status) === -1)) {
       columns['Overdue'].push(ap);
     } else if (status === 'Not Due') {
       columns['Pending'].push(ap);
@@ -416,57 +446,50 @@ function renderKanbanBoard() {
     }
   });
 
-  // Render each column
-  Object.keys(columns).forEach(status => {
-    const containerId = 'kanban' + status.replace(/\s+/g, '');
-    const countId = 'kanbanCount' + status.replace(/\s+/g, '');
-    const container = document.getElementById(containerId);
-    const countEl = document.getElementById(countId);
+  Object.keys(columns).forEach(function(status) {
+    var containerId = 'kanban' + status.replace(/\s+/g, '');
+    var countId = 'kanbanCount' + status.replace(/\s+/g, '');
+    var container = _apEl(containerId);
+    var countEl = _apEl(countId);
 
     if (countEl) countEl.textContent = columns[status].length;
-
     if (!container) return;
 
     if (columns[status].length === 0) {
-      container.innerHTML = `
-        <div class="kanban-empty">
-          <i class="bi bi-inbox"></i>
-          <div>No items</div>
-        </div>
-      `;
+      container.innerHTML =
+        '<div class="kanban-empty">' +
+          '<i class="bi bi-inbox"></i>' +
+          '<div>No items</div>' +
+        '</div>';
       return;
     }
 
-    container.innerHTML = columns[status].map(ap => {
-      const isOverdue = ap.days_overdue > 0;
-      const isDueSoon = !isOverdue && ap.days_until_due <= 7 && ap.days_until_due > 0;
-      const cardClass = isOverdue ? 'overdue' : (isDueSoon ? 'due-soon' : '');
+    container.innerHTML = columns[status].map(function(ap) {
+      var isOverdue = ap.days_overdue > 0;
+      var isDueSoon = !isOverdue && ap.days_until_due <= 7 && ap.days_until_due > 0;
+      var cardClass = isOverdue ? 'overdue' : (isDueSoon ? 'due-soon' : '');
 
-      return `
-        <div class="kanban-card ${cardClass}" onclick="navigateTo('action-plan-view', {id:'${ap.action_plan_id}'})">
-          <div class="card-id">${ap.action_plan_id}</div>
-          <div class="card-description">${escapeHtml(ap.action_description || 'No description')}</div>
-          <div class="card-meta">
-            <div class="card-owner">
-              <i class="bi bi-person"></i>
-              ${escapeHtml((ap.owner_names || '-').split(',')[0])}
-            </div>
-            <div class="card-due">
-              ${isOverdue ? `<span class="overdue-badge">${ap.days_overdue}d overdue</span>` :
-                `<i class="bi bi-calendar"></i> ${ap.due_date ? formatDate(ap.due_date) : '-'}`}
-            </div>
-          </div>
-        </div>
-      `;
+      return '<div class="kanban-card ' + cardClass + '" onclick="navigateTo(\'action-plan-view\', {id:\'' + ap.action_plan_id + '\'})">' +
+          '<div class="card-id">' + ap.action_plan_id + '</div>' +
+          '<div class="card-description">' + escapeHtml(ap.action_description || 'No description') + '</div>' +
+          '<div class="card-meta">' +
+            '<div class="card-owner"><i class="bi bi-person"></i> ' + escapeHtml((ap.owner_names || '-').split(',')[0]) + '</div>' +
+            '<div class="card-due">' +
+              (isOverdue
+                ? '<span class="overdue-badge">' + ap.days_overdue + 'd overdue</span>'
+                : '<i class="bi bi-calendar"></i> ' + (ap.due_date ? formatDate(ap.due_date) : '-')) +
+            '</div>' +
+          '</div>' +
+        '</div>';
     }).join('');
   });
 }
 
 // Initialize owner filter
-function initAPFilters() {
-  const ownerSelect = document.getElementById('apFilterOwner');
+function _apListInitFilters() {
+  var ownerSelect = _apEl('apFilterOwner');
   if (ownerSelect && window.appDropdowns && window.appDropdowns.users) {
-    window.appDropdowns.users.forEach(u => {
+    window.appDropdowns.users.forEach(function(u) {
       var opt = document.createElement('option');
       opt.value = u.id;
       opt.textContent = u.name;
@@ -478,16 +501,19 @@ function initAPFilters() {
 // Collect current active filter selections
 function getCurrentAPFilters() {
   var filters = {};
-  var status = document.getElementById('apFilterStatus')?.value;
-  var owner = document.getElementById('apFilterOwner')?.value;
-  var search = document.getElementById('apSearchInput')?.value;
+  var statusEl = _apEl('apFilterStatus');
+  var ownerEl = _apEl('apFilterOwner');
+  var searchEl = _apEl('apSearchInput');
+  var status = statusEl ? statusEl.value : '';
+  var owner = ownerEl ? ownerEl.value : '';
+  var search = searchEl ? searchEl.value : '';
   if (status) filters.status = status;
   if (owner) filters.owner = owner;
   if (search) filters.search = search;
   return filters;
 }
 
-// Export action plans - pass current active filters
+// Export action plans
 function exportAPList(format) {
   showLoading('Exporting...');
   apiCall('exportActionPlansCSV', { filters: getCurrentAPFilters() })
@@ -510,8 +536,9 @@ function exportAPList(format) {
     });
 }
 
-function showAPSkeletonRows() {
-  var tbody = document.getElementById('apTableBody');
+function _apListShowSkeleton() {
+  var tbody = _apEl('apTableBody');
+  if (!tbody) return;
   var html = '';
   for (var i = 0; i < 6; i++) {
     html += '<tr class="skeleton-row">' +
@@ -529,123 +556,172 @@ function showAPSkeletonRows() {
 
 function loadActionPlans(filters) {
   filters = filters || {};
-  const search = document.getElementById('apSearchInput')?.value || '';
-  const status = document.getElementById('apFilterStatus')?.value || '';
-  const owner = document.getElementById('apFilterOwner')?.value || '';
-  const overdueOnly = document.getElementById('apFilterOverdue')?.checked || false;
+
+  var searchEl = _apEl('apSearchInput');
+  var statusEl = _apEl('apFilterStatus');
+  var ownerEl = _apEl('apFilterOwner');
+  var overdueEl = _apEl('apFilterOverdue');
+
+  var search = searchEl ? searchEl.value : '';
+  var status = statusEl ? statusEl.value : '';
+  var owner = ownerEl ? ownerEl.value : '';
+  var overdueOnly = overdueEl ? overdueEl.checked : false;
+
+  // ── DOM DIAGNOSTIC (remove after fix is confirmed) ──
+  console.log('[AP-DEBUG] loadActionPlans called');
+  console.log('[AP-DEBUG] DOM check: apTableBody=', !!_apEl('apTableBody'),
+    'apResultsInfo=', !!_apEl('apResultsInfo'),
+    'apPagination=', !!_apEl('apPagination'),
+    'statTotal=', !!_apEl('statTotal'));
 
   // Show skeleton loading rows
-  const tbody = document.getElementById('apTableBody');
-  tbody.innerHTML = Array(4).fill(0).map(() =>
-    '<tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>'
-  ).join('');
+  var tbody = _apEl('apTableBody');
+  if (tbody) {
+    tbody.innerHTML = Array(4).fill(0).map(function() {
+      return '<tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>';
+    }).join('');
+  }
 
   // Timeout: if API takes >20s, show error instead of infinite skeleton
   var apLoadTimer = setTimeout(function() {
-    console.error('Action plans load timed out after 20s');
-    actionPlansData = [];
-    updateAPStats();
-    if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
+    console.error('[AP-DEBUG] Action plans load timed out after 20s');
+    _apListData = [];
+    _apListUpdateStats();
+    if (_apListViewMode === 'kanban') _apListRenderKanban(); else _apListRender();
     showToast('Loading timed out. Check Firestore connection and try again.', 'danger');
   }, 20000);
 
-  apiCall('getActionPlans', { filters: { ...filters, search, status, owner_id: owner, overdue_only: overdueOnly } })
-    .then(r => {
+  apiCall('getActionPlans', { filters: { search: search, status: status, owner_id: owner, overdue_only: overdueOnly } })
+    .then(function(r) {
       clearTimeout(apLoadTimer);
+      console.log('[AP-DEBUG] API response:', JSON.stringify({
+        success: r ? r.success : 'NULL_RESPONSE',
+        isArray: r ? Array.isArray(r.actionPlans) : false,
+        count: (r && r.actionPlans) ? r.actionPlans.length : 'N/A',
+        error: r ? r.error : 'N/A'
+      }));
+
       if (r && r.success !== false && Array.isArray(r.actionPlans)) {
-        actionPlansData = r.actionPlans;
-        updateAPStats();
-        if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
+        _apListData = r.actionPlans;
+        _apListUpdateStats();
+        if (_apListViewMode === 'kanban') _apListRenderKanban(); else _apListRender();
       } else {
         var errMsg = (r && r.error) ? r.error : 'Unexpected response from server';
-        console.error('Action plans load error:', errMsg);
-        actionPlansData = [];
-        updateAPStats();
-        if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
+        console.error('[AP-DEBUG] Action plans load error:', errMsg);
+        _apListData = [];
+        _apListUpdateStats();
+        if (_apListViewMode === 'kanban') _apListRenderKanban(); else _apListRender();
         showToast(errMsg, 'danger');
       }
     })
-    .catch(err => {
+    .catch(function(err) {
       clearTimeout(apLoadTimer);
-      console.error('Action plans error:', err);
-      actionPlansData = [];
-      updateAPStats();
-      if (apViewMode === 'kanban') renderKanbanBoard(); else renderActionPlans();
+      console.error('[AP-DEBUG] Action plans catch error:', err);
+      _apListData = [];
+      _apListUpdateStats();
+      if (_apListViewMode === 'kanban') _apListRenderKanban(); else _apListRender();
       showToast('Failed to load action plans: ' + (err.message || err), 'danger');
     });
 }
 
 function loadActionPlansOverdue() {
-  document.getElementById('apFilterOverdue').checked = true;
+  var el = _apEl('apFilterOverdue');
+  if (el) el.checked = true;
   loadActionPlans({ overdue_only: true });
 }
 
-function renderActionPlans() {
-  const start = (apCurrentPage - 1) * apPageSize;
-  const pageData = actionPlansData.slice(start, start + apPageSize);
-  document.getElementById('apResultsInfo').textContent = actionPlansData.length === 0
-    ? 'No results found'
-    : `Showing ${start + 1}-${Math.min(start + apPageSize, actionPlansData.length)} of ${actionPlansData.length}`;
+// =============================================
+// RENDER — fully null-safe
+// =============================================
+function _apListRender() {
+  var start = (_apListPage - 1) * _apListPageSize;
+  var pageData = _apListData.slice(start, start + _apListPageSize);
 
-  const apTbody = document.getElementById('apTableBody');
-  if (!pageData.length) {
-    apTbody.innerHTML = `<tr><td colspan="7" class="text-center py-5">
-      <div class="empty-state-enhanced">
-        <div class="empty-icon"><i class="bi bi-list-check"></i></div>
-        <h5>No action plans found</h5>
-        <p>Try adjusting your filters or check back later</p>
-        <button class="btn btn-outline-primary" onclick="clearAPFilters()"><i class="bi bi-arrow-counterclockwise me-1"></i>Clear Filters</button>
-      </div>
-    </td></tr>`;
+  var infoEl = _apEl('apResultsInfo');
+  if (infoEl) {
+    infoEl.textContent = _apListData.length === 0
+      ? 'No results found'
+      : 'Showing ' + (start + 1) + '-' + Math.min(start + _apListPageSize, _apListData.length) + ' of ' + _apListData.length;
+  }
+
+  var apTbody = _apEl('apTableBody');
+  if (!apTbody) {
+    console.error('[AP-DEBUG] CRITICAL: #apTableBody not found in DOM. Check that Actionplanslist.html is included inside <div id="page-action-plans"> in your main HTML.');
     return;
   }
 
-  apTbody.innerHTML = pageData.map(ap => `
-    <tr onclick="navigateTo('action-plan-view', {id:'${ap.action_plan_id}'})" style="cursor:pointer;">
-      <td><code>${ap.action_plan_id}</code></td>
-      <td>${escapeHtml((ap.action_description || '').substring(0, 60))}${(ap.action_description || '').length > 60 ? '...' : ''}</td>
-      <td><code>${ap.work_paper_id}</code></td>
-      <td>${escapeHtml(ap.owner_names || '-')}</td>
-      <td>${ap.due_date ? formatDate(ap.due_date) : '-'}</td>
-      <td><span class="badge badge-status ${getStatusClass(ap.status)}">${ap.status || '-'}</span></td>
-      <td>${ap.days_overdue > 0 ? `<span class="badge bg-danger">${ap.days_overdue} days</span>` : '-'}</td>
-    </tr>
-  `).join('');
+  if (!pageData.length) {
+    apTbody.innerHTML = '<tr><td colspan="7" class="text-center py-5">' +
+      '<div class="empty-state-enhanced">' +
+        '<div class="empty-icon"><i class="bi bi-list-check"></i></div>' +
+        '<h5>No action plans found</h5>' +
+        '<p>Try adjusting your filters or check back later</p>' +
+        '<button class="btn btn-outline-primary" onclick="clearAPFilters()"><i class="bi bi-arrow-counterclockwise me-1"></i>Clear Filters</button>' +
+      '</div>' +
+    '</td></tr>';
+    _apListRenderPagination();
+    return;
+  }
 
-  renderAPPagination();
+  apTbody.innerHTML = pageData.map(function(ap) {
+    var desc = ap.action_description || '';
+    var truncDesc = escapeHtml(desc.substring(0, 60)) + (desc.length > 60 ? '...' : '');
+    return '<tr onclick="navigateTo(\'action-plan-view\', {id:\'' + ap.action_plan_id + '\'})" style="cursor:pointer;">' +
+      '<td><code>' + ap.action_plan_id + '</code></td>' +
+      '<td>' + truncDesc + '</td>' +
+      '<td><code>' + (ap.work_paper_id || '') + '</code></td>' +
+      '<td>' + escapeHtml(ap.owner_names || '-') + '</td>' +
+      '<td>' + (ap.due_date ? formatDate(ap.due_date) : '-') + '</td>' +
+      '<td><span class="badge badge-status ' + getStatusClass(ap.status) + '">' + (ap.status || '-') + '</span></td>' +
+      '<td>' + (ap.days_overdue > 0 ? '<span class="badge bg-danger">' + ap.days_overdue + ' days</span>' : '-') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  _apListRenderPagination();
 }
 
-function renderAPPagination() {
-  const totalPages = Math.ceil(actionPlansData.length / apPageSize);
-  const ul = document.getElementById('apPagination').querySelector('ul');
+function _apListRenderPagination() {
+  var navEl = _apEl('apPagination');
+  if (!navEl) return;
+  var ul = navEl.querySelector('ul');
+  if (!ul) return;
+
+  var totalPages = Math.ceil(_apListData.length / _apListPageSize);
   if (totalPages <= 1) { ul.innerHTML = ''; return; }
-  let html = `<li class="page-item ${apCurrentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goToAPPage(${apCurrentPage - 1})"><i class="bi bi-chevron-left"></i></a></li>`;
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || Math.abs(i - apCurrentPage) <= 2)
-      html += `<li class="page-item ${i === apCurrentPage ? 'active' : ''}"><a class="page-link" href="#" onclick="goToAPPage(${i})">${i}</a></li>`;
-    else if (Math.abs(i - apCurrentPage) === 3)
+
+  var html = '<li class="page-item ' + (_apListPage === 1 ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="goToAPPage(' + (_apListPage - 1) + ')"><i class="bi bi-chevron-left"></i></a></li>';
+  for (var i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - _apListPage) <= 2) {
+      html += '<li class="page-item ' + (i === _apListPage ? 'active' : '') + '"><a class="page-link" href="#" onclick="goToAPPage(' + i + ')">' + i + '</a></li>';
+    } else if (Math.abs(i - _apListPage) === 3) {
       html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+    }
   }
-  html += `<li class="page-item ${apCurrentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goToAPPage(${apCurrentPage + 1})"><i class="bi bi-chevron-right"></i></a></li>`;
+  html += '<li class="page-item ' + (_apListPage === totalPages ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="goToAPPage(' + (_apListPage + 1) + ')"><i class="bi bi-chevron-right"></i></a></li>';
   ul.innerHTML = html;
 }
 
-function goToAPPage(p) { apCurrentPage = p; renderActionPlans(); window.scrollTo(0, 0); }
-function filterActionPlans() { apCurrentPage = 1; loadActionPlans(); }
+function goToAPPage(p) { _apListPage = p; _apListRender(); window.scrollTo(0, 0); }
+function filterActionPlans() { _apListPage = 1; loadActionPlans(); }
+
 function clearAPFilters() {
-  document.getElementById('apSearchInput').value = '';
-  document.getElementById('apFilterStatus').value = '';
-  document.getElementById('apFilterOwner').value = '';
-  document.getElementById('apFilterOverdue').checked = false;
-  apCurrentPage = 1;
+  var searchEl = _apEl('apSearchInput');
+  var statusEl = _apEl('apFilterStatus');
+  var ownerEl = _apEl('apFilterOwner');
+  var overdueEl = _apEl('apFilterOverdue');
+  if (searchEl) searchEl.value = '';
+  if (statusEl) statusEl.value = '';
+  if (ownerEl) ownerEl.value = '';
+  if (overdueEl) overdueEl.checked = false;
+  _apListPage = 1;
   loadActionPlans();
 }
 
-// Initialize filters when dropdowns are available (not just on a timer)
+// Initialize filters when dropdowns are available
 document.addEventListener('DOMContentLoaded', function() {
   function tryInitFilters(retries) {
     if (window.appDropdowns && window.appDropdowns.users) {
-      initAPFilters();
+      _apListInitFilters();
     } else if (retries > 0) {
       setTimeout(function() { tryInitFilters(retries - 1); }, 500);
     }
