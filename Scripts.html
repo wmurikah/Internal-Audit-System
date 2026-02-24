@@ -429,6 +429,8 @@ function setupNavigation(p) {
     document.getElementById('navMyWorkPapers')?.classList.remove('d-none');
     document.getElementById('navPendingReview')?.classList.remove('d-none');
     document.getElementById('navSendQueue')?.classList.remove('d-none');
+    document.getElementById('navAuditeeSection')?.classList.remove('d-none');
+    document.getElementById('navAuditeeMenu')?.classList.remove('d-none');
     return;
   }
 
@@ -484,6 +486,34 @@ function setupNavigation(p) {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
     document.getElementById('navQuickStats')?.classList.add('d-none');
   }
+
+  // Auditee section - show My Findings for auditee-type roles
+  var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  if (auditeeRoles.includes(role)) {
+    document.getElementById('navAuditeeSection')?.classList.remove('d-none');
+    document.getElementById('navAuditeeMenu')?.classList.remove('d-none');
+    // Load auditee finding counts for badge
+    loadAuditeeFindingCounts();
+  } else {
+    document.getElementById('navAuditeeSection')?.classList.add('d-none');
+    document.getElementById('navAuditeeMenu')?.classList.add('d-none');
+  }
+}
+
+function loadAuditeeFindingCounts() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success && result.counts) {
+        var pending = (result.counts.pendingResponse || 0) + (result.counts.rejected || 0);
+        var badge = document.getElementById('auditeeNewFindingCount');
+        if (badge && pending > 0) {
+          badge.textContent = pending;
+          badge.style.display = 'inline-block';
+        }
+      }
+    })
+    .withFailureHandler(function() { /* non-fatal */ })
+    .apiCall('getAuditeeFindingCounts', {});
 }
 
 // Navigation
@@ -555,6 +585,8 @@ function navigateTo(page, params, updateHash = true) {
     'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => { if (typeof loadActionPlans === 'function') loadActionPlans(params); } },
     'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: () => { if (typeof loadActionPlansOverdue === 'function') loadActionPlansOverdue(); else if (typeof loadActionPlans === 'function') loadActionPlans({ overdue: true }); } },
     'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => { if (typeof loadActionPlanView === 'function') loadActionPlanView(params); } },
+    'auditee-findings': { el: 'page-auditee-findings', title: 'My Findings', init: () => { if (typeof loadAuditeeFindings === 'function') loadAuditeeFindings(); } },
+    'auditee-response': { el: 'page-auditee-response', title: 'Finding Response', init: () => { if (typeof loadAuditeeResponse === 'function') loadAuditeeResponse(params); } },
     'reports': { el: 'page-reports', title: 'Dashboard', init: () => { if (typeof loadReports === 'function') loadReports(); } },
     'users': { el: 'page-settings', title: 'User Management', init: () => { if (typeof loadSettings === 'function') loadSettings({ tab: 'users' }); } },
     'settings': { el: 'page-settings', title: 'Settings', init: () => { if (typeof loadSettings === 'function') loadSettings(params); } },

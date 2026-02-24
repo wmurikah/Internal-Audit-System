@@ -1,0 +1,704 @@
+<!-- Auditee Response Page - View finding & submit management response + action plans -->
+<div class="auditee-response-page">
+  <div id="auditeeResponseLoading" class="text-center py-5">
+    <div class="spinner-border text-primary"></div>
+    <p class="mt-2 text-muted">Loading finding details...</p>
+  </div>
+
+  <div id="auditeeResponseContent" style="display:none;">
+    <!-- Back button -->
+    <div class="mb-3">
+      <button class="btn btn-outline-secondary btn-sm" onclick="navigateTo('auditee-findings')">
+        <i class="bi bi-arrow-left me-1"></i>Back to My Findings
+      </button>
+    </div>
+
+    <!-- Finding Header -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h5 class="mb-1" id="arFindingTitle">-</h5>
+            <div class="text-muted small">
+              <span id="arWorkPaperRef" class="me-3"></span>
+              <span id="arIssuedDate" class="me-3"></span>
+            </div>
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <span id="arRiskBadge"></span>
+            <span id="arResponseStatusBadge"></span>
+          </div>
+        </div>
+
+        <!-- Response Deadline Banner -->
+        <div id="arDeadlineBanner" class="alert alert-warning mt-3 mb-0 py-2 d-flex align-items-center" style="display:none !important;">
+          <i class="bi bi-clock me-2"></i>
+          <span id="arDeadlineText"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two Column Layout -->
+    <div class="row g-4">
+      <!-- Left Column: Finding Details (Read-Only) -->
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom">
+            <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Audit Finding</h6>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-muted small">Observation</label>
+              <div id="arObservation" class="border rounded p-3 bg-light" style="white-space:pre-wrap; max-height:200px; overflow-y:auto;"></div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-muted small">Risk Summary</label>
+              <div id="arRiskSummary" class="border rounded p-3 bg-light"></div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-muted small">Recommendation</label>
+              <div id="arRecommendation" class="border rounded p-3 bg-light" style="white-space:pre-wrap; max-height:200px; overflow-y:auto;"></div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-muted small">Evidence / Attachments</label>
+              <div id="arFilesList" class="border rounded p-3 bg-light">
+                <span class="text-muted">No files attached</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Management Response Form -->
+      <div class="col-lg-6">
+        <!-- Management Response -->
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="bi bi-chat-left-text me-2"></i>Management Response</h6>
+            <span id="arRoundBadge" class="badge bg-secondary"></span>
+          </div>
+          <div class="card-body">
+            <!-- Response Type -->
+            <div class="mb-3" id="arResponseTypeGroup">
+              <label class="form-label fw-semibold">Response Type <span class="text-danger">*</span></label>
+              <div class="d-flex gap-2">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="arResponseType" id="arTypeAgree" value="Agree">
+                  <label class="form-check-label" for="arTypeAgree">Agree</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="arResponseType" id="arTypePartial" value="Partially Agree">
+                  <label class="form-check-label" for="arTypePartial">Partially Agree</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="arResponseType" id="arTypeDisagree" value="Disagree">
+                  <label class="form-check-label" for="arTypeDisagree">Disagree</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Management Response Text -->
+            <div class="mb-3" id="arResponseTextGroup">
+              <label class="form-label fw-semibold">Management Response <span class="text-danger">*</span></label>
+              <textarea class="form-control" id="arManagementResponse" rows="6" maxlength="2000"
+                        placeholder="Provide your management response to this audit finding..."></textarea>
+              <div class="d-flex justify-content-between mt-1">
+                <small class="text-muted">Minimum 10 characters</small>
+                <small class="text-muted"><span id="arCharCount">0</span>/2000</small>
+              </div>
+            </div>
+
+            <!-- Read-only view for non-editable states -->
+            <div id="arResponseReadOnly" style="display:none;">
+              <div class="mb-3">
+                <label class="form-label fw-semibold text-muted small">Response Type</label>
+                <div id="arResponseTypeDisplay" class="fw-semibold"></div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold text-muted small">Management Response</label>
+                <div id="arResponseTextDisplay" class="border rounded p-3 bg-light" style="white-space:pre-wrap;"></div>
+              </div>
+            </div>
+
+            <!-- Reviewer Comments (shown after review) -->
+            <div id="arReviewerFeedback" style="display:none;" class="alert alert-info mt-3">
+              <h6 class="alert-heading"><i class="bi bi-chat-dots me-2"></i>Auditor Feedback</h6>
+              <p id="arReviewerComments" class="mb-0"></p>
+            </div>
+
+            <!-- Action Buttons -->
+            <div id="arResponseActions" class="d-flex gap-2 mt-3">
+              <button class="btn btn-outline-primary" onclick="saveDraftResponseForm()" id="btnSaveDraft">
+                <i class="bi bi-save me-1"></i>Save Draft
+              </button>
+              <button class="btn btn-primary" onclick="submitResponseForm()" id="btnSubmitResponse">
+                <i class="bi bi-send me-1"></i>Submit Response
+              </button>
+            </div>
+
+            <!-- Auditor Review Buttons (for auditor/admin viewing submitted response) -->
+            <div id="arAuditorReviewActions" style="display:none;" class="d-flex gap-2 mt-3">
+              <button class="btn btn-success" onclick="reviewResponseAction('accept')">
+                <i class="bi bi-check-lg me-1"></i>Accept Response
+              </button>
+              <button class="btn btn-danger" onclick="showRejectResponseModal()">
+                <i class="bi bi-x-lg me-1"></i>Reject Response
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Plans Section -->
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="bi bi-list-check me-2"></i>Action Plans</h6>
+            <button class="btn btn-sm btn-outline-primary" onclick="showAddActionPlanModal()" id="btnAddActionPlan">
+              <i class="bi bi-plus me-1"></i>Add Action Plan
+            </button>
+          </div>
+          <div class="card-body p-0">
+            <div id="arActionPlansList" class="p-3">
+              <div class="text-center text-muted py-3">
+                <i class="bi bi-inbox me-2"></i>No action plans yet
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Response History -->
+        <div class="card border-0 shadow-sm mt-4" id="arHistoryCard" style="display:none;">
+          <div class="card-header bg-white border-bottom">
+            <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Response History</h6>
+          </div>
+          <div class="card-body p-0">
+            <div id="arResponseHistory" class="p-3"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Action Plan Modal -->
+<div class="modal fade" id="addAuditeeAPModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Propose Action Plan</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Action Description <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="newAPDescription" rows="3" maxlength="2000"
+                    placeholder="Describe the specific action to be taken..."></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Responsible Person</label>
+          <select class="form-select" id="newAPOwner">
+            <option value="">-- Select owner --</option>
+          </select>
+          <small class="text-muted">Leave blank to assign to yourself</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Due Date <span class="text-danger">*</span></label>
+          <input type="date" class="form-control" id="newAPDueDate">
+          <small class="text-muted">Maximum 6 months from today</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="addAuditeeActionPlan()">
+          <i class="bi bi-plus me-1"></i>Add Action Plan
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Response Modal -->
+<div class="modal fade" id="rejectResponseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="bi bi-x-circle me-2"></i>Reject Response</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Please provide comments explaining why this response is being rejected. The auditee will see these comments.</p>
+        <textarea class="form-control" id="rejectResponseComments" rows="4" maxlength="2000"
+                  placeholder="Explain what needs to be revised..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" onclick="reviewResponseAction('reject')">
+          <i class="bi bi-x-lg me-1"></i>Reject Response
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var _arData = null;
+var _arWorkPaperId = null;
+
+function loadAuditeeResponse(params) {
+  params = params || {};
+  _arWorkPaperId = params.id;
+  if (!_arWorkPaperId) {
+    showToast('No finding ID provided', 'danger');
+    navigateTo('auditee-findings');
+    return;
+  }
+
+  document.getElementById('auditeeResponseLoading').style.display = 'block';
+  document.getElementById('auditeeResponseContent').style.display = 'none';
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      document.getElementById('auditeeResponseLoading').style.display = 'none';
+      document.getElementById('auditeeResponseContent').style.display = 'block';
+
+      if (!result || !result.success) {
+        showToast(result ? result.error : 'Failed to load finding', 'danger');
+        return;
+      }
+
+      _arData = result;
+      renderAuditeeResponse();
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('auditeeResponseLoading').style.display = 'none';
+      document.getElementById('auditeeResponseContent').style.display = 'block';
+      showToast('Error: ' + err.message, 'danger');
+    })
+    .apiCall('getAuditeeResponseData', { workPaperId: _arWorkPaperId });
+}
+
+function renderAuditeeResponse() {
+  var f = _arData.finding;
+  var canEdit = _arData.canEditResponse;
+  var isAuditor = _arData.isAuditor;
+  var isSuperAdmin = _arData.isSuperAdmin;
+
+  // Header
+  document.getElementById('arFindingTitle').textContent = f.observation_title || 'Untitled Finding';
+  document.getElementById('arWorkPaperRef').innerHTML = '<i class="bi bi-hash me-1"></i>' + (f.work_paper_ref || f.work_paper_id);
+  document.getElementById('arIssuedDate').innerHTML = f.sent_to_auditee_date ? '<i class="bi bi-calendar me-1"></i>Issued: ' + formatDateAr(f.sent_to_auditee_date) : '';
+
+  // Badges
+  document.getElementById('arRiskBadge').innerHTML = getRiskBadgeAr(f.risk_rating);
+  document.getElementById('arResponseStatusBadge').innerHTML = getResponseStatusBadgeAr(f.response_status || 'Pending Response');
+
+  // Deadline
+  var banner = document.getElementById('arDeadlineBanner');
+  if (f.response_deadline) {
+    var dl = new Date(f.response_deadline);
+    var now = new Date();
+    var daysLeft = Math.ceil((dl - now) / (1000 * 60 * 60 * 24));
+    banner.style.display = 'flex';
+    banner.style.removeProperty('display');
+    if (daysLeft < 0) {
+      banner.className = 'alert alert-danger mt-3 mb-0 py-2 d-flex align-items-center';
+      document.getElementById('arDeadlineText').textContent = 'Response is OVERDUE by ' + Math.abs(daysLeft) + ' day(s). Deadline was ' + formatDateAr(f.response_deadline);
+    } else if (daysLeft <= 3) {
+      banner.className = 'alert alert-warning mt-3 mb-0 py-2 d-flex align-items-center';
+      document.getElementById('arDeadlineText').textContent = daysLeft + ' day(s) remaining. Deadline: ' + formatDateAr(f.response_deadline);
+    } else {
+      banner.className = 'alert alert-info mt-3 mb-0 py-2 d-flex align-items-center';
+      document.getElementById('arDeadlineText').textContent = 'Response deadline: ' + formatDateAr(f.response_deadline) + ' (' + daysLeft + ' days remaining)';
+    }
+  } else {
+    banner.style.display = 'none';
+  }
+
+  // Round info
+  document.getElementById('arRoundBadge').textContent = 'Round ' + (f.response_round || 0) + ' / ' + _arData.maxRounds;
+
+  // Finding details (read-only)
+  document.getElementById('arObservation').textContent = f.observation_description || '-';
+  document.getElementById('arRiskSummary').textContent = f.risk_summary || '-';
+  document.getElementById('arRecommendation').textContent = f.recommendation || '-';
+
+  // Files
+  renderFindingFiles(_arData.files || []);
+
+  // Response form vs read-only
+  var responseStatus = f.response_status || 'Pending Response';
+  var editableStatuses = ['Pending Response', 'Draft Response', 'Response Rejected'];
+
+  if (canEdit && editableStatuses.indexOf(responseStatus) >= 0) {
+    // Editable mode
+    document.getElementById('arResponseTypeGroup').style.display = 'block';
+    document.getElementById('arResponseTextGroup').style.display = 'block';
+    document.getElementById('arResponseReadOnly').style.display = 'none';
+    document.getElementById('arResponseActions').style.display = 'flex';
+    document.getElementById('arAuditorReviewActions').style.display = 'none';
+    document.getElementById('btnAddActionPlan').style.display = 'inline-block';
+
+    // Pre-fill if there's existing draft/response
+    document.getElementById('arManagementResponse').value = f.management_response || '';
+    updateCharCount();
+
+    // Show reviewer feedback if rejected
+    if (responseStatus === 'Response Rejected' && f.response_review_comments) {
+      document.getElementById('arReviewerFeedback').style.display = 'block';
+      document.getElementById('arReviewerComments').textContent = f.response_review_comments;
+    }
+  } else if (isSuperAdmin) {
+    // SUPER_ADMIN can always edit
+    document.getElementById('arResponseTypeGroup').style.display = 'block';
+    document.getElementById('arResponseTextGroup').style.display = 'block';
+    document.getElementById('arResponseReadOnly').style.display = 'none';
+    document.getElementById('arResponseActions').style.display = 'flex';
+    document.getElementById('arAuditorReviewActions').style.display = 'none';
+    document.getElementById('btnAddActionPlan').style.display = 'inline-block';
+    document.getElementById('arManagementResponse').value = f.management_response || '';
+    updateCharCount();
+  } else {
+    // Read-only mode
+    document.getElementById('arResponseTypeGroup').style.display = 'none';
+    document.getElementById('arResponseTextGroup').style.display = 'none';
+    document.getElementById('arResponseReadOnly').style.display = 'block';
+    document.getElementById('arResponseActions').style.display = 'none';
+    document.getElementById('btnAddActionPlan').style.display = 'none';
+
+    // Show response details
+    var latestResponse = (_arData.responses && _arData.responses.length > 0) ? _arData.responses[0] : null;
+    document.getElementById('arResponseTypeDisplay').textContent = latestResponse ? latestResponse.response_type : '-';
+    document.getElementById('arResponseTextDisplay').textContent = f.management_response || 'No response submitted yet';
+
+    // Show auditor review buttons if applicable
+    if ((isAuditor || isSuperAdmin) && responseStatus === 'Response Submitted') {
+      document.getElementById('arAuditorReviewActions').style.display = 'flex';
+    }
+  }
+
+  // Action plans
+  renderAuditeeActionPlans(_arData.actionPlans || []);
+
+  // Response history
+  renderResponseHistory(_arData.responses || []);
+
+  // Load users dropdown for action plan assignment
+  loadUsersForAPAssignment();
+}
+
+function renderFindingFiles(files) {
+  var container = document.getElementById('arFilesList');
+  if (!files || files.length === 0) {
+    container.innerHTML = '<span class="text-muted">No files attached</span>';
+    return;
+  }
+  var html = '';
+  files.forEach(function(f) {
+    var icon = getFileIcon(f.mime_type || f.file_name);
+    html += '<div class="d-flex align-items-center gap-2 mb-2">' +
+      '<i class="bi ' + icon + '"></i>' +
+      (f.drive_url ? '<a href="' + f.drive_url + '" target="_blank">' + escapeHtmlAr(f.file_name) + '</a>' :
+        '<span>' + escapeHtmlAr(f.file_name) + '</span>') +
+      '<small class="text-muted ms-auto">' + (f.file_category || '') + '</small>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function renderAuditeeActionPlans(plans) {
+  var container = document.getElementById('arActionPlansList');
+  if (!plans || plans.length === 0) {
+    container.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-inbox me-2"></i>No action plans yet. Add one to propose your remediation steps.</div>';
+    return;
+  }
+
+  var html = '';
+  plans.forEach(function(ap) {
+    var statusBadge = getAPStatusBadge(ap.status);
+    var dueDate = ap.due_date ? formatDateAr(ap.due_date) : '-';
+    var isProposed = ap.auditee_proposed ? '<span class="badge bg-info text-dark ms-1">Proposed</span>' : '';
+
+    html += '<div class="border rounded p-3 mb-2">' +
+      '<div class="d-flex justify-content-between align-items-start">' +
+        '<div class="flex-grow-1">' +
+          '<div class="fw-semibold">' + escapeHtmlAr(ap.action_description || 'No description') + '</div>' +
+          '<div class="small text-muted mt-1">' +
+            '<span class="me-3"><i class="bi bi-person me-1"></i>' + escapeHtmlAr(ap.owner_names || '-') + '</span>' +
+            '<span class="me-3"><i class="bi bi-calendar me-1"></i>Due: ' + dueDate + '</span>' +
+            statusBadge + isProposed +
+          '</div>' +
+        '</div>' +
+        '<button class="btn btn-sm btn-outline-secondary" onclick="navigateTo(\'action-plan-view\', {id:\'' + ap.action_plan_id + '\'})" title="View Details">' +
+          '<i class="bi bi-eye"></i>' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function renderResponseHistory(responses) {
+  var container = document.getElementById('arResponseHistory');
+  var card = document.getElementById('arHistoryCard');
+  if (!responses || responses.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+
+  var html = '';
+  responses.forEach(function(r) {
+    var statusCls = r.status === 'Approved' ? 'success' : r.status === 'Rejected' ? 'danger' : 'secondary';
+    html += '<div class="border-start border-3 border-' + statusCls + ' ps-3 mb-3">' +
+      '<div class="d-flex justify-content-between">' +
+        '<strong>Round ' + (r.round_number || '?') + ' - ' + (r.response_type || '-') + '</strong>' +
+        '<span class="badge bg-' + statusCls + '">' + (r.status || 'Pending') + '</span>' +
+      '</div>' +
+      '<div class="small text-muted">Submitted by ' + escapeHtmlAr(r.submitted_by_name || '-') + ' on ' + formatDateAr(r.submitted_date) + '</div>' +
+      '<div class="mt-1" style="white-space:pre-wrap;">' + escapeHtmlAr(r.management_response || '') + '</div>' +
+      (r.review_comments ? '<div class="mt-2 p-2 bg-light rounded"><small class="fw-semibold text-muted">Reviewer: </small>' + escapeHtmlAr(r.review_comments) + '</div>' : '') +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+// ── Form Actions ──
+
+function updateCharCount() {
+  var ta = document.getElementById('arManagementResponse');
+  document.getElementById('arCharCount').textContent = (ta.value || '').length;
+}
+
+// Bind char counter
+document.getElementById('arManagementResponse').addEventListener('input', updateCharCount);
+
+function saveDraftResponseForm() {
+  var mgmtResponse = document.getElementById('arManagementResponse').value;
+  var btn = document.getElementById('btnSaveDraft');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-save me-1"></i>Save Draft';
+      if (result && result.success) {
+        showToast('Draft saved successfully', 'success');
+      } else {
+        showToast(result ? result.error : 'Save failed', 'danger');
+      }
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-save me-1"></i>Save Draft';
+      showToast('Error: ' + err.message, 'danger');
+    })
+    .apiCall('saveDraftResponse', { workPaperId: _arWorkPaperId, management_response: mgmtResponse });
+}
+
+function submitResponseForm() {
+  var responseType = document.querySelector('input[name="arResponseType"]:checked');
+  if (!responseType) {
+    showToast('Please select a response type (Agree / Partially Agree / Disagree)', 'warning');
+    return;
+  }
+
+  var mgmtResponse = document.getElementById('arManagementResponse').value;
+  if (!mgmtResponse || mgmtResponse.trim().length < 10) {
+    showToast('Management response must be at least 10 characters', 'warning');
+    return;
+  }
+
+  // Collect action plan IDs
+  var apIds = (_arData.actionPlans || []).map(function(ap) { return ap.action_plan_id; });
+
+  if (!confirm('Are you sure you want to submit your response? This will notify the audit team for review.')) return;
+
+  var btn = document.getElementById('btnSubmitResponse');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Submitting...';
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-send me-1"></i>Submit Response';
+      if (result && result.success) {
+        showToast(result.message || 'Response submitted successfully', 'success');
+        // Reload the page to reflect new state
+        loadAuditeeResponse({ id: _arWorkPaperId });
+      } else {
+        showToast(result ? result.error : 'Submit failed', 'danger');
+      }
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-send me-1"></i>Submit Response';
+      showToast('Error: ' + err.message, 'danger');
+    })
+    .apiCall('submitAuditeeResponse', {
+      workPaperId: _arWorkPaperId,
+      response_type: responseType.value,
+      management_response: mgmtResponse,
+      action_plan_ids: apIds
+    });
+}
+
+function reviewResponseAction(action) {
+  var comments = '';
+  if (action === 'reject') {
+    comments = document.getElementById('rejectResponseComments').value;
+    if (!comments || comments.trim().length < 5) {
+      showToast('Please provide comments (at least 5 characters)', 'warning');
+      return;
+    }
+  }
+
+  if (action === 'accept' && !confirm('Accept this auditee response?')) return;
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) {
+        showToast(result.message || 'Response reviewed successfully', 'success');
+        // Close modal if open
+        var modal = bootstrap.Modal.getInstance(document.getElementById('rejectResponseModal'));
+        if (modal) modal.hide();
+        // Reload
+        loadAuditeeResponse({ id: _arWorkPaperId });
+      } else {
+        showToast(result ? result.error : 'Review failed', 'danger');
+      }
+    })
+    .withFailureHandler(function(err) {
+      showToast('Error: ' + err.message, 'danger');
+    })
+    .apiCall('reviewAuditeeResponse', {
+      workPaperId: _arWorkPaperId,
+      action: action,
+      comments: comments
+    });
+}
+
+function showRejectResponseModal() {
+  document.getElementById('rejectResponseComments').value = '';
+  new bootstrap.Modal(document.getElementById('rejectResponseModal')).show();
+}
+
+// ── Action Plan Modal ──
+
+function showAddActionPlanModal() {
+  document.getElementById('newAPDescription').value = '';
+  document.getElementById('newAPDueDate').value = '';
+  // Set max date (6 months)
+  var maxDate = new Date();
+  maxDate.setMonth(maxDate.getMonth() + 6);
+  document.getElementById('newAPDueDate').max = maxDate.toISOString().split('T')[0];
+  // Set min date (today)
+  document.getElementById('newAPDueDate').min = new Date().toISOString().split('T')[0];
+
+  new bootstrap.Modal(document.getElementById('addAuditeeAPModal')).show();
+}
+
+function loadUsersForAPAssignment() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      var sel = document.getElementById('newAPOwner');
+      sel.innerHTML = '<option value="">-- Assign to myself --</option>';
+      var users = (result && result.users) ? result.users : (result || []);
+      if (Array.isArray(users)) {
+        users.forEach(function(u) {
+          var opt = document.createElement('option');
+          opt.value = u.id || u.user_id;
+          opt.textContent = (u.name || u.full_name) + ' (' + (u.email || '') + ')';
+          sel.appendChild(opt);
+        });
+      }
+    })
+    .withFailureHandler(function() { /* non-fatal */ })
+    .apiCall('getDropdowns', {});
+}
+
+function addAuditeeActionPlan() {
+  var desc = document.getElementById('newAPDescription').value;
+  if (!desc || desc.trim().length < 5) {
+    showToast('Action description is required (at least 5 characters)', 'warning');
+    return;
+  }
+  var dueDate = document.getElementById('newAPDueDate').value;
+  if (!dueDate) {
+    showToast('Due date is required', 'warning');
+    return;
+  }
+
+  var ownerSel = document.getElementById('newAPOwner');
+  var ownerId = ownerSel.value || '';
+  var ownerName = ownerId ? ownerSel.options[ownerSel.selectedIndex].textContent : '';
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) {
+        showToast('Action plan added', 'success');
+        var modal = bootstrap.Modal.getInstance(document.getElementById('addAuditeeAPModal'));
+        if (modal) modal.hide();
+        // Reload to see new AP
+        loadAuditeeResponse({ id: _arWorkPaperId });
+      } else {
+        showToast(result ? result.error : 'Failed to add action plan', 'danger');
+      }
+    })
+    .withFailureHandler(function(err) {
+      showToast('Error: ' + err.message, 'danger');
+    })
+    .apiCall('createAuditeeActionPlan', {
+      work_paper_id: _arWorkPaperId,
+      action_description: desc,
+      owner_ids: ownerId,
+      owner_names: ownerName,
+      due_date: dueDate
+    });
+}
+
+// ── Helper Functions ──
+
+function formatDateAr(d) {
+  if (!d) return '-';
+  try { return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch(e) { return String(d); }
+}
+
+function escapeHtmlAr(str) {
+  var div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function getRiskBadgeAr(rating) {
+  var m = { 'Extreme': 'bg-danger', 'High': 'bg-warning text-dark', 'Medium': 'bg-info text-dark', 'Low': 'bg-success' };
+  return '<span class="badge ' + (m[rating] || 'bg-secondary') + '">' + (rating || 'N/A') + '</span>';
+}
+
+function getResponseStatusBadgeAr(status) {
+  var m = {
+    'Pending Response': 'bg-warning text-dark', 'Draft Response': 'bg-info text-dark',
+    'Response Submitted': 'bg-primary', 'Response Accepted': 'bg-success',
+    'Response Rejected': 'bg-danger', 'Escalated': 'bg-dark'
+  };
+  return '<span class="badge ' + (m[status] || 'bg-secondary') + '">' + status + '</span>';
+}
+
+function getAPStatusBadge(status) {
+  var m = {
+    'Not Due': 'bg-secondary', 'Pending': 'bg-warning text-dark', 'In Progress': 'bg-info text-dark',
+    'Implemented': 'bg-primary', 'Pending Verification': 'bg-info', 'Verified': 'bg-success',
+    'Rejected': 'bg-danger', 'Overdue': 'bg-danger', 'Closed': 'bg-dark'
+  };
+  return '<span class="badge ' + (m[status] || 'bg-secondary') + '">' + (status || '-') + '</span>';
+}
+
+function getFileIcon(nameOrMime) {
+  var s = (nameOrMime || '').toLowerCase();
+  if (s.includes('pdf')) return 'bi-file-earmark-pdf text-danger';
+  if (s.includes('image') || s.includes('jpg') || s.includes('png')) return 'bi-file-earmark-image text-success';
+  if (s.includes('sheet') || s.includes('xls') || s.includes('csv')) return 'bi-file-earmark-spreadsheet text-success';
+  if (s.includes('doc') || s.includes('word')) return 'bi-file-earmark-word text-primary';
+  return 'bi-file-earmark text-secondary';
+}
+</script>

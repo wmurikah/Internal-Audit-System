@@ -49,6 +49,14 @@ function createWorkPaper(data, user) {
     approved_by_name: '',
     approved_date: '',
     sent_to_auditee_date: '',
+    response_status: '',
+    response_deadline: '',
+    response_round: 0,
+    response_submitted_by: '',
+    response_submitted_date: '',
+    response_reviewed_by: '',
+    response_review_date: '',
+    response_review_comments: '',
     created_at: now,
     updated_at: now,
     work_paper_ref: workPaperId
@@ -549,10 +557,18 @@ function sendToAuditee(workPaperId, user) {
   }
 
   const now = new Date();
+
+  // Calculate response deadline: configurable per WP or default 14 days
+  var deadlineDays = RESPONSE_DEFAULTS ? RESPONSE_DEFAULTS.DEADLINE_DAYS : 14;
+  var responseDeadline = new Date(now.getTime() + deadlineDays * 24 * 60 * 60 * 1000);
+
   const updates = {
     status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
     final_status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
     sent_to_auditee_date: now,
+    response_status: STATUS.RESPONSE.PENDING,
+    response_deadline: responseDeadline,
+    response_round: 0,
     updated_at: now
   };
 
@@ -1197,10 +1213,15 @@ function batchSendToAuditees(workPaperIds, user) {
       }
 
       // Update status to Sent to Auditee
+      var batchDeadlineDays = RESPONSE_DEFAULTS ? RESPONSE_DEFAULTS.DEADLINE_DAYS : 14;
+      var batchResponseDeadline = new Date(now.getTime() + batchDeadlineDays * 24 * 60 * 60 * 1000);
       var updates = {
         status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
         final_status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
         sent_to_auditee_date: now,
+        response_status: STATUS.RESPONSE.PENDING,
+        response_deadline: batchResponseDeadline,
+        response_round: 0,
         updated_at: now
       };
 

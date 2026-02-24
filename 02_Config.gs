@@ -24,7 +24,8 @@ const SHEETS = {
   SESSIONS: '20_Sessions',
   NOTIFICATION_QUEUE: '21_NotificationQueue',
   EMAIL_TEMPLATES: '22_EmailTemplates',
-  STAGING_AREA: '23_StagingArea'
+  STAGING_AREA: '23_StagingArea',
+  AUDITEE_RESPONSES: '24_AuditeeResponses'
 };
 
 const SCHEMAS = {
@@ -53,7 +54,10 @@ const SCHEMAS = {
     'prepared_by_id', 'prepared_by_name', 'prepared_date',
     'submitted_date', 'reviewed_by_id', 'reviewed_by_name', 'review_date', 'review_comments',
     'approved_by_id', 'approved_by_name', 'approved_date', 'sent_to_auditee_date',
-    'created_at', 'updated_at', 'work_paper_ref'
+    'created_at', 'updated_at', 'work_paper_ref',
+    'response_status', 'response_deadline', 'response_round',
+    'response_submitted_by', 'response_submitted_date',
+    'response_reviewed_by', 'response_review_date', 'response_review_comments'
   ],
   WP_REQUIREMENTS: [
     'requirement_id', 'work_paper_id', 'requirement_number', 'requirement_description',
@@ -75,7 +79,8 @@ const SCHEMAS = {
     'hoa_review_status', 'hoa_review_by', 'hoa_review_date', 'hoa_review_comments',
     'days_overdue',
     'delegated_by_id', 'delegated_by_name', 'delegated_date', 'delegation_notes', 'original_owner_ids',
-    'created_at', 'created_by', 'updated_at', 'updated_by'
+    'created_at', 'created_by', 'updated_at', 'updated_by',
+    'created_by_role', 'auditee_proposed', 'response_id'
   ],
   AP_EVIDENCE: [
     'evidence_id', 'action_plan_id', 'file_name', 'file_description',
@@ -98,7 +103,14 @@ const SCHEMAS = {
     'subject', 'body', 'module', 'record_id', 'status', 'scheduled_for',
     'sent_at', 'error_message', 'created_at'
   ],
-  EMAIL_TEMPLATES: ['template_code', 'template_name', 'subject_template', 'body_template', 'is_active']
+  EMAIL_TEMPLATES: ['template_code', 'template_name', 'subject_template', 'body_template', 'is_active'],
+  AUDITEE_RESPONSES: [
+    'response_id', 'work_paper_id', 'round_number', 'response_type',
+    'management_response', 'submitted_by_id', 'submitted_by_name', 'submitted_date',
+    'action_plan_ids', 'status',
+    'reviewed_by_id', 'reviewed_by_name', 'review_date', 'review_comments',
+    'created_at', 'updated_at'
+  ]
 };
 
 const STATUS = {
@@ -121,6 +133,14 @@ const STATUS = {
     OVERDUE: 'Overdue',
     NOT_IMPLEMENTED: 'Not Implemented',
     CLOSED: 'Closed'                 // Final state after verification
+  },
+  RESPONSE: {
+    PENDING: 'Pending Response',
+    DRAFT: 'Draft Response',
+    SUBMITTED: 'Response Submitted',
+    ACCEPTED: 'Response Accepted',
+    REJECTED: 'Response Rejected',
+    ESCALATED: 'Escalated'
   },
   REVIEW: {
     PENDING: 'Pending Review',
@@ -166,7 +186,8 @@ function generateId(entityType) {
       'HISTORY': 'NEXT_HISTORY_ID',
       'SESSION': 'NEXT_SESSION_ID',
       'NOTIFICATION': 'NEXT_NOTIF_ID',
-      'LOG': 'NEXT_LOG_ID'
+      'LOG': 'NEXT_LOG_ID',
+      'AUDITEE_RESPONSE': 'NEXT_AR_ID'
     };
 
     var prefixMap = {
@@ -180,7 +201,8 @@ function generateId(entityType) {
       'HISTORY': 'HIST-',
       'SESSION': 'SES-',
       'NOTIFICATION': 'NOTIF-',
-      'LOG': 'LOG-'
+      'LOG': 'LOG-',
+      'AUDITEE_RESPONSE': 'AR-'
     };
 
     var configKey = configKeyMap[entityType];

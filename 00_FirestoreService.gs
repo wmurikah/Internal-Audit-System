@@ -268,7 +268,8 @@ var FIRESTORE_COLLECTIONS = {
   '02_Permissions':         'permissions',
   '16_AuditLog':            'audit_log',
   '21_NotificationQueue':   'notification_queue',
-  '22_EmailTemplates':      'email_templates'
+  '22_EmailTemplates':      'email_templates',
+  '24_AuditeeResponses':    'auditee_responses'
 };
 
 /**
@@ -292,7 +293,8 @@ var FIRESTORE_DOC_ID_FIELD = {
   '02_Permissions':         'permission_id',
   '16_AuditLog':            'log_id',
   '21_NotificationQueue':   'notification_id',
-  '22_EmailTemplates':      'template_code'
+  '22_EmailTemplates':      'template_code',
+  '24_AuditeeResponses':    'response_id'
 };
 
 /**
