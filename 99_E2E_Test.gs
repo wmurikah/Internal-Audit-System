@@ -71,30 +71,90 @@ function runFullE2ETest() {
   R.push('═══════════════════════════════════════════════════════════════');
 
   // ═══════════════════════════════════════════════════════════════
-  // SETUP: Resolve test users by role
+  // SETUP: Resolve test users by role — auto-create any missing
   // ═══════════════════════════════════════════════════════════════
   SECTION('SETUP: Resolve Test Users');
 
+  // Test-user definitions for roles that don't exist yet in the system.
+  // These are created automatically and cleaned up at the end.
+  var TEST_USER_DEFS = {
+    SENIOR_AUDITOR:   { email: 'e2e.senior.auditor@hasspetroleum.com',   full_name: 'E2E Senior Auditor',   first_name: 'E2E', last_name: 'Senior Auditor',   department: 'Internal Audit' },
+    AUDITEE:          { email: 'e2e.auditee@hasspetroleum.com',          full_name: 'E2E Auditee',          first_name: 'E2E', last_name: 'Auditee',          department: 'Finance' },
+    MANAGEMENT:       { email: 'e2e.management@hasspetroleum.com',       full_name: 'E2E Manager',          first_name: 'E2E', last_name: 'Manager',          department: 'Finance' },
+    OBSERVER:         { email: 'e2e.observer@hasspetroleum.com',         full_name: 'E2E Observer',         first_name: 'E2E', last_name: 'Observer',         department: 'Compliance' },
+    EXTERNAL_AUDITOR: { email: 'e2e.external.auditor@hasspetroleum.com', full_name: 'E2E External Auditor', first_name: 'E2E', last_name: 'External Auditor', department: 'External' },
+    BOARD:            { email: 'e2e.board@hasspetroleum.com',            full_name: 'E2E Board Member',     first_name: 'E2E', last_name: 'Board Member',     department: 'Board' }
+  };
+
+  var createdTestUserIds = []; // track for cleanup
+
+  /**
+   * Create a test user directly in Firestore + Sheet if no user with
+   * the given role exists. Returns the full user object.
+   */
+  function ensureTestUser(roleCode) {
+    var def = TEST_USER_DEFS[roleCode];
+    if (!def) return null; // no def means we don't auto-create (e.g. SUPER_ADMIN)
+
+    var now = new Date();
+    var userId = generateId('USER');
+    var salt = Utilities.getUuid();
+    var hashed = hashPassword('Test1234!', salt);
+
+    var user = {
+      user_id: userId,
+      email: def.email,
+      password_hash: hashed,
+      password_salt: salt,
+      full_name: def.full_name,
+      first_name: def.first_name,
+      last_name: def.last_name,
+      role_code: roleCode,
+      affiliate_code: 'HQ',
+      department: def.department,
+      phone: '',
+      is_active: true,
+      must_change_password: false,
+      login_attempts: 0,
+      locked_until: '',
+      last_login: '',
+      created_at: now,
+      created_by: 'E2E_TEST',
+      updated_at: now,
+      updated_by: 'E2E_TEST'
+    };
+
+    // Write to Firestore
+    syncToFirestore(SHEETS.USERS, userId, user);
+
+    // Write to Sheet (so getUsersDropdown / getUserByEmail can find it)
+    var sheet = getSheet(SHEETS.USERS);
+    if (sheet) {
+      sheet.appendRow(objectToRow('USERS', user));
+    }
+
+    // Invalidate caches so the new user is visible immediately
+    invalidateSheetData(SHEETS.USERS);
+    invalidateUserCache(def.email, userId);
+    invalidateDropdownCache();
+
+    createdTestUserIds.push(userId);
+    return user;
+  }
+
+  // ── Load existing users ──
+  invalidateDropdownCache();          // fresh read
+  invalidateSheetData(SHEETS.USERS);
   var allUsers = getUsersDropdown();
   if (!allUsers || allUsers.length === 0) {
     FAIL('Users', 'No active users found'); R.push('\nABORTED'); console.log(R.join('\n')); return R.join('\n');
   }
-  PASS('Users loaded', allUsers.length + ' active users');
+  PASS('Existing users loaded', allUsers.length + ' active users');
 
-  // Find one user per role
+  // Find one user per role — or auto-create if missing
   function findUser(roleCode) {
     return allUsers.find(function(u) { return u.roleCode === roleCode; });
   }
-
-  var superAdmin = findUser('SUPER_ADMIN');
-  var seniorAuditor = findUser('SENIOR_AUDITOR');
-  var auditor = findUser('AUDITOR');
-  var juniorStaff = findUser('JUNIOR_STAFF');
-  var auditee = findUser('AUDITEE');
-  var management = findUser('MANAGEMENT');
-  var observer = findUser('OBSERVER');
-  var externalAuditor = findUser('EXTERNAL_AUDITOR');
-  var board = findUser('BOARD');
 
   // Build full user objects (service functions need user_id, full_name, role_code, email)
   function fullUser(dropdownUser) {
@@ -108,31 +168,53 @@ function runFullE2ETest() {
     };
   }
 
-  var uSuperAdmin = fullUser(superAdmin);
-  var uSeniorAuditor = fullUser(seniorAuditor);
-  var uAuditor = fullUser(auditor);
-  var uJuniorStaff = fullUser(juniorStaff);
-  var uAuditee = fullUser(auditee);
-  var uManagement = fullUser(management);
-  var uObserver = fullUser(observer);
-  var uExternalAuditor = fullUser(externalAuditor);
-  var uBoard = fullUser(board);
+  // Convert a raw user object (from ensureTestUser) to the same format as fullUser
+  function fullUserFromRaw(rawUser) {
+    return {
+      user_id: rawUser.user_id,
+      full_name: rawUser.full_name,
+      email: rawUser.email,
+      role_code: rawUser.role_code,
+      affiliate_code: rawUser.affiliate_code || ''
+    };
+  }
 
-  // Report which users we found
-  var roleNames = [
-    ['SUPER_ADMIN', uSuperAdmin], ['SENIOR_AUDITOR', uSeniorAuditor],
-    ['AUDITOR', uAuditor], ['JUNIOR_STAFF', uJuniorStaff],
-    ['AUDITEE', uAuditee], ['MANAGEMENT', uManagement],
-    ['OBSERVER', uObserver], ['EXTERNAL_AUDITOR', uExternalAuditor],
-    ['BOARD', uBoard]
-  ];
-  roleNames.forEach(function(pair) {
-    if (pair[1]) {
-      PASS(pair[0], pair[1].full_name + ' (' + pair[1].email + ')');
+  // Resolve each role: find existing or auto-create
+  var requiredRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF',
+                       'AUDITEE', 'MANAGEMENT', 'OBSERVER', 'EXTERNAL_AUDITOR', 'BOARD'];
+  var resolvedUsers = {};
+
+  requiredRoles.forEach(function(role) {
+    var found = findUser(role);
+    if (found) {
+      resolvedUsers[role] = fullUser(found);
+      PASS(role, resolvedUsers[role].full_name + ' (' + resolvedUsers[role].email + ')');
+    } else if (TEST_USER_DEFS[role]) {
+      var created = ensureTestUser(role);
+      if (created) {
+        resolvedUsers[role] = fullUserFromRaw(created);
+        PASS(role + ' (auto-created)', resolvedUsers[role].full_name + ' [' + resolvedUsers[role].user_id + ']');
+      } else {
+        WARN(role, 'Failed to auto-create');
+      }
     } else {
-      WARN(pair[0], 'No user with this role found — some tests will be skipped');
+      WARN(role, 'No user found and no auto-create definition');
     }
   });
+
+  if (createdTestUserIds.length > 0) {
+    R.push('  📝 Auto-created ' + createdTestUserIds.length + ' test user(s): ' + createdTestUserIds.join(', '));
+  }
+
+  var uSuperAdmin      = resolvedUsers['SUPER_ADMIN'];
+  var uSeniorAuditor   = resolvedUsers['SENIOR_AUDITOR'];
+  var uAuditor         = resolvedUsers['AUDITOR'];
+  var uJuniorStaff     = resolvedUsers['JUNIOR_STAFF'];
+  var uAuditee         = resolvedUsers['AUDITEE'];
+  var uManagement      = resolvedUsers['MANAGEMENT'];
+  var uObserver        = resolvedUsers['OBSERVER'];
+  var uExternalAuditor = resolvedUsers['EXTERNAL_AUDITOR'];
+  var uBoard           = resolvedUsers['BOARD'];
 
   // Must have at minimum a super admin and auditee to run
   if (!uSuperAdmin) { FAIL('ABORT', 'SUPER_ADMIN required'); console.log(R.join('\n')); return R.join('\n'); }
@@ -1067,12 +1149,41 @@ function runFullE2ETest() {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // CLEANUP: Delete test WPs (non-draft won't delete, that's fine)
+  // CLEANUP: Remove auto-created test users
   // ═══════════════════════════════════════════════════════════════
   SECTION('CLEANUP');
+
+  if (createdTestUserIds.length > 0) {
+    R.push('  Removing ' + createdTestUserIds.length + ' auto-created test user(s)...');
+    var usersSheet = getSheet(SHEETS.USERS);
+    createdTestUserIds.forEach(function(userId) {
+      try {
+        // Remove from Firestore
+        deleteFromFirestore(SHEETS.USERS, userId);
+
+        // Remove from Sheet (find row by user_id and delete)
+        if (usersSheet) {
+          var data = usersSheet.getDataRange().getValues();
+          var idIdx = data[0].indexOf('user_id');
+          for (var ri = data.length - 1; ri >= 1; ri--) {
+            if (data[ri][idIdx] === userId) {
+              usersSheet.deleteRow(ri + 1);
+              break;
+            }
+          }
+        }
+        PASS('Removed test user', userId);
+      } catch (cleanErr) {
+        WARN('Cleanup user ' + userId, cleanErr.message);
+      }
+    });
+    invalidateSheetData(SHEETS.USERS);
+    invalidateDropdownCache();
+  }
+
   R.push('  Test WPs created: ' + wpId + (escalationWpId ? ', ' + escalationWpId : ''));
   R.push('  Test APs created: ' + apId);
-  R.push('  (These are left in place for manual inspection. Run purgeAndSeedTestData to reset.)');
+  R.push('  (WPs/APs left in place for inspection. Run purgeAndSeedTestData to reset.)');
 
   // ═══════════════════════════════════════════════════════════════
   // FINAL SUMMARY
