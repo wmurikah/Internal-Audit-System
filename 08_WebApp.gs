@@ -292,6 +292,34 @@ function routeAction(action, data, user) {
     case 'hoaReview':
       return hoaReview(data.actionPlanId, data.action, data.comments, user);
       
+    // ========== AUDITEE RESPONSE WORKFLOW ==========
+    case 'getAuditeeFindings':
+      return { success: true, findings: getAuditeeFindings(data.filters, user) };
+
+    case 'getAuditeeResponseData':
+      return getAuditeeResponseData(data.workPaperId, user);
+
+    case 'saveDraftResponse':
+      return saveDraftResponse(data.workPaperId, data, user);
+
+    case 'submitAuditeeResponse':
+      return submitAuditeeResponse(data.workPaperId, data, user);
+
+    case 'reviewAuditeeResponse':
+      return reviewAuditeeResponse(data.workPaperId, data.action, data.comments, user);
+
+    case 'createAuditeeActionPlan':
+      return createAuditeeActionPlan(data, user);
+
+    case 'respondToDelegation':
+      return respondToDelegation(data.actionPlanId, data.action, data.reason, user);
+
+    case 'getAuditeeFindingCounts':
+      return { success: true, counts: getAuditeeFindingCounts(user) };
+
+    case 'getResponseHistory':
+      return { success: true, responses: getResponseHistory(data.workPaperId) };
+
     // ========== ACTION PLAN EVIDENCE ==========
     case 'addActionPlanEvidence':
       return addActionPlanEvidence(data.actionPlanId, data, user);

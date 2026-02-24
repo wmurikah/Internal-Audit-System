@@ -167,6 +167,22 @@
           </ul>
         </li>
 
+        <!-- Auditee Section -->
+        <li class="nav-item nav-section" id="navAuditeeSection">Auditee</li>
+        <li class="nav-item nav-has-submenu" id="navAuditeeMenu">
+          <a href="#" class="nav-link nav-submenu-toggle" onclick="toggleSubmenu(event, 'auditeeSubmenu')">
+            <i class="bi bi-clipboard-check"></i>
+            <span>My Findings</span>
+            <i class="bi bi-chevron-down submenu-icon rotate"></i>
+          </a>
+          <ul class="nav-submenu show" id="auditeeSubmenu">
+            <li><a href="#auditee-findings" class="nav-link" data-page="auditee-findings" onclick="navigateTo('auditee-findings')">
+              <i class="bi bi-list-ul"></i><span>All Findings</span>
+              <span class="badge bg-warning text-dark ms-auto" id="auditeeNewFindingCount" style="display:none;">0</span>
+            </a></li>
+          </ul>
+        </li>
+
         <!-- Insights Section -->
         <li class="nav-item nav-section" id="navInsightsSection">Insights</li>
         <li class="nav-item" id="navAnalytics">
@@ -306,6 +322,16 @@
         <!-- Action Plan View Page -->
         <div class="page" id="page-action-plan-view" style="display:none;">
           <?!= include('Actionplanview'); ?>
+        </div>
+
+        <!-- Auditee Findings List Page -->
+        <div class="page" id="page-auditee-findings" style="display:none;">
+          <?!= include('AuditeeFindings'); ?>
+        </div>
+
+        <!-- Auditee Response Page -->
+        <div class="page" id="page-auditee-response" style="display:none;">
+          <?!= include('AuditeeResponse'); ?>
         </div>
 
         <!-- Dashboard Page (default landing) -->
@@ -462,12 +488,17 @@
     const wpPages = ['work-papers', 'work-papers-mine', 'work-papers-pending', 'work-paper-form', 'work-paper-view'];
     const apPages = ['action-plans', 'action-plans-mine', 'action-plans-overdue', 'action-plan-view'];
 
+    const auditeePages = ['auditee-findings', 'auditee-response'];
+
     if (wpPages.includes(page)) {
       document.getElementById('wpSubmenu')?.classList.add('show');
       document.querySelector('[onclick*="wpSubmenu"] .submenu-icon')?.classList.add('rotate');
     } else if (apPages.includes(page)) {
       document.getElementById('apSubmenu')?.classList.add('show');
       document.querySelector('[onclick*="apSubmenu"] .submenu-icon')?.classList.add('rotate');
+    } else if (auditeePages.includes(page)) {
+      document.getElementById('auditeeSubmenu')?.classList.add('show');
+      document.querySelector('[onclick*="auditeeSubmenu"] .submenu-icon')?.classList.add('rotate');
     }
   }
 

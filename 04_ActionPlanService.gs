@@ -78,9 +78,12 @@ function createActionPlan(data, user) {
     created_at: now,
     created_by: user.user_id,
     updated_at: now,
-    updated_by: user.user_id
+    updated_by: user.user_id,
+    created_by_role: user.role_code || '',
+    auditee_proposed: false,
+    response_id: data.response_id || ''
   };
-  
+
   // Firestore is the primary write
   syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, actionPlan);
   invalidateSheetData(SHEETS.ACTION_PLANS);
@@ -195,7 +198,10 @@ function createActionPlansBatch(workPaperId, plansData, user) {
       created_at: now,
       created_by: user.user_id,
       updated_at: now,
-      updated_by: user.user_id
+      updated_by: user.user_id,
+      created_by_role: user.role_code || '',
+      auditee_proposed: data.auditee_proposed || false,
+      response_id: data.response_id || ''
     };
 
     rows.push(objectToRow('ACTION_PLANS', actionPlan));

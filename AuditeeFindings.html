@@ -1,0 +1,256 @@
+<!-- Auditee Findings List Page (My Findings) -->
+<div class="auditee-findings-list">
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4" id="findingSummaryCards">
+    <div class="col-md-2">
+      <div class="card border-0 shadow-sm h-100" onclick="filterFindingsByStatus('')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-primary" id="findingCountTotal">0</div>
+          <small class="text-muted">Total Findings</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-0 shadow-sm h-100" onclick="filterFindingsByStatus('Pending Response')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-warning" id="findingCountPending">0</div>
+          <small class="text-muted">Pending Response</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-0 shadow-sm h-100" onclick="filterFindingsByStatus('Draft Response')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-info" id="findingCountDraft">0</div>
+          <small class="text-muted">Draft</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-0 shadow-sm h-100" onclick="filterFindingsByStatus('Response Submitted')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-primary" id="findingCountSubmitted">0</div>
+          <small class="text-muted">Submitted</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-0 shadow-sm h-100" onclick="filterFindingsByStatus('Response Accepted')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-success" id="findingCountAccepted">0</div>
+          <small class="text-muted">Accepted</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-0 shadow-sm h-100" onclick="filterFindingsByStatus('Response Rejected')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-danger" id="findingCountRejected">0</div>
+          <small class="text-muted">Rejected</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar mb-3">
+    <div class="input-group" style="max-width: 300px;">
+      <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+      <input type="text" class="form-control" id="findingSearchInput" placeholder="Search findings..."
+             onkeyup="debounceSearch(filterAuditeeFindings)">
+    </div>
+
+    <select class="form-select" id="findingFilterStatus" onchange="filterAuditeeFindings()" style="max-width:200px;">
+      <option value="">All Status</option>
+      <option value="Pending Response">Pending Response</option>
+      <option value="Draft Response">Draft</option>
+      <option value="Response Submitted">Submitted</option>
+      <option value="Response Accepted">Accepted</option>
+      <option value="Response Rejected">Rejected</option>
+      <option value="Escalated">Escalated</option>
+    </select>
+
+    <select class="form-select" id="findingFilterRisk" onchange="filterAuditeeFindings()" style="max-width:180px;">
+      <option value="">All Risk Levels</option>
+      <option value="Extreme">Extreme</option>
+      <option value="High">High</option>
+      <option value="Medium">Medium</option>
+      <option value="Low">Low</option>
+    </select>
+
+    <div class="ms-auto">
+      <span class="text-muted small" id="findingResultCount"></span>
+    </div>
+  </div>
+
+  <!-- Findings Table -->
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="findingsTable">
+        <thead class="table-light">
+          <tr>
+            <th style="width:60px;">#</th>
+            <th>Finding</th>
+            <th style="width:100px;">Risk</th>
+            <th style="width:140px;">Response Status</th>
+            <th style="width:120px;">Deadline</th>
+            <th style="width:80px;">Round</th>
+            <th style="width:90px;">Actions</th>
+            <th style="width:90px;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="findingsTableBody">
+          <tr><td colspan="8" class="text-center py-4 text-muted">Loading findings...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+var _auditeeFindings = [];
+var _filteredFindings = [];
+
+function loadAuditeeFindings() {
+  var tbody = document.getElementById('findingsTableBody');
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div> Loading your findings...</td></tr>';
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) {
+        _auditeeFindings = result.findings || [];
+      } else {
+        _auditeeFindings = result || [];
+      }
+      _filteredFindings = _auditeeFindings;
+      updateFindingSummary();
+      renderFindingsTable();
+    })
+    .withFailureHandler(function(err) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + err.message + '</td></tr>';
+    })
+    .apiCall('getAuditeeFindings', { filters: {} });
+}
+
+function updateFindingSummary() {
+  var counts = { total: 0, pending: 0, draft: 0, submitted: 0, accepted: 0, rejected: 0 };
+  _auditeeFindings.forEach(function(f) {
+    counts.total++;
+    var rs = f.response_status || 'Pending Response';
+    if (rs === 'Pending Response') counts.pending++;
+    else if (rs === 'Draft Response') counts.draft++;
+    else if (rs === 'Response Submitted') counts.submitted++;
+    else if (rs === 'Response Accepted') counts.accepted++;
+    else if (rs === 'Response Rejected') counts.rejected++;
+  });
+  document.getElementById('findingCountTotal').textContent = counts.total;
+  document.getElementById('findingCountPending').textContent = counts.pending;
+  document.getElementById('findingCountDraft').textContent = counts.draft;
+  document.getElementById('findingCountSubmitted').textContent = counts.submitted;
+  document.getElementById('findingCountAccepted').textContent = counts.accepted;
+  document.getElementById('findingCountRejected').textContent = counts.rejected;
+}
+
+function filterFindingsByStatus(status) {
+  document.getElementById('findingFilterStatus').value = status;
+  filterAuditeeFindings();
+}
+
+function filterAuditeeFindings() {
+  var search = (document.getElementById('findingSearchInput').value || '').toLowerCase();
+  var statusFilter = document.getElementById('findingFilterStatus').value;
+  var riskFilter = document.getElementById('findingFilterRisk').value;
+
+  _filteredFindings = _auditeeFindings.filter(function(f) {
+    if (statusFilter && f.response_status !== statusFilter) return false;
+    if (riskFilter && f.risk_rating !== riskFilter) return false;
+    if (search) {
+      var title = (f.observation_title || '').toLowerCase();
+      var desc = (f.observation_description || '').toLowerCase();
+      if (!title.includes(search) && !desc.includes(search)) return false;
+    }
+    return true;
+  });
+
+  renderFindingsTable();
+}
+
+function renderFindingsTable() {
+  var tbody = document.getElementById('findingsTableBody');
+  document.getElementById('findingResultCount').textContent = _filteredFindings.length + ' of ' + _auditeeFindings.length + ' findings';
+
+  if (_filteredFindings.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-inbox me-2"></i>No findings found</td></tr>';
+    return;
+  }
+
+  var html = '';
+  _filteredFindings.forEach(function(f, idx) {
+    var riskBadge = getRiskBadgeHtml(f.risk_rating);
+    var statusBadge = getResponseStatusBadge(f.response_status || 'Pending Response');
+    var deadline = f.response_deadline ? formatDate(f.response_deadline) : '-';
+    var deadlineClass = f.deadline_passed ? 'text-danger fw-bold' : '';
+    var round = (f.response_round || 0) + ' / 3';
+    var actionBtn = '';
+
+    var rs = f.response_status || 'Pending Response';
+    if (rs === 'Pending Response' || rs === 'Draft Response' || rs === 'Response Rejected') {
+      actionBtn = '<button class="btn btn-sm btn-primary" onclick="navigateTo(\'auditee-response\', {id:\'' + f.work_paper_id + '\'})">' +
+        '<i class="bi bi-reply me-1"></i>Respond</button>';
+    } else {
+      actionBtn = '<button class="btn btn-sm btn-outline-secondary" onclick="navigateTo(\'auditee-response\', {id:\'' + f.work_paper_id + '\'})">' +
+        '<i class="bi bi-eye me-1"></i>View</button>';
+    }
+
+    html += '<tr>' +
+      '<td>' + (idx + 1) + '</td>' +
+      '<td>' +
+        '<div class="fw-semibold text-truncate" style="max-width:350px;" title="' + escapeHtml(f.observation_title || '') + '">' + escapeHtml(f.observation_title || 'Untitled') + '</div>' +
+        '<small class="text-muted">' + escapeHtml(f.work_paper_ref || f.work_paper_id) + '</small>' +
+      '</td>' +
+      '<td>' + riskBadge + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td class="' + deadlineClass + '">' + deadline + (f.deadline_passed ? ' <i class="bi bi-exclamation-circle"></i>' : '') + '</td>' +
+      '<td>' + round + '</td>' +
+      '<td>' + (f.action_plan_count || 0) + ' plan(s)</td>' +
+      '<td>' + actionBtn + '</td>' +
+    '</tr>';
+  });
+
+  tbody.innerHTML = html;
+}
+
+function getResponseStatusBadge(status) {
+  var map = {
+    'Pending Response': 'bg-warning text-dark',
+    'Draft Response': 'bg-info text-dark',
+    'Response Submitted': 'bg-primary',
+    'Response Accepted': 'bg-success',
+    'Response Rejected': 'bg-danger',
+    'Escalated': 'bg-dark'
+  };
+  var cls = map[status] || 'bg-secondary';
+  var label = status.replace('Response ', '');
+  return '<span class="badge ' + cls + '">' + label + '</span>';
+}
+
+function getRiskBadgeHtml(rating) {
+  var map = { 'Extreme': 'bg-danger', 'High': 'bg-warning text-dark', 'Medium': 'bg-info text-dark', 'Low': 'bg-success' };
+  var cls = map[rating] || 'bg-secondary';
+  return '<span class="badge ' + cls + '">' + (rating || 'N/A') + '</span>';
+}
+
+function formatDate(d) {
+  if (!d) return '-';
+  try {
+    var dt = new Date(d);
+    return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch(e) { return String(d); }
+}
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
