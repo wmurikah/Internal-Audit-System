@@ -732,24 +732,27 @@ function recoverWorkPapersFromSheet() {
   var migrated = migrateSheetToFirestore(SHEETS.WORK_PAPERS);
   report.push('✅ Migrated ' + migrated + ' doc(s) from Sheet → Firestore');
 
-  // ── STEP 3: Apply response fields to Sent to Auditee WPs ──
-  report.push('\n── STEP 3: APPLY RESPONSE FIELDS (SAFE PARTIAL UPDATE) ──');
+  // ── STEP 3: Backfill response fields on ALL WPs ──
+  // The Sheet header may predate the response columns, so the migration
+  // won't include them.  We use firestoreUpdate (partial) to add them
+  // without touching any existing fields.
+  report.push('\n── STEP 3: BACKFILL RESPONSE FIELDS ON ALL WPs ──');
   var allWPs = firestoreGetAll(SHEETS.WORK_PAPERS);
-  var fixed = 0;
+  var fixedAuditee = 0;
+  var fixedOther = 0;
 
   if (allWPs && allWPs.length > 0) {
     allWPs.forEach(function(wp) {
-      if (wp.status === STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
-        var wpId = wp.work_paper_id;
-        if (!wpId) return;
+      var wpId = wp.work_paper_id;
+      if (!wpId) return;
 
-        // Calculate deadline from sent_to_auditee_date
+      if (wp.status === STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+        // Sent to Auditee → set real response tracking values
         var deadlineDays = (typeof RESPONSE_DEFAULTS !== 'undefined' && RESPONSE_DEFAULTS.DEADLINE_DAYS)
           ? RESPONSE_DEFAULTS.DEADLINE_DAYS : 14;
         var sentDate = wp.sent_to_auditee_date ? new Date(wp.sent_to_auditee_date) : new Date();
         var responseDeadline = new Date(sentDate.getTime() + deadlineDays * 24 * 60 * 60 * 1000);
 
-        // Use firestoreUpdate (partial) — NOT firestoreSet (full replace)
         firestoreUpdate(SHEETS.WORK_PAPERS, wpId, {
           response_status: STATUS.RESPONSE.PENDING,
           response_deadline: responseDeadline,
@@ -762,12 +765,28 @@ function recoverWorkPapersFromSheet() {
         });
 
         var deadlineStr = responseDeadline.toISOString().split('T')[0];
-        report.push('  ✅ ' + wpId + ': response_status="Pending Response", deadline=' + deadlineStr);
-        fixed++;
+        report.push('  ✅ ' + wpId + ' (Sent to Auditee): response_status="Pending Response", deadline=' + deadlineStr);
+        fixedAuditee++;
+      } else {
+        // All other statuses → backfill empty defaults so schema is complete
+        firestoreUpdate(SHEETS.WORK_PAPERS, wpId, {
+          response_status: '',
+          response_deadline: '',
+          response_round: 0,
+          response_submitted_by: '',
+          response_submitted_date: '',
+          response_reviewed_by: '',
+          response_review_date: '',
+          response_review_comments: ''
+        });
+
+        report.push('  ✅ ' + wpId + ' (' + (wp.status || 'Draft') + '): backfilled empty response defaults');
+        fixedOther++;
       }
     });
   }
-  report.push('✅ Applied response fields to ' + fixed + ' Sent to Auditee WP(s)');
+  report.push('✅ Auditee WPs with response tracking: ' + fixedAuditee);
+  report.push('✅ Other WPs backfilled with empty defaults: ' + fixedOther);
 
   // ── STEP 4: Invalidate caches ──
   report.push('\n── STEP 4: INVALIDATE CACHES ──');
@@ -831,7 +850,7 @@ function recoverWorkPapersFromSheet() {
   } else {
     report.push('  ⚠️ RECOVERY DONE — Check warnings above');
   }
-  report.push('  Purged: ' + purged + ' | Migrated: ' + migrated + ' | Response fields: ' + fixed);
+  report.push('  Purged: ' + purged + ' | Migrated: ' + migrated + ' | Auditee: ' + fixedAuditee + ' | Backfilled: ' + fixedOther);
   report.push('═══════════════════════════════════════════════════');
 
   var output = report.join('\n');
