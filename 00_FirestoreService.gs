@@ -402,6 +402,8 @@ function firestoreQuery(sheetName, field, op, value) {
 
 /**
  * Write a single document (create or overwrite).
+ * ⚠️  This REPLACES the entire document.  If you only need to change a few
+ *     fields on an existing document, use firestoreUpdate() instead.
  * @param {string} sheetName - The sheet tab name
  * @param {string} docId - Document ID
  * @param {Object} data - Plain JS object to store
@@ -412,6 +414,34 @@ function firestoreSet(sheetName, docId, data) {
   var collection = getFirestoreCollection_(sheetName);
   var payload = { fields: objectToFirestoreFields_(data) };
   firestoreRequest_('patch', collection + '/' + encodeURIComponent(docId), payload);
+}
+
+/**
+ * Partial update: modifies ONLY the specified fields, leaving all others intact.
+ * Uses Firestore updateMask so existing fields are never deleted.
+ *
+ * Use this instead of firestoreSet() when you want to add/change a few fields
+ * on an existing document without reading the full document first.
+ *
+ * @param {string} sheetName - Sheet tab name (e.g., SHEETS.WORK_PAPERS)
+ * @param {string} docId - Document ID (primary key value)
+ * @param {Object} fields - Key-value pairs to update (only these fields are touched)
+ */
+function firestoreUpdate(sheetName, docId, fields) {
+  if (!isFirestoreEnabled()) return;
+
+  var collection = getFirestoreCollection_(sheetName);
+  var fieldNames = Object.keys(fields);
+  if (fieldNames.length === 0) return;
+
+  // Build updateMask query string — tells Firestore to only touch these fields
+  var maskParams = fieldNames.map(function(f) {
+    return 'updateMask.fieldPaths=' + encodeURIComponent(f);
+  }).join('&');
+
+  var docPath = collection + '/' + encodeURIComponent(docId) + '?' + maskParams;
+  var payload = { fields: objectToFirestoreFields_(fields) };
+  firestoreRequest_('patch', docPath, payload);
 }
 
 /**
@@ -659,6 +689,154 @@ function verifyFirestoreMigration() {
   var summary = 'Verification:\n' + report.join('\n');
   console.log(summary);
   return summary;
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// Recovery: Restore Firestore from Sheet backup
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * RECOVERY: Restore work_papers Firestore collection from the Sheet backup.
+ *
+ * Use this when Firestore work paper documents have been corrupted
+ * (e.g. by a partial firestoreSet that replaced full docs with only a few fields).
+ *
+ * Steps:
+ *   1. Purge all docs from the Firestore work_papers collection
+ *   2. Re-migrate the full data from the 09_WorkPapers Sheet
+ *   3. Safely apply response tracking fields to "Sent to Auditee" WPs
+ *      using firestoreUpdate (partial update with updateMask)
+ *   4. Invalidate caches
+ *
+ * RUN: Script Editor → Run → recoverWorkPapersFromSheet
+ */
+function recoverWorkPapersFromSheet() {
+  if (!isFirestoreEnabled()) {
+    throw new Error('Firestore not configured');
+  }
+
+  var report = [];
+  report.push('═══════════════════════════════════════════════════');
+  report.push('  WORK PAPERS RECOVERY');
+  report.push('  Run: ' + new Date().toLocaleString());
+  report.push('═══════════════════════════════════════════════════');
+
+  // ── STEP 1: Purge corrupted Firestore collection ──
+  report.push('\n── STEP 1: PURGE CORRUPTED FIRESTORE DOCS ──');
+  var purged = purgeFirestoreCollection(SHEETS.WORK_PAPERS);
+  report.push('✅ Purged ' + purged + ' corrupted doc(s) from Firestore');
+
+  // ── STEP 2: Re-migrate from Sheet ──
+  report.push('\n── STEP 2: RE-MIGRATE FROM SHEET ──');
+  var migrated = migrateSheetToFirestore(SHEETS.WORK_PAPERS);
+  report.push('✅ Migrated ' + migrated + ' doc(s) from Sheet → Firestore');
+
+  // ── STEP 3: Apply response fields to Sent to Auditee WPs ──
+  report.push('\n── STEP 3: APPLY RESPONSE FIELDS (SAFE PARTIAL UPDATE) ──');
+  var allWPs = firestoreGetAll(SHEETS.WORK_PAPERS);
+  var fixed = 0;
+
+  if (allWPs && allWPs.length > 0) {
+    allWPs.forEach(function(wp) {
+      if (wp.status === STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+        var wpId = wp.work_paper_id;
+        if (!wpId) return;
+
+        // Calculate deadline from sent_to_auditee_date
+        var deadlineDays = (typeof RESPONSE_DEFAULTS !== 'undefined' && RESPONSE_DEFAULTS.DEADLINE_DAYS)
+          ? RESPONSE_DEFAULTS.DEADLINE_DAYS : 14;
+        var sentDate = wp.sent_to_auditee_date ? new Date(wp.sent_to_auditee_date) : new Date();
+        var responseDeadline = new Date(sentDate.getTime() + deadlineDays * 24 * 60 * 60 * 1000);
+
+        // Use firestoreUpdate (partial) — NOT firestoreSet (full replace)
+        firestoreUpdate(SHEETS.WORK_PAPERS, wpId, {
+          response_status: STATUS.RESPONSE.PENDING,
+          response_deadline: responseDeadline,
+          response_round: 0,
+          response_submitted_by: '',
+          response_submitted_date: '',
+          response_reviewed_by: '',
+          response_review_date: '',
+          response_review_comments: ''
+        });
+
+        var deadlineStr = responseDeadline.toISOString().split('T')[0];
+        report.push('  ✅ ' + wpId + ': response_status="Pending Response", deadline=' + deadlineStr);
+        fixed++;
+      }
+    });
+  }
+  report.push('✅ Applied response fields to ' + fixed + ' Sent to Auditee WP(s)');
+
+  // ── STEP 4: Invalidate caches ──
+  report.push('\n── STEP 4: INVALIDATE CACHES ──');
+  invalidateSheetData(SHEETS.WORK_PAPERS);
+  try { CacheService.getScriptCache().remove('sidebar_counts_all'); } catch (e) {}
+  report.push('✅ Caches invalidated');
+
+  // ── STEP 5: Verify ──
+  report.push('\n── STEP 5: VERIFY ──');
+  var verifyWPs = firestoreGetAll(SHEETS.WORK_PAPERS);
+  var totalDocs = verifyWPs ? verifyWPs.length : 0;
+  report.push('  Total Firestore docs: ' + totalDocs);
+
+  var schemaFields = SCHEMAS.WORK_PAPERS;
+  var allGood = true;
+
+  if (verifyWPs) {
+    // Status breakdown
+    var statusBreakdown = {};
+    var responseBreakdown = {};
+    var incomplete = [];
+
+    verifyWPs.forEach(function(wp) {
+      var wpId = wp.work_paper_id || '(unknown)';
+      var s = wp.status || '(empty)';
+      statusBreakdown[s] = (statusBreakdown[s] || 0) + 1;
+
+      var rs = wp.response_status || '(not set)';
+      responseBreakdown[rs] = (responseBreakdown[rs] || 0) + 1;
+
+      // Check schema completeness
+      var missing = schemaFields.filter(function(f) { return !(f in wp); });
+      if (missing.length > 0) {
+        incomplete.push(wpId + ' missing ' + missing.length + ' fields');
+        allGood = false;
+      }
+    });
+
+    report.push('\n  WP status breakdown:');
+    Object.keys(statusBreakdown).forEach(function(s) {
+      report.push('    ' + s + ': ' + statusBreakdown[s]);
+    });
+
+    report.push('\n  Response status breakdown:');
+    Object.keys(responseBreakdown).forEach(function(rs) {
+      report.push('    ' + rs + ': ' + responseBreakdown[rs]);
+    });
+
+    if (incomplete.length > 0) {
+      report.push('\n  ⚠️ WPs with missing schema fields:');
+      incomplete.forEach(function(msg) { report.push('    ' + msg); });
+    } else {
+      report.push('\n  ✅ All ' + totalDocs + ' WPs have all ' + schemaFields.length + ' schema fields');
+    }
+  }
+
+  // ── DONE ──
+  report.push('\n═══════════════════════════════════════════════════');
+  if (allGood && totalDocs === migrated) {
+    report.push('  🎉 RECOVERY COMPLETE — All ' + totalDocs + ' work papers restored');
+  } else {
+    report.push('  ⚠️ RECOVERY DONE — Check warnings above');
+  }
+  report.push('  Purged: ' + purged + ' | Migrated: ' + migrated + ' | Response fields: ' + fixed);
+  report.push('═══════════════════════════════════════════════════');
+
+  var output = report.join('\n');
+  console.log(output);
+  return output;
 }
 
 
