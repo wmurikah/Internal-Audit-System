@@ -291,8 +291,8 @@
         </div>
         <div class="card-body">
           <p class="text-muted small mb-3">
-            Enter comma-separated email addresses to receive the biweekly audit summary report.
-            If left empty, the system sends to all Super Admins, Management, Senior Management, and Senior Auditors by default.
+            Select internal users for bulk summary notifications. Manual/custom email mapping is disabled.
+            If left empty, the system sends to all Super Admins, Management, Senior Management, and Auditors by default.
           </p>
           <div class="row g-3 align-items-end">
             <div class="col-md-9">
@@ -1290,18 +1290,12 @@ function setupSummaryRecipientsAutocomplete() {
       return (nameMatch || emailMatch) && !alreadySelected;
     }).slice(0, 10);
 
-    // Allow custom email entry
-    if (query.includes('@') && !filtered.some(f => f.email === query)) {
-      filtered.push({ id: 'custom_' + Date.now(), email: query, name: query, isCustom: true });
-    }
-
     if (filtered.length === 0) { suggestionsDiv.style.display = 'none'; return; }
 
     suggestionsDiv.innerHTML = filtered.map((s, i) =>
       '<div class="autocomplete-suggestion" data-index="' + i + '">' +
       '<div class="suggestion-name">' + escapeHtml(s.name || s.email) + '</div>' +
-      (!s.isCustom && s.email ? '<div class="suggestion-email">' + escapeHtml(s.email) + '</div>' : '') +
-      (s.isCustom ? '<div class="suggestion-email"><em>Add as custom email</em></div>' : '') +
+      (s.email ? '<div class="suggestion-email">' + escapeHtml(s.email) + '</div>' : '') +
       '</div>'
     ).join('');
 
