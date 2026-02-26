@@ -631,7 +631,7 @@ function renderRiskPieChart(canvasId, rd) {
           font: { size: 11, weight: '600' },
           anchor: 'end',
           align: 'end',
-          offset: 16,
+          offset: 18,
           clamp: true,
           formatter: function(value, context) {
             return context.chart.data.labels[context.dataIndex] + ': ' + value;
@@ -666,7 +666,7 @@ function renderAPStatusChart(canvasId, dist) {
           font: { size: 11, weight: '600' },
           anchor: 'end',
           align: 'end',
-          offset: 16,
+          offset: 18,
           clamp: true,
           formatter: function(value, context) {
             return labels[context.dataIndex] + ': ' + value;
@@ -825,7 +825,7 @@ function renderAgingChart(canvasId, ag) {
           font: { size: 11, weight: '600' },
           anchor: 'end',
           align: 'end',
-          offset: 16,
+          offset: 18,
           clamp: true,
           formatter: function(value, context) {
             return agingLabels[context.dataIndex] + ': ' + value;
