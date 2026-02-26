@@ -78,25 +78,6 @@
             <span id="arRoundBadge" class="badge bg-secondary"></span>
           </div>
           <div class="card-body">
-            <!-- Response Type -->
-            <div class="mb-3" id="arResponseTypeGroup">
-              <label class="form-label fw-semibold">Response Type <span class="text-danger">*</span></label>
-              <div class="d-flex gap-2">
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="arResponseType" id="arTypeAgree" value="Agree">
-                  <label class="form-check-label" for="arTypeAgree">Agree</label>
-                </div>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="arResponseType" id="arTypePartial" value="Partially Agree">
-                  <label class="form-check-label" for="arTypePartial">Partially Agree</label>
-                </div>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="arResponseType" id="arTypeDisagree" value="Disagree">
-                  <label class="form-check-label" for="arTypeDisagree">Disagree</label>
-                </div>
-              </div>
-            </div>
-
             <!-- Management Response Text -->
             <div class="mb-3" id="arResponseTextGroup">
               <label class="form-label fw-semibold">Management Response <span class="text-danger">*</span></label>
@@ -110,10 +91,6 @@
 
             <!-- Read-only view for non-editable states -->
             <div id="arResponseReadOnly" style="display:none;">
-              <div class="mb-3">
-                <label class="form-label fw-semibold text-muted small">Response Type</label>
-                <div id="arResponseTypeDisplay" class="fw-semibold"></div>
-              </div>
               <div class="mb-3">
                 <label class="form-label fw-semibold text-muted small">Management Response</label>
                 <div id="arResponseTextDisplay" class="border rounded p-3 bg-light" style="white-space:pre-wrap;"></div>
@@ -330,7 +307,6 @@ function renderAuditeeResponse() {
 
   if (canEdit && editableStatuses.indexOf(responseStatus) >= 0) {
     // Editable mode
-    document.getElementById('arResponseTypeGroup').style.display = 'block';
     document.getElementById('arResponseTextGroup').style.display = 'block';
     document.getElementById('arResponseReadOnly').style.display = 'none';
     document.getElementById('arResponseActions').style.display = 'flex';
@@ -348,7 +324,6 @@ function renderAuditeeResponse() {
     }
   } else if (isSuperAdmin) {
     // SUPER_ADMIN can always edit
-    document.getElementById('arResponseTypeGroup').style.display = 'block';
     document.getElementById('arResponseTextGroup').style.display = 'block';
     document.getElementById('arResponseReadOnly').style.display = 'none';
     document.getElementById('arResponseActions').style.display = 'flex';
@@ -358,7 +333,6 @@ function renderAuditeeResponse() {
     updateCharCount();
   } else {
     // Read-only mode
-    document.getElementById('arResponseTypeGroup').style.display = 'none';
     document.getElementById('arResponseTextGroup').style.display = 'none';
     document.getElementById('arResponseReadOnly').style.display = 'block';
     document.getElementById('arResponseActions').style.display = 'none';
@@ -366,7 +340,6 @@ function renderAuditeeResponse() {
 
     // Show response details
     var latestResponse = (_arData.responses && _arData.responses.length > 0) ? _arData.responses[0] : null;
-    document.getElementById('arResponseTypeDisplay').textContent = latestResponse ? latestResponse.response_type : '-';
     document.getElementById('arResponseTextDisplay').textContent = f.management_response || 'No response submitted yet';
 
     // Show auditor review buttons if applicable
@@ -450,7 +423,7 @@ function renderResponseHistory(responses) {
     var statusCls = r.status === 'Approved' ? 'success' : r.status === 'Rejected' ? 'danger' : 'secondary';
     html += '<div class="border-start border-3 border-' + statusCls + ' ps-3 mb-3">' +
       '<div class="d-flex justify-content-between">' +
-        '<strong>Round ' + (r.round_number || '?') + ' - ' + (r.response_type || '-') + '</strong>' +
+        '<strong>Round ' + (r.round_number || '?') + '</strong>' +
         '<span class="badge bg-' + statusCls + '">' + (r.status || 'Pending') + '</span>' +
       '</div>' +
       '<div class="small text-muted">Submitted by ' + escapeHtmlAr(r.submitted_by_name || '-') + ' on ' + formatDateAr(r.submitted_date) + '</div>' +
@@ -496,12 +469,6 @@ function saveDraftResponseForm() {
 }
 
 function submitResponseForm() {
-  var responseType = document.querySelector('input[name="arResponseType"]:checked');
-  if (!responseType) {
-    showToast('Please select a response type (Agree / Partially Agree / Disagree)', 'warning');
-    return;
-  }
-
   var mgmtResponse = document.getElementById('arManagementResponse').value;
   if (!mgmtResponse || mgmtResponse.trim().length < 10) {
     showToast('Management response must be at least 10 characters', 'warning');
@@ -536,7 +503,6 @@ function submitResponseForm() {
     })
     .apiCall('submitAuditeeResponse', {
       workPaperId: _arWorkPaperId,
-      response_type: responseType.value,
       management_response: mgmtResponse,
       action_plan_ids: apIds
     });
