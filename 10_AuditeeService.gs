@@ -11,8 +11,6 @@ var RESPONSE_DEFAULTS = {
   MAX_ROUNDS: 3
 };
 
-var RESPONSE_TYPES = ['Agree', 'Partially Agree', 'Disagree'];
-
 // ─────────────────────────────────────────────────────────────
 // My Findings — list all findings assigned to this auditee
 // ─────────────────────────────────────────────────────────────
@@ -239,12 +237,6 @@ function submitAuditeeResponse(workPaperId, data, user) {
     throw new Error('Response cannot be submitted in current status: ' + currentStatus);
   }
 
-  // Validate response type
-  var responseType = data.response_type || '';
-  if (RESPONSE_TYPES.indexOf(responseType) === -1) {
-    throw new Error('Invalid response type. Must be one of: ' + RESPONSE_TYPES.join(', '));
-  }
-
   // Validate management response text
   var mgmtResponse = sanitizeInput(data.management_response || '');
   if (!mgmtResponse || mgmtResponse.trim().length < 10) {
@@ -271,7 +263,7 @@ function submitAuditeeResponse(workPaperId, data, user) {
     response_id: responseId,
     work_paper_id: workPaperId,
     round_number: currentRound,
-    response_type: responseType,
+    response_type: '',
     management_response: mgmtResponse,
     submitted_by_id: user.user_id,
     submitted_by_name: user.full_name || '',
@@ -334,7 +326,7 @@ function submitAuditeeResponse(workPaperId, data, user) {
 
   // Add work paper revision
   addWorkPaperRevision(workPaperId, 'Response Submitted',
-    'Auditee response submitted (Round ' + currentRound + '): ' + responseType, user);
+    'Auditee response submitted (Round ' + currentRound + ').', user);
 
   // Queue notification to auditors
   queueResponseSubmittedNotification(workPaperId, updatedWp, responseRecord, user);
@@ -685,7 +677,6 @@ function queueResponseSubmittedNotification(workPaperId, workPaper, response, su
     var headers = ['Field', 'Details'];
     var rows = [
       ['Finding', String(workPaper.observation_title || '-')],
-      ['Response Type', String(response.response_type || '-')],
       ['Round', String(response.round_number || 1)],
       ['Risk Rating', String(workPaper.risk_rating || '-')],
       ['Submitted By', String(submitter.full_name || '-')],

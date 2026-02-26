@@ -1107,6 +1107,19 @@ function sendBiweeklySummary() {
  * Get configured summary report recipients.
  * Reads from system config SUMMARY_RECIPIENTS; falls back to role-based lookup.
  */
+
+function getNotificationBulkRoles_() {
+  return [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR, ROLES.MANAGEMENT, ROLES.SENIOR_MGMT];
+}
+
+function getAllowedNotificationRecipientEmails_() {
+  var allowedRoles = getNotificationBulkRoles_();
+  var users = getUsersDropdown().filter(function(u) {
+    return allowedRoles.indexOf(u.roleCode) >= 0;
+  });
+  return users.map(function(u) { return String(u.email || '').toLowerCase().trim(); }).filter(Boolean);
+}
+
 function getConfiguredSummaryRecipients() {
   try {
     var props = PropertiesService.getScriptProperties();
@@ -1119,9 +1132,9 @@ function getConfiguredSummaryRecipients() {
     console.warn('Error reading SUMMARY_RECIPIENTS:', e);
   }
 
-  // Fallback: Super Admin + Management + Senior Mgmt + Auditors
+  // Fallback: eligible notification roles
   var recipients = getUsersDropdown().filter(function(u) {
-    return [ROLES.SUPER_ADMIN, ROLES.MANAGEMENT, ROLES.SENIOR_MGMT, ROLES.SENIOR_AUDITOR].includes(u.roleCode);
+    return getNotificationBulkRoles_().indexOf(u.roleCode) >= 0;
   });
   return recipients.map(function(u) { return u.email; }).filter(Boolean);
 }
@@ -1133,9 +1146,19 @@ function saveSummaryRecipients(emailsString, user) {
   if (!user || (user.role_code !== ROLES.SUPER_ADMIN)) {
     return { success: false, error: 'Only Super Admin can configure summary recipients' };
   }
+  var cleaned = String(emailsString || '').split(',').map(function(e) { return e.trim().toLowerCase(); }).filter(Boolean);
+  var unique = [];
+  cleaned.forEach(function(e) { if (unique.indexOf(e) === -1) unique.push(e); });
+
+  var allowedEmails = getAllowedNotificationRecipientEmails_();
+  var invalid = unique.filter(function(email) { return allowedEmails.indexOf(email) === -1; });
+  if (invalid.length > 0) {
+    return { success: false, error: 'Only existing Admin/Auditor/Management users can be selected. Invalid: ' + invalid.join(', ') };
+  }
+
   var props = PropertiesService.getScriptProperties();
-  props.setProperty('SUMMARY_RECIPIENTS', String(emailsString || '').trim());
-  logAuditEvent('SET_SUMMARY_RECIPIENTS', 'CONFIG', 'NOTIFICATION', null, { recipients: emailsString }, user.user_id, user.email);
+  props.setProperty('SUMMARY_RECIPIENTS', unique.join(', '));
+  logAuditEvent('SET_SUMMARY_RECIPIENTS', 'CONFIG', 'NOTIFICATION', null, { recipients: unique.join(', ') }, user.user_id, user.email);
   return { success: true };
 }
 
