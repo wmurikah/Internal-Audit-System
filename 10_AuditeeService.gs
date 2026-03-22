@@ -279,15 +279,7 @@ function submitAuditeeResponse(workPaperId, data, user) {
   };
 
   syncToFirestore(SHEETS.AUDITEE_RESPONSES, responseId, responseRecord);
-
-  // Sheet backup
-  if (shouldWriteToSheet()) {
-    var sheet = getSheet(SHEETS.AUDITEE_RESPONSES);
-    if (sheet) {
-      var row = objectToRow('AUDITEE_RESPONSES', responseRecord);
-      sheet.appendRow(row);
-    }
-  }
+  invalidateSheetData(SHEETS.AUDITEE_RESPONSES);
 
   // Update work paper
   var wpUpdates = {
@@ -530,23 +522,6 @@ function createAuditeeActionPlan(data, user) {
 
   syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, actionPlan);
   invalidateSheetData(SHEETS.ACTION_PLANS);
-
-  if (shouldWriteToSheet()) {
-    var sheet = getSheet(SHEETS.ACTION_PLANS);
-    if (sheet) {
-      var row = objectToRow('ACTION_PLANS', actionPlan);
-      var lock = LockService.getScriptLock();
-      try {
-        lock.waitLock(15000);
-        sheet.appendRow(row);
-        var rowNum = sheet.getLastRow();
-        lock.releaseLock();
-        if (rowNum) updateActionPlanIndex(actionPlanId, actionPlan, rowNum);
-      } catch (lockErr) {
-        try { lock.releaseLock(); } catch (ignored) {}
-      }
-    }
-  }
 
   addActionPlanHistory(actionPlanId, '', initialStatus, 'Action plan proposed by auditee', user);
   logAuditEvent('CREATE', 'ACTION_PLAN', actionPlanId, null, actionPlan, user.user_id, user.email);

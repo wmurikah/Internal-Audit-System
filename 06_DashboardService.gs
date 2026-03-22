@@ -1320,4 +1320,87 @@ function getComprehensiveReportData(filters) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Dashboard Summary - Atomic increment/decrement helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Update the cached dashboard summary when a work paper status changes.
+ * Uses partial Firestore update for efficiency.
+ * @param {string} oldStatus - Previous status (null for new WPs)
+ * @param {string} newStatus - New status (null for deleted WPs)
+ */
+function updateDashboardSummary_WPStatus(oldStatus, newStatus) {
+  try {
+    var summary = firestoreGet('00_Config', 'dashboard_summary');
+    if (!summary) summary = { config_key: 'dashboard_summary', description: 'Dashboard summary counters' };
+
+    var wpByStatus = summary.wp_by_status || {};
+    if (oldStatus) wpByStatus[oldStatus] = Math.max(0, (wpByStatus[oldStatus] || 0) - 1);
+    if (newStatus) wpByStatus[newStatus] = (wpByStatus[newStatus] || 0) + 1;
+
+    summary.wp_by_status = wpByStatus;
+    summary.last_updated = new Date().toISOString();
+    firestoreSet('00_Config', 'dashboard_summary', summary);
+  } catch (e) {
+    console.warn('Dashboard summary update (WP) failed:', e.message);
+  }
+}
+
+/**
+ * Update the cached dashboard summary when an action plan status changes.
+ * @param {string} oldStatus - Previous status (null for new APs)
+ * @param {string} newStatus - New status (null for deleted APs)
+ */
+function updateDashboardSummary_APStatus(oldStatus, newStatus) {
+  try {
+    var summary = firestoreGet('00_Config', 'dashboard_summary');
+    if (!summary) summary = { config_key: 'dashboard_summary', description: 'Dashboard summary counters' };
+
+    var apByStatus = summary.ap_by_status || {};
+    if (oldStatus) apByStatus[oldStatus] = Math.max(0, (apByStatus[oldStatus] || 0) - 1);
+    if (newStatus) apByStatus[newStatus] = (apByStatus[newStatus] || 0) + 1;
+
+    summary.ap_by_status = apByStatus;
+    summary.last_updated = new Date().toISOString();
+    firestoreSet('00_Config', 'dashboard_summary', summary);
+  } catch (e) {
+    console.warn('Dashboard summary update (AP) failed:', e.message);
+  }
+}
+
+/**
+ * Rebuild dashboard summary from scratch (run periodically or after data changes).
+ * @return {Object} The rebuilt summary
+ */
+function rebuildDashboardSummary() {
+  var wpData = firestoreGetAll(SHEETS.WORK_PAPERS) || [];
+  var apData = firestoreGetAll(SHEETS.ACTION_PLANS) || [];
+
+  var wpByStatus = {};
+  wpData.forEach(function(wp) {
+    var s = wp.status || 'Unknown';
+    wpByStatus[s] = (wpByStatus[s] || 0) + 1;
+  });
+
+  var apByStatus = {};
+  apData.forEach(function(ap) {
+    var s = ap.status || 'Unknown';
+    apByStatus[s] = (apByStatus[s] || 0) + 1;
+  });
+
+  var summary = {
+    config_key: 'dashboard_summary',
+    description: 'Dashboard summary counters',
+    wp_total: wpData.length,
+    ap_total: apData.length,
+    wp_by_status: wpByStatus,
+    ap_by_status: apByStatus,
+    last_updated: new Date().toISOString()
+  };
+
+  firestoreSet('00_Config', 'dashboard_summary', summary);
+  return summary;
+}
+
 // sanitizeForClient() is defined in 01_Core.gs (canonical)

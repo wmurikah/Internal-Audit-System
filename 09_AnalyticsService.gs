@@ -283,46 +283,7 @@ function updatePermissions(roleCode, permissions, user) {
   const approveIdx = headers.indexOf('can_approve');
   const exportIdx = headers.indexOf('can_export');
 
-  // Update or insert each module's permissions (Sheet backup)
-  if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
-    var sheet = getSheet(SHEETS.PERMISSIONS);
-    Object.entries(permissions).forEach(([module, perms]) => {
-      let found = false;
-
-      // Try to find existing row
-      for (let i = 1; i < data.length; i++) {
-        if (data[i][roleIdx] === roleCode && data[i][moduleIdx] === module) {
-          // Update existing row
-          if (createIdx >= 0) sheet.getRange(i + 1, createIdx + 1).setValue(perms.can_create === true);
-          if (readIdx >= 0) sheet.getRange(i + 1, readIdx + 1).setValue(perms.can_read === true);
-          if (updateIdx >= 0) sheet.getRange(i + 1, updateIdx + 1).setValue(perms.can_update === true);
-          if (deleteIdx >= 0) sheet.getRange(i + 1, deleteIdx + 1).setValue(perms.can_delete === true);
-          if (approveIdx >= 0) sheet.getRange(i + 1, approveIdx + 1).setValue(perms.can_approve === true);
-          if (exportIdx >= 0) sheet.getRange(i + 1, exportIdx + 1).setValue(perms.can_export === true);
-          found = true;
-          console.log('Updated permissions for', roleCode, module);
-          break;
-        }
-      }
-
-      // If not found, insert new row
-      if (!found) {
-        const newRow = new Array(headers.length).fill('');
-        newRow[roleIdx] = roleCode;
-        newRow[moduleIdx] = module;
-        if (createIdx >= 0) newRow[createIdx] = perms.can_create === true;
-        if (readIdx >= 0) newRow[readIdx] = perms.can_read === true;
-        if (updateIdx >= 0) newRow[updateIdx] = perms.can_update === true;
-        if (deleteIdx >= 0) newRow[deleteIdx] = perms.can_delete === true;
-        if (approveIdx >= 0) newRow[approveIdx] = perms.can_approve === true;
-        if (exportIdx >= 0) newRow[exportIdx] = perms.can_export === true;
-        sheet.appendRow(newRow);
-        console.log('Inserted new permissions for', roleCode, module);
-      }
-    });
-  }
-
-  // Write to Firestore (primary)
+  // Write to Firestore
   if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
     Object.entries(permissions).forEach(([module, perms]) => {
       var permId = roleCode + '_' + module;

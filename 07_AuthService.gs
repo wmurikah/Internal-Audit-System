@@ -114,20 +114,18 @@ function postLoginCleanup(data) {
     try {
       const user = getUserByEmailCached(userEmail);
       if (user) {
-        const sheet = getSheet(SHEETS.USERS);
-        const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
-        if (rowIndex) {
-          const attemptsIdx = getColumnIndex(SHEETS.USERS, 'login_attempts');
-          const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
-          const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
-          
-          if (shouldWriteToSheet()) {
-            sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
-            sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
-            sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
-          }
-        }
+        // Update login state in Firestore
+        var loginUpdates = {
+          login_attempts: 0,
+          locked_until: '',
+          last_login: new Date()
+        };
+        var updatedUser = {};
+        for (var k in user) { updatedUser[k] = user[k]; }
+        for (var k2 in loginUpdates) { updatedUser[k2] = loginUpdates[k2]; }
+        syncToFirestore(SHEETS.USERS, user.user_id, updatedUser);
         invalidateUserCache(userEmail, user.user_id);
+        invalidateSheetData(SHEETS.USERS);
       }
     } catch(e) { console.warn('Cleanup: reset attempts failed:', e); }
     
@@ -181,25 +179,8 @@ function getUserByEmailCached(email) {
   return user;
 }
 
+/** Legacy stub - no longer needed in Firestore-only mode */
 function findUserRowIndex(userId) {
-  // Only needed for Sheet backup writes in realtime mode
-  if (typeof shouldWriteToSheet === 'function' && !shouldWriteToSheet()) {
-    return null;
-  }
-  var sheet = getSheet(SHEETS.USERS);
-  if (!sheet) return null;
-  var data = sheet.getDataRange().getValues();
-  if (!data || data.length < 2) return null;
-  var headers = data[0];
-  if (!headers || typeof headers.indexOf !== 'function') return null;
-  var idIdx = headers.indexOf('user_id');
-  if (idIdx === -1) return null;
-
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][idIdx] === userId) {
-      return i + 1;
-    }
-  }
   return null;
 }
 
@@ -232,17 +213,12 @@ function prewarmUserCache(user) {
 
 function updateLastLoginAsync(user) {
   try {
-    const sheet = getSheet(SHEETS.USERS);
-    const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
-
-    if (rowIndex) {
-      const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
-      if (shouldWriteToSheet()) {
-        sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
-      }
-    }
-
+    var updatedUser = {};
+    for (var k in user) { if (k !== '_rowIndex') updatedUser[k] = user[k]; }
+    updatedUser.last_login = new Date();
+    syncToFirestore(SHEETS.USERS, user.user_id, updatedUser);
     invalidateUserCache(user.email, user.user_id);
+    invalidateSheetData(SHEETS.USERS);
   } catch (e) {
     console.warn('updateLastLoginAsync failed:', e);
   }
@@ -398,12 +374,10 @@ function createSession(user) {
     is_valid: true
   };
   
-  const sheet = getSheet(SHEETS.SESSIONS);
-  const row = objectToRow('SESSIONS', session);
-  if (shouldWriteToSheet()) {
-    sheet.appendRow(row);
-  }
-  
+  // Write session to Firestore
+  syncToFirestore(SHEETS.SESSIONS, sessionId, session);
+  invalidateSheetData(SHEETS.SESSIONS);
+
   const cache = CacheService.getScriptCache();
   const cacheKey = 'session_' + sessionToken.substring(0, 16);
   cache.put(cacheKey, JSON.stringify(session), 300);
@@ -430,35 +404,15 @@ function getSessionByToken(token) {
 }
 
 function invalidateSession(sessionId) {
-  // Invalidate in Firestore (primary)
-  if (typeof firestoreGet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-    var session = firestoreGet(SHEETS.SESSIONS, sessionId);
-    if (session) {
-      session.is_valid = false;
-      firestoreSet(SHEETS.SESSIONS, sessionId, session);
-      if (session.session_token) {
-        CacheService.getScriptCache().remove('session_' + session.session_token.substring(0, 16));
-      }
+  var session = firestoreGet(SHEETS.SESSIONS, sessionId);
+  if (session) {
+    session.is_valid = false;
+    firestoreSet(SHEETS.SESSIONS, sessionId, session);
+    invalidateSheetData(SHEETS.SESSIONS);
+    if (session.session_token) {
+      CacheService.getScriptCache().remove('session_' + session.session_token.substring(0, 16));
     }
   }
-
-  // Sheet backup
-  if (typeof shouldWriteToSheet === 'function' && shouldWriteToSheet()) {
-    var sheet = getSheet(SHEETS.SESSIONS);
-    if (sheet) {
-      var data = sheet.getDataRange().getValues();
-      var headers = data[0];
-      var idIdx = headers.indexOf('session_id');
-      var validIdx = headers.indexOf('is_valid');
-      for (var i = 1; i < data.length; i++) {
-        if (data[i][idIdx] === sessionId) {
-          sheet.getRange(i + 1, validIdx + 1).setValue(false);
-          break;
-        }
-      }
-    }
-  }
-
   return true;
 }
 
@@ -467,34 +421,17 @@ function cleanupExpiredSessions() {
   var cleaned = 0;
 
   // Read from Firestore (primary)
-  if (typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-    var sessions = firestoreGetAll(SHEETS.SESSIONS);
-    if (sessions) {
-      sessions.forEach(function(session) {
-        var expired = !session.is_valid || (session.expires_at && new Date(session.expires_at) < now);
-        if (expired && session.session_id) {
-          firestoreDelete(SHEETS.SESSIONS, session.session_id);
-          cleaned++;
-        }
-      });
-    }
-  }
-
-  // Sheet backup cleanup
-  if (typeof shouldWriteToSheet === 'function' && shouldWriteToSheet()) {
-    var sheet = getSheet(SHEETS.SESSIONS);
-    if (sheet && sheet.getLastRow() > 1) {
-      var data = sheet.getDataRange().getValues();
-      var headers = data[0];
-      var expiresIdx = headers.indexOf('expires_at');
-      var validIdx = headers.indexOf('is_valid');
-      for (var i = data.length - 1; i >= 1; i--) {
-        if (!data[i][validIdx] || (data[i][expiresIdx] && new Date(data[i][expiresIdx]) < now)) {
-          sheet.deleteRow(i + 1);
-        }
+  var sessions = firestoreGetAll(SHEETS.SESSIONS);
+  if (sessions) {
+    sessions.forEach(function(session) {
+      var expired = !session.is_valid || (session.expires_at && new Date(session.expires_at) < now);
+      if (expired && session.session_id) {
+        firestoreDelete(SHEETS.SESSIONS, session.session_id);
+        cleaned++;
       }
-    }
+    });
   }
+  if (cleaned > 0) invalidateSheetData(SHEETS.SESSIONS);
 
   console.log('Cleaned up sessions:', cleaned);
   return cleaned;
@@ -604,27 +541,15 @@ function changePassword(userId, currentPassword, newPassword) {
   const salt = generateSalt();
   const hash = hashPassword(newPassword, salt);
 
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex;
-
-  const sheetName = SHEETS.USERS;
-  const hashIdx = getColumnIndex(sheetName, 'password_hash');
-  const saltIdx = getColumnIndex(sheetName, 'password_salt');
-  const mustChangeIdx = getColumnIndex(sheetName, 'must_change_password');
-  const updatedIdx = getColumnIndex(sheetName, 'updated_at');
-
-  if (hashIdx < 0 || saltIdx < 0 || mustChangeIdx < 0 || updatedIdx < 0) {
-    console.error('changePassword: Column index lookup failed for sheet:', sheetName);
-    return { success: false, error: 'Internal configuration error' };
-  }
-
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
-    sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
-    sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(false);
-    sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
-  }
-
+  // Update user in Firestore
+  var updatedUser = {};
+  for (var k in user) { if (k !== '_rowIndex') updatedUser[k] = user[k]; }
+  updatedUser.password_hash = hash;
+  updatedUser.password_salt = salt;
+  updatedUser.must_change_password = false;
+  updatedUser.updated_at = new Date();
+  syncToFirestore(SHEETS.USERS, user.user_id, updatedUser);
+  invalidateSheetData(SHEETS.USERS);
   invalidateUserCache(user.email, user.user_id);
 
   logAuditEvent('CHANGE_PASSWORD', 'USER', userId, null, null, userId, user.email);
@@ -646,34 +571,21 @@ function resetPassword(userId, adminUser) {
     return { success: false, error: 'User not found' };
   }
 
-  if (!user._rowIndex) {
-    user._rowIndex = findUserRowIndex(userId);
-  }
-
   const tempPassword = generateTempPassword();
   const salt = generateSalt();
   const hash = hashPassword(tempPassword, salt);
-  
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex;
-  const sheetName = SHEETS.USERS;
 
-  const hashIdx = getColumnIndex(sheetName, 'password_hash');
-  const saltIdx = getColumnIndex(sheetName, 'password_salt');
-  const mustChangeIdx = getColumnIndex(sheetName, 'must_change_password');
-  const updatedIdx = getColumnIndex(sheetName, 'updated_at');
-  const attemptsIdx = getColumnIndex(sheetName, 'login_attempts');
-  const lockedIdx = getColumnIndex(sheetName, 'locked_until');
-
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
-    sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
-    sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
-    sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
-    sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
-    sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
-  }
-
+  // Update user in Firestore
+  var updatedUser = {};
+  for (var k in user) { if (k !== '_rowIndex') updatedUser[k] = user[k]; }
+  updatedUser.password_hash = hash;
+  updatedUser.password_salt = salt;
+  updatedUser.must_change_password = true;
+  updatedUser.updated_at = new Date();
+  updatedUser.login_attempts = 0;
+  updatedUser.locked_until = '';
+  syncToFirestore(SHEETS.USERS, user.user_id, updatedUser);
+  invalidateSheetData(SHEETS.USERS);
   invalidateUserCache(user.email, user.user_id);
 
   invalidateUserSessions(userId);
@@ -726,60 +638,42 @@ function validatePassword(password) {
 }
 
 function incrementFailedAttempts(user) {
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
+  var updatedUser = {};
+  for (var k in user) { if (k !== '_rowIndex') updatedUser[k] = user[k]; }
 
-  if (!rowIndex) return;
-
-  const attemptsIdx = getColumnIndex(SHEETS.USERS, 'login_attempts');
-  const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
-  
-  const attempts = (parseInt(user.login_attempts) || 0) + 1;
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, attemptsIdx + 1).setValue(attempts);
-  }
+  var attempts = (parseInt(user.login_attempts) || 0) + 1;
+  updatedUser.login_attempts = attempts;
 
   if (attempts >= AUTH_CONFIG.MAX_LOGIN_ATTEMPTS) {
-    const lockUntil = new Date();
+    var lockUntil = new Date();
     lockUntil.setMinutes(lockUntil.getMinutes() + AUTH_CONFIG.LOCKOUT_DURATION_MINUTES);
-    if (shouldWriteToSheet()) {
-      sheet.getRange(rowIndex, lockedIdx + 1).setValue(lockUntil);
-    }
-    
+    updatedUser.locked_until = lockUntil;
     logAuditEvent('ACCOUNT_LOCKED', 'USER', user.user_id, null, { attempts: attempts }, '', user.email);
   }
-  
+
+  syncToFirestore(SHEETS.USERS, user.user_id, updatedUser);
+  invalidateSheetData(SHEETS.USERS);
   invalidateUserCache(user.email, user.user_id);
 }
 
 function resetFailedAttempts(user) {
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
+  var updatedUser = {};
+  for (var k in user) { if (k !== '_rowIndex') updatedUser[k] = user[k]; }
+  updatedUser.login_attempts = 0;
+  updatedUser.locked_until = '';
 
-  if (!rowIndex) return;
-
-  const attemptsIdx = getColumnIndex(SHEETS.USERS, 'login_attempts');
-  const lockedIdx = getColumnIndex(SHEETS.USERS, 'locked_until');
-  
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
-    sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
-  }
-
+  syncToFirestore(SHEETS.USERS, user.user_id, updatedUser);
+  invalidateSheetData(SHEETS.USERS);
   invalidateUserCache(user.email, user.user_id);
 }
 
 function updateLastLogin(user) {
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex || findUserRowIndex(user.user_id);
+  var updatedUser = {};
+  for (var k in user) { if (k !== '_rowIndex') updatedUser[k] = user[k]; }
+  updatedUser.last_login = new Date();
 
-  if (!rowIndex) return;
-
-  const lastLoginIdx = getColumnIndex(SHEETS.USERS, 'last_login');
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, lastLoginIdx + 1).setValue(new Date());
-  }
-
+  syncToFirestore(SHEETS.USERS, user.user_id, updatedUser);
+  invalidateSheetData(SHEETS.USERS);
   invalidateUserCache(user.email, user.user_id);
 }
 
@@ -834,26 +728,9 @@ function createUser(userData, adminUser) {
     updated_by: adminUser.user_id
   };
   
-  const sheet = getSheet(SHEETS.USERS);
-  const row = objectToRow('USERS', user);
-
-  // Lock to make appendRow + getLastRow atomic
-  const lock = LockService.getScriptLock();
-  let rowNum;
-  try {
-    lock.waitLock(15000);
-    if (shouldWriteToSheet()) {
-      sheet.appendRow(row);
-    }
-    rowNum = sheet.getLastRow();
-    lock.releaseLock();
-  } catch (lockErr) {
-    try { lock.releaseLock(); } catch (ignored) {}
-    throw lockErr;
-  }
-
-  updateUserIndex(userId, user, rowNum);
-  
+  // Write to Firestore
+  syncToFirestore(SHEETS.USERS, userId, user);
+  invalidateSheetData(SHEETS.USERS);
   invalidateDropdownCache();
   
   const loginUrl = ScriptApp.getService().getUrl();
@@ -938,22 +815,20 @@ function updateUser(userId, userData, adminUser) {
   }
   
   const updated = { ...user, ...updates };
-  
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex;
-  const row = objectToRow('USERS', updated);
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  }
+  delete updated._rowIndex;
+
+  // Write to Firestore
+  syncToFirestore(SHEETS.USERS, userId, updated);
+  invalidateSheetData(SHEETS.USERS);
 
   invalidateUserCache(user.email, user.user_id);
   if (updates.email && updates.email !== user.email) {
     invalidateUserCache(updates.email);
   }
   invalidateDropdownCache();
-  
+
   logAuditEvent('UPDATE', 'USER', userId, user, updated, adminUser.user_id, adminUser.email);
-  
+
   return sanitizeForClient({ success: true, user: updated });
 }
 
@@ -975,20 +850,14 @@ function deactivateUser(userId, adminUser) {
     return { success: false, error: 'User not found' };
   }
   
-  if (!user._rowIndex) {
-    user._rowIndex = findUserRowIndex(userId);
-  }
-  
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex;
-  const activeIdx = getColumnIndex(SHEETS.USERS, 'is_active');
-  
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, activeIdx + 1).setValue(false);
-  }
+  // Deactivate in Firestore
+  var updatedUser = {};
+  for (var k in user) { if (k !== '_rowIndex') updatedUser[k] = user[k]; }
+  updatedUser.is_active = false;
+  syncToFirestore(SHEETS.USERS, userId, updatedUser);
+  invalidateSheetData(SHEETS.USERS);
 
   invalidateUserSessions(userId);
-
   invalidateUserCache(user.email, user.user_id);
   invalidateDropdownCache();
 
@@ -1010,34 +879,21 @@ function forgotPassword(email) {
     return { success: true, message: 'If an account exists with that email, a temporary password has been sent.' };
   }
   
-  if (!user._rowIndex) {
-    user._rowIndex = findUserRowIndex(user.user_id);
-  }
-  
   const tempPassword = generateTempPassword();
   const salt = generateSalt();
   const hash = hashPassword(tempPassword, salt);
-  
-  const sheet = getSheet(SHEETS.USERS);
-  const rowIndex = user._rowIndex;
-  const sheetName = SHEETS.USERS;
 
-  const hashIdx = getColumnIndex(sheetName, 'password_hash');
-  const saltIdx = getColumnIndex(sheetName, 'password_salt');
-  const mustChangeIdx = getColumnIndex(sheetName, 'must_change_password');
-  const updatedIdx = getColumnIndex(sheetName, 'updated_at');
-  const attemptsIdx = getColumnIndex(sheetName, 'login_attempts');
-  const lockedIdx = getColumnIndex(sheetName, 'locked_until');
-
-  if (shouldWriteToSheet()) {
-    sheet.getRange(rowIndex, hashIdx + 1).setValue(hash);
-    sheet.getRange(rowIndex, saltIdx + 1).setValue(salt);
-    sheet.getRange(rowIndex, mustChangeIdx + 1).setValue(true);
-    sheet.getRange(rowIndex, updatedIdx + 1).setValue(new Date());
-    sheet.getRange(rowIndex, attemptsIdx + 1).setValue(0);
-    sheet.getRange(rowIndex, lockedIdx + 1).setValue('');
-  }
-
+  // Update user in Firestore
+  var updatedUser = {};
+  for (var k in user) { if (k !== '_rowIndex') updatedUser[k] = user[k]; }
+  updatedUser.password_hash = hash;
+  updatedUser.password_salt = salt;
+  updatedUser.must_change_password = true;
+  updatedUser.updated_at = new Date();
+  updatedUser.login_attempts = 0;
+  updatedUser.locked_until = '';
+  syncToFirestore(SHEETS.USERS, user.user_id, updatedUser);
+  invalidateSheetData(SHEETS.USERS);
   invalidateUserCache(user.email, user.user_id);
   invalidateUserSessions(user.user_id);
 
@@ -1082,22 +938,17 @@ function invalidateUserSessions(userId) {
   var tokenIdx = headers.indexOf('session_token');
   if (userIdIdx === -1 || validIdx === -1 || tokenIdx === -1) return;
 
-  var sheet = shouldWriteToSheet() ? getSheet(SHEETS.SESSIONS) : null;
-
   for (var i = 1; i < sessions.length; i++) {
     if (sessions[i][userIdIdx] === userId) {
-      // Update in Firestore
+      var sessionId = sessions[i][headers.indexOf('session_id')];
       var token = sessions[i][tokenIdx];
-      if (token && typeof syncToFirestore === 'function' && isFirestoreEnabled()) {
-        var sessionDoc = firestoreGet(SHEETS.SESSIONS, token);
+      // Invalidate in Firestore
+      if (sessionId) {
+        var sessionDoc = firestoreGet(SHEETS.SESSIONS, sessionId);
         if (sessionDoc) {
           sessionDoc.is_valid = false;
-          syncToFirestore(SHEETS.SESSIONS, sessionDoc);
+          syncToFirestore(SHEETS.SESSIONS, sessionId, sessionDoc);
         }
-      }
-      // Backup to Sheet
-      if (sheet) {
-        sheet.getRange(i + 1, validIdx + 1).setValue(false);
       }
       // Invalidate session cache entry
       if (token) {
@@ -1105,11 +956,7 @@ function invalidateUserSessions(userId) {
       }
     }
   }
-
-  // Clear the sheet data cache for sessions
-  if (typeof _sheetDataCache !== 'undefined') {
-    _sheetDataCache[SHEETS.SESSIONS] = null;
-  }
+  invalidateSheetData(SHEETS.SESSIONS);
 }
 
 function getUsers(filters, adminUser) {
@@ -1171,25 +1018,7 @@ function getUsers(filters, adminUser) {
   return sanitizeForClient({ success: true, users: users, total: users.length });
 }
 
-function updateUserIndex(userId, user, rowNumber) {
-  if (!shouldWriteToSheet()) return; // Index is backup-only
-
-  var indexSheet = getSheet(SHEETS.INDEX_USERS);
-  if (!indexSheet) return;
-  var data = indexSheet.getDataRange().getValues();
-  var headers = data[0];
-  var idIdx = headers.indexOf('user_id');
-
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][idIdx] === userId) {
-      var updateRow = [userId, rowNumber, user.email, user.role_code, user.is_active, new Date()];
-      indexSheet.getRange(i + 1, 1, 1, updateRow.length).setValues([updateRow]);
-      return;
-    }
-  }
-
-  var newRow = [userId, rowNumber, user.email, user.role_code, user.is_active, new Date()];
-  indexSheet.appendRow(newRow);
-}
+/** Legacy stub - no longer needed in Firestore-only mode */
+function updateUserIndex() {}
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)
