@@ -506,228 +506,59 @@ const DB = {
   }
 };
 
-// ── DBWrite: Sheet backup layer ──
-// Firestore is the primary write store (via syncToFirestore in service files).
-// DBWrite handles Sheet backup only: realtime writes, incremental queuing, or skip.
-const DBWrite = {
-  insert: function(sheetName, data) {
-    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
-      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
-        try {
-          var sheet = getSheet(sheetName);
-          if (sheet) {
-            var headers = getSheetHeaders(sheetName);
-            var rowArray = headers.map(function(header) {
-              var value = data[header];
-              return sanitizeValue(value !== undefined ? value : '');
-            });
-            sheet.appendRow(rowArray);
-          }
-        } catch (e) {
-          console.warn('Sheet backup insert failed for ' + sheetName + ':', e.message);
-        }
-      } else {
-        var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
-        var docId = idField ? data[idField] : '';
-        if (typeof backupToSheet === 'function') backupToSheet(sheetName, docId, 'upsert', null);
-      }
-    }
-    return -1; // No Sheet row (Firestore is primary)
-  },
+// DBWrite and Transaction have been removed (Firestore-only mode).
+// All writes go directly through firestoreSet / firestoreUpdate / firestoreDelete.
 
-  updateRow: function(sheetName, rowNumber, data) {
-    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
-      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup() && rowNumber >= 2) {
-        try {
-          var sheet = getSheet(sheetName);
-          if (sheet) {
-            var headers = getSheetHeaders(sheetName);
-            var currentData = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
-            var newRowArray = headers.map(function(header, idx) {
-              if (data[header] !== undefined) return sanitizeValue(data[header]);
-              return currentData[idx];
-            });
-            sheet.getRange(rowNumber, 1, 1, headers.length).setValues([newRowArray]);
-          }
-        } catch (e) {
-          console.warn('Sheet backup updateRow failed for ' + sheetName + ':', e.message);
-        }
-      } else if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-        var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
-        var docId = idField && data[idField] ? data[idField] : 'row_' + rowNumber;
-        if (typeof backupToSheet === 'function') backupToSheet(sheetName, docId, 'upsert', null);
-      }
-    }
-    return true;
-  },
-
-  updateById: function(entityType, entityId, data) {
-    var sheetName = CONFIG.DATA_SHEETS[entityType];
-    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
-      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
-        var rowNumber = Index.getRowNumber(entityType, entityId);
-        if (rowNumber >= 2) {
-          this.updateRow(sheetName, rowNumber, data);
-          // Update index for backup consistency
-          try {
-            var indexHeaders = getSheetHeaders(CONFIG.INDEX_SHEETS[entityType]);
-            var indexFields = {};
-            var needsIndexUpdate = false;
-            indexHeaders.forEach(function(header) {
-              if (data[header] !== undefined) { indexFields[header] = data[header]; needsIndexUpdate = true; }
-            });
-            if (needsIndexUpdate) Index.updateEntry(entityType, entityId, rowNumber, indexFields);
-          } catch (e) {}
-        }
-      } else {
-        if (typeof backupToSheet === 'function') backupToSheet(sheetName, entityId, 'upsert', null);
-      }
-    }
-    return true;
-  },
-
-  deleteRow: function(sheetName, rowNumber) {
-    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
-      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup() && rowNumber >= 2) {
-        try {
-          var sheet = getSheet(sheetName);
-          if (sheet) sheet.deleteRow(rowNumber);
-        } catch (e) {
-          console.warn('Sheet backup deleteRow failed for ' + sheetName + ':', e.message);
-        }
-      } else if (typeof isRealtimeBackup === 'function' && !isRealtimeBackup()) {
-        if (typeof backupToSheet === 'function') backupToSheet(sheetName, 'row_' + rowNumber, 'delete', null);
-      }
-    }
-    return true;
-  },
-
-  deleteById: function(entityType, entityId) {
-    var sheetName = CONFIG.DATA_SHEETS[entityType];
-    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
-      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
-        var rowNumber = Index.getRowNumber(entityType, entityId);
-        if (rowNumber >= 2) {
-          try {
-            var sheet = getSheet(sheetName);
-            if (sheet) sheet.deleteRow(rowNumber);
-            Index.removeEntry(entityType, entityId);
-          } catch (e) {
-            console.warn('Sheet backup deleteById failed:', e.message);
-          }
-        }
-      } else {
-        if (typeof backupToSheet === 'function') backupToSheet(sheetName, entityId, 'delete', null);
-      }
-    }
-    return true;
-  },
-
-  batchInsert: function(sheetName, dataArray) {
-    if (!dataArray || dataArray.length === 0) return [];
-    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
-      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
-        try {
-          var sheet = getSheet(sheetName);
-          if (sheet) {
-            var headers = getSheetHeaders(sheetName);
-            var startRow = sheet.getLastRow() + 1;
-            var rowArrays = dataArray.map(function(d) {
-              return headers.map(function(header) {
-                var value = d[header];
-                return sanitizeValue(value !== undefined ? value : '');
-              });
-            });
-            sheet.getRange(startRow, 1, rowArrays.length, headers.length).setValues(rowArrays);
-          }
-        } catch (e) {
-          console.warn('Sheet backup batchInsert failed:', e.message);
-        }
-      } else {
-        var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
-        dataArray.forEach(function(d) {
-          var docId = idField && d[idField] ? d[idField] : '';
-          if (typeof backupToSheet === 'function') backupToSheet(sheetName, docId, 'upsert', null);
-        });
-      }
-    }
-    return [];
-  },
-
-  batchUpdate: function(sheetName, updates) {
-    if (!updates || updates.length === 0) return true;
-    if (typeof isSheetBackupEnabled === 'function' && isSheetBackupEnabled()) {
-      if (typeof isRealtimeBackup === 'function' && isRealtimeBackup()) {
-        try {
-          var sheet = getSheet(sheetName);
-          if (sheet) {
-            var headers = getSheetHeaders(sheetName);
-            updates.forEach(function(update) {
-              if (update.rowNumber >= 2) {
-                var currentData = sheet.getRange(update.rowNumber, 1, 1, headers.length).getValues()[0];
-                var newRowArray = headers.map(function(header, idx) {
-                  if (update.data[header] !== undefined) return sanitizeValue(update.data[header]);
-                  return currentData[idx];
-                });
-                sheet.getRange(update.rowNumber, 1, 1, headers.length).setValues([newRowArray]);
-              }
-            });
-          }
-        } catch (e) {
-          console.warn('Sheet backup batchUpdate failed:', e.message);
-        }
-      } else {
-        var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
-        updates.forEach(function(u) {
-          var docId = idField && u.data[idField] ? u.data[idField] : 'row_' + u.rowNumber;
-          if (typeof backupToSheet === 'function') backupToSheet(sheetName, docId, 'upsert', null);
-        });
-      }
-    }
-    return true;
-  }
-};
-
-// Transaction is no longer needed with Firestore-primary.
-// Firestore writes are atomic per document. For multi-document atomicity,
-// use firestoreBatchWrite() in 00_FirestoreService.gs.
-const Transaction = {
-  execute: function(operations) {
-    console.warn('Transaction.execute is deprecated in Firestore-primary mode. Use firestoreBatchWrite() instead.');
-    return { success: false, error: 'Transaction.execute is deprecated. Use Firestore writes directly.' };
-  }
-};
-
+/**
+ * Generate a unique ID using consolidated counters in Firestore.
+ * Uses a single 'counters' document in system_settings collection
+ * for all entity types, with atomic increment via script lock.
+ */
 function getNextId(prefix) {
   var lock = LockService.getScriptLock();
 
   try {
     lock.waitLock(10000);
 
-    var counterKey = 'NEXT_' + prefix + '_ID';
+    var counterKey = prefix.toLowerCase() + '_counter';
 
-    // Firestore is the source of truth for ID counters
-    var configDoc = firestoreGet('00_Config', counterKey);
-    var currentVal = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
+    // Read from consolidated counters document
+    var countersDoc = firestoreGet('00_Config', 'counters');
+    var currentVal = (countersDoc && countersDoc[counterKey]) ? parseInt(countersDoc[counterKey]) : 1;
 
-    // Write incremented value to Firestore
-    firestoreSet('00_Config', counterKey, {
-      config_key: counterKey,
-      config_value: currentVal + 1,
-      description: 'Auto-generated counter',
-      updated_at: new Date().toISOString()
-    });
+    // Atomic increment via partial update
+    var incrementFields = {};
+    incrementFields[counterKey] = currentVal + 1;
+    incrementFields.updated_at = new Date().toISOString();
+
+    if (countersDoc) {
+      // Update existing counters document
+      var updated = {};
+      for (var k in countersDoc) { updated[k] = countersDoc[k]; }
+      for (var k2 in incrementFields) { updated[k2] = incrementFields[k2]; }
+      firestoreSet('00_Config', 'counters', updated);
+    } else {
+      // Create counters document
+      incrementFields.config_key = 'counters';
+      incrementFields.description = 'Consolidated ID counters';
+      firestoreSet('00_Config', 'counters', incrementFields);
+    }
 
     lock.releaseLock();
     Cache.remove('config_all');
 
-    var padded = String(currentVal).padStart(5, '0');
+    var padded = String(currentVal).padStart(6, '0');
     return getIdPrefix(prefix) + padded;
 
   } catch (e) {
     try { lock.releaseLock(); } catch (ignored) {}
     throw e;
   }
+}
+
+/** Alias for backward compatibility */
+function generateId(entityType) {
+  return getNextId(entityType);
 }
 
 function getIdPrefix(prefix) {

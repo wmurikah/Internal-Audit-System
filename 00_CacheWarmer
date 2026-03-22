@@ -164,72 +164,8 @@ function warmAllCachesOnDeploy() {
     console.error('✗ Config caching failed:', e);
   }
   
-  // 5. Warm sheet headers (used frequently for column lookups)
-  console.log('\n[5/6] Caching sheet headers...');
-  const sheetNames = ['USERS', 'WORK_PAPERS', 'ACTION_PLANS', 'SESSIONS'];
-  try {
-    const headerStart = new Date().getTime();
-    sheetNames.forEach(sheetKey => {
-      try {
-        var sheetName = SHEETS[sheetKey];
-        if (sheetName) {
-          var sheetData = getSheetData(sheetName);
-          if (sheetData && sheetData.length > 0) {
-            cache.put('headers_' + sheetKey, JSON.stringify(sheetData[0]), 3600);
-          }
-        }
-      } catch (e) {
-        console.warn('Header cache failed for', sheetKey, ':', e.message);
-      }
-    });
-    results.cached.push('headers (' + (new Date().getTime() - headerStart) + 'ms)');
-    console.log('✓ Sheet headers cached');
-  } catch (e) {
-    results.errors.push('headers: ' + e.message);
-    console.error('✗ Header caching failed:', e);
-  }
-  
-  // 6. Verify indexes are built
-  console.log('\n[6/6] Verifying indexes...');
-  try {
-    const indexStart = new Date().getTime();
-    let indexesOk = true;
-    
-    // Check user index
-    const userIndexSheet = getSheet(SHEETS.INDEX_USERS);
-    if (!userIndexSheet || userIndexSheet.getLastRow() < 2) {
-      console.log('User index empty, rebuilding...');
-      Index.rebuild('USER');
-      indexesOk = false;
-    }
-    
-    // Check work paper index
-    const wpIndexSheet = getSheet(SHEETS.INDEX_WORK_PAPERS);
-    if (!wpIndexSheet || wpIndexSheet.getLastRow() < 2) {
-      console.log('Work paper index empty, rebuilding...');
-      Index.rebuild('WORK_PAPER');
-      indexesOk = false;
-    }
-    
-    // Check action plan index
-    const apIndexSheet = getSheet(SHEETS.INDEX_ACTION_PLANS);
-    if (!apIndexSheet || apIndexSheet.getLastRow() < 2) {
-      console.log('Action plan index empty, rebuilding...');
-      Index.rebuild('ACTION_PLAN');
-      indexesOk = false;
-    }
-    
-    if (indexesOk) {
-      results.cached.push('indexes verified (' + (new Date().getTime() - indexStart) + 'ms)');
-      console.log('✓ All indexes verified');
-    } else {
-      results.cached.push('indexes rebuilt (' + (new Date().getTime() - indexStart) + 'ms)');
-      console.log('✓ Indexes rebuilt');
-    }
-  } catch (e) {
-    results.errors.push('indexes: ' + e.message);
-    console.error('✗ Index verification failed:', e);
-  }
+  // 5. (Removed) Sheet header caching no longer needed — Firestore-only mode
+  // 6. (Removed) Index verification no longer needed — Firestore-only mode
   
   // Summary
   results.duration = new Date().getTime() - startTime;

@@ -959,23 +959,8 @@ function logAuditEvent(action, entityType, entityId, oldData, newData, userId, u
       ip_address: ''
     };
 
-    // Write to Firestore (primary)
-    if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      firestoreSet(SHEETS.AUDIT_LOG, logId, logData);
-    }
-
-    // Sheet backup
-    if (typeof shouldWriteToSheet !== 'function' || shouldWriteToSheet()) {
-      var sheet = getSheet(SHEETS.AUDIT_LOG);
-      if (sheet) {
-        sheet.appendRow([
-          logId, action, entityType, entityId || '',
-          logData.old_data, logData.new_data,
-          logData.user_id, logData.user_email,
-          new Date(), ''
-        ]);
-      }
-    }
+    // Write to Firestore
+    firestoreSet(SHEETS.AUDIT_LOG, logId, logData);
   } catch (e) {
     console.error('Failed to log audit event:', e);
   }

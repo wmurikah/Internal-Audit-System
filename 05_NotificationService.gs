@@ -169,15 +169,9 @@ function queueEmail(data) {
       created_at: now
     };
     
-    // Sync new notification to Firestore
-    syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notification);
-
-    // Write to Sheet backup
-    if (shouldWriteToSheet()) {
-      var sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-      var row = objectToRow('NOTIFICATION_QUEUE', notification);
-      sheet.appendRow(row);
-    }
+    // Write to Firestore
+    syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
+    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
     
     return sanitizeForClient({ success: true, notificationId: notificationId });
   } catch (e) {
@@ -334,34 +328,22 @@ function processEmailQueue() {
         throw new Error(result.error || 'Email send failed');
       }
 
-      // Sync updated status to Firestore
+      // Update status to Sent in Firestore
       var sentObj = rowToObject(headers, data[i]);
       sentObj.status = STATUS.NOTIFICATION.SENT;
       sentObj.sent_at = now;
-      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, sentObj);
-
-      // Update status to Sent in Sheet backup
-      if (shouldWriteToSheet()) {
-        var sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.SENT);
-        sheet.getRange(rowIndex, colMap['sent_at'] + 1).setValue(now);
-      }
+      var notifId = sentObj.notification_id || row[colMap['notification_id']];
+      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notifId, sentObj);
 
       sentCount++;
 
     } catch (e) {
-      // Sync failed status to Firestore
+      // Mark as failed in Firestore
       var failedObj = rowToObject(headers, data[i]);
       failedObj.status = STATUS.NOTIFICATION.FAILED;
       failedObj.error_message = e.message;
-      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, failedObj);
-
-      // Align with database schema: mark as failed on send error in Sheet backup
-      if (shouldWriteToSheet()) {
-        var sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-        sheet.getRange(rowIndex, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.FAILED);
-        sheet.getRange(rowIndex, colMap['error_message'] + 1).setValue(e.message);
-      }
+      var failNotifId = failedObj.notification_id || row[colMap['notification_id']];
+      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, failNotifId, failedObj);
 
       failedCount++;
       console.error('Failed to send email to', recipientEmail + ':', e.message);
@@ -708,18 +690,12 @@ function retryFailedEmails() {
     const status = data[i][colMap['status']];
 
     if (status === STATUS.NOTIFICATION.FAILED) {
-      // Sync updated record to Firestore
+      // Reset to pending in Firestore
       var updatedObj = rowToObject(headers, data[i]);
       updatedObj.status = STATUS.NOTIFICATION.PENDING;
       updatedObj.error_message = '';
-      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, updatedObj);
-
-      // Reset to pending for retry in Sheet backup
-      if (shouldWriteToSheet()) {
-        var sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-        sheet.getRange(i + 1, colMap['status'] + 1).setValue(STATUS.NOTIFICATION.PENDING);
-        sheet.getRange(i + 1, colMap['error_message'] + 1).setValue('');
-      }
+      var notifId = updatedObj.notification_id || data[i][colMap['notification_id']];
+      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notifId, updatedObj);
       resetCount++;
     }
   }
@@ -1313,12 +1289,6 @@ function cleanupOldNotifications(daysOld) {
         if (notificationId) {
           deleteFromFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId);
         }
-
-        // Delete from Sheet backup
-        if (shouldWriteToSheet()) {
-          var sheet = getSheet(SHEETS.NOTIFICATION_QUEUE);
-          sheet.deleteRow(i + 1);
-        }
         deletedCount++;
       }
     }
@@ -1731,14 +1701,9 @@ function saveEmailTemplateAction(templateCode, updates, user) {
       if (updates.body_template !== undefined) existing.body_template = sanitizeInput(updates.body_template);
       if (updates.is_active !== undefined) existing.is_active = updates.is_active;
 
-      // Sync updated template to Firestore
-      syncToFirestore(SHEETS.EMAIL_TEMPLATES, existing);
-
-      var row = objectToRow('EMAIL_TEMPLATES', existing);
-      if (shouldWriteToSheet()) {
-        var sheet = getSheet(SHEETS.EMAIL_TEMPLATES);
-        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
-      }
+      // Write to Firestore
+      syncToFirestore(SHEETS.EMAIL_TEMPLATES, existing.template_code || templateCode, existing);
+      invalidateSheetData(SHEETS.EMAIL_TEMPLATES);
 
       // Clear template cache
       var cache = CacheService.getScriptCache();
