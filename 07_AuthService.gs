@@ -159,9 +159,6 @@ function getUserByEmailCached(email) {
   if (cached) {
     try {
       const user = JSON.parse(cached);
-      if (!user._rowIndex) {
-        user._rowIndex = findUserRowIndex(user.user_id);
-      }
       return user;
     } catch (e) {
       console.warn('Cache parse error:', e);
@@ -179,10 +176,7 @@ function getUserByEmailCached(email) {
   return user;
 }
 
-/** Legacy stub - no longer needed in Firestore-only mode */
-function findUserRowIndex(userId) {
-  return null;
-}
+
 
 function prewarmUserCache(user) {
   try {
@@ -522,12 +516,7 @@ function changePassword(userId, currentPassword, newPassword) {
     return { success: false, error: 'User not found' };
   }
 
-  if (!user._rowIndex) {
-    user._rowIndex = findUserRowIndex(userId);
-    if (!user._rowIndex) {
-      return { success: false, error: 'Unable to locate user record for update' };
-    }
-  }
+
 
   if (!verifyPassword(currentPassword, user.password_salt, user.password_hash)) {
     return { success: false, error: 'Current password is incorrect' };
@@ -777,10 +766,6 @@ function updateUser(userId, userData, adminUser) {
     return { success: false, error: 'User not found' };
   }
   
-  if (!user._rowIndex) {
-    user._rowIndex = findUserRowIndex(userId);
-  }
-  
   const isSelf = adminUser.user_id === userId;
   const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SENIOR_AUDITOR;
 
@@ -1017,8 +1002,5 @@ function getUsers(filters, adminUser) {
   
   return sanitizeForClient({ success: true, users: users, total: users.length });
 }
-
-/** Legacy stub - no longer needed in Firestore-only mode */
-function updateUserIndex() {}
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)
