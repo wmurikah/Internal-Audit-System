@@ -1,27 +1,17 @@
 // 01_Core.gs - Core Services Layer (Database, Cache, Index, Security).
 
 const CONFIG = {
- SPREADSHEET_ID: '1pInjjLXgJu4d0zIb3-RzkI3SwcX7q23_4g1K44M-pO4',
-  
   // Cache TTLs (seconds)
   CACHE_TTL: {
     CONFIG: 3600,        // 1 hour - rarely changes
     DROPDOWNS: 1800,     // 30 min - affiliates, areas, users list
     PERMISSIONS: 10,     // 10 sec - keep access control changes near-real-time
     SESSION: 300,        // 5 min - session validation
-    INDEX: 600,          // 10 min - lookup indexes
-    USER_BY_EMAIL: 300,  // 5 min - email to user mapping
-    SHEET_HEADERS: 3600  // 1 hour - column headers
+    USER_BY_EMAIL: 300   // 5 min - email to user mapping
   },
   
-  // Index sheet mappings
-  INDEX_SHEETS: {
-    'WORK_PAPER': '17_Index_WorkPapers',
-    'ACTION_PLAN': '18_Index_ActionPlans',
-    'USER': '19_Index_Users'
-  },
-  
-  // Data sheet mappings
+  // Entity type → Firestore collection key mappings
+  // Used by DB.getById, DB.getFiltered, DB.count
   DATA_SHEETS: {
     'WORK_PAPER': '09_WorkPapers',
     'ACTION_PLAN': '13_ActionPlans',
@@ -29,23 +19,9 @@ const CONFIG = {
   }
 };
 
-let _dbInstance = null;
-
-function getDatabase() {
-  if (!_dbInstance) {
-    _dbInstance = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  }
-  return _dbInstance;
-}
-
+/** Legacy stub — returns null. All data now comes from Firestore. */
 function getSheet(sheetName) {
-  const db = getDatabase();
-  const sheet = db.getSheetByName(sheetName);
-  if (!sheet) {
-    console.error('Sheet not found:', sheetName);
-    return null;
-  }
-  return sheet;
+  return null;
 }
 
 // ── In-memory sheet data cache ──
@@ -131,13 +107,9 @@ function getSheetData(sheetName, skipCache) {
     return data;
   }
 
-  // Non-Firestore collection (e.g. sheets without a FIRESTORE_DOC_ID_FIELD mapping)
-  // — read from Sheet directly
-  var sheet = getSheet(sheetName);
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  _sheetDataCache[sheetName] = data;
-  return data;
+  // All collections should be Firestore-backed at this point
+  console.warn('getSheetData: No Firestore mapping for', sheetName);
+  return [];
 }
 
 /** Invalidate in-memory cache for a sheet after writes */
@@ -206,16 +178,9 @@ const Cache = {
     if (pattern === '*' || pattern === 'config' || pattern === 'config_') {
       keysToRemove.push('config_all', 'config_SYSTEM_NAME', 'config_SESSION_TIMEOUT_HOURS', 'config_AUDIT_FILES_FOLDER_ID');
     }
-    if (pattern === '*' || pattern === 'index' || pattern === 'index_') {
-      keysToRemove.push('index_work_paper_map', 'index_action_plan_map', 'index_user_map');
-    }
     if (pattern === '*' || pattern === 'role') {
       keysToRemove.push('role_names');
       roles.forEach(function(r) { keysToRemove.push('role_name_' + r); });
-    }
-    if (pattern === '*' || pattern === 'headers' || pattern === 'headers_') {
-      keysToRemove.push('headers_05_Users', 'headers_09_WorkPapers', 'headers_13_ActionPlans',
-        'headers_00_Config', 'headers_02_Permissions', 'headers_06_Sessions');
     }
 
     if (keysToRemove.length > 0) {
@@ -229,213 +194,7 @@ const Cache = {
   }
 };
 
-function getSheetHeaders(sheetName) {
-  const cacheKey = 'headers_' + sheetName;
-  
-  // Check cache first
-  let headers = Cache.get(cacheKey);
-  if (headers) return headers;
-  
-  // Load from sheet
-  const sheet = getSheet(sheetName);
-  if (!sheet || sheet.getLastColumn() < 1) return [];
-  
-  headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  
-  // Cache for 1 hour
-  Cache.set(cacheKey, headers, CONFIG.CACHE_TTL.SHEET_HEADERS);
-  
-  return headers;
-}
-
-function getColumnIndex(sheetName, columnName) {
-  const headers = getSheetHeaders(sheetName);
-  return headers.indexOf(columnName);
-}
-
-const Index = {
-  getRowNumber: function(entityType, entityId) {
-    const indexMap = this.getIndexMap(entityType);
-    const entry = indexMap[entityId];
-    return entry ? entry.rowNumber : -1;
-  },
-
-  getIndexMap: function(entityType) {
-    const cacheKey = 'index_' + entityType.toLowerCase() + '_map';
-    
-    // Check cache
-    let indexMap = Cache.get(cacheKey);
-    if (indexMap) return indexMap;
-    
-    // Build from index sheet
-    const indexSheetName = CONFIG.INDEX_SHEETS[entityType];
-    if (!indexSheetName) {
-      console.error('No index sheet for entity type:', entityType);
-      return {};
-    }
-    
-    const sheet = getSheet(indexSheetName);
-    if (!sheet || sheet.getLastRow() < 2) return {};
-    
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    
-    const idIdx = 0;  // First column is always the ID
-    const rowIdx = 1; // Second column is always row_number
-    
-    indexMap = {};
-    
-    for (let i = 1; i < data.length; i++) {
-      const id = data[i][idIdx];
-      if (!id) continue;
-      
-      const entry = { rowNumber: data[i][rowIdx] };
-      
-      // Add additional indexed fields
-      for (let j = 2; j < headers.length; j++) {
-        entry[headers[j]] = data[i][j];
-      }
-      
-      indexMap[id] = entry;
-    }
-    
-    // Cache the index map
-    Cache.set(cacheKey, indexMap, CONFIG.CACHE_TTL.INDEX);
-    
-    return indexMap;
-  },
-
-  updateEntry: function(entityType, entityId, rowNumber, metadata) {
-    const indexSheetName = CONFIG.INDEX_SHEETS[entityType];
-    if (!indexSheetName) return false;
-    
-    const sheet = getSheet(indexSheetName);
-    if (!sheet) return false;
-    
-    const headers = getSheetHeaders(indexSheetName);
-    const data = sheet.getDataRange().getValues();
-    
-    // Find existing entry
-    let existingRow = -1;
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === entityId) {
-        existingRow = i + 1;
-        break;
-      }
-    }
-    
-    // Build row data
-    const rowData = headers.map((header, idx) => {
-      if (idx === 0) return entityId;
-      if (idx === 1) return rowNumber;
-      if (header === 'updated_at') return new Date();
-      return metadata[header] !== undefined ? metadata[header] : '';
-    });
-    
-    if (existingRow > 0) {
-      // Update existing
-      sheet.getRange(existingRow, 1, 1, headers.length).setValues([rowData]);
-    } else {
-      // Append new
-      sheet.appendRow(rowData);
-    }
-    
-    // Invalidate cache
-    Cache.remove('index_' + entityType.toLowerCase() + '_map');
-    
-    return true;
-  },
-
-  removeEntry: function(entityType, entityId) {
-    const indexSheetName = CONFIG.INDEX_SHEETS[entityType];
-    if (!indexSheetName) return false;
-    
-    const sheet = getSheet(indexSheetName);
-    if (!sheet) return false;
-    
-    const data = sheet.getDataRange().getValues();
-    
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === entityId) {
-        sheet.deleteRow(i + 1);
-        Cache.remove('index_' + entityType.toLowerCase() + '_map');
-        return true;
-      }
-    }
-    
-    return false;
-  },
-
-  rebuild: function(entityType) {
-    const dataSheetName = CONFIG.DATA_SHEETS[entityType];
-    const indexSheetName = CONFIG.INDEX_SHEETS[entityType];
-    
-    if (!dataSheetName || !indexSheetName) {
-      console.error('Invalid entity type for index rebuild:', entityType);
-      return false;
-    }
-    
-    const dataSheet = getSheet(dataSheetName);
-    const indexSheet = getSheet(indexSheetName);
-    
-    if (!dataSheet || !indexSheet) return false;
-    
-    const data = dataSheet.getDataRange().getValues();
-    if (data.length < 2) {
-      // Clear index (keep headers)
-      if (indexSheet.getLastRow() > 1) {
-        indexSheet.getRange(2, 1, indexSheet.getLastRow() - 1, indexSheet.getLastColumn()).clearContent();
-      }
-      return true;
-    }
-    
-    const dataHeaders = data[0];
-    const indexHeaders = getSheetHeaders(indexSheetName);
-    
-    // Build column mappings
-    const idColName = indexHeaders[0]; // e.g., 'work_paper_id'
-    const idIdx = dataHeaders.indexOf(idColName);
-    
-    if (idIdx === -1) {
-      console.error('ID column not found in data sheet:', idColName);
-      return false;
-    }
-    
-    const indexRows = [];
-    const now = new Date();
-    
-    for (let i = 1; i < data.length; i++) {
-      const entityId = data[i][idIdx];
-      if (!entityId) continue;
-      
-      const indexRow = indexHeaders.map((header, idx) => {
-        if (idx === 0) return entityId;
-        if (idx === 1) return i + 1; // row_number
-        if (header === 'updated_at') return now;
-        
-        // Find matching column in data
-        const dataColIdx = dataHeaders.indexOf(header);
-        return dataColIdx >= 0 ? data[i][dataColIdx] : '';
-      });
-      
-      indexRows.push(indexRow);
-    }
-    
-    // Clear and rewrite index
-    if (indexSheet.getLastRow() > 1) {
-      indexSheet.getRange(2, 1, indexSheet.getLastRow() - 1, indexSheet.getLastColumn()).clearContent();
-    }
-    
-    if (indexRows.length > 0) {
-      indexSheet.getRange(2, 1, indexRows.length, indexHeaders.length).setValues(indexRows);
-    }
-    
-    // Clear cache
-    Cache.remove('index_' + entityType.toLowerCase() + '_map');
-    
-    return true;
-  }
-};
+// Index object removed — Firestore queries replace Sheet-based indexes.
 
 const DB = {
   getById: function(entityType, entityId) {
@@ -464,24 +223,12 @@ const DB = {
   },
 
   getAll: function(sheetName) {
-    // Firestore-backed collections — Firestore is the sole source of truth
+    // Firestore is the sole source of truth
     if (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined' && FIRESTORE_DOC_ID_FIELD[sheetName] &&
         typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
       return firestoreGetAll(sheetName) || [];
     }
-
-    // Non-Firestore sheets only (no FIRESTORE_DOC_ID_FIELD mapping)
-    var sheet = getSheet(sheetName);
-    if (!sheet || sheet.getLastRow() < 2) return [];
-    var data = sheet.getDataRange().getValues();
-    var headers = data[0];
-    var results = [];
-    for (var i = 1; i < data.length; i++) {
-      var row = {};
-      headers.forEach(function(h, idx) { row[h] = data[i][idx]; });
-      results.push(row);
-    }
-    return results;
+    return [];
   },
 
   getFiltered: function(entityType, filters) {
