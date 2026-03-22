@@ -4,8 +4,6 @@ const SHEETS = {
   CONFIG: '00_Config',
   ROLES: '01_Roles',
   PERMISSIONS: '02_Permissions',
-  FIELD_DEFINITIONS: '03_FieldDefinitions',
-  STATUS_WORKFLOW: '04_StatusWorkflow',
   USERS: '05_Users',
   AFFILIATES: '06_Affiliates',
   AUDIT_AREAS: '07_AuditAreas',
@@ -18,13 +16,9 @@ const SHEETS = {
   AP_EVIDENCE: '14_ActionPlanEvidence',
   AP_HISTORY: '15_ActionPlanHistory',
   AUDIT_LOG: '16_AuditLog',
-  INDEX_WORK_PAPERS: '17_Index_WorkPapers',
-  INDEX_ACTION_PLANS: '18_Index_ActionPlans',
-  INDEX_USERS: '19_Index_Users',
   SESSIONS: '20_Sessions',
   NOTIFICATION_QUEUE: '21_NotificationQueue',
   EMAIL_TEMPLATES: '22_EmailTemplates',
-  STAGING_AREA: '23_StagingArea',
   AUDITEE_RESPONSES: '24_AuditeeResponses'
 };
 
@@ -126,13 +120,13 @@ const STATUS = {
     NOT_DUE: 'Not Due',
     PENDING: 'Pending',
     IN_PROGRESS: 'In Progress',
-    IMPLEMENTED: 'Implemented',      // Auditee marks as done
-    PENDING_VERIFICATION: 'Pending Verification',  // Awaiting auditor verification
-    VERIFIED: 'Verified',            // Auditor verified implementation
-    REJECTED: 'Rejected',            // Auditor rejected/returned
+    IMPLEMENTED: 'Implemented',
+    PENDING_VERIFICATION: 'Pending Verification',
+    VERIFIED: 'Verified',
+    REJECTED: 'Rejected',
     OVERDUE: 'Overdue',
     NOT_IMPLEMENTED: 'Not Implemented',
-    CLOSED: 'Closed'                 // Final state after verification
+    CLOSED: 'Closed'
   },
   RESPONSE: {
     PENDING: 'Pending Response',
@@ -156,7 +150,7 @@ const STATUS = {
 };
 
 const ROLES = {
-  SUPER_ADMIN: 'SUPER_ADMIN',        // Head of Internal Audit - full system access
+  SUPER_ADMIN: 'SUPER_ADMIN',
   SENIOR_AUDITOR: 'SENIOR_AUDITOR',
   JUNIOR_STAFF: 'JUNIOR_STAFF',
   AUDITEE: 'AUDITEE',
@@ -211,7 +205,6 @@ function generateId(entityType) {
 
     var currentValue = 1;
 
-    // Firestore is the source of truth for ID counters
     var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
     currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
 
@@ -260,7 +253,6 @@ function generateIds(entityType, count) {
 
     var currentValue = 1;
 
-    // Firestore is the source of truth for ID counters
     var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
     currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
 
@@ -323,12 +315,8 @@ function invalidateDropdownCache() {
   console.log('All dropdown caches invalidated');
 }
 
-/**
- * Force clear ALL caches - run this manually after updating user data
- */
 function clearAllCaches() {
   const cache = CacheService.getScriptCache();
-  // Clear all known cache keys
   const keysToRemove = [
     'dropdown_data_all',
     'affiliates_dropdown', 
@@ -350,9 +338,7 @@ function clearAllCaches() {
   ];
   
   keysToRemove.forEach(key => {
-    try {
-      cache.remove(key);
-    } catch(e) {}
+    try { cache.remove(key); } catch(e) {}
   });
   
   console.log('All caches cleared successfully');
@@ -557,14 +543,11 @@ function getAuditorsDropdown() {
 
 function getAuditeesDropdown() {
   const allUsers = getUsersDropdown();
-  // Include all non-auditor roles as potential auditees (responsible parties)
   const auditeeRoles = [
     'AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT', 'JUNIOR_STAFF',
     ROLES.AUDITEE, ROLES.MANAGEMENT, ROLES.UNIT_MANAGER
   ];
-  // Return all users that are potential auditees, or just return all active users if no matches
   const auditees = allUsers.filter(u => auditeeRoles.includes(u.roleCode));
-  // If no auditees found, return all active users (fallback)
   return auditees.length > 0 ? auditees : allUsers;
 }
 
@@ -641,7 +624,6 @@ function invalidateUserCache(email, userId) {
 function getUserById(userId) {
   if (!userId) return null;
 
-  // Firestore is the primary data store
   if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
     var user = firestoreGet(SHEETS.USERS, userId);
     if (user) return user;
@@ -654,7 +636,6 @@ function getUserById(userId) {
 function getWorkPaperById(workPaperId) {
   if (!workPaperId) return null;
 
-  // Firestore is the primary data store
   if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
     return firestoreGet(SHEETS.WORK_PAPERS, workPaperId);
   }
@@ -743,7 +724,6 @@ function getActionPlansByWorkPaper(workPaperId) {
 function getActionPlanById(actionPlanId) {
   if (!actionPlanId) return null;
 
-  // Firestore is the primary data store
   if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
     return firestoreGet(SHEETS.ACTION_PLANS, actionPlanId);
   }
@@ -826,39 +806,28 @@ function getColumnIndex(schemaKey, columnName) {
   return idx;
 }
 
-/**
- * Check if user can perform action - NOW USES DATABASE PERMISSIONS
- * SUPER_ADMIN has full access to everything
- * Auditor roles have code-level fallback for work paper create/update
- */
 function canUserPerform(user, action, entityType, entity) {
   if (!user) return false;
 
   const roleCode = user.role_code || user.roleCode;
 
-  // SUPER_ADMIN bypasses all permission checks - full system access
   if (roleCode === 'SUPER_ADMIN') {
     return true;
   }
 
-  // Check database permissions first
   if (typeof checkPermission === 'function') {
     if (!checkPermission(roleCode, entityType, action)) {
-               // Fallback: prevent lockouts when the 02_Permissions sheet is missing entries
       var auditorRoles = [ROLES.AUDITOR, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF];
       var wpFallbackActions = ['create', 'read', 'update'];
       if (entityType === 'WORK_PAPER' && auditorRoles.indexOf(roleCode) !== -1 && wpFallbackActions.indexOf(action) !== -1) {
         console.log('Permission granted via auditor WP fallback:', roleCode, entityType, action);
       }
-      // Fallback for ACTION_PLAN: auditor roles need full CRUD + approve access
       else if (entityType === 'ACTION_PLAN' && auditorRoles.indexOf(roleCode) !== -1) {
         console.log('Permission granted via auditor AP fallback:', roleCode, entityType, action);
       }
-      // Fallback for ACTION_PLAN: auditees need read + update (for implementation notes)
       else if (entityType === 'ACTION_PLAN' && roleCode === ROLES.AUDITEE && (action === 'read' || action === 'update')) {
         console.log('Permission granted via auditee AP fallback:', roleCode, entityType, action);
       }
-      // Fallback for ACTION_PLAN: management/observer roles need read access
       else if (entityType === 'ACTION_PLAN' && action === 'read' &&
         [ROLES.MANAGEMENT, ROLES.SENIOR_MGMT, ROLES.BOARD, ROLES.OBSERVER, ROLES.EXTERNAL_AUDITOR, ROLES.UNIT_MANAGER].indexOf(roleCode) !== -1) {
         console.log('Permission granted via read-only AP fallback:', roleCode, entityType, action);
@@ -867,18 +836,13 @@ function canUserPerform(user, action, entityType, entity) {
         console.log('Permission denied by database:', roleCode, entityType, action);
         return false;
       }
-
     }
   }
   
-  // Entity-level restrictions (these are business rules, not role bypasses)
   if (entity) {
-    // Work paper ownership check for update/delete
     if (entityType === 'WORK_PAPER' && (action === 'update' || action === 'delete')) {
-      // Only enforce ownership for non-admin roles that don't have approve permission
       const permissions = getUserPermissions(roleCode);
       if (!permissions.canApproveWorkPaper) {
-        // Non-reviewers can only edit their own work papers
         if (entity.prepared_by_id !== user.user_id) {
           console.log('Ownership check failed: user', user.user_id, 'vs prepared_by', entity.prepared_by_id);
           return false;
@@ -886,22 +850,18 @@ function canUserPerform(user, action, entityType, entity) {
       }
     }
     
-    // Action plan ownership check for auditees
     if (entityType === 'ACTION_PLAN' && roleCode === ROLES.AUDITEE) {
       const ownerIds = String(entity.owner_ids || '').split(',').map(s => s.trim());
       if (!ownerIds.includes(user.user_id)) {
         console.log('Auditee not owner of action plan');
         return false;
       }
-      // Auditees cannot delete action plans
       if (action === 'delete') return false;
     }
   }
   
   return true;
 }
-
-// getRoleName is defined in 01_Core.gs (canonical, with caching)
 
 function formatDate(date, format) {
   if (!date) return '';
@@ -959,7 +919,6 @@ function logAuditEvent(action, entityType, entityId, oldData, newData, userId, u
       ip_address: ''
     };
 
-    // Write to Firestore
     firestoreSet(SHEETS.AUDIT_LOG, logId, logData);
   } catch (e) {
     console.error('Failed to log audit event:', e);
@@ -967,13 +926,11 @@ function logAuditEvent(action, entityType, entityId, oldData, newData, userId, u
 }
 
 function getConfigValue(key) {
-  // Firestore is the source of truth
   var doc = firestoreGet(SHEETS.CONFIG, key);
   return doc ? doc.config_value : null;
 }
 
 function setConfigValue(key, value) {
-  // Firestore is the source of truth
   firestoreSet(SHEETS.CONFIG, key, {
     config_key: key,
     config_value: value,
