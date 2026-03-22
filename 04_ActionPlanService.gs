@@ -1036,12 +1036,6 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
   return history;
 }
 
-// Sheet index functions removed (Firestore-only mode).
-// Legacy stubs for callers that may still reference them.
-function updateActionPlanIndex() {}
-function buildActionPlanIndexRow() { return []; }
-function rebuildActionPlanIndex() { return 0; }
-
 function queueImplementationNotification(actionPlanId, actionPlan, implementer) {
   const auditors = getUsersDropdown().filter(u => 
     [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].includes(u.roleCode)
