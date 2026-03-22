@@ -8,12 +8,10 @@
 function getPermissions(roleCode, forceFresh) {
   if (!roleCode) return {};
   
-  // If forceFresh is true, skip cache entirely
   if (forceFresh === true) {
     return getPermissionsFresh(roleCode);
   }
   
-  // Try cache first with short TTL (5 minutes)
   const cache = CacheService.getScriptCache();
   const cacheKey = 'perm_' + roleCode;
   
@@ -29,10 +27,8 @@ function getPermissions(roleCode, forceFresh) {
     console.warn('Cache read failed for permissions:', e);
   }
   
-  // Cache miss - read fresh from database
   const permissions = getPermissionsFresh(roleCode);
   
-  // Cache for 5 minutes only (300 seconds) to ensure changes propagate
   try {
     if (Object.keys(permissions).length > 0) {
       cache.put(cacheKey, JSON.stringify(permissions), 300);
@@ -46,17 +42,12 @@ function getPermissions(roleCode, forceFresh) {
 
 /**
  * Check if a role has permission for a specific action on a module
- * @param {string} roleCode - The role code (e.g., 'SUPER_ADMIN')
- * @param {string} module - The module name (e.g., 'WORK_PAPER', 'CONFIG', 'REPORT')
- * @param {string} action - The action (e.g., 'create', 'read', 'update', 'delete', 'approve', 'export')
- * @returns {boolean} - True if permission granted
  */
 function checkPermission(roleCode, module, action) {
   if (!roleCode || !module || !action) return false;
   
   const permissions = getPermissions(roleCode);
   
-  // Map action to permission field
   const actionMap = {
     'create': 'can_create',
     'read': 'can_read',
@@ -69,7 +60,6 @@ function checkPermission(roleCode, module, action) {
   const permField = actionMap[action.toLowerCase()];
   if (!permField) return false;
   
-  // Check module permissions
   if (permissions[module] && permissions[module][permField] === true) {
     return true;
   }
@@ -79,38 +69,27 @@ function checkPermission(roleCode, module, action) {
 
 /**
  * Master cache warm function - call after deployment or when caches are cold
- * Can be run manually from Apps Script editor or via trigger
  */
 function warmAllCachesOnDeploy() {
   const startTime = new Date().getTime();
-  console.log('===========================================');
   console.log('=== CACHE WARMING STARTED ===');
-  console.log('Timestamp:', new Date().toISOString());
-  console.log('===========================================');
   
   const cache = CacheService.getScriptCache();
-  const results = {
-    success: true,
-    cached: [],
-    errors: [],
-    duration: 0
-  };
+  const results = { success: true, cached: [], errors: [], duration: 0 };
   
-  // 1. Warm dropdown data (affiliates, audit areas, users, roles)
-  console.log('\n[1/6] Caching dropdown data...');
+  // 1. Warm dropdown data
+  console.log('[1/4] Caching dropdown data...');
   try {
     const dropdownStart = new Date().getTime();
     const dropdowns = getDropdownDataFresh();
-    cache.put('dropdown_data_all', JSON.stringify(dropdowns), 1800); // 30 min
+    cache.put('dropdown_data_all', JSON.stringify(dropdowns), 1800);
     results.cached.push('dropdowns (' + (new Date().getTime() - dropdownStart) + 'ms)');
-    console.log('✓ Dropdowns cached');
   } catch (e) {
     results.errors.push('dropdowns: ' + e.message);
-    console.error('✗ Dropdown caching failed:', e);
   }
   
   // 2. Warm role permissions
-  console.log('\n[2/6] Caching role permissions...');
+  console.log('[2/4] Caching role permissions...');
   const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT'];
   try {
     const permStart = new Date().getTime();
@@ -119,14 +98,12 @@ function warmAllCachesOnDeploy() {
       cache.put('perm_' + role, JSON.stringify(perms), 1800);
     });
     results.cached.push('permissions (' + (new Date().getTime() - permStart) + 'ms)');
-    console.log('✓ Permissions cached for', roles.length, 'roles');
   } catch (e) {
     results.errors.push('permissions: ' + e.message);
-    console.error('✗ Permission caching failed:', e);
   }
   
   // 3. Warm role names
-  console.log('\n[3/6] Caching role names...');
+  console.log('[3/4] Caching role names...');
   try {
     const roleStart = new Date().getTime();
     roles.forEach(role => {
@@ -134,68 +111,35 @@ function warmAllCachesOnDeploy() {
       cache.put('role_name_' + role, name || role, 3600);
     });
     results.cached.push('roleNames (' + (new Date().getTime() - roleStart) + 'ms)');
-    console.log('✓ Role names cached');
   } catch (e) {
     results.errors.push('roleNames: ' + e.message);
-    console.error('✗ Role name caching failed:', e);
   }
   
   // 4. Warm config values
-  console.log('\n[4/6] Caching config values...');
-  const configKeys = [
-    'SYSTEM_NAME', 
-    'SESSION_TIMEOUT_HOURS', 
-    'PASSWORD_MIN_LENGTH',
-    'MAX_LOGIN_ATTEMPTS',
-    'AUDIT_FILES_FOLDER_ID'
-  ];
+  console.log('[4/4] Caching config values...');
+  const configKeys = ['SYSTEM_NAME', 'SESSION_TIMEOUT_HOURS', 'PASSWORD_MIN_LENGTH', 'MAX_LOGIN_ATTEMPTS', 'AUDIT_FILES_FOLDER_ID'];
   try {
     const configStart = new Date().getTime();
     configKeys.forEach(key => {
       const value = getConfigValueFresh(key);
-      if (value) {
-        cache.put('config_' + key, String(value), 3600);
-      }
+      if (value) cache.put('config_' + key, String(value), 3600);
     });
     results.cached.push('config (' + (new Date().getTime() - configStart) + 'ms)');
-    console.log('✓ Config values cached');
   } catch (e) {
     results.errors.push('config: ' + e.message);
-    console.error('✗ Config caching failed:', e);
   }
   
-  // 5. (Removed) Sheet header caching no longer needed — Firestore-only mode
-  // 6. (Removed) Index verification no longer needed — Firestore-only mode
-  
-  // Summary
   results.duration = new Date().getTime() - startTime;
-  
-  console.log('\n===========================================');
-  console.log('=== CACHE WARMING COMPLETE ===');
-  console.log('Duration:', results.duration, 'ms');
-  console.log('Cached:', results.cached.length, 'categories');
-  console.log('Errors:', results.errors.length);
-  if (results.errors.length > 0) {
-    console.log('Error details:', results.errors);
-  }
-  console.log('===========================================');
-  
+  console.log('=== CACHE WARMING COMPLETE === Duration:', results.duration, 'ms');
   return results;
 }
 
 /**
- * Get dropdown data fresh from database (bypasses cache)
+ * Get dropdown data fresh from Firestore (bypasses cache)
  */
 function getDropdownDataFresh() {
-  const dropdowns = {
-    affiliates: [],
-    auditAreas: [],
-    subAreas: [],
-    users: [],
-    roles: []
-  };
+  const dropdowns = { affiliates: [], auditAreas: [], subAreas: [], users: [], roles: [] };
   
-  // Get affiliates
   try {
     var affData = getSheetData(SHEETS.AFFILIATES);
     if (affData && affData.length > 1) {
@@ -203,67 +147,47 @@ function getDropdownDataFresh() {
       var codeIdx = affHeaders.indexOf('affiliate_code');
       var nameIdx = affHeaders.indexOf('affiliate_name');
       var activeIdx = affHeaders.indexOf('is_active');
-
       for (var i = 1; i < affData.length; i++) {
         if (isActive(affData[i][activeIdx])) {
-          dropdowns.affiliates.push({
-            code: affData[i][codeIdx],
-            name: affData[i][nameIdx]
-          });
+          dropdowns.affiliates.push({ code: affData[i][codeIdx], name: affData[i][nameIdx] });
         }
       }
     }
-  } catch (e) {
-    console.warn('Failed to load affiliates:', e);
-  }
+  } catch (e) { console.warn('Failed to load affiliates:', e); }
   
-  // Get audit areas
   try {
     var areaData = getSheetData(SHEETS.AUDIT_AREAS);
     if (areaData && areaData.length > 1) {
       var areaHeaders = areaData[0];
-      var idIdx = areaHeaders.indexOf('audit_area_id');
-      var areaNameIdx = areaHeaders.indexOf('audit_area_name');
+      var idIdx = areaHeaders.indexOf('area_id');
+      if (idIdx === -1) idIdx = areaHeaders.indexOf('audit_area_id');
+      var areaNameIdx = areaHeaders.indexOf('area_name');
+      if (areaNameIdx === -1) areaNameIdx = areaHeaders.indexOf('audit_area_name');
       var areaActiveIdx = areaHeaders.indexOf('is_active');
-
       for (var i = 1; i < areaData.length; i++) {
         if (isActive(areaData[i][areaActiveIdx])) {
-          dropdowns.auditAreas.push({
-            id: areaData[i][idIdx],
-            name: areaData[i][areaNameIdx]
-          });
+          dropdowns.auditAreas.push({ id: areaData[i][idIdx], name: areaData[i][areaNameIdx] });
         }
       }
     }
-  } catch (e) {
-    console.warn('Failed to load audit areas:', e);
-  }
+  } catch (e) { console.warn('Failed to load audit areas:', e); }
   
-  // Get sub areas
   try {
-    var subData = getSheetData(SHEETS.PROCESS_SUB_AREAS);
+    var subData = getSheetData(SHEETS.SUB_AREAS);
     if (subData && subData.length > 1) {
       var subHeaders = subData[0];
       var subIdIdx = subHeaders.indexOf('sub_area_id');
       var subNameIdx = subHeaders.indexOf('sub_area_name');
-      var parentIdx = subHeaders.indexOf('audit_area_id');
+      var parentIdx = subHeaders.indexOf('area_id');
       var subActiveIdx = subHeaders.indexOf('is_active');
-
       for (var i = 1; i < subData.length; i++) {
         if (isActive(subData[i][subActiveIdx])) {
-          dropdowns.subAreas.push({
-            id: subData[i][subIdIdx],
-            name: subData[i][subNameIdx],
-            parentId: subData[i][parentIdx]
-          });
+          dropdowns.subAreas.push({ id: subData[i][subIdIdx], name: subData[i][subNameIdx], parentId: subData[i][parentIdx] });
         }
       }
     }
-  } catch (e) {
-    console.warn('Failed to load sub areas:', e);
-  }
+  } catch (e) { console.warn('Failed to load sub areas:', e); }
   
-  // Get users (for dropdowns - minimal data)
   try {
     var userData = getSheetData(SHEETS.USERS);
     if (userData && userData.length > 1) {
@@ -273,23 +197,14 @@ function getDropdownDataFresh() {
       var emailIdx = userHeaders.indexOf('email');
       var roleIdx = userHeaders.indexOf('role_code');
       var userActiveIdx = userHeaders.indexOf('is_active');
-
       for (var i = 1; i < userData.length; i++) {
         if (isActive(userData[i][userActiveIdx])) {
-          dropdowns.users.push({
-            id: userData[i][userIdIdx],
-            name: userData[i][userNameIdx],
-            email: userData[i][emailIdx],
-            roleCode: userData[i][roleIdx]
-          });
+          dropdowns.users.push({ id: userData[i][userIdIdx], name: userData[i][userNameIdx], email: userData[i][emailIdx], roleCode: userData[i][roleIdx] });
         }
       }
     }
-  } catch (e) {
-    console.warn('Failed to load users:', e);
-  }
+  } catch (e) { console.warn('Failed to load users:', e); }
   
-  // Get roles
   try {
     var roleData = getSheetData(SHEETS.ROLES);
     if (roleData && roleData.length > 1) {
@@ -297,31 +212,23 @@ function getDropdownDataFresh() {
       var roleCodeIdx = roleHeaders.indexOf('role_code');
       var roleNameIdx = roleHeaders.indexOf('role_name');
       var roleActiveIdx = roleHeaders.indexOf('is_active');
-
       for (var i = 1; i < roleData.length; i++) {
         if (isActive(roleData[i][roleActiveIdx])) {
-          dropdowns.roles.push({
-            code: roleData[i][roleCodeIdx],
-            name: roleData[i][roleNameIdx]
-          });
+          dropdowns.roles.push({ code: roleData[i][roleCodeIdx], name: roleData[i][roleNameIdx] });
         }
       }
     }
-  } catch (e) {
-    console.warn('Failed to load roles:', e);
-  }
+  } catch (e) { console.warn('Failed to load roles:', e); }
   
   return dropdowns;
 }
 
 /**
- * Get permissions fresh from database (bypasses cache)
+ * Get permissions fresh from Firestore (bypasses cache)
  */
 function getPermissionsFresh(roleCode) {
   if (!roleCode) return {};
-  
   const permissions = {};
-  
   try {
     var data = getSheetData(SHEETS.PERMISSIONS);
     if (data && data.length > 1) {
@@ -335,7 +242,6 @@ function getPermissionsFresh(roleCode) {
       var approveIdx = headers.indexOf('can_approve');
       var exportIdx = headers.indexOf('can_export');
       var fieldRestIdx = headers.indexOf('field_restrictions');
-
       for (var i = 1; i < data.length; i++) {
         if (data[i][roleIdx] === roleCode) {
           var module = data[i][moduleIdx];
@@ -351,62 +257,39 @@ function getPermissionsFresh(roleCode) {
         }
       }
     }
-  } catch (e) {
-    console.warn('Failed to load permissions:', e);
-  }
-  
+  } catch (e) { console.warn('Failed to load permissions:', e); }
   return permissions;
 }
 
-/**
- * Get role name fresh from database (bypasses cache)
- */
 function getRoleNameFresh(roleCode) {
   if (!roleCode) return '';
-  
   try {
     var data = getSheetData(SHEETS.ROLES);
     if (data && data.length > 1) {
       var headers = data[0];
       var codeIdx = headers.indexOf('role_code');
       var nameIdx = headers.indexOf('role_name');
-
       for (var i = 1; i < data.length; i++) {
-        if (data[i][codeIdx] === roleCode) {
-          return data[i][nameIdx] || roleCode;
-        }
+        if (data[i][codeIdx] === roleCode) return data[i][nameIdx] || roleCode;
       }
     }
-  } catch (e) {
-    console.warn('Failed to get role name:', e);
-  }
-  
+  } catch (e) { console.warn('Failed to get role name:', e); }
   return roleCode;
 }
 
-/**
- * Get config value fresh from database (bypasses cache)
- */
 function getConfigValueFresh(key) {
   if (!key) return null;
-  
   try {
     var data = getSheetData(SHEETS.CONFIG);
     if (data && data.length > 1) {
       var headers = data[0];
       var keyIdx = headers.indexOf('config_key');
       var valueIdx = headers.indexOf('config_value');
-
       for (var i = 1; i < data.length; i++) {
-        if (data[i][keyIdx] === key) {
-          return data[i][valueIdx];
-        }
+        if (data[i][keyIdx] === key) return data[i][valueIdx];
       }
     }
-  } catch (e) {
-    console.warn('Failed to get config value:', e);
-  }
-  
+  } catch (e) { console.warn('Failed to get config value:', e); }
   return null;
 }
 
@@ -415,30 +298,18 @@ function getConfigValueFresh(key) {
  */
 function getCacheStatus() {
   const cache = CacheService.getScriptCache();
-  const status = {
-    timestamp: new Date().toISOString(),
-    items: {}
-  };
+  const status = { timestamp: new Date().toISOString(), items: {} };
   
-  // Check key cache items
   const keysToCheck = [
-    'dropdown_data_all',
-    'config_SYSTEM_NAME',
-    'perm_SUPER_ADMIN',
-    'perm_SENIOR_AUDITOR',
-    'perm_JUNIOR_STAFF',
-    'perm_AUDITEE',
-    'role_name_SUPER_ADMIN',
-    'headers_USERS',
-    'headers_WORK_PAPERS'
+    'dropdown_data_all', 'config_SYSTEM_NAME',
+    'perm_SUPER_ADMIN', 'perm_SENIOR_AUDITOR', 'perm_JUNIOR_STAFF', 'perm_AUDITEE',
+    'role_name_SUPER_ADMIN'
   ];
   
   keysToCheck.forEach(key => {
-    const value = cache.get(key);
-    status.items[key] = value ? 'CACHED' : 'MISS';
+    status.items[key] = cache.get(key) ? 'CACHED' : 'MISS';
   });
   
-  // Count hits and misses
   const values = Object.values(status.items);
   status.summary = {
     total: values.length,
@@ -452,40 +323,41 @@ function getCacheStatus() {
 }
 
 /**
- * Force clear all caches
+ * Clear in-memory sheet data cache for a specific sheet or all sheets.
+ * Call after any write operation to ensure subsequent reads return fresh data.
+ */
+function clearCache(sheetName) {
+  if (sheetName) {
+    delete _sheetDataCache[sheetName];
+  } else {
+    _sheetDataCache = {};
+  }
+}
+
+/**
+ * Force clear all caches (CacheService + in-memory)
  */
 function clearAllCachesForced() {
   const cache = CacheService.getScriptCache();
   
-  // All known cache keys
   const allKeys = [
-    'dropdown_data_all',
-    'config_SYSTEM_NAME',
-    'config_SESSION_TIMEOUT_HOURS',
-    'config_PASSWORD_MIN_LENGTH',
-    'config_MAX_LOGIN_ATTEMPTS',
-    'config_AUDIT_FILES_FOLDER_ID',
-    'headers_USERS',
-    'headers_WORK_PAPERS',
-    'headers_ACTION_PLANS',
-    'headers_SESSIONS'
+    'dropdown_data_all', 'config_SYSTEM_NAME', 'config_SESSION_TIMEOUT_HOURS',
+    'config_PASSWORD_MIN_LENGTH', 'config_MAX_LOGIN_ATTEMPTS', 'config_AUDIT_FILES_FOLDER_ID'
   ];
   
-  // Add role-based keys
   const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT'];
   roles.forEach(role => {
     allKeys.push('perm_' + role);
     allKeys.push('role_name_' + role);
   });
   
-  // Clear all
   let cleared = 0;
   allKeys.forEach(key => {
-    try {
-      cache.remove(key);
-      cleared++;
-    } catch (e) {}
+    try { cache.remove(key); cleared++; } catch (e) {}
   });
+  
+  // Also clear in-memory cache
+  clearCache();
   
   console.log('Cleared', cleared, 'cache keys');
   return { success: true, cleared: cleared };
@@ -496,36 +368,19 @@ function clearAllCachesForced() {
  */
 function scheduledCacheRefresh() {
   console.log('Scheduled cache refresh starting...');
-  
   try {
-    // Check cache status first
     const status = getCacheStatus();
-    
-    // Only warm if hit rate is below 50%
     if (status.summary.hits < status.summary.total / 2) {
-      console.log('Cache hit rate low (' + status.summary.hitRate + '), warming caches...');
       warmAllCachesOnDeploy();
     } else {
-      console.log('Cache hit rate acceptable (' + status.summary.hitRate + '), skipping full warm');
-      
-      // Just refresh the most critical caches
       const cache = CacheService.getScriptCache();
-      
-      // Refresh dropdowns
       const dropdowns = getDropdownDataFresh();
       cache.put('dropdown_data_all', JSON.stringify(dropdowns), 1800);
-      
-      // Refresh config
       const systemName = getConfigValueFresh('SYSTEM_NAME');
-      if (systemName) {
-        cache.put('config_SYSTEM_NAME', systemName, 3600);
-      }
-      
+      if (systemName) cache.put('config_SYSTEM_NAME', systemName, 3600);
       console.log('Critical caches refreshed');
     }
-    
     return { success: true };
-    
   } catch (e) {
     console.error('Scheduled cache refresh failed:', e);
     return { success: false, error: e.message };
@@ -533,109 +388,38 @@ function scheduledCacheRefresh() {
 }
 
 /**
- * Performance test - measures time for common operations
- */
-function runPerformanceTest() {
-  console.log('=== PERFORMANCE TEST ===');
-  const results = {};
-  
-  // Test 1: Cold dropdown load
-  clearAllCachesForced();
-  let start = new Date().getTime();
-  getDropdownDataFresh();
-  results.dropdownCold = new Date().getTime() - start;
-  console.log('Dropdown (cold):', results.dropdownCold, 'ms');
-  
-  // Test 2: Warm dropdown load
-  warmAllCachesOnDeploy();
-  start = new Date().getTime();
-  const cache = CacheService.getScriptCache();
-  JSON.parse(cache.get('dropdown_data_all'));
-  results.dropdownWarm = new Date().getTime() - start;
-  console.log('Dropdown (warm):', results.dropdownWarm, 'ms');
-  
-  // Test 3: Permission load (cold)
-  cache.remove('perm_SUPER_ADMIN');
-  start = new Date().getTime();
-  getPermissionsFresh('SUPER_ADMIN');
-  results.permissionCold = new Date().getTime() - start;
-  console.log('Permission (cold):', results.permissionCold, 'ms');
-  
-  // Test 4: Permission load (warm)
-  cache.put('perm_SUPER_ADMIN', JSON.stringify(getPermissionsFresh('SUPER_ADMIN')), 1800);
-  start = new Date().getTime();
-  JSON.parse(cache.get('perm_SUPER_ADMIN'));
-  results.permissionWarm = new Date().getTime() - start;
-  console.log('Permission (warm):', results.permissionWarm, 'ms');
-  
-  // Summary
-  console.log('\n=== SUMMARY ===');
-  console.log('Dropdown speedup:', Math.round(results.dropdownCold / Math.max(results.dropdownWarm, 1)) + 'x');
-  console.log('Permission speedup:', Math.round(results.permissionCold / Math.max(results.permissionWarm, 1)) + 'x');
-  
-  return results;
-}
-
-/**
  * Setup cache warming trigger
  */
 function setupCacheWarmingTrigger() {
-  // Remove existing cache warming triggers
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(trigger => {
-    if (trigger.getHandlerFunction() === 'scheduledCacheRefresh' || 
+    if (trigger.getHandlerFunction() === 'scheduledCacheRefresh' ||
         trigger.getHandlerFunction() === 'warmAllCachesOnDeploy') {
       ScriptApp.deleteTrigger(trigger);
     }
   });
-  
-  // Create new trigger - every 6 hours
-  ScriptApp.newTrigger('scheduledCacheRefresh')
-    .timeBased()
-    .everyHours(6)
-    .create();
-  
+  ScriptApp.newTrigger('scheduledCacheRefresh').timeBased().everyHours(6).create();
   console.log('Cache warming trigger configured (every 6 hours)');
   return { success: true };
 }
 
 /**
- * One-time setup after deployment
- * Run this manually after deploying the app
+ * One-time setup after deployment (Firestore-only mode)
  */
 function postDeploymentSetup() {
   console.log('=== POST-DEPLOYMENT SETUP ===');
   
-  // 1. Rebuild all indexes
-  console.log('\n[1/3] Rebuilding indexes...');
-  try {
-    Index.rebuild('USER');
-    Index.rebuild('WORK_PAPER');
-    Index.rebuild('ACTION_PLAN');
-    console.log('✓ Indexes rebuilt');
-  } catch (e) {
-    console.error('✗ Index rebuild failed:', e);
-  }
+  // 1. Warm all caches
+  console.log('[1/2] Warming caches...');
+  try { warmAllCachesOnDeploy(); } catch (e) { console.error('Cache warming failed:', e); }
   
-  // 2. Warm all caches
-  console.log('\n[2/3] Warming caches...');
-  try {
-    warmAllCachesOnDeploy();
-    console.log('✓ Caches warmed');
-  } catch (e) {
-    console.error('✗ Cache warming failed:', e);
-  }
-  
-  // 3. Setup triggers
-  console.log('\n[3/3] Setting up triggers...');
+  // 2. Setup triggers
+  console.log('[2/2] Setting up triggers...');
   try {
     setupAllTriggers();
     setupCacheWarmingTrigger();
-    console.log('✓ Triggers configured');
-  } catch (e) {
-    console.error('✗ Trigger setup failed:', e);
-  }
+  } catch (e) { console.error('Trigger setup failed:', e); }
   
-  console.log('\n=== POST-DEPLOYMENT SETUP COMPLETE ===');
+  console.log('=== POST-DEPLOYMENT SETUP COMPLETE ===');
   return { success: true };
 }
