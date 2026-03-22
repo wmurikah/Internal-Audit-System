@@ -497,3 +497,17 @@ function verifyFirestoreHealth() {
   console.log(summary);
   return summary;
 }
+
+
+// ─────────────────────────────────────────────────────────────
+// Legacy write aliases (called by 03_WorkPaperService.gs,
+// 04_ActionPlanService.gs, 07_AuthService.gs)
+// ─────────────────────────────────────────────────────────────
+
+function syncToFirestore(sheetName, docId, data) {
+  firestoreSet(sheetName, docId, data);
+}
+
+function deleteFromFirestore(sheetName, docId) {
+  firestoreDelete(sheetName, docId);
+}
