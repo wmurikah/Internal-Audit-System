@@ -753,13 +753,6 @@ function addWorkPaperRevision(workPaperId, action, comments, user) {
   return revision;
 }
 
-// Sheet index functions removed (Firestore-only mode).
-// Legacy stubs for callers that may still reference them.
-function updateWorkPaperIndex() {}
-function buildIndexRow() { return []; }
-function removeFromIndex() { return false; }
-function rebuildWorkPaperIndex() { return 0; }
-
 function queueReviewNotification(workPaperId, workPaper, submitter) {
   // Get reviewers (Senior Auditors and Head of Audit)
   const users = getUsersDropdown();
