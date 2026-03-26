@@ -600,6 +600,38 @@ function setupNavigation(p) {
     document.getElementById('navAuditeeSection')?.classList.add('d-none');
     document.getElementById('navAuditeeMenu')?.classList.add('d-none');
   }
+
+  // ── PROB-06: Role-based sidebar visibility ──
+
+  // A) Work Papers sidebar: only auditor roles + Board Member (view-only)
+  var wpFullRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+  var wpViewOnlyRoles = ['OBSERVER']; // Board Member — WP list only
+
+  if (wpFullRoles.indexOf(role) === -1 && wpViewOnlyRoles.indexOf(role) === -1) {
+    // Non-auditor, non-Board Member: hide entire WP section
+    document.getElementById('navAuditMgmtSection')?.classList.add('d-none');
+    document.getElementById('navMyWorkPapers')?.classList.add('d-none');
+    document.getElementById('navNewWorkPaper')?.classList.add('d-none');
+    document.getElementById('navPendingReview')?.classList.add('d-none');
+    document.getElementById('navSendQueue')?.classList.add('d-none');
+    document.getElementById('navResponsesReview')?.classList.add('d-none');
+  }
+
+  if (wpViewOnlyRoles.indexOf(role) >= 0) {
+    // Board Member: show WP list only, hide Create/Review/Send/Responses
+    document.getElementById('navNewWorkPaper')?.classList.add('d-none');
+    document.getElementById('navPendingReview')?.classList.add('d-none');
+    document.getElementById('navSendQueue')?.classList.add('d-none');
+    document.getElementById('navResponsesReview')?.classList.add('d-none');
+  }
+
+  // B) My Observations: visible only for auditee roles + SUPER_ADMIN (HOA oversight)
+  var myObsRoles = ['SUPER_ADMIN', 'SENIOR_MGMT', 'MANAGEMENT', 'UNIT_MANAGER', 'AUDITEE'];
+  if (myObsRoles.indexOf(role) === -1) {
+    // Hide My Observations for: AUDITOR, SENIOR_AUDITOR, OBSERVER (Board), EXTERNAL_AUDITOR
+    document.getElementById('navAuditeeSection')?.classList.add('d-none');
+    document.getElementById('navAuditeeMenu')?.classList.add('d-none');
+  }
 }
 
 function loadAuditeeFindingCounts() {

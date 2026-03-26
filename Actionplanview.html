@@ -1,731 +1,723 @@
-<!-- Action Plans List Page -->
-<div class="action-plans-list">
-  <!-- Quick Stats -->
-  <div class="ap-stats-bar mb-3">
-    <div class="ap-stat-item">
-      <div class="stat-value" id="statTotal">-</div>
-      <div class="stat-label">Total</div>
+<!-- Action Plan Detail Page -->
+<div class="action-plan-view">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <button class="btn btn-outline-secondary btn-sm me-2" onclick="_apvGoBack()"><i class="bi bi-arrow-left me-1"></i>Back</button>
+      <span class="badge bg-secondary" id="apvStatus">-</span>
+      <span class="badge" id="apvRisk">-</span>
+      <span class="badge bg-danger" id="apvOverdue" style="display:none;"></span>
+      <span class="badge bg-info" id="apvProposed" style="display:none;">Proposed by Auditee</span>
     </div>
-    <div class="ap-stat-item text-warning">
-      <div class="stat-value" id="statPending">-</div>
-      <div class="stat-label">Pending</div>
-    </div>
-    <div class="ap-stat-item text-danger">
-      <div class="stat-value" id="statOverdue">-</div>
-      <div class="stat-label">Overdue</div>
-    </div>
-    <div class="ap-stat-item text-info">
-      <div class="stat-value" id="statImplemented">-</div>
-      <div class="stat-label">Implemented</div>
-    </div>
-    <div class="ap-stat-item text-success">
-      <div class="stat-value" id="statVerified">-</div>
-      <div class="stat-label">Verified</div>
-    </div>
+    <div class="btn-group" id="apvHeaderActions"></div>
   </div>
 
-  <div class="filters-bar">
-    <div class="input-group" style="max-width: 300px;">
-      <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-      <input type="text" class="form-control" id="apSearchInput" placeholder="Search..." onkeyup="debounceAPSearch()">
-    </div>
-    <select class="form-select" id="apFilterStatus" onchange="filterActionPlans()">
-      <option value="">All Status</option>
-      <option value="Not Due">Not Due</option>
-      <option value="Pending">Pending</option>
-      <option value="In Progress">In Progress</option>
-      <option value="Overdue">Overdue</option>
-      <option value="Implemented">Implemented</option>
-      <option value="Pending Verification">Pending Verification</option>
-      <option value="Verified">Verified</option>
-      <option value="Rejected">Rejected</option>
-      <option value="Not Implemented">Not Implemented</option>
-      <option value="Closed">Closed</option>
-    </select>
-    <select class="form-select" id="apFilterOwner" onchange="filterActionPlans()">
-      <option value="">All Owners</option>
-    </select>
-    <div class="form-check form-switch ms-3">
-      <input class="form-check-input" type="checkbox" id="apFilterOverdue" onchange="filterActionPlans()">
-      <label class="form-check-label" for="apFilterOverdue">Overdue Only</label>
-    </div>
-    <button class="btn btn-outline-secondary" onclick="clearAPFilters()"><i class="bi bi-x-circle me-1"></i>Clear</button>
-
-    <div class="ms-auto">
-      <div class="btn-group">
-        <button class="btn btn-outline-secondary active" onclick="setAPView('table')" id="btnAPViewTable" title="Table view">
-          <i class="bi bi-list"></i>
-        </button>
-        <button class="btn btn-outline-secondary" onclick="setAPView('kanban')" id="btnAPViewKanban" title="Kanban view">
-          <i class="bi bi-kanban"></i>
-        </button>
-      </div>
-    </div>
+  <!-- Loading spinner -->
+  <div id="apvLoading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="mt-3 text-muted">Loading action plan...</p>
   </div>
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <span class="text-muted" id="apResultsInfo">Loading...</span>
-    <div class="dropdown">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-        <i class="bi bi-download me-1"></i>Export
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        <li><a class="dropdown-item" href="#" onclick="exportAPList('csv')"><i class="bi bi-filetype-csv me-2"></i>CSV</a></li>
-        <li><a class="dropdown-item" href="#" onclick="exportAPList('excel')"><i class="bi bi-file-earmark-excel me-2"></i>Excel</a></li>
-      </ul>
-    </div>
-  </div>
-
-  <!-- Table View -->
-  <div class="table-container" id="apTableView">
-    <div class="table-responsive">
-      <table class="table table-hover">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Description</th>
-            <th>Work Paper</th>
-            <th>Owner</th>
-            <th>Due Date</th>
-            <th>Status</th>
-            <th>Overdue</th>
-          </tr>
-        </thead>
-        <tbody id="apTableBody">
-          <tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>
-          <tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>
-          <tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>
-          <tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Kanban View -->
-  <div class="kanban-container" id="apKanbanView" style="display: none;">
-    <div class="kanban-board">
-      <div class="kanban-column" data-status="Pending">
-        <div class="kanban-column-header">
-          <span class="kanban-column-title">
-            <i class="bi bi-hourglass-split text-warning me-2"></i>Pending
-          </span>
-          <span class="kanban-column-count badge bg-warning" id="kanbanCountPending">0</span>
+  <!-- Main content (hidden until loaded) -->
+  <div id="apvContent" style="display:none;">
+    <div class="row">
+      <div class="col-lg-8">
+        <!-- Details Card -->
+        <div class="card mb-4">
+          <div class="card-header d-flex justify-content-between">
+            <span><i class="bi bi-list-check me-2"></i><code id="apvId">-</code></span>
+          </div>
+          <div class="card-body">
+            <div id="apvDescription" style="white-space:pre-wrap;" class="mb-3">-</div>
+            <hr>
+            <div class="row g-3">
+              <div class="col-md-6"><strong>Owner(s):</strong> <span id="apvOwners">-</span></div>
+              <div class="col-md-6"><strong>Due Date:</strong> <span id="apvDueDate">-</span></div>
+              <div class="col-md-6"><strong>Created By:</strong> <span id="apvCreatedBy">-</span></div>
+              <div class="col-md-6"><strong>Created:</strong> <span id="apvCreatedDate">-</span></div>
+              <div class="col-md-6"><strong>Affiliate:</strong> <span id="apvAffiliate">-</span></div>
+              <div class="col-md-6"><strong>Action #:</strong> <span id="apvNumber">-</span></div>
+            </div>
+            <!-- Delegation info -->
+            <div id="apvDelegationInfo" class="alert alert-secondary mt-3" style="display:none;">
+              <i class="bi bi-person-plus me-2"></i><span id="apvDelegationText"></span>
+            </div>
+          </div>
         </div>
-        <div class="kanban-column-body" id="kanbanPending"></div>
+
+        <!-- Related Observation -->
+        <div class="card mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#apvObsCollapse" style="cursor:pointer;">
+            <span><i class="bi bi-eye me-2"></i>Related Observation</span>
+            <i class="bi bi-chevron-down"></i>
+          </div>
+          <div class="collapse show" id="apvObsCollapse">
+            <div class="card-body">
+              <h6 id="apvObsTitle">-</h6>
+              <button class="btn btn-sm btn-outline-primary mt-2" id="apvViewWPBtn" onclick="_apvViewWP()">
+                <i class="bi bi-file-earmark-text me-1"></i>View Full Work Paper
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Implementation Section -->
+        <div class="card mb-4" id="apvImplCard">
+          <div class="card-header"><i class="bi bi-check2-square me-2"></i>Implementation</div>
+          <div class="card-body" id="apvImplBody">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Evidence Files -->
+        <div class="card mb-4">
+          <div class="card-header d-flex justify-content-between">
+            <span><i class="bi bi-paperclip me-2"></i>Evidence (<span id="apvEvidenceCount">0</span>)</span>
+            <button class="btn btn-sm btn-outline-primary" id="apvUploadBtn" onclick="_apvUploadEvidence()"><i class="bi bi-upload me-1"></i>Upload</button>
+          </div>
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="apvEvidenceList">
+              <li class="list-group-item text-muted text-center">No evidence files</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
-      <div class="kanban-column" data-status="Overdue">
-        <div class="kanban-column-header">
-          <span class="kanban-column-title">
-            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Overdue
-          </span>
-          <span class="kanban-column-count badge bg-danger" id="kanbanCountOverdue">0</span>
+      <div class="col-lg-4">
+        <!-- Actions Card -->
+        <div class="card mb-4" id="apvActionsCard">
+          <div class="card-header"><i class="bi bi-lightning me-2"></i>Actions</div>
+          <div class="card-body" id="apvActions">
+            <!-- Populated by JS based on role -->
+          </div>
         </div>
-        <div class="kanban-column-body" id="kanbanOverdue"></div>
-      </div>
 
-      <div class="kanban-column" data-status="In Progress">
-        <div class="kanban-column-header">
-          <span class="kanban-column-title">
-            <i class="bi bi-arrow-repeat text-primary me-2"></i>In Progress
-          </span>
-          <span class="kanban-column-count badge bg-primary" id="kanbanCountInProgress">0</span>
+        <!-- Timeline -->
+        <div class="card mb-4">
+          <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>History</div>
+          <div class="card-body">
+            <div class="timeline" id="apvTimeline"></div>
+          </div>
         </div>
-        <div class="kanban-column-body" id="kanbanInProgress"></div>
-      </div>
 
-      <div class="kanban-column" data-status="Pending Verification">
-        <div class="kanban-column-header">
-          <span class="kanban-column-title">
-            <i class="bi bi-hourglass-top text-info me-2"></i>Pending Verification
-          </span>
-          <span class="kanban-column-count badge bg-info" id="kanbanCountPendingVerification">0</span>
+        <!-- Review Comments -->
+        <div class="card mb-4" id="apvReviewCard" style="display:none;">
+          <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Review Comments</div>
+          <div class="card-body" id="apvReviewBody"></div>
         </div>
-        <div class="kanban-column-body" id="kanbanPendingVerification"></div>
-      </div>
-
-      <div class="kanban-column" data-status="Verified">
-        <div class="kanban-column-header">
-          <span class="kanban-column-title">
-            <i class="bi bi-check-circle-fill text-success me-2"></i>Verified / Closed
-          </span>
-          <span class="kanban-column-count badge bg-success" id="kanbanCountVerified">0</span>
-        </div>
-        <div class="kanban-column-body" id="kanbanVerified"></div>
       </div>
     </div>
   </div>
-
-  <nav class="mt-4" id="apPagination"><ul class="pagination justify-content-center"></ul></nav>
 </div>
 
-<style>
-/* Quick Stats Bar */
-.ap-stats-bar {
-  display: flex;
-  gap: 16px;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  flex-wrap: wrap;
-}
-
-.ap-stat-item {
-  text-align: center;
-  padding: 8px 24px;
-  border-right: 1px solid #dee2e6;
-}
-
-.ap-stat-item:last-child {
-  border-right: none;
-}
-
-.ap-stat-item .stat-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-}
-
-.ap-stat-item .stat-label {
-  font-size: 0.8rem;
-  color: #6c757d;
-  text-transform: uppercase;
-}
-
-/* Kanban Styles */
-.kanban-container {
-  overflow-x: auto;
-  padding-bottom: 16px;
-}
-
-.kanban-board {
-  display: flex;
-  gap: 16px;
-  min-width: max-content;
-}
-
-.kanban-column {
-  width: 300px;
-  min-width: 300px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 300px);
-}
-
-.kanban-column-header {
-  padding: 12px 16px;
-  background: #ffffff;
-  border-radius: 8px 8px 0 0;
-  border-bottom: 1px solid #e9ecef;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.kanban-column-title {
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-}
-
-.kanban-column-body {
-  padding: 12px;
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.kanban-card {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border-left: 4px solid #dee2e6;
-}
-
-.kanban-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  transform: translateY(-2px);
-}
-
-.kanban-card.overdue {
-  border-left-color: #dc3545;
-}
-
-.kanban-card.due-soon {
-  border-left-color: #ffc107;
-}
-
-.kanban-card .card-id {
-  font-size: 0.75rem;
-  color: #6c757d;
-  font-family: monospace;
-}
-
-.kanban-card .card-description {
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin: 8px 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.kanban-card .card-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.75rem;
-  color: #6c757d;
-}
-
-.kanban-card .card-owner {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.kanban-card .card-due {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.kanban-card .overdue-badge {
-  background: #fee2e2;
-  color: #dc2626;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-.kanban-empty {
-  text-align: center;
-  padding: 24px;
-  color: #9ca3af;
-}
-
-.kanban-empty i {
-  font-size: 32px;
-  margin-bottom: 8px;
-  display: block;
-}
-
-@media (max-width: 768px) {
-  .kanban-column {
-    width: 260px;
-    min-width: 260px;
-  }
-
-  .ap-stats-bar {
-    justify-content: center;
-  }
-
-  .ap-stat-item {
-    border-right: none;
-    border-bottom: 1px solid #dee2e6;
-    padding: 8px 16px;
-  }
-}
-</style>
-
 <script>
-// =============================================
-// UNIQUE variable names to avoid collision with
-// other included files (Reports.html, Actionplanview.html)
-// that may also declare _apListData in the same
-// global scope when GAS concatenates all includes.
-// =============================================
-var _apListData = [];        // was: actionPlansData
-var _apListPage = 1;         // was: _apListPage
-var _apListPageSize = 20;    // was: _apListPageSize
-var _apListViewMode = 'table'; // was: _apListViewMode
-var _apListSearchTimer = null; // was: _apListSearchTimer
+var _currentAP = null;
 
-// =============================================
-// SAFE DOM HELPER — prevents the "Cannot set
-// properties of undefined" crash that was causing
-// infinite-loading.  Every getElementById in this
-// file now goes through this wrapper.
-// =============================================
-function _apEl(id) {
-  var el = document.getElementById(id);
-  if (!el) {
-    console.warn('[AP-DOM] Element not found: #' + id);
-  }
-  return el;
-}
+function loadActionPlanView(params) {
+  if (!params || !params.id) { navigateTo('action-plans'); return; }
 
-// Debounce search
-function debounceAPSearch() {
-  if (_apListSearchTimer) clearTimeout(_apListSearchTimer);
-  _apListSearchTimer = setTimeout(filterActionPlans, 300);
-}
+  var loading = document.getElementById('apvLoading');
+  var content = document.getElementById('apvContent');
+  if (loading) loading.style.display = 'block';
+  if (content) content.style.display = 'none';
 
-// Set view mode
-function setAPView(mode) {
-  _apListViewMode = mode;
-
-  var btnTable = _apEl('btnAPViewTable');
-  var btnKanban = _apEl('btnAPViewKanban');
-  var tableView = _apEl('apTableView');
-  var kanbanView = _apEl('apKanbanView');
-  var pagination = _apEl('apPagination');
-
-  if (btnTable) btnTable.classList.toggle('active', mode === 'table');
-  if (btnKanban) btnKanban.classList.toggle('active', mode === 'kanban');
-  if (tableView) tableView.style.display = mode === 'table' ? 'block' : 'none';
-  if (kanbanView) kanbanView.style.display = mode === 'kanban' ? 'block' : 'none';
-  if (pagination) pagination.style.display = mode === 'table' ? 'block' : 'none';
-
-  if (mode === 'kanban') {
-    _apListRenderKanban();
-  } else {
-    _apListRender();
-  }
-}
-
-// Update stats — null-safe
-function _apListUpdateStats() {
-  var total = _apListData.length;
-  var pending = _apListData.filter(function(ap) { return ap.status === 'Pending' || ap.status === 'Not Due' || ap.status === 'In Progress'; }).length;
-  var closedStatuses = ['Implemented', 'Pending Verification', 'Verified', 'Closed', 'Not Implemented'];
-  var overdue = _apListData.filter(function(ap) { return ap.days_overdue > 0 && closedStatuses.indexOf(ap.status) === -1; }).length;
-  var implemented = _apListData.filter(function(ap) { return ap.status === 'Implemented' || ap.status === 'Pending Verification'; }).length;
-  var verified = _apListData.filter(function(ap) { return ap.status === 'Verified' || ap.status === 'Closed'; }).length;
-
-  var elTotal = _apEl('statTotal');
-  var elPending = _apEl('statPending');
-  var elOverdue = _apEl('statOverdue');
-  var elImpl = _apEl('statImplemented');
-  var elVerified = _apEl('statVerified');
-
-  if (elTotal) elTotal.textContent = total;
-  if (elPending) elPending.textContent = pending;
-  if (elOverdue) elOverdue.textContent = overdue;
-  if (elImpl) elImpl.textContent = implemented;
-  if (elVerified) elVerified.textContent = verified;
-}
-
-// Render Kanban board — null-safe
-function _apListRenderKanban() {
-  var columns = {
-    'Pending': [],
-    'Overdue': [],
-    'In Progress': [],
-    'Pending Verification': [],
-    'Verified': []
-  };
-
-  _apListData.forEach(function(ap) {
-    var status = ap.status || 'Pending';
-    if (status === 'Overdue' || (ap.days_overdue > 0 && ['Implemented', 'Pending Verification', 'Verified', 'Closed', 'Not Implemented'].indexOf(status) === -1)) {
-      columns['Overdue'].push(ap);
-    } else if (status === 'Not Due') {
-      columns['Pending'].push(ap);
-    } else if (status === 'Implemented' || status === 'Pending Verification') {
-      columns['Pending Verification'].push(ap);
-    } else if (status === 'Rejected') {
-      columns['In Progress'].push(ap);
-    } else if (status === 'Verified' || status === 'Closed') {
-      columns['Verified'].push(ap);
-    } else if (columns[status]) {
-      columns[status].push(ap);
-    } else {
-      columns['Pending'].push(ap);
-    }
-  });
-
-  Object.keys(columns).forEach(function(status) {
-    var containerId = 'kanban' + status.replace(/\s+/g, '');
-    var countId = 'kanbanCount' + status.replace(/\s+/g, '');
-    var container = _apEl(containerId);
-    var countEl = _apEl(countId);
-
-    if (countEl) countEl.textContent = columns[status].length;
-    if (!container) return;
-
-    if (columns[status].length === 0) {
-      container.innerHTML =
-        '<div class="kanban-empty">' +
-          '<i class="bi bi-inbox"></i>' +
-          '<div>No items</div>' +
-        '</div>';
-      return;
-    }
-
-    container.innerHTML = columns[status].map(function(ap) {
-      var isOverdue = ap.days_overdue > 0;
-      var isDueSoon = !isOverdue && ap.days_until_due <= 7 && ap.days_until_due > 0;
-      var cardClass = isOverdue ? 'overdue' : (isDueSoon ? 'due-soon' : '');
-
-      return '<div class="kanban-card ' + cardClass + '" onclick="navigateTo(\'action-plan-view\', {id:\'' + ap.action_plan_id + '\'})">' +
-          '<div class="card-id">' + ap.action_plan_id + '</div>' +
-          '<div class="card-description">' + escapeHtml(ap.action_description || 'No description') + '</div>' +
-          '<div class="card-meta">' +
-            '<div class="card-owner"><i class="bi bi-person"></i> ' + escapeHtml((ap.owner_names || '-').split(',')[0]) + '</div>' +
-            '<div class="card-due">' +
-              (isOverdue
-                ? '<span class="overdue-badge">' + ap.days_overdue + 'd overdue</span>'
-                : '<i class="bi bi-calendar"></i> ' + (ap.due_date ? formatDate(ap.due_date) : '-')) +
-            '</div>' +
-          '</div>' +
-        '</div>';
-    }).join('');
-  });
-}
-
-// Initialize owner filter
-function _apListInitFilters() {
-  var ownerSelect = _apEl('apFilterOwner');
-  if (ownerSelect && window.appDropdowns && window.appDropdowns.users) {
-    window.appDropdowns.users.forEach(function(u) {
-      var opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = u.name;
-      ownerSelect.appendChild(opt);
-    });
-  }
-}
-
-// Collect current active filter selections
-function getCurrentAPFilters() {
-  var filters = {};
-  var statusEl = _apEl('apFilterStatus');
-  var ownerEl = _apEl('apFilterOwner');
-  var searchEl = _apEl('apSearchInput');
-  var status = statusEl ? statusEl.value : '';
-  var owner = ownerEl ? ownerEl.value : '';
-  var search = searchEl ? searchEl.value : '';
-  if (status) filters.status = status;
-  if (owner) filters.owner = owner;
-  if (search) filters.search = search;
-  return filters;
-}
-
-// Export action plans
-function exportAPList(format) {
-  showLoading('Exporting...');
-  apiCall('exportActionPlansCSV', { filters: getCurrentAPFilters() })
-    .then(function(result) {
-      hideLoading();
-      if (result.success && result.csv) {
-        var blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
-        var link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = result.filename || 'action_plans_export.csv';
-        link.click();
-        showToast('Export downloaded (' + result.count + ' records)', 'success');
-      } else {
-        showToast(result.error || 'Export failed', 'danger');
-      }
-    })
-    .catch(function() {
-      hideLoading();
-      showToast('Export failed', 'danger');
-    });
-}
-
-function _apListShowSkeleton() {
-  var tbody = _apEl('apTableBody');
-  if (!tbody) return;
-  var html = '';
-  for (var i = 0; i < 6; i++) {
-    html += '<tr class="skeleton-row">' +
-      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-lg">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-md">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-md">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-badge">&nbsp;</div></td>' +
-      '<td><div class="skeleton-cell w-sm">&nbsp;</div></td>' +
-    '</tr>';
-  }
-  tbody.innerHTML = html;
-}
-
-function loadActionPlans(filters) {
-  filters = filters || {};
-
-  var searchEl = _apEl('apSearchInput');
-  var statusEl = _apEl('apFilterStatus');
-  var ownerEl = _apEl('apFilterOwner');
-  var overdueEl = _apEl('apFilterOverdue');
-
-  var search = searchEl ? searchEl.value : '';
-  var status = statusEl ? statusEl.value : '';
-  var owner = ownerEl ? ownerEl.value : '';
-  var overdueOnly = overdueEl ? overdueEl.checked : false;
-
-  // ── DOM DIAGNOSTIC (remove after fix is confirmed) ──
-  console.log('[AP-DEBUG] loadActionPlans called');
-  console.log('[AP-DEBUG] DOM check: apTableBody=', !!_apEl('apTableBody'),
-    'apResultsInfo=', !!_apEl('apResultsInfo'),
-    'apPagination=', !!_apEl('apPagination'),
-    'statTotal=', !!_apEl('statTotal'));
-
-  // Show skeleton loading rows
-  var tbody = _apEl('apTableBody');
-  if (tbody) {
-    tbody.innerHTML = Array(4).fill(0).map(function() {
-      return '<tr class="skeleton-row"><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-75"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td><div class="skeleton-bar w-25"></div></td><td><div class="skeleton-bar w-50"></div></td><td></td></tr>';
-    }).join('');
-  }
-
-  // Timeout: if API takes >20s, show error instead of infinite skeleton
-  var apLoadTimer = setTimeout(function() {
-    console.error('[AP-DEBUG] Action plans load timed out after 20s');
-    _apListData = [];
-    _apListUpdateStats();
-    if (_apListViewMode === 'kanban') _apListRenderKanban(); else _apListRender();
-    showToast('Loading timed out. Check Firestore connection and try again.', 'danger');
-  }, 20000);
-
-  apiCall('getActionPlans', { filters: { search: search, status: status, owner_id: owner, overdue_only: overdueOnly } })
+  apiCall('getActionPlan', { actionPlanId: params.id, includeRelated: true })
     .then(function(r) {
-      clearTimeout(apLoadTimer);
-      console.log('[AP-DEBUG] API response:', JSON.stringify({
-        success: r ? r.success : 'NULL_RESPONSE',
-        isArray: r ? Array.isArray(r.actionPlans) : false,
-        count: (r && r.actionPlans) ? r.actionPlans.length : 'N/A',
-        error: r ? r.error : 'N/A'
-      }));
-
-      if (r && r.success !== false && Array.isArray(r.actionPlans)) {
-        _apListData = r.actionPlans;
-        _apListUpdateStats();
-        if (_apListViewMode === 'kanban') _apListRenderKanban(); else _apListRender();
+      if (loading) loading.style.display = 'none';
+      if (r && r.success !== false && r.actionPlan) {
+        _currentAP = r.actionPlan;
+        if (content) content.style.display = 'block';
+        renderActionPlanView();
       } else {
-        var errMsg = (r && r.error) ? r.error : 'Unexpected response from server';
-        console.error('[AP-DEBUG] Action plans load error:', errMsg);
-        _apListData = [];
-        _apListUpdateStats();
-        if (_apListViewMode === 'kanban') _apListRenderKanban(); else _apListRender();
-        showToast(errMsg, 'danger');
+        showToast(r ? r.error || 'Action plan not found' : 'Not found', 'danger');
+        navigateTo('action-plans');
       }
     })
     .catch(function(err) {
-      clearTimeout(apLoadTimer);
-      console.error('[AP-DEBUG] Action plans catch error:', err);
-      _apListData = [];
-      _apListUpdateStats();
-      if (_apListViewMode === 'kanban') _apListRenderKanban(); else _apListRender();
-      showToast('Failed to load action plans: ' + (err.message || err), 'danger');
+      if (loading) loading.style.display = 'none';
+      showToast('Error loading action plan: ' + (err.message || err), 'danger');
+      navigateTo('action-plans');
     });
 }
 
-function loadActionPlansOverdue() {
-  var el = _apEl('apFilterOverdue');
-  if (el) el.checked = true;
-  loadActionPlans({ overdue_only: true });
+function renderActionPlanView() {
+  var ap = _currentAP;
+  if (!ap) return;
+
+  var wp = ap.workPaper || {};
+
+  // Header badges
+  var statusEl = document.getElementById('apvStatus');
+  if (statusEl) { statusEl.textContent = ap.status || '-'; statusEl.className = 'badge badge-status ' + getStatusClass(ap.status); }
+
+  var riskEl = document.getElementById('apvRisk');
+  if (riskEl) { riskEl.textContent = wp.risk_rating || 'Not Rated'; riskEl.className = 'badge ' + getRiskClass(wp.risk_rating); }
+
+  var overdueEl = document.getElementById('apvOverdue');
+  if (overdueEl) {
+    if (ap.days_overdue > 0) { overdueEl.textContent = ap.days_overdue + ' days overdue'; overdueEl.style.display = ''; }
+    else { overdueEl.style.display = 'none'; }
+  }
+
+  var proposedEl = document.getElementById('apvProposed');
+  if (proposedEl) proposedEl.style.display = ap.auditee_proposed ? '' : 'none';
+
+  // Details
+  var el = document.getElementById('apvId');
+  if (el) el.textContent = ap.action_plan_id || '-';
+  el = document.getElementById('apvDescription');
+  if (el) el.textContent = ap.action_description || '-';
+  el = document.getElementById('apvOwners');
+  if (el) el.textContent = ap.owner_names || '-';
+  el = document.getElementById('apvDueDate');
+  if (el) el.textContent = ap.due_date ? formatDate(ap.due_date) : '-';
+  el = document.getElementById('apvCreatedBy');
+  if (el) el.textContent = ap.created_by || '-';
+  el = document.getElementById('apvCreatedDate');
+  if (el) el.textContent = ap.created_at ? formatDate(ap.created_at) : '-';
+  el = document.getElementById('apvAffiliate');
+  if (el) el.textContent = wp.affiliate_code || '-';
+  el = document.getElementById('apvNumber');
+  if (el) el.textContent = ap.action_number || '-';
+
+  // Delegation info
+  var delegInfo = document.getElementById('apvDelegationInfo');
+  if (delegInfo) {
+    if (ap.delegated_by_id) {
+      var txt = 'Delegated by ' + escapeHtml(ap.delegated_by_name || ap.delegated_by_id);
+      if (ap.delegated_date) txt += ' on ' + formatDate(ap.delegated_date);
+      if (ap.delegation_notes) txt += '. Notes: ' + escapeHtml(ap.delegation_notes);
+      if (ap.original_owner_ids) txt += '. Original owner: ' + escapeHtml(ap.original_owner_ids);
+      document.getElementById('apvDelegationText').innerHTML = txt;
+      delegInfo.style.display = 'block';
+    } else {
+      delegInfo.style.display = 'none';
+    }
+  }
+
+  // Related observation
+  el = document.getElementById('apvObsTitle');
+  if (el) el.textContent = wp.observation_title || 'No observation linked';
+
+  // Implementation section
+  renderAPImplementation(ap);
+
+  // Evidence
+  renderAPEvidence(ap.evidence || []);
+
+  // Actions
+  renderAPActions(ap);
+
+  // Timeline
+  renderAPTimeline(ap.history || []);
+
+  // Review comments
+  renderAPReviewComments(ap);
+
+  // Upload button visibility
+  var uploadBtn = document.getElementById('apvUploadBtn');
+  if (uploadBtn) {
+    var user = window.currentUser;
+    var isOwner = _apvIsOwner(ap, user);
+    var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+    var isAuditor = auditorRoles.indexOf(user?.role_code) >= 0;
+    var terminalStatuses = ['Verified', 'Closed', 'Not Implemented'];
+    uploadBtn.style.display = (isOwner || isAuditor) && terminalStatuses.indexOf(ap.status) === -1 ? '' : 'none';
+  }
 }
 
-// =============================================
-// RENDER — fully null-safe
-// =============================================
-function _apListRender() {
-  var start = (_apListPage - 1) * _apListPageSize;
-  var pageData = _apListData.slice(start, start + _apListPageSize);
+function _apvIsOwner(ap, user) {
+  if (!ap || !user || !ap.owner_ids) return false;
+  return ap.owner_ids.split(',').indexOf(user.user_id) >= 0;
+}
 
-  var infoEl = _apEl('apResultsInfo');
-  if (infoEl) {
-    infoEl.textContent = _apListData.length === 0
-      ? 'No results found'
-      : 'Showing ' + (start + 1) + '-' + Math.min(start + _apListPageSize, _apListData.length) + ' of ' + _apListData.length;
+function renderAPActions(ap) {
+  var container = document.getElementById('apvActions');
+  if (!container) return;
+  var html = '';
+  var user = window.currentUser;
+  var role = user?.role_code || '';
+  var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+  var hoaRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR'];
+  var isAuditor = auditorRoles.indexOf(role) >= 0;
+  var isHOA = hoaRoles.indexOf(role) >= 0;
+  var isOwner = _apvIsOwner(ap, user);
+  var readOnlyRoles = ['OBSERVER', 'EXTERNAL_AUDITOR'];
+  var isReadOnly = readOnlyRoles.indexOf(role) >= 0;
+  var terminalStatuses = ['Verified', 'Closed', 'Not Implemented'];
+  var isTerminal = terminalStatuses.indexOf(ap.status) >= 0;
+  var evidence = ap.evidence || [];
+  var hasEvidence = evidence.length > 0;
+
+  // Delegation banner (delegated to current user, pending acceptance)
+  if (isOwner && ap.delegated_by_id && ap.original_owner_ids) {
+    html += '<div class="alert alert-info mb-3">' +
+      '<i class="bi bi-person-plus me-2"></i>' +
+      'This action plan was delegated to you by <strong>' + escapeHtml(ap.delegated_by_name || '') + '</strong>' +
+      (ap.delegated_date ? ' on ' + formatDate(ap.delegated_date) : '') + '.' +
+      (ap.delegation_notes ? '<br><small>' + escapeHtml(ap.delegation_notes) + '</small>' : '') +
+      '<div class="mt-2">' +
+      '<button class="btn btn-success btn-sm me-2" onclick="respondDelegation(\'accept\')"><i class="bi bi-check me-1"></i>Accept</button>' +
+      '<button class="btn btn-outline-danger btn-sm" onclick="respondDelegation(\'reject\')"><i class="bi bi-x me-1"></i>Reject</button>' +
+      '</div></div>';
   }
 
-  var apTbody = _apEl('apTableBody');
-  if (!apTbody) {
-    console.error('[AP-DEBUG] CRITICAL: #apTableBody not found in DOM. Check that Actionplanslist.html is included inside <div id="page-action-plans"> in your main HTML.');
+  // Owner actions (non-terminal)
+  if (isOwner && !isTerminal) {
+    var implStatuses = ['Pending', 'Not Due', 'In Progress', 'Rejected'];
+    if (implStatuses.indexOf(ap.status) >= 0) {
+      html += '<button class="btn btn-success w-100 mb-2" onclick="markAPImplemented()" ' +
+        (!hasEvidence ? 'disabled title="Upload at least one evidence document first"' : '') + '>' +
+        '<i class="bi bi-check-circle me-1"></i>Mark as Implemented' +
+        (!hasEvidence ? ' <small>(needs evidence)</small>' : '') + '</button>';
+    }
+    html += '<button class="btn btn-outline-primary w-100 mb-2" onclick="showDelegateModal()"><i class="bi bi-person-plus me-1"></i>Delegate</button>';
+    html += '<button class="btn btn-outline-secondary w-100 mb-2" onclick="_apvUploadEvidence()"><i class="bi bi-upload me-1"></i>Upload Evidence</button>';
+  }
+
+  // Auditor: Verification buttons
+  if (isAuditor && ap.status === 'Pending Verification') {
+    html += '<hr>';
+    html += '<p class="small text-muted mb-2">Verification</p>';
+    html += '<button class="btn btn-success w-100 mb-2" onclick="showVerifyModal(\'approve\')"><i class="bi bi-check-circle me-1"></i>Verify (Approve)</button>';
+    html += '<button class="btn btn-warning w-100 mb-2" onclick="showVerifyModal(\'return\')"><i class="bi bi-arrow-return-left me-1"></i>Return for Rework</button>';
+    html += '<button class="btn btn-danger w-100 mb-2" onclick="showVerifyModal(\'reject\')"><i class="bi bi-x-circle me-1"></i>Reject</button>';
+  }
+
+  // HOA: Final review buttons
+  if (isHOA && ap.status === 'Verified') {
+    html += '<hr>';
+    html += '<p class="small text-muted mb-2">HOA Final Review</p>';
+    html += '<button class="btn btn-primary w-100 mb-2" onclick="showHOAReviewModal(\'approve\')"><i class="bi bi-check-all me-1"></i>HOA Approve (Close)</button>';
+    html += '<button class="btn btn-outline-danger w-100 mb-2" onclick="showHOAReviewModal(\'reject\')"><i class="bi bi-x-circle me-1"></i>HOA Reject</button>';
+  }
+
+  // Auditor general actions
+  if (isAuditor && !isReadOnly) {
+    html += '<hr>';
+    var canEdit = ['Verified', 'Closed'].indexOf(ap.status) === -1;
+    var canDelegate = terminalStatuses.indexOf(ap.status) === -1;
+    var canDelete = ['Not Due', 'Pending', 'In Progress'].indexOf(ap.status) >= 0;
+
+    if (canEdit) html += '<button class="btn btn-outline-primary btn-sm me-1 mb-1" onclick="showEditAPModal()"><i class="bi bi-pencil me-1"></i>Edit</button>';
+    if (canDelegate) html += '<button class="btn btn-outline-secondary btn-sm me-1 mb-1" onclick="showDelegateModal()"><i class="bi bi-person-plus me-1"></i>Delegate</button>';
+    if (canDelete) html += '<button class="btn btn-outline-danger btn-sm me-1 mb-1" onclick="deleteAP()"><i class="bi bi-trash me-1"></i>Delete</button>';
+  }
+
+  if (isReadOnly) {
+    html += '<p class="text-muted small mb-0"><i class="bi bi-eye me-1"></i>Read-only access</p>';
+  }
+
+  if (!html) {
+    html = '<p class="text-muted small mb-0">No actions available</p>';
+  }
+
+  container.innerHTML = html;
+
+  // Hide actions card for read-only users with nothing to show
+  var card = document.getElementById('apvActionsCard');
+  if (card && isReadOnly) card.style.display = 'none';
+}
+
+function renderAPImplementation(ap) {
+  var body = document.getElementById('apvImplBody');
+  if (!body) return;
+  var html = '';
+  var user = window.currentUser;
+  var isOwner = _apvIsOwner(ap, user);
+  var evidence = ap.evidence || [];
+  var implStatuses = ['Pending', 'Not Due', 'In Progress', 'Rejected'];
+
+  if (ap.implementation_notes) {
+    html += '<div class="mb-3"><strong>Implementation Notes:</strong><div class="mt-1 p-3 bg-light rounded" style="white-space:pre-wrap;">' + escapeHtml(ap.implementation_notes) + '</div></div>';
+  }
+  if (ap.implemented_date) {
+    html += '<p class="text-muted small"><i class="bi bi-calendar-check me-1"></i>Implemented on ' + formatDate(ap.implemented_date) + '</p>';
+  }
+
+  // Show textarea for owner to add notes before marking implemented
+  if (isOwner && implStatuses.indexOf(ap.status) >= 0) {
+    html += '<div class="mt-3">' +
+      '<label class="form-label">Implementation Notes</label>' +
+      '<textarea class="form-control" id="apvImplNotes" rows="3" placeholder="Describe what was implemented...">' + escapeHtml(ap.implementation_notes || '') + '</textarea>' +
+      '</div>';
+  }
+
+  if (!html) {
+    html = '<p class="text-muted small mb-0">No implementation details yet.</p>';
+  }
+
+  body.innerHTML = html;
+}
+
+function renderAPEvidence(evidence) {
+  var list = document.getElementById('apvEvidenceList');
+  var countEl = document.getElementById('apvEvidenceCount');
+  if (countEl) countEl.textContent = evidence.length;
+
+  if (!list) return;
+  if (!evidence.length) {
+    list.innerHTML = '<li class="list-group-item text-muted text-center">No evidence files</li>';
     return;
   }
 
-  if (!pageData.length) {
-    apTbody.innerHTML = '<tr><td colspan="7" class="text-center py-5">' +
-      '<div class="empty-state-enhanced">' +
-        '<div class="empty-icon"><i class="bi bi-list-check"></i></div>' +
-        '<h5>No action plans found</h5>' +
-        '<p>Try adjusting your filters or check back later</p>' +
-        '<button class="btn btn-outline-primary" onclick="clearAPFilters()"><i class="bi bi-arrow-counterclockwise me-1"></i>Clear Filters</button>' +
-      '</div>' +
-    '</td></tr>';
-    _apListRenderPagination();
-    return;
-  }
+  var user = window.currentUser;
+  var isOwner = _apvIsOwner(_currentAP, user);
+  var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+  var isAuditor = auditorRoles.indexOf(user?.role_code) >= 0;
+  var canDelete = isOwner || isAuditor;
+  var terminalStatuses = ['Verified', 'Closed', 'Not Implemented'];
+  var isTerminal = terminalStatuses.indexOf(_currentAP?.status) >= 0;
 
-  apTbody.innerHTML = pageData.map(function(ap) {
-    var desc = ap.action_description || '';
-    var truncDesc = escapeHtml(desc.substring(0, 60)) + (desc.length > 60 ? '...' : '');
-    return '<tr onclick="navigateTo(\'action-plan-view\', {id:\'' + ap.action_plan_id + '\'})" style="cursor:pointer;">' +
-      '<td><code>' + ap.action_plan_id + '</code></td>' +
-      '<td>' + truncDesc + '</td>' +
-      '<td><code>' + (ap.work_paper_id || '') + '</code></td>' +
-      '<td>' + escapeHtml(ap.owner_names || '-') + '</td>' +
-      '<td>' + (ap.due_date ? formatDate(ap.due_date) : '-') + '</td>' +
-      '<td><span class="badge badge-status ' + getStatusClass(ap.status) + '">' + (ap.status || '-') + '</span></td>' +
-      '<td>' + (ap.days_overdue > 0 ? '<span class="badge bg-danger">' + ap.days_overdue + ' days</span>' : '-') + '</td>' +
-    '</tr>';
+  list.innerHTML = evidence.map(function(f) {
+    var icon = typeof getFileIcon === 'function' ? getFileIcon(f.mime_type, f.file_name) : 'bi-file-earmark';
+    var size = f.file_size ? (f.file_size < 1024 * 1024 ? Math.round(f.file_size / 1024) + ' KB' : (f.file_size / (1024 * 1024)).toFixed(1) + ' MB') : '';
+    var deleteBtn = canDelete && !isTerminal ? '<button class="btn btn-sm btn-outline-danger ms-2" onclick="event.stopPropagation(); deleteAPEvidence(\'' + f.evidence_id + '\')"><i class="bi bi-trash"></i></button>' : '';
+    return '<li class="list-group-item d-flex justify-content-between align-items-center">' +
+      '<a href="' + escapeHtml(f.drive_url || '#') + '" target="_blank" class="text-decoration-none">' +
+      '<i class="bi ' + icon + ' me-2"></i>' + escapeHtml(f.file_name || 'File') +
+      (size ? ' <small class="text-muted">(' + size + ')</small>' : '') +
+      '</a>' + deleteBtn + '</li>';
   }).join('');
-
-  _apListRenderPagination();
 }
 
-function _apListRenderPagination() {
-  var navEl = _apEl('apPagination');
-  if (!navEl) return;
-  var ul = navEl.querySelector('ul');
-  if (!ul) return;
+function renderAPTimeline(history) {
+  var timeline = document.getElementById('apvTimeline');
+  if (!timeline) return;
 
-  var totalPages = Math.ceil(_apListData.length / _apListPageSize);
-  if (totalPages <= 1) { ul.innerHTML = ''; return; }
+  if (!history || !history.length) {
+    timeline.innerHTML = '<p class="text-muted">No history</p>';
+    return;
+  }
 
-  var html = '<li class="page-item ' + (_apListPage === 1 ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="goToAPPage(' + (_apListPage - 1) + ')"><i class="bi bi-chevron-left"></i></a></li>';
-  for (var i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || Math.abs(i - _apListPage) <= 2) {
-      html += '<li class="page-item ' + (i === _apListPage ? 'active' : '') + '"><a class="page-link" href="#" onclick="goToAPPage(' + i + ')">' + i + '</a></li>';
-    } else if (Math.abs(i - _apListPage) === 3) {
-      html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+  // Sort newest first
+  var sorted = history.slice().sort(function(a, b) {
+    return new Date(b.changed_at || 0) - new Date(a.changed_at || 0);
+  });
+
+  timeline.innerHTML = sorted.map(function(h) {
+    var statusColor = '';
+    var ns = (h.new_status || '').toLowerCase();
+    if (ns.indexOf('approved') >= 0 || ns.indexOf('verified') >= 0 || ns.indexOf('closed') >= 0 || ns.indexOf('implemented') >= 0) statusColor = 'text-success';
+    else if (ns.indexOf('rejected') >= 0 || ns.indexOf('not implemented') >= 0) statusColor = 'text-danger';
+    else statusColor = 'text-primary';
+
+    var label = '';
+    if (h.previous_status && h.new_status) label = h.previous_status + ' &rarr; ' + h.new_status;
+    else if (h.new_status) label = h.new_status;
+    else label = 'Update';
+
+    return '<div class="timeline-item">' +
+      '<div class="fw-medium ' + statusColor + '">' + label + '</div>' +
+      '<div class="timeline-date">' + formatDate(h.changed_at) + (h.user_name ? ' by ' + escapeHtml(h.user_name) : '') + '</div>' +
+      (h.comments ? '<div class="small text-muted mt-1">' + escapeHtml(h.comments) + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function renderAPReviewComments(ap) {
+  var card = document.getElementById('apvReviewCard');
+  var body = document.getElementById('apvReviewBody');
+  if (!card || !body) return;
+
+  var html = '';
+  if (ap.auditor_review_comments) {
+    html += '<div class="mb-3"><strong>Auditor Review</strong>' +
+      (ap.auditor_review_by ? '<br><small class="text-muted">By ' + escapeHtml(ap.auditor_review_by) + (ap.auditor_review_date ? ' on ' + formatDate(ap.auditor_review_date) : '') + '</small>' : '') +
+      '<div class="mt-1 p-2 bg-light rounded">' + escapeHtml(ap.auditor_review_comments) + '</div></div>';
+  }
+  if (ap.hoa_review_comments) {
+    html += '<div class="mb-3"><strong>HOA Review</strong>' +
+      (ap.hoa_review_by ? '<br><small class="text-muted">By ' + escapeHtml(ap.hoa_review_by) + (ap.hoa_review_date ? ' on ' + formatDate(ap.hoa_review_date) : '') + '</small>' : '') +
+      '<div class="mt-1 p-2 bg-light rounded">' + escapeHtml(ap.hoa_review_comments) + '</div></div>';
+  }
+
+  if (html) {
+    body.innerHTML = html;
+    card.style.display = 'block';
+  } else {
+    card.style.display = 'none';
+  }
+}
+
+// ── Action handlers ──
+
+function _apvGoBack() {
+  var ap = _currentAP;
+  if (ap && ap.work_paper_id && document.referrer && document.referrer.indexOf('work-paper-view') >= 0) {
+    navigateTo('work-paper-view', { id: ap.work_paper_id });
+  } else {
+    navigateTo('action-plans');
+  }
+}
+
+function _apvViewWP() {
+  if (_currentAP && _currentAP.work_paper_id) {
+    navigateTo('work-paper-view', { id: _currentAP.work_paper_id });
+  }
+}
+
+function _apvUploadEvidence() {
+  if (_currentAP) showUploadModal('ACTION_PLAN', _currentAP.action_plan_id);
+}
+
+function _apvReload() {
+  if (_currentAP) loadActionPlanView({ id: _currentAP.action_plan_id });
+}
+
+function _apvSpinBtn(btn) {
+  if (!btn) return { restore: function(){} };
+  var orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing...';
+  return { restore: function() { btn.disabled = false; btn.innerHTML = orig; } };
+}
+
+function markAPImplemented() {
+  var ap = _currentAP;
+  if (!ap) return;
+  var evidence = ap.evidence || [];
+  if (!evidence.length) { showToast('Upload at least one evidence document first', 'warning'); return; }
+
+  var notesEl = document.getElementById('apvImplNotes');
+  var notes = notesEl ? notesEl.value : (ap.implementation_notes || '');
+
+  if (!confirm('Mark this action plan as implemented?')) return;
+
+  var btn = document.querySelector('[onclick="markAPImplemented()"]');
+  var s = _apvSpinBtn(btn);
+
+  apiCall('markAsImplemented', { actionPlanId: ap.action_plan_id, implementationNotes: notes })
+    .then(function(r) {
+      s.restore();
+      if (r && r.success) { showToast('Marked as implemented', 'success'); _apvReload(); }
+      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+    })
+    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+}
+
+function showVerifyModal(action) {
+  var ap = _currentAP;
+  if (!ap) return;
+  document.getElementById('verifyAPAction').value = action;
+  document.getElementById('verifyAPId').value = ap.action_plan_id;
+  document.getElementById('verifyAPComments').value = '';
+
+  var label = document.getElementById('verifyAPModalLabel');
+  var info = document.getElementById('verifyAPInfo');
+  var submitBtn = document.getElementById('verifyAPSubmitBtn');
+
+  if (action === 'approve') {
+    if (label) label.textContent = 'Verify Action Plan';
+    if (info) info.textContent = 'Confirm that the implementation is complete and satisfactory.';
+    if (submitBtn) { submitBtn.className = 'btn btn-success'; submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Verify'; }
+  } else if (action === 'return') {
+    if (label) label.textContent = 'Return for Rework';
+    if (info) info.textContent = 'Return this action plan for additional work. Please provide comments.';
+    if (submitBtn) { submitBtn.className = 'btn btn-warning'; submitBtn.innerHTML = '<i class="bi bi-arrow-return-left me-1"></i>Return'; }
+  } else {
+    if (label) label.textContent = 'Reject Action Plan';
+    if (info) info.textContent = 'Reject the implementation. Please provide a reason.';
+    if (submitBtn) { submitBtn.className = 'btn btn-danger'; submitBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Reject'; }
+  }
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyAPModal')).show();
+}
+
+function submitAPVerification() {
+  var action = document.getElementById('verifyAPAction').value;
+  var apId = document.getElementById('verifyAPId').value;
+  var comments = document.getElementById('verifyAPComments').value;
+
+  var btn = document.getElementById('verifyAPSubmitBtn');
+  var s = _apvSpinBtn(btn);
+
+  apiCall('verifyImplementation', { actionPlanId: apId, action: action, comments: comments })
+    .then(function(r) {
+      s.restore();
+      bootstrap.Modal.getInstance(document.getElementById('verifyAPModal'))?.hide();
+      if (r && r.success) { showToast('Verification submitted', 'success'); _apvReload(); }
+      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+    })
+    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+}
+
+function showHOAReviewModal(action) {
+  var ap = _currentAP;
+  if (!ap) return;
+  document.getElementById('hoaReviewAPAction').value = action;
+  document.getElementById('hoaReviewAPId').value = ap.action_plan_id;
+  document.getElementById('hoaReviewAPComments').value = '';
+
+  var label = document.getElementById('hoaReviewAPModalLabel');
+  var info = document.getElementById('hoaReviewAPInfo');
+  var submitBtn = document.getElementById('hoaReviewAPSubmitBtn');
+
+  if (action === 'approve') {
+    if (label) label.textContent = 'HOA Final Approval';
+    if (info) info.textContent = 'Approve and close this action plan.';
+    if (submitBtn) { submitBtn.className = 'btn btn-primary'; submitBtn.innerHTML = '<i class="bi bi-check-all me-1"></i>Approve & Close'; }
+  } else {
+    if (label) label.textContent = 'HOA Rejection';
+    if (info) info.textContent = 'Reject this action plan. It will be returned to In Progress.';
+    if (submitBtn) { submitBtn.className = 'btn btn-danger'; submitBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Reject'; }
+  }
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('hoaReviewAPModal')).show();
+}
+
+function submitHOAReview() {
+  var action = document.getElementById('hoaReviewAPAction').value;
+  var apId = document.getElementById('hoaReviewAPId').value;
+  var comments = document.getElementById('hoaReviewAPComments').value;
+
+  var btn = document.getElementById('hoaReviewAPSubmitBtn');
+  var s = _apvSpinBtn(btn);
+
+  apiCall('hoaReview', { actionPlanId: apId, action: action, comments: comments })
+    .then(function(r) {
+      s.restore();
+      bootstrap.Modal.getInstance(document.getElementById('hoaReviewAPModal'))?.hide();
+      if (r && r.success) { showToast('HOA review submitted', 'success'); _apvReload(); }
+      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+    })
+    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+}
+
+function showDelegateModal() {
+  var ap = _currentAP;
+  if (!ap) return;
+  document.getElementById('delegateAPId').value = ap.action_plan_id;
+  document.getElementById('delegateCurrentOwner').value = ap.owner_names || '-';
+  document.getElementById('delegateNotes').value = '';
+  populateMultiSelect('delegateNewOwner', window.appDropdowns?.users || [], 'id', 'display');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('delegateAPModal')).show();
+}
+
+function submitDelegation() {
+  var apId = document.getElementById('delegateAPId').value;
+  var ownerSelect = document.getElementById('delegateNewOwner');
+  var notes = document.getElementById('delegateNotes').value;
+  var newOwnerIds = Array.from(ownerSelect.selectedOptions).map(function(o) { return o.value; }).join(',');
+  var newOwnerNames = Array.from(ownerSelect.selectedOptions).map(function(o) { return o.text; }).join(', ');
+
+  if (!newOwnerIds) { showToast('Please select a new owner', 'warning'); return; }
+
+  var btn = document.querySelector('#delegateAPModal .btn-primary');
+  var s = _apvSpinBtn(btn);
+
+  apiCall('delegateActionPlan', { actionPlanId: apId, newOwnerIds: newOwnerIds, newOwnerNames: newOwnerNames, notes: notes })
+    .then(function(r) {
+      s.restore();
+      bootstrap.Modal.getInstance(document.getElementById('delegateAPModal'))?.hide();
+      if (r && r.success) { showToast('Action plan delegated', 'success'); _apvReload(); }
+      else showToast(r ? r.error || 'Delegation failed' : 'Failed', 'danger');
+    })
+    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+}
+
+function respondDelegation(action) {
+  var ap = _currentAP;
+  if (!ap) return;
+
+  if (action === 'accept') {
+    if (!confirm('Accept this delegated action plan?')) return;
+    apiCall('respondToDelegation', { actionPlanId: ap.action_plan_id, action: 'accept', reason: '' })
+      .then(function(r) {
+        if (r && r.success) { showToast('Delegation accepted', 'success'); _apvReload(); }
+        else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+      })
+      .catch(function(e) { showToast('Error: ' + (e.message || e), 'danger'); });
+  } else {
+    document.getElementById('rejectDelegationAPId').value = ap.action_plan_id;
+    document.getElementById('rejectDelegationReason').value = '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('rejectDelegationModal')).show();
+  }
+}
+
+function submitRejectDelegation() {
+  var apId = document.getElementById('rejectDelegationAPId').value;
+  var reason = document.getElementById('rejectDelegationReason').value;
+  if (!reason || reason.trim().length < 5) { showToast('Please provide a reason (at least 5 characters)', 'warning'); return; }
+
+  var btn = document.querySelector('#rejectDelegationModal .btn-danger');
+  var s = _apvSpinBtn(btn);
+
+  apiCall('respondToDelegation', { actionPlanId: apId, action: 'reject', reason: reason })
+    .then(function(r) {
+      s.restore();
+      bootstrap.Modal.getInstance(document.getElementById('rejectDelegationModal'))?.hide();
+      if (r && r.success) { showToast('Delegation rejected', 'success'); _apvReload(); }
+      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+    })
+    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+}
+
+function showEditAPModal() {
+  var ap = _currentAP;
+  if (!ap) return;
+  document.getElementById('editAPId').value = ap.action_plan_id;
+  document.getElementById('editAPDesc').value = ap.action_description || '';
+  document.getElementById('editAPDueDate').value = ap.due_date ? new Date(ap.due_date).toISOString().split('T')[0] : '';
+  populateMultiSelect('editAPOwners', window.appDropdowns?.users || [], 'id', 'display');
+
+  // Pre-select current owners
+  if (ap.owner_ids) {
+    var ids = ap.owner_ids.split(',');
+    var sel = document.getElementById('editAPOwners');
+    if (sel) {
+      Array.from(sel.options).forEach(function(opt) {
+        opt.selected = ids.indexOf(opt.value) >= 0;
+      });
     }
   }
-  html += '<li class="page-item ' + (_apListPage === totalPages ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="goToAPPage(' + (_apListPage + 1) + ')"><i class="bi bi-chevron-right"></i></a></li>';
-  ul.innerHTML = html;
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('editAPModal')).show();
 }
 
-function goToAPPage(p) { _apListPage = p; _apListRender(); window.scrollTo(0, 0); }
-function filterActionPlans() { _apListPage = 1; loadActionPlans(); }
+function submitEditAP() {
+  var apId = document.getElementById('editAPId').value;
+  var desc = document.getElementById('editAPDesc').value;
+  var dueDate = document.getElementById('editAPDueDate').value;
+  var ownerSelect = document.getElementById('editAPOwners');
+  var ownerIds = Array.from(ownerSelect.selectedOptions).map(function(o) { return o.value; }).join(',');
+  var ownerNames = Array.from(ownerSelect.selectedOptions).map(function(o) { return o.text; }).join(', ');
 
-function clearAPFilters() {
-  var searchEl = _apEl('apSearchInput');
-  var statusEl = _apEl('apFilterStatus');
-  var ownerEl = _apEl('apFilterOwner');
-  var overdueEl = _apEl('apFilterOverdue');
-  if (searchEl) searchEl.value = '';
-  if (statusEl) statusEl.value = '';
-  if (ownerEl) ownerEl.value = '';
-  if (overdueEl) overdueEl.checked = false;
-  _apListPage = 1;
-  loadActionPlans();
+  if (!desc) { showToast('Description is required', 'warning'); return; }
+
+  var btn = document.querySelector('#editAPModal .btn-primary');
+  var s = _apvSpinBtn(btn);
+
+  apiCall('updateActionPlan', { actionPlanId: apId, action_description: desc, owner_ids: ownerIds, owner_names: ownerNames, due_date: dueDate })
+    .then(function(r) {
+      s.restore();
+      bootstrap.Modal.getInstance(document.getElementById('editAPModal'))?.hide();
+      if (r && r.success) { showToast('Action plan updated', 'success'); _apvReload(); }
+      else showToast(r ? r.error || 'Update failed' : 'Failed', 'danger');
+    })
+    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
 }
 
-// Initialize filters when dropdowns are available
-document.addEventListener('DOMContentLoaded', function() {
-  function tryInitFilters(retries) {
-    if (window.appDropdowns && window.appDropdowns.users) {
-      _apListInitFilters();
-    } else if (retries > 0) {
-      setTimeout(function() { tryInitFilters(retries - 1); }, 500);
-    }
-  }
-  tryInitFilters(20);
-});
+function deleteAP() {
+  var ap = _currentAP;
+  if (!ap) return;
+  if (!confirm('Delete action plan ' + ap.action_plan_id + '? This cannot be undone.')) return;
+
+  apiCall('deleteActionPlan', { actionPlanId: ap.action_plan_id })
+    .then(function(r) {
+      if (r && r.success) { showToast('Action plan deleted', 'success'); navigateTo('action-plans'); }
+      else showToast(r ? r.error || 'Delete failed' : 'Failed', 'danger');
+    })
+    .catch(function(e) { showToast('Error: ' + (e.message || e), 'danger'); });
+}
+
+function deleteAPEvidence(evidenceId) {
+  if (!confirm('Delete this evidence file?')) return;
+
+  apiCall('deleteActionPlanEvidence', { evidenceId: evidenceId })
+    .then(function(r) {
+      if (r && r.success) { showToast('Evidence deleted', 'success'); _apvReload(); }
+      else showToast(r ? r.error || 'Delete failed' : 'Failed', 'danger');
+    })
+    .catch(function(e) { showToast('Error: ' + (e.message || e), 'danger'); });
+}
 </script>

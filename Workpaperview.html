@@ -266,6 +266,7 @@ function showAddActionPlan() {
   document.getElementById('apFormWorkPaperId').value = currentWorkPaper.work_paper_id;
   document.getElementById('apFormId').value = '';
   document.getElementById('actionPlanFormModal').querySelector('form').reset();
+  populateMultiSelect('apFormOwners', window.appDropdowns?.users || [], 'id', 'display');
   bootstrap.Modal.getOrCreateInstance(document.getElementById('actionPlanFormModal')).show();
 }
 
