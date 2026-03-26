@@ -108,7 +108,7 @@ function getAuditeeResponseData(workPaperId, user) {
   var isAssigned = responsibleIds.includes(user.user_id);
 
   if (!isSuperAdmin && !isAuditor && !isAssigned) {
-    throw new Error('Permission denied: You are not assigned to this finding');
+    throw new Error('Permission denied: You are not assigned to this observation');
   }
 
   // Get response history
@@ -463,7 +463,7 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
     message: action === 'accept'
       ? 'Response accepted successfully.'
       : (newResponseStatus === STATUS.RESPONSE.ESCALATED
-          ? 'Maximum rounds reached. Finding has been escalated to CC recipients.'
+          ? 'Maximum rounds reached. Observation has been escalated to CC recipients.'
           : 'Response rejected. Auditee will be notified to revise.')
   });
 }
@@ -852,7 +852,7 @@ function queueResponseEscalatedNotification(workPaperId, workPaper, reviewer) {
       ['Escalated By', String(reviewer.full_name || '-')]
     ];
 
-    var outro = 'This observation requires management intervention. Please <a href="' + loginUrl + '">log in</a> to review the full finding and response history.';
+    var outro = 'This observation requires management intervention. Please <a href="' + loginUrl + '">log in</a> to review the full observation and response history.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
     sendEmail(email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
   });

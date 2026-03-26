@@ -439,6 +439,8 @@ function formatEmailHtml(subject, body) {
   else if (/Rejected|Revision/i.test(subject)) categoryLabel = 'ACTION REQUIRED';
   else if (/Delegat/i.test(subject)) categoryLabel = 'DELEGATION REQUEST';
   else if (/Overdue/i.test(subject)) categoryLabel = 'OVERDUE REMINDER';
+  else if (/Evidence Required/i.test(subject)) categoryLabel = 'EVIDENCE REQUIRED';
+  else if (/Not Yet Sent/i.test(subject)) categoryLabel = 'REMINDER';
   else if (/Verification|Verify/i.test(subject)) categoryLabel = 'VERIFICATION REQUIRED';
   else if (/Approved/i.test(subject)) categoryLabel = 'APPROVED';
   else if (/Summary/i.test(subject)) categoryLabel = 'BI-WEEKLY SUMMARY';
@@ -548,6 +550,8 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
   else if (/Rejected|Revision/i.test(subject)) categoryLabel = 'ACTION REQUIRED';
   else if (/Delegat/i.test(subject)) categoryLabel = 'DELEGATION REQUEST';
   else if (/Overdue/i.test(subject)) categoryLabel = 'OVERDUE REMINDER';
+  else if (/Evidence Required/i.test(subject)) categoryLabel = 'EVIDENCE REQUIRED';
+  else if (/Not Yet Sent/i.test(subject)) categoryLabel = 'REMINDER';
   else if (/Verification|Verify/i.test(subject)) categoryLabel = 'VERIFICATION REQUIRED';
   else if (/Approved/i.test(subject)) categoryLabel = 'APPROVED';
   else if (/Summary/i.test(subject)) categoryLabel = 'BI-WEEKLY SUMMARY';
@@ -825,7 +829,7 @@ function buildCalloutBox(text, variant) {
  * Called when work papers are sent to auditees — groups by auditee and sends ONE email per person.
  *
  * Email format:
- *   AUDIT FINDINGS ASSIGNED
+ *   AUDIT OBSERVATIONS ASSIGNED
  *   Dear [First Name],
  *   [Context line]
  *   [Grouped table: Observation headers with risk badge → AP rows underneath with due dates]
@@ -877,14 +881,14 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   }
 
   var subjectSuffix = ctx.auditAreaName ? ' \u2013 ' + ctx.auditAreaName : '';
-  var subject = 'Audit Findings Assigned' + subjectSuffix;
+  var subject = 'Audit Observations Assigned' + subjectSuffix;
 
   // Build email body with grouped observation/AP layout
   var year = new Date().getFullYear();
   var systemUrl = getSystemUrl();
 
-  var introHtml = '<p style="margin:0 0 6px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">AUDIT FINDINGS ASSIGNED</p>' +
-    '<p style="margin:0 0 16px 0; color:#1d1d1f; font-size:20px; font-weight:600; line-height:1.3; font-family:system-ui,-apple-system,sans-serif;">New Audit Findings, ' + firstName + '</p>' +
+  var introHtml = '<p style="margin:0 0 6px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">AUDIT OBSERVATIONS ASSIGNED</p>' +
+    '<p style="margin:0 0 16px 0; color:#1d1d1f; font-size:20px; font-weight:600; line-height:1.3; font-family:system-ui,-apple-system,sans-serif;">New Audit Observations, ' + firstName + '</p>' +
     '<p style="margin:0 0 20px 0; color:#424245; font-size:14px; line-height:1.6; font-family:system-ui,-apple-system,sans-serif;">' +
     'Dear ' + (auditeeName || firstName) + ',<br><br>' +
     'The following audit observations and action plans have been assigned to you. Please log in to review, provide your management response, and upload supporting evidence before the due dates.</p>' +
