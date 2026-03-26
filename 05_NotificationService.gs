@@ -700,15 +700,90 @@ function resolveAuditContext(workPapers) {
 }
 
 /**
- * Send batched auditee notification with professional table.
+ * Build HTML for grouped observations with nested action plan tables.
+ * Each observation becomes a shaded header row with risk badge,
+ * followed by AP rows showing description and due date.
+ * @param {Object[]} workPapers - Array of work paper objects
+ * @param {Object} actionPlansByWp - Map of work_paper_id → array of action plan objects
+ * @returns {string} HTML string for the grouped table
+ */
+function buildGroupedObservationApHtml(workPapers, actionPlansByWp) {
+  var html = '';
+
+  workPapers.forEach(function(wp) {
+    var wpId = wp.work_paper_id || '';
+    var obsTitle = wp.observation_title || wp.work_paper_id || 'Observation';
+    var riskRating = wp.risk_rating || '';
+
+    // Observation header row (full-width, shaded)
+    html += '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px; margin-top:16px;">' +
+      '<tr><td style="background-color:#f1f5f9; padding:12px 16px; border-radius:8px 8px 0 0; border:1px solid #e2e8f0; border-bottom:none;">' +
+      '<span style="font-size:14px; font-weight:600; color:#1d1d1f; font-family:system-ui,-apple-system,sans-serif;">' +
+      ratingBadge(riskRating) + '&nbsp;&nbsp;' + obsTitle +
+      '</span></td></tr></table>';
+
+    // Action plan rows under this observation
+    var aps = actionPlansByWp[wpId] || [];
+    if (aps.length > 0) {
+      html += '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0; border-radius:0 0 8px 8px; border-collapse:collapse; margin-bottom:12px;">';
+      // AP table header
+      html += '<thead><tr>' +
+        '<th style="padding:8px 14px; text-align:left; font-size:11px; font-weight:600; color:#86868b; border-bottom:1px solid #e5e5e5; font-family:system-ui,-apple-system,sans-serif; width:40px;">#</th>' +
+        '<th style="padding:8px 14px; text-align:left; font-size:11px; font-weight:600; color:#86868b; border-bottom:1px solid #e5e5e5; font-family:system-ui,-apple-system,sans-serif;">Action Plan</th>' +
+        '<th style="padding:8px 14px; text-align:left; font-size:11px; font-weight:600; color:#86868b; border-bottom:1px solid #e5e5e5; font-family:system-ui,-apple-system,sans-serif; width:120px;">Due Date</th>' +
+        '</tr></thead><tbody>';
+      aps.forEach(function(ap, idx) {
+        var bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        var dueStr = ap.due_date
+          ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '-';
+        html += '<tr style="background-color:' + bg + ';">' +
+          '<td style="padding:8px 14px; font-size:13px; color:#6b7280; border-bottom:1px solid #f0f0f0; font-family:system-ui,-apple-system,sans-serif;">' + (idx + 1) + '</td>' +
+          '<td style="padding:8px 14px; font-size:13px; color:#1d1d1f; border-bottom:1px solid #f0f0f0; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' + (ap.action_description || '-') + '</td>' +
+          '<td style="padding:8px 14px; font-size:13px; color:#1d1d1f; border-bottom:1px solid #f0f0f0; font-family:system-ui,-apple-system,sans-serif; white-space:nowrap;">' + dueStr + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+    } else {
+      // No APs yet for this observation
+      html += '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0; border-radius:0 0 8px 8px; margin-bottom:12px;">' +
+        '<tr><td style="padding:10px 16px; font-size:13px; color:#9ca3af; font-style:italic; font-family:system-ui,-apple-system,sans-serif;">Action plans will be created upon review.</td></tr></table>';
+    }
+  });
+
+  return html;
+}
+
+/**
+ * Build a callout box for emails (info or warning variant).
+ * @param {string} text - Callout text (HTML allowed)
+ * @param {string} [variant] - 'info' (blue) or 'warning' (amber). Default: 'info'
+ * @returns {string} HTML for the callout box
+ */
+function buildCalloutBox(text, variant) {
+  var bg, border, color;
+  if (variant === 'warning') {
+    bg = '#fffbeb'; border = '#fde68a'; color = '#92400e';
+  } else {
+    bg = '#eff6ff'; border = '#bfdbfe'; color = '#1e40af';
+  }
+  return '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;">' +
+    '<tr><td style="background-color:' + bg + '; border:1px solid ' + border + '; border-radius:8px; padding:14px 18px;">' +
+    '<p style="margin:0; color:' + color + '; font-size:13px; line-height:1.6; font-family:system-ui,-apple-system,sans-serif;">' + text + '</p>' +
+    '</td></tr></table>';
+}
+
+/**
+ * Send batched auditee notification with professional grouped table.
  * Called when work papers are sent to auditees — groups by auditee and sends ONE email per person.
  *
  * Email format:
- *   Dear [First Name], [CC Party 1], [CC Party 2],
- *   Below are audit observations from [Affiliate] – [Audit Area] audit.
- *   Please respond with your action plans.
- *   [Table: Observation | Details | Rating]
- *   Please log in and submit your action plans...
+ *   AUDIT FINDINGS ASSIGNED
+ *   Dear [First Name],
+ *   [Context line]
+ *   [Grouped table: Observation headers with risk badge → AP rows underneath with due dates]
+ *   [Callout: evidence requirements + upcoming reminders]
+ *   CTA: Login to View Details
  *
  * @param {Object[]} workPapers - Array of work paper objects sent to this auditee
  * @param {string} auditeeEmail - Recipient email
@@ -716,8 +791,9 @@ function resolveAuditContext(workPapers) {
  * @param {string} auditeeName - Recipient full name
  * @param {string} auditeeFirstName - Recipient first name for greeting
  * @param {string} [ccEmails] - Optional comma-separated CC emails from work paper cc_recipients
+ * @param {Object} [actionPlansByWp] - Optional map of work_paper_id → action plan array. If not provided, will be fetched.
  */
-function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId, auditeeName, auditeeFirstName, ccEmails) {
+function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId, auditeeName, auditeeFirstName, ccEmails, actionPlansByWp) {
   if (!workPapers || workPapers.length === 0 || !auditeeEmail) return;
 
   // Resolve affiliate and audit area for context line
@@ -737,31 +813,101 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   // Use first name only for greeting
   var firstName = auditeeFirstName || (auditeeName || '').split(' ')[0] || 'Auditee';
 
-  var subjectSuffix = ctx.auditAreaName ? ' - ' + ctx.auditAreaName : '';
-  var subject = workPapers.length === 1
-    ? 'Audit Observation Requires Your Response' + subjectSuffix
-    : workPapers.length + ' Audit Observations Require Your Response' + subjectSuffix;
+  // Fetch action plans per WP if not provided
+  if (!actionPlansByWp) {
+    actionPlansByWp = {};
+    workPapers.forEach(function(wp) {
+      var wpId = wp.work_paper_id;
+      if (wpId && !actionPlansByWp[wpId]) {
+        try {
+          actionPlansByWp[wpId] = getActionPlansByWorkPaperRaw(wpId);
+        } catch (e) {
+          console.error('Failed to fetch APs for WP', wpId, ':', e.message);
+          actionPlansByWp[wpId] = [];
+        }
+      }
+    });
+  }
 
-  var intro = 'Dear ' + firstName + ',<br><br>' +
-    contextLine + ' Please respond with your action plan' + (workPapers.length > 1 ? 's.' : '.');
+  var subjectSuffix = ctx.auditAreaName ? ' \u2013 ' + ctx.auditAreaName : '';
+  var subject = 'Audit Findings Assigned' + subjectSuffix;
 
-  var headers = ['Observation', 'Details', 'Rating'];
-  var rows = workPapers.map(function(wp) {
-    return [
-      String(wp.observation_title || wp.work_paper_id || '-'),
-      truncateWords(wp.observation_description || wp.risk_description || '', 10),
-      ratingBadge(wp.risk_rating)
-    ];
-  });
-
-  // Outro with hyperlinked "log in" — the CTA button is also appended by formatTableEmailHtml
+  // Build email body with grouped observation/AP layout
+  var year = new Date().getFullYear();
   var systemUrl = getSystemUrl();
-  var loginLink = systemUrl
-    ? '<a href="' + systemUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a>'
-    : 'log in';
-  var outro = '<p style="color:#6b7280; font-size:13px; text-align:center; font-family:system-ui,-apple-system,sans-serif;">Please ' + loginLink + ' and submit your action plans at your earliest convenience.</p>';
 
-  var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+  var introHtml = '<p style="margin:0 0 6px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">AUDIT FINDINGS ASSIGNED</p>' +
+    '<p style="margin:0 0 16px 0; color:#1d1d1f; font-size:20px; font-weight:600; line-height:1.3; font-family:system-ui,-apple-system,sans-serif;">New Audit Findings, ' + firstName + '</p>' +
+    '<p style="margin:0 0 20px 0; color:#424245; font-size:14px; line-height:1.6; font-family:system-ui,-apple-system,sans-serif;">' +
+    'Dear ' + (auditeeName || firstName) + ',<br><br>' +
+    'The following audit observations and action plans have been assigned to you. Please log in to review, provide your management response, and upload supporting evidence before the due dates.</p>' +
+    (contextLine ? '<p style="margin:0 0 8px 0; color:#424245; font-size:14px; line-height:1.6; font-family:system-ui,-apple-system,sans-serif;">' + contextLine + '</p>' : '');
+
+  // Grouped observations + APs
+  var groupedTableHtml = buildGroupedObservationApHtml(workPapers, actionPlansByWp);
+
+  // Callout box about evidence and reminders
+  var calloutHtml = buildCalloutBox(
+    '<strong>Evidence Required:</strong> You will receive reminders before each due date. Evidence upload is required to mark action plans as implemented.',
+    'info'
+  );
+
+  // CTA button
+  var ctaHtml = buildCtaButton(systemUrl, 'Login to View Details');
+
+  // Footer
+  var footerHtml = '<p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
+    '&copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>';
+
+  // Assemble full email HTML
+  var htmlBody = '<!DOCTYPE html>' +
+'<html lang="en">' +
+'<head>' +
+'  <meta charset="utf-8">' +
+'  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+'  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->' +
+'  <style>' +
+'    @media only screen and (max-width: 620px) {' +
+'      .email-outer { padding: 0 !important; }' +
+'      .email-inner { width: 100% !important; min-width: 100% !important; border-radius: 0 !important; }' +
+'      .email-content { padding: 20px 16px !important; }' +
+'      .email-header { padding: 20px 16px !important; }' +
+'      .email-footer-inner { padding: 20px 16px !important; }' +
+'    }' +
+'  </style>' +
+'</head>' +
+'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
+'    ' + subject + ' &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
+'  </div>' +
+'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
+'    <tr><td align="center" style="padding:40px 16px;">' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);" class="email-inner">' +
+'        <!-- HEADER -->' +
+'        <tr>' +
+'          <td style="padding:28px 36px 0 36px; border-bottom:none;" class="email-header">' +
+'            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif;">Internal Audit</p>' +
+'          </td>' +
+'        </tr>' +
+'        <tr><td style="padding:16px 36px 0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
+'        <!-- CONTENT -->' +
+'        <tr>' +
+'          <td style="padding:24px 36px 36px 36px;" class="email-content">' +
+             introHtml +
+             groupedTableHtml +
+             calloutHtml +
+             ctaHtml +
+'          </td>' +
+'        </tr>' +
+'        <!-- FOOTER -->' +
+'        <tr><td style="padding:0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
+'        <tr><td style="padding:16px 36px;" class="email-footer-inner">' + footerHtml + '</td></tr>' +
+'      </table>' +
+'    </td></tr>' +
+'  </table>' +
+'</body>' +
+'</html>';
 
   sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'hassaudit@outlook.com');
 }
@@ -995,6 +1141,420 @@ function sendUpcomingDueReminders() {
   });
 
   console.log('Queued upcoming due reminders:', notificationCount);
+  return notificationCount;
+}
+
+/**
+ * Send evidence upload reminders for action plans approaching their due date.
+ * Sends ONLY if the AP has zero evidence files uploaded.
+ * Triggers on exact days: day -7 (7 days before due) and day 0 (due date).
+ * Groups all qualifying APs per owner into ONE email.
+ * NO CC on pre-due reminders (owner only).
+ *
+ * Called by daily trigger (dailyMaintenance or dailyReminderRunner).
+ */
+function sendEvidenceReminders() {
+  var data = getSheetData(SHEETS.ACTION_PLANS);
+  if (!data || data.length < 2) { console.log('sendEvidenceReminders: No action plan data'); return 0; }
+  var headers = data[0];
+
+  var colMap = {};
+  headers.forEach(function(h, i) { colMap[h] = i; });
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  var systemUrl = getSystemUrl();
+
+  // Collect APs due in exactly 7 days or exactly 0 days with no evidence
+  var qualifying = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var status = row[colMap['status']];
+    var dueDate = row[colMap['due_date']];
+
+    if (!dueDate) continue;
+    // Only target active APs that are not yet implemented/closed
+    if (isImplementedOrVerified(status)) continue;
+    // Specifically target 'Not Implemented', 'Pending', 'In Progress', 'Not Due', 'Overdue' statuses
+    // Skip 'Implemented', 'Verified', 'Closed', 'Rejected'
+
+    var due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    var daysUntilDue = Math.round((due - today) / (1000 * 60 * 60 * 24));
+
+    // Only trigger on exact day -7 or day 0
+    if (daysUntilDue !== 7 && daysUntilDue !== 0) continue;
+
+    var ap = rowToObject(headers, data[i]);
+    ap._daysUntilDue = daysUntilDue;
+    ap._reminderType = daysUntilDue === 7 ? 'day_minus_7' : 'day_0';
+
+    // Check evidence count for this AP
+    var hasEvidence = false;
+    try {
+      var evidenceRecords = firestoreQuery(SHEETS.AP_EVIDENCE, 'action_plan_id', 'EQUAL', ap.action_plan_id);
+      if (evidenceRecords && evidenceRecords.length > 0) {
+        // Count only records with actual drive_file_id (not orphaned metadata)
+        var realEvidence = evidenceRecords.filter(function(ev) { return ev.drive_file_id; });
+
+        // For small batches, verify Drive file accessibility
+        if (realEvidence.length > 0 && realEvidence.length <= 5) {
+          realEvidence = realEvidence.filter(function(ev) {
+            try { DriveApp.getFileById(ev.drive_file_id); return true; } catch (e) { return false; }
+          });
+        }
+
+        hasEvidence = realEvidence.length > 0;
+      }
+    } catch (e) {
+      console.error('sendEvidenceReminders: Evidence check failed for', ap.action_plan_id, ':', e.message);
+    }
+
+    if (hasEvidence) continue; // Skip — evidence already uploaded
+
+    // Enrich with parent work paper data
+    if (ap.work_paper_id) {
+      var wp = getWorkPaperById(ap.work_paper_id);
+      ap._observation_title = wp ? wp.observation_title : '';
+      ap._risk_rating = ap.risk_rating || (wp ? wp.risk_rating : '');
+    }
+
+    qualifying.push(ap);
+  }
+
+  if (qualifying.length === 0) {
+    console.log('sendEvidenceReminders: No APs need evidence reminders today');
+    return 0;
+  }
+
+  // Group by owner
+  var byOwner = {};
+  qualifying.forEach(function(ap) {
+    var ownerIds = String(ap.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    ownerIds.forEach(function(ownerId) {
+      if (!byOwner[ownerId]) byOwner[ownerId] = [];
+      byOwner[ownerId].push(ap);
+    });
+  });
+
+  var notificationCount = 0;
+
+  Object.keys(byOwner).forEach(function(ownerId) {
+    var owner = getUserById(ownerId);
+    if (!owner || !owner.email) return;
+
+    var plans = byOwner[ownerId];
+    var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
+
+    // Determine subject based on whether any are due today
+    var hasDueToday = plans.some(function(ap) { return ap._reminderType === 'day_0'; });
+    var subject = hasDueToday
+      ? 'Action Plan Due Today \u2014 Evidence Required'
+      : 'Action Plan Reminder \u2014 Evidence Required by ' + new Date(plans[0].due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    // Group APs by observation for the email
+    var byObservation = {};
+    plans.forEach(function(ap) {
+      var obsKey = ap._observation_title || ap.work_paper_id || 'Other';
+      if (!byObservation[obsKey]) byObservation[obsKey] = { risk: ap._risk_rating, aps: [] };
+      byObservation[obsKey].aps.push(ap);
+    });
+
+    // Build intro
+    var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
+      'The following action plans are ' + (hasDueToday ? '<strong>due today</strong>' : 'due soon') +
+      ' and you have <strong>not yet uploaded any supporting evidence</strong>:';
+
+    // Build table rows: AP Description | Observation | Due Date | Evidence Status
+    var tableHeaders = ['Action Plan', 'Observation', 'Due Date', 'Evidence'];
+    var rows = plans.map(function(ap) {
+      var dueStr = ap.due_date
+        ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '-';
+      var daysLabel = ap._daysUntilDue === 0
+        ? '<span style="color:#dc2626; font-weight:600;">Due Today</span>'
+        : '<span style="color:#f59e0b; font-weight:600;">' + ap._daysUntilDue + ' days left</span>';
+      return [
+        truncateWords(ap.action_description || '-', 10),
+        String(ap._observation_title || '-').substring(0, 40),
+        dueStr + '<br>' + daysLabel,
+        '<span style="color:#dc2626; font-weight:600;">\u26A0 No evidence</span>'
+      ];
+    });
+
+    // Callout
+    var calloutHtml = buildCalloutBox(
+      '<strong>Evidence upload is required</strong> to mark action plans as implemented. Please log in and upload your supporting documents before the due date.',
+      'warning'
+    );
+
+    var loginLink = systemUrl
+      ? 'Please <a href="' + systemUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to upload evidence for your action plans.'
+      : 'Please log in to upload evidence for your action plans.';
+    var outro = loginLink + calloutHtml;
+
+    var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
+
+    // NO CC on pre-due reminders (owner only)
+    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    notificationCount++;
+  });
+
+  console.log('Sent evidence reminders:', notificationCount);
+  return notificationCount;
+}
+
+/**
+ * Send overdue evidence escalation emails for action plans past their due date
+ * with no evidence uploaded. Escalates by CC'ing the work paper's cc_recipients.
+ *
+ * Escalation cadence:
+ *   Day +1 overdue: Owner + CC recipients (overdue, action needed)
+ *   Day +7 overdue: Owner + CC recipients (firmer tone, management visibility)
+ *
+ * Groups all overdue APs per owner into ONE email.
+ * Called by daily trigger.
+ */
+function sendOverdueEvidenceEscalation() {
+  var data = getSheetData(SHEETS.ACTION_PLANS);
+  if (!data || data.length < 2) { console.log('sendOverdueEvidenceEscalation: No action plan data'); return 0; }
+  var headers = data[0];
+
+  var colMap = {};
+  headers.forEach(function(h, i) { colMap[h] = i; });
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  var systemUrl = getSystemUrl();
+
+  // Collect APs overdue by exactly 1 day or exactly 7 days with no evidence
+  var qualifying = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var status = row[colMap['status']];
+    var dueDate = row[colMap['due_date']];
+
+    if (!dueDate) continue;
+    if (isImplementedOrVerified(status)) continue;
+
+    var due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    var daysOverdue = Math.round((today - due) / (1000 * 60 * 60 * 24));
+
+    // Only trigger on exact day +1 or day +7
+    if (daysOverdue !== 1 && daysOverdue !== 7) continue;
+
+    var ap = rowToObject(headers, data[i]);
+    ap._daysOverdue = daysOverdue;
+    ap._escalationLevel = daysOverdue === 1 ? 'day_plus_1' : 'day_plus_7';
+
+    // Check evidence count
+    var hasEvidence = false;
+    try {
+      var evidenceRecords = firestoreQuery(SHEETS.AP_EVIDENCE, 'action_plan_id', 'EQUAL', ap.action_plan_id);
+      if (evidenceRecords && evidenceRecords.length > 0) {
+        var realEvidence = evidenceRecords.filter(function(ev) { return ev.drive_file_id; });
+        if (realEvidence.length > 0 && realEvidence.length <= 5) {
+          realEvidence = realEvidence.filter(function(ev) {
+            try { DriveApp.getFileById(ev.drive_file_id); return true; } catch (e) { return false; }
+          });
+        }
+        hasEvidence = realEvidence.length > 0;
+      }
+    } catch (e) {
+      console.error('sendOverdueEvidenceEscalation: Evidence check failed for', ap.action_plan_id, ':', e.message);
+    }
+
+    if (hasEvidence) continue;
+
+    // Enrich with parent work paper data + CC recipients
+    if (ap.work_paper_id) {
+      var wp = getWorkPaperById(ap.work_paper_id);
+      ap._observation_title = wp ? wp.observation_title : '';
+      ap._risk_rating = ap.risk_rating || (wp ? wp.risk_rating : '');
+      ap._cc_recipients = wp ? (wp.cc_recipients || '') : '';
+    }
+
+    qualifying.push(ap);
+  }
+
+  if (qualifying.length === 0) {
+    console.log('sendOverdueEvidenceEscalation: No overdue APs need escalation today');
+    return 0;
+  }
+
+  // Group by owner
+  var byOwner = {};
+  qualifying.forEach(function(ap) {
+    var ownerIds = String(ap.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    ownerIds.forEach(function(ownerId) {
+      if (!byOwner[ownerId]) byOwner[ownerId] = [];
+      byOwner[ownerId].push(ap);
+    });
+  });
+
+  var notificationCount = 0;
+
+  Object.keys(byOwner).forEach(function(ownerId) {
+    var owner = getUserById(ownerId);
+    if (!owner || !owner.email) return;
+
+    var plans = byOwner[ownerId];
+    var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
+
+    // Determine escalation level (use the most severe in the batch)
+    var hasDay7 = plans.some(function(ap) { return ap._escalationLevel === 'day_plus_7'; });
+    var maxDaysOverdue = Math.max.apply(null, plans.map(function(ap) { return ap._daysOverdue; }));
+
+    // Build subject
+    var primaryObs = plans[0]._observation_title || 'Action Plan';
+    var subject;
+    if (hasDay7) {
+      subject = 'OVERDUE (7 Days): Action Plan Evidence Still Outstanding \u2014 ' + primaryObs;
+    } else {
+      subject = 'OVERDUE: Action Plan Evidence Not Submitted \u2014 ' + primaryObs;
+    }
+
+    // Build intro with appropriate tone
+    var intro;
+    if (hasDay7) {
+      intro = 'Dear ' + ownerFirstName + ',<br><br>' +
+        'The following action plan(s) have been <strong>overdue for ' + maxDaysOverdue + ' day(s)</strong> with no evidence submitted. ' +
+        'Please take action or delegate to someone who can.';
+    } else {
+      intro = 'Dear ' + ownerFirstName + ',<br><br>' +
+        'The following action plan(s) are now <strong>overdue</strong> with no evidence uploaded. ' +
+        'Please log in to provide your update and upload evidence, or delegate to someone who can.';
+    }
+
+    // Build table
+    var tableHeaders = ['Action Plan', 'Observation', 'Due Date', 'Days Overdue', 'Evidence'];
+    var rows = plans.map(function(ap) {
+      var dueStr = ap.due_date
+        ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '-';
+      return [
+        truncateWords(ap.action_description || '-', 10),
+        String(ap._observation_title || '-').substring(0, 40),
+        dueStr,
+        '<span style="color:#dc2626; font-weight:600;">' + ap._daysOverdue + ' day(s)</span>',
+        '<span style="color:#dc2626; font-weight:600;">\u26A0 No evidence</span>'
+      ];
+    });
+
+    // Collect CC recipients from all work papers in this batch, deduplicate against owner
+    var ccMap = {};
+    plans.forEach(function(ap) {
+      String(ap._cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean).forEach(function(email) {
+        if (email.toLowerCase() !== owner.email.toLowerCase()) {
+          ccMap[email.toLowerCase()] = email;
+        }
+      });
+    });
+    var ccString = Object.keys(ccMap).length > 0 ? Object.values(ccMap).join(',') : null;
+
+    var loginLink = systemUrl
+      ? 'Please <a href="' + systemUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to update your action plans and upload evidence.'
+      : 'Please log in to update your action plans and upload evidence.';
+    var outro = loginLink;
+
+    var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
+
+    // CC recipients from work paper brought back in for overdue escalation
+    sendEmail(owner.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
+    notificationCount++;
+  });
+
+  console.log('Sent overdue evidence escalations:', notificationCount);
+  return notificationCount;
+}
+
+/**
+ * Nudge auditors who have approved work papers that haven't been sent to auditees
+ * within 48 hours. Sends ONE reminder email per auditor listing all unsent WPs.
+ *
+ * LOW priority — runs as part of daily maintenance.
+ */
+function sendAuditorUnsentWorkPaperNudge() {
+  var allWPs = getWorkPapersRaw({ status: STATUS.WORK_PAPER.APPROVED }, null);
+  if (!allWPs || allWPs.length === 0) {
+    console.log('sendAuditorUnsentWorkPaperNudge: No approved WPs');
+    return 0;
+  }
+
+  var now = new Date();
+  var cutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000); // 48 hours ago
+
+  // Filter to WPs approved > 48 hours ago that have responsible_ids but haven't been sent
+  var unsent = allWPs.filter(function(wp) {
+    // Must have responsible parties assigned
+    if (!wp.responsible_ids) return false;
+    // Must be still in Approved status (not yet Sent to Auditee)
+    if (wp.status !== STATUS.WORK_PAPER.APPROVED) return false;
+    // Check approved_date or updated_at to see if it's been > 48 hours
+    var approvedDate = wp.approved_date || wp.updated_at || wp.created_at;
+    if (!approvedDate) return false;
+    return new Date(approvedDate) < cutoff;
+  });
+
+  if (unsent.length === 0) {
+    console.log('sendAuditorUnsentWorkPaperNudge: No overdue unsent WPs');
+    return 0;
+  }
+
+  var systemUrl = getSystemUrl();
+
+  // Group by preparer/auditor (prepared_by_id)
+  var byAuditor = {};
+  unsent.forEach(function(wp) {
+    var auditorId = wp.prepared_by_id || wp.reviewed_by_id || '';
+    if (!auditorId) return;
+    if (!byAuditor[auditorId]) byAuditor[auditorId] = [];
+    byAuditor[auditorId].push(wp);
+  });
+
+  var notificationCount = 0;
+
+  Object.keys(byAuditor).forEach(function(auditorId) {
+    var auditor = getUserById(auditorId);
+    if (!auditor || !auditor.email) return;
+
+    var wps = byAuditor[auditorId];
+    var firstName = auditor.first_name || (auditor.full_name || '').split(' ')[0] || 'Auditor';
+
+    var subject = 'Reminder: ' + wps.length + ' Approved Work Paper(s) Not Yet Sent to Auditees';
+    var intro = 'Dear ' + firstName + ',<br><br>' +
+      'You have <strong>' + wps.length + '</strong> approved work paper(s) with assigned auditees that have not yet been sent. ' +
+      'Please review and send them at your earliest convenience:';
+
+    var tableHeaders = ['Observation', 'Risk Rating', 'Approved Since', 'Auditees Assigned'];
+    var rows = wps.map(function(wp) {
+      var approvedDate = wp.approved_date || wp.updated_at || '';
+      var dateStr = approvedDate
+        ? new Date(approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '-';
+      var hoursAgo = approvedDate ? Math.round((now - new Date(approvedDate)) / (1000 * 60 * 60)) : 0;
+      return [
+        String(wp.observation_title || wp.work_paper_id || '-').substring(0, 50),
+        ratingBadge(wp.risk_rating || ''),
+        dateStr + ' <span style="color:#6b7280; font-size:12px;">(' + hoursAgo + 'h ago)</span>',
+        String(wp.responsible_ids || '').split(',').length + ' person(s)'
+      ];
+    });
+
+    var loginLink = systemUrl
+      ? 'Please <a href="' + systemUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to the Send Queue and dispatch these work papers.'
+      : 'Please log in to the Send Queue and dispatch these work papers.';
+    var outro = loginLink;
+
+    var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
+    sendEmail(auditor.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    notificationCount++;
+  });
+
+  console.log('Sent auditor unsent WP nudges:', notificationCount);
   return notificationCount;
 }
 
@@ -1235,11 +1795,39 @@ function dailyMaintenance() {
   const cleaned = cleanupOldNotifications(30);
   console.log('Old notifications cleaned:', cleaned);
 
-  console.log('Daily maintenance completed');
+  // Run daily evidence reminders (day -7 and day 0)
+  var evidenceReminders = 0;
+  try {
+    evidenceReminders = sendEvidenceReminders();
+  } catch (e) {
+    console.error('dailyMaintenance: sendEvidenceReminders failed:', e.message);
+  }
+
+  // Run overdue evidence escalation (day +1 and day +7)
+  var overdueEscalations = 0;
+  try {
+    overdueEscalations = sendOverdueEvidenceEscalation();
+  } catch (e) {
+    console.error('dailyMaintenance: sendOverdueEvidenceEscalation failed:', e.message);
+  }
+
+  // Nudge auditors with unsent approved work papers (> 48 hours)
+  var auditorNudges = 0;
+  try {
+    auditorNudges = sendAuditorUnsentWorkPaperNudge();
+  } catch (e) {
+    console.error('dailyMaintenance: sendAuditorUnsentWorkPaperNudge failed:', e.message);
+  }
+
+  console.log('Daily maintenance completed. Evidence reminders:', evidenceReminders,
+    'Overdue escalations:', overdueEscalations, 'Auditor nudges:', auditorNudges);
 
   return {
     overdueUpdated,
-    cleaned
+    cleaned,
+    evidenceReminders,
+    overdueEscalations,
+    auditorNudges
   };
 }
 
