@@ -1,0 +1,175 @@
+<!-- Responses to Review Page — Auditor queue for auditee responses -->
+<div class="responses-to-review-page">
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4" id="rtrSummaryCards">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm h-100" onclick="filterResponsesToReview('')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-primary" id="rtrCountTotal">0</div>
+          <small class="text-muted">Total Pending</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm h-100" onclick="filterResponsesToReview('Extreme')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-danger" id="rtrCountExtreme">0</div>
+          <small class="text-muted">Extreme Risk</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm h-100" onclick="filterResponsesToReview('High')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold" style="color:#fd7e14;" id="rtrCountHigh">0</div>
+          <small class="text-muted">High Risk</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm h-100" onclick="filterResponsesToReview('Other')" style="cursor:pointer;">
+        <div class="card-body text-center py-3">
+          <div class="fs-3 fw-bold text-secondary" id="rtrCountOther">0</div>
+          <small class="text-muted">Medium / Low</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <select class="form-select form-select-sm" style="max-width:180px;" id="rtrFilterRisk" onchange="filterResponsesToReview(this.value === 'All' ? '' : this.value)">
+      <option value="All">All Risk Ratings</option>
+      <option value="Extreme">Extreme</option>
+      <option value="High">High</option>
+      <option value="Medium">Medium</option>
+      <option value="Low">Low</option>
+    </select>
+    <input type="text" class="form-control form-control-sm" style="max-width:260px;" placeholder="Search observation title..." id="rtrSearchInput" oninput="filterResponsesToReview()">
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadResponsesToReview()">
+      <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+    </button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-container">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th style="width:40px;">#</th>
+            <th>Observation Title</th>
+            <th>Auditee</th>
+            <th>Risk Rating</th>
+            <th class="text-center">Round</th>
+            <th>Submitted Date</th>
+            <th class="text-center">Action Plans</th>
+            <th style="width:100px;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="rtrTableBody">
+          <tr><td colspan="8" class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 mb-0 text-muted">Loading responses...</p>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+var _rtrData = [];
+var _rtrActiveFilter = '';
+
+function loadResponsesToReview() {
+  var tbody = document.getElementById('rtrTableBody');
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 mb-0 text-muted">Loading responses...</p></td></tr>';
+
+  apiCall('getPendingAuditeeResponses', {}).then(function(r) {
+    if (r && r.success && r.responses) {
+      _rtrData = r.responses;
+      updateRTRSummaryCards(_rtrData);
+      renderResponsesToReview(_rtrData);
+    } else {
+      _rtrData = [];
+      updateRTRSummaryCards([]);
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-muted"><i class="bi bi-exclamation-circle" style="font-size:2rem;"></i><p class="mt-2 mb-0">' + (r && r.error ? escapeHtml(r.error) : 'Failed to load responses') + '</p></td></tr>';
+    }
+  }).catch(function() {
+    _rtrData = [];
+    updateRTRSummaryCards([]);
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-muted"><i class="bi bi-exclamation-circle" style="font-size:2rem;"></i><p class="mt-2 mb-0">Connection error</p></td></tr>';
+  });
+}
+
+function updateRTRSummaryCards(data) {
+  var total = data.length;
+  var extreme = data.filter(function(r) { return r.risk_rating === 'Extreme'; }).length;
+  var high = data.filter(function(r) { return r.risk_rating === 'High'; }).length;
+  var other = total - extreme - high;
+
+  var el;
+  el = document.getElementById('rtrCountTotal'); if (el) el.textContent = total;
+  el = document.getElementById('rtrCountExtreme'); if (el) el.textContent = extreme;
+  el = document.getElementById('rtrCountHigh'); if (el) el.textContent = high;
+  el = document.getElementById('rtrCountOther'); if (el) el.textContent = other;
+}
+
+function renderResponsesToReview(data) {
+  var tbody = document.getElementById('rtrTableBody');
+
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="text-center py-5 text-muted"><i class="bi bi-check-circle" style="font-size:3rem;"></i><p class="mt-2 mb-0">No pending responses to review</p><small>All auditee responses have been processed</small></div></td></tr>';
+    return;
+  }
+
+  var html = '';
+  data.forEach(function(item, idx) {
+    html += '<tr>' +
+      '<td>' + (idx + 1) + '</td>' +
+      '<td><span class="fw-semibold">' + escapeHtml(item.observation_title || '-') + '</span>' +
+        (item.management_response_preview ? '<br><small class="text-muted">' + escapeHtml(item.management_response_preview) + '...</small>' : '') +
+      '</td>' +
+      '<td>' + escapeHtml(item.submitted_by_name || '-') + '</td>' +
+      '<td><span class="badge ' + getRiskClass(item.risk_rating) + '">' + escapeHtml(item.risk_rating || '-') + '</span></td>' +
+      '<td class="text-center">' + (item.response_round || 1) + '</td>' +
+      '<td>' + (item.submitted_date ? formatDate(item.submitted_date) : '-') + '</td>' +
+      '<td class="text-center">' + (item.action_plan_count || 0) + '</td>' +
+      '<td><button class="btn btn-sm btn-primary" onclick="navigateTo(\'auditee-response\', {id: \'' + item.work_paper_id + '\'})">' +
+        '<i class="bi bi-eye me-1"></i>Review</button></td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+function filterResponsesToReview(riskFilter) {
+  if (riskFilter !== undefined && riskFilter !== null) {
+    _rtrActiveFilter = riskFilter;
+    // Sync dropdown
+    var dd = document.getElementById('rtrFilterRisk');
+    if (dd) {
+      if (riskFilter === 'Other') dd.value = 'All';
+      else if (riskFilter === '') dd.value = 'All';
+      else dd.value = riskFilter;
+    }
+  }
+
+  var searchTerm = (document.getElementById('rtrSearchInput')?.value || '').toLowerCase();
+  var filtered = _rtrData.filter(function(item) {
+    // Risk filter
+    if (_rtrActiveFilter === 'Other') {
+      if (item.risk_rating === 'Extreme' || item.risk_rating === 'High') return false;
+    } else if (_rtrActiveFilter && item.risk_rating !== _rtrActiveFilter) {
+      return false;
+    }
+    // Search filter
+    if (searchTerm && (item.observation_title || '').toLowerCase().indexOf(searchTerm) === -1) {
+      return false;
+    }
+    return true;
+  });
+
+  renderResponsesToReview(filtered);
+}
+</script>

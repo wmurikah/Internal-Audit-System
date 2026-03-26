@@ -314,6 +314,11 @@ function routeAction(action, data, user) {
     case 'respondToDelegation':
       return respondToDelegation(data.actionPlanId, data.action, data.reason, user);
 
+    case 'getPendingAuditeeResponses':
+      var prAuditorRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+      if (!prAuditorRoles.includes(user.role_code)) return { success: false, error: 'Permission denied' };
+      return { success: true, responses: getPendingAuditeeResponsesForAuditor(user) };
+
     case 'getAuditeeFindingCounts':
       return { success: true, counts: getAuditeeFindingCounts(user) };
 

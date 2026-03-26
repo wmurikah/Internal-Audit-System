@@ -364,18 +364,53 @@ function submitWorkPaper(workPaperId, user) {
   
   const updated = { ...workPaper, ...updates };
 
-  // Write to Firestore
+  // Critical: update the work paper first
   syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
   invalidateSheetData(SHEETS.WORK_PAPERS);
 
-  // Add revision history
-  addWorkPaperRevision(workPaperId, 'Submitted', 'Submitted for review', user);
+  // Batch secondary writes (revision + audit log) in one HTTP call
+  try {
+    var revisionId = generateId('REVISION');
+    var logId = generateId('LOG');
 
-  // Queue notification to reviewers
-  queueReviewNotification(workPaperId, updated, user);
+    // Get next revision number
+    var existingRevisions = getWorkPaperRevisions(workPaperId);
+    var nextNum = existingRevisions.length > 0 ? Math.max(...existingRevisions.map(r => r.revision_number || 0)) + 1 : 1;
 
-  // Log audit event
-  logAuditEvent('SUBMIT', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
+    var revisionObj = {
+      revision_id: revisionId,
+      work_paper_id: workPaperId,
+      revision_number: nextNum,
+      action: 'Submitted',
+      comments: 'Submitted for review',
+      changes_summary: '',
+      user_id: user.user_id,
+      user_name: user.full_name,
+      action_date: now
+    };
+
+    var logObj = {
+      log_id: logId,
+      action: 'SUBMIT',
+      entity_type: 'WORK_PAPER',
+      entity_id: workPaperId,
+      old_data: JSON.stringify(workPaper),
+      new_data: JSON.stringify(updated),
+      user_id: user.user_id || '',
+      user_email: user.email || '',
+      timestamp: new Date().toISOString(),
+      ip_address: ''
+    };
+
+    firestoreBatchWrite([
+      { sheetName: SHEETS.WP_REVISIONS, docId: revisionId, data: revisionObj },
+      { sheetName: SHEETS.AUDIT_LOG, docId: logId, data: logObj }
+    ]);
+    invalidateSheetData(SHEETS.WP_REVISIONS);
+  } catch(e) { console.warn('Secondary writes failed (non-fatal):', e.message); }
+
+  // Notifications - fire and forget
+  try { queueReviewNotification(workPaperId, updated, user); } catch(e) { console.warn('Notification failed:', e.message); }
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }

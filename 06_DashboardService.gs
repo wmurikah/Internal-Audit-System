@@ -124,6 +124,13 @@ function getDashboardData(user) {
         // Reviewers - senior auditors, HOA, super admin
         dashboard.pendingReviews = getPendingReviews(user);
         dashboard.teamStats = getTeamStats(user);
+        // Add pending auditee responses for auditor review
+        try {
+          dashboard.pendingResponses = getPendingAuditeeResponsesForAuditor(user);
+        } catch (respErr) {
+          console.warn('Failed to load pending responses:', respErr.message);
+          dashboard.pendingResponses = [];
+        }
       }
     } catch (e) {
       console.error('Error loading role-specific data:', e);
@@ -182,10 +189,13 @@ function getSidebarCounts(user) {
 
       var pendingReviewAll = 0;
       var approvedQueueAll = 0;
+      var pendingResponsesAll = 0;
       var wpResponsibleIdx = wpHeaders.indexOf ? wpHeaders.indexOf('responsible_ids') : -1;
+      var wpResponseStatusIdx = wpHeaders.indexOf ? wpHeaders.indexOf('response_status') : -1;
       for (var wi = 1; wi < (wpData ? wpData.length : 0); wi++) {
         if (wpStatusIdx >= 0 && wpData[wi][wpStatusIdx] === 'Submitted') pendingReviewAll++;
         if (wpStatusIdx >= 0 && wpData[wi][wpStatusIdx] === 'Approved' && wpResponsibleIdx >= 0 && wpData[wi][wpResponsibleIdx]) approvedQueueAll++;
+        if (wpResponseStatusIdx >= 0 && wpData[wi][wpResponseStatusIdx] === 'Response Submitted') pendingResponsesAll++;
       }
 
       var apData = getSheetData(SHEETS.ACTION_PLANS);
@@ -219,7 +229,7 @@ function getSidebarCounts(user) {
         }
       }
 
-      allCounts = { pendingReview: pendingReviewAll, overdueAll: overdueAll, overdueByOwner: overdueByOwner, approvedQueue: approvedQueueAll };
+      allCounts = { pendingReview: pendingReviewAll, overdueAll: overdueAll, overdueByOwner: overdueByOwner, approvedQueue: approvedQueueAll, pendingResponses: pendingResponsesAll };
       cache.put(cacheKey, JSON.stringify(allCounts), 20);
     }
 
@@ -236,7 +246,14 @@ function getSidebarCounts(user) {
       approvedQueue = 0;
     }
 
-    return { success: true, pendingReview: pendingReview, overdueActionPlans: overdueActionPlans, approvedQueue: approvedQueue };
+    var pendingResponses = allCounts.pendingResponses || 0;
+    // Only show pending responses count for auditor roles
+    var auditorRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+    if (!auditorRoles.includes(roleCode)) {
+      pendingResponses = 0;
+    }
+
+    return { success: true, pendingReview: pendingReview, overdueActionPlans: overdueActionPlans, approvedQueue: approvedQueue, pendingResponses: pendingResponses };
   } catch (e) {
     console.error('Error getting sidebar counts:', e);
     return { success: false, error: e.message, pendingReview: 0, overdueActionPlans: 0 };

@@ -529,7 +529,7 @@ function submitResponseForm() {
     });
 }
 
-function reviewResponseAction(action) {
+function reviewResponseAction(action, event) {
   var comments = '';
   if (action === 'reject') {
     comments = document.getElementById('rejectResponseComments').value;
@@ -541,12 +541,17 @@ function reviewResponseAction(action) {
 
   if (action === 'accept' && !confirm('Accept this auditee response?')) return;
 
+  var btn = (event && event.target) ? event.target.closest('button') : null;
+  var btnOriginal = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing...'; }
+
   apiCall('reviewAuditeeResponse', {
     workPaperId: _arWorkPaperId,
     action: action,
     comments: comments
   })
     .then(function(result) {
+      if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; }
       if (result && result.success) {
         showToast(result.message || 'Response reviewed successfully', 'success');
         var modal = bootstrap.Modal.getInstance(document.getElementById('rejectResponseModal'));
@@ -557,6 +562,7 @@ function reviewResponseAction(action) {
       }
     })
     .catch(function(err) {
+      if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; }
       showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
     });
 }

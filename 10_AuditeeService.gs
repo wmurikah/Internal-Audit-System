@@ -668,13 +668,71 @@ function respondToDelegation(actionPlanId, action, reason, user) {
 // Notification Helpers
 // ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// Pending Auditee Responses — for auditor review queue
+// ─────────────────────────────────────────────────────────────
+
+function getPendingAuditeeResponsesForAuditor(user) {
+  if (!user) return [];
+  var auditorRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+  if (auditorRoles.indexOf(user.role_code) === -1) return [];
+
+  var allWPs = getWorkPapersRaw({}, null);
+  var results = [];
+
+  for (var i = 0; i < allWPs.length; i++) {
+    var wp = allWPs[i];
+    if (wp.status === 'Sent to Auditee' && wp.response_status === 'Response Submitted') {
+      var latest = {};
+      try {
+        var responses = getResponseHistory(wp.work_paper_id);
+        latest = (responses && responses.length > 0) ? responses[0] : {};
+      } catch (e) { /* non-fatal */ }
+
+      var apCount = 0;
+      try {
+        apCount = getActionPlansByWorkPaperRaw(wp.work_paper_id).length;
+      } catch (e) { /* non-fatal */ }
+
+      results.push({
+        work_paper_id: wp.work_paper_id,
+        observation_title: wp.observation_title || '',
+        risk_rating: wp.risk_rating || '',
+        affiliate_code: wp.affiliate_code || '',
+        audit_area_id: wp.audit_area_id || '',
+        response_round: wp.response_round || 1,
+        response_status: wp.response_status,
+        submitted_by_name: latest.submitted_by_name || '',
+        submitted_date: latest.submitted_date || '',
+        management_response_preview: (String(latest.management_response || '')).substring(0, 100),
+        action_plan_count: apCount
+      });
+    }
+  }
+
+  // Sort by submitted_date ascending (oldest first — FIFO review)
+  results.sort(function(a, b) {
+    var da = a.submitted_date ? new Date(a.submitted_date).getTime() : 0;
+    var db = b.submitted_date ? new Date(b.submitted_date).getTime() : 0;
+    return da - db;
+  });
+
+  return sanitizeForClient(results);
+}
+
 function queueResponseSubmittedNotification(workPaperId, workPaper, response, submitter) {
   var auditors = getUsersDropdown().filter(function(u) {
     return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(u.roleCode) >= 0;
   });
 
   var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Auditee Response Submitted - ' + (workPaper.observation_title || workPaperId);
+  var subject = 'Audit Response [Round ' + (response.round_number || 1) + '/' + RESPONSE_DEFAULTS.MAX_ROUNDS + '] Submitted - ' + (workPaper.observation_title || workPaperId);
+
+  // Collect CC emails from the work paper, removing auditor duplicates
+  var ccEmails = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean);
+  var auditorEmails = auditors.map(function(a) { return a.email; });
+  var uniqueCc = ccEmails.filter(function(e) { return auditorEmails.indexOf(e) === -1; });
+  var ccString = uniqueCc.join(',') || null;
 
   auditors.forEach(function(auditor) {
     var firstName = auditor.name ? auditor.name.split(' ')[0] : 'Auditor';
@@ -684,7 +742,7 @@ function queueResponseSubmittedNotification(workPaperId, workPaper, response, su
     var headers = ['Field', 'Details'];
     var rows = [
       ['Observation', String(workPaper.observation_title || '-')],
-      ['Round', String(response.round_number || 1)],
+      ['Round', String(response.round_number || 1) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
       ['Risk Rating', String(workPaper.risk_rating || '-')],
       ['Submitted By', String(submitter.full_name || '-')],
       ['Submitted Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })]
@@ -692,14 +750,20 @@ function queueResponseSubmittedNotification(workPaperId, workPaper, response, su
 
     var outro = 'Please <a href="' + loginUrl + '">log in</a> to review the response and accept or reject it.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    sendEmail(auditor.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    sendEmail(auditor.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 
 function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
   var responsibleIds = parseIdList(workPaper.responsible_ids);
   var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Your Response Has Been Accepted - ' + (workPaper.observation_title || workPaperId);
+  var subject = 'Audit Response Accepted - ' + (workPaper.observation_title || workPaperId);
+
+  // Collect CC emails, removing duplicates with responsible party emails
+  var responsibleEmails = [];
+  responsibleIds.forEach(function(uid) { var u = getUserById(uid); if (u && u.email) responsibleEmails.push(u.email); });
+  var ccList = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(function(e) { return e && responsibleEmails.indexOf(e) === -1; });
+  var ccString = ccList.join(',') || null;
 
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
@@ -719,14 +783,20 @@ function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
 
     var outro = 'Please continue to implement the agreed action plans. You can track progress by <a href="' + loginUrl + '">logging in</a>.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    sendEmail(auditee.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    sendEmail(auditee.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 
 function queueResponseRejectedNotification(workPaperId, workPaper, comments, reviewer) {
   var responsibleIds = parseIdList(workPaper.responsible_ids);
   var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Response Requires Revision - ' + (workPaper.observation_title || workPaperId);
+  var subject = 'Audit Response [Round ' + (workPaper.response_round || 1) + '/' + RESPONSE_DEFAULTS.MAX_ROUNDS + '] Requires Revision - ' + (workPaper.observation_title || workPaperId);
+
+  // Collect CC emails, removing duplicates with responsible party emails
+  var responsibleEmails = [];
+  responsibleIds.forEach(function(uid) { var u = getUserById(uid); if (u && u.email) responsibleEmails.push(u.email); });
+  var ccList = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(function(e) { return e && responsibleEmails.indexOf(e) === -1; });
+  var ccString = ccList.join(',') || null;
 
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
@@ -748,7 +818,7 @@ function queueResponseRejectedNotification(workPaperId, workPaper, comments, rev
 
     var outro = 'Please <a href="' + loginUrl + '">log in</a> to revise your response and action plans.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    sendEmail(auditee.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    sendEmail(auditee.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 
