@@ -878,13 +878,21 @@ function queueAuditeeNotification(workPaperId, workPaper, sender) {
   // Collect CC emails from work paper's cc_recipients field
   var ccEmails = String(workPaper.cc_recipients || '').trim() || null;
 
+  // Fetch action plans for this work paper to include in the notification
+  var actionPlansByWp = {};
+  try {
+    actionPlansByWp[workPaperId] = getActionPlansByWorkPaperRaw(workPaperId);
+  } catch (e) {
+    console.error('queueAuditeeNotification: Failed to fetch APs for', workPaperId, ':', e.message);
+    actionPlansByWp[workPaperId] = [];
+  }
+
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
     if (auditee && auditee.email) {
       var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Auditee';
-      // Send immediately using the batched table format with CC
-      // Parameters: workPapers, email, userId, fullName, firstName, ccEmails
-      sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name, firstName, ccEmails);
+      // Send immediately using the grouped observation + AP table format with CC
+      sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name, firstName, ccEmails, actionPlansByWp);
     }
   });
 }
@@ -897,6 +905,20 @@ function queueAuditeeNotification(workPaperId, workPaper, sender) {
  */
 function sendBatchedAuditeeNotifications(workPapers) {
   if (!workPapers || workPapers.length === 0) return;
+
+  // Pre-fetch action plans for all work papers in the batch
+  var actionPlansByWp = {};
+  workPapers.forEach(function(wp) {
+    var wpId = wp.work_paper_id;
+    if (wpId && !actionPlansByWp[wpId]) {
+      try {
+        actionPlansByWp[wpId] = getActionPlansByWorkPaperRaw(wpId);
+      } catch (e) {
+        console.error('sendBatchedAuditeeNotifications: Failed to fetch APs for', wpId, ':', e.message);
+        actionPlansByWp[wpId] = [];
+      }
+    }
+  });
 
   // Group by auditee user ID + collect all CC emails
   var byAuditee = {};
@@ -918,7 +940,15 @@ function sendBatchedAuditeeNotifications(workPapers) {
   Object.keys(byAuditee).forEach(function(userId) {
     var auditee = getUserById(userId);
     if (auditee && auditee.email) {
-      sendBatchedAuditeeNotification(byAuditee[userId], auditee.email, auditee.user_id, auditee.full_name, auditee.first_name, ccString);
+      // Deduplicate CC against the auditee's own email
+      var filteredCc = ccString;
+      if (ccString && auditee.email) {
+        var ccArr = ccString.split(',').map(function(e) { return e.trim(); }).filter(function(e) {
+          return e && e.toLowerCase() !== auditee.email.toLowerCase();
+        });
+        filteredCc = ccArr.length > 0 ? ccArr.join(',') : null;
+      }
+      sendBatchedAuditeeNotification(byAuditee[userId], auditee.email, auditee.user_id, auditee.full_name, auditee.first_name, filteredCc, actionPlansByWp);
     }
   });
 }
