@@ -95,7 +95,7 @@ function warmAllCachesOnDeploy() {
     const permStart = new Date().getTime();
     roles.forEach(role => {
       const perms = getPermissionsFresh(role);
-      cache.put('perm_' + role, JSON.stringify(perms), 1800);
+      cache.put('perm_' + role, JSON.stringify(perms), CONFIG.CACHE_TTL.PERMISSIONS);
     });
     results.cached.push('permissions (' + (new Date().getTime() - permStart) + 'ms)');
   } catch (e) {

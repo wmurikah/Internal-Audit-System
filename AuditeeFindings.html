@@ -115,21 +115,23 @@ function loadAuditeeFindings() {
   var tbody = document.getElementById('findingsTableBody');
   tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div> Loading your findings...</td></tr>';
 
-  google.script.run
-    .withSuccessHandler(function(result) {
-      if (result && result.success) {
+  apiCall('getAuditeeFindings', { filters: {} })
+    .then(function(result) {
+      if (result && result.success !== false) {
         _auditeeFindings = result.findings || [];
       } else {
-        _auditeeFindings = result || [];
+        _auditeeFindings = [];
+        if (result && result.error) {
+          showToast(result.error, 'danger');
+        }
       }
       _filteredFindings = _auditeeFindings;
       updateFindingSummary();
       renderFindingsTable();
     })
-    .withFailureHandler(function(err) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + err.message + '</td></tr>';
-    })
-    .apiCall('getAuditeeFindings', { filters: {} });
+    .catch(function(err) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + (err.message || 'Failed to load findings') + '</td></tr>';
+    });
 }
 
 function updateFindingSummary() {

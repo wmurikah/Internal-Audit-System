@@ -317,9 +317,24 @@ function updatePermissions(roleCode, permissions, user) {
     console.warn('Failed to invalidate cache:', e);
   }
 
+  // Invalidate in-memory sheet data cache so subsequent reads in this execution get fresh data
+  invalidateSheetData(SHEETS.PERMISSIONS);
+
+  // Write a permissions version counter so clients can detect changes faster
+  try {
+    firestoreSet('00_Config', 'permissions_version', {
+      config_key: 'permissions_version',
+      config_value: String(Date.now()),
+      description: 'Incremented when any role permissions change',
+      updated_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.warn('Failed to update permissions version counter:', e.message);
+  }
+
   logAuditEvent('UPDATE_PERMISSIONS', 'ROLE', roleCode, null, permissions, user.user_id, user.email);
 
-  return { success: true, message: 'Permissions updated. Users must refresh or re-login to see changes.' };
+  return { success: true, message: 'Permissions updated. Changes will propagate to active users within 15 seconds.' };
 }
 
 /**

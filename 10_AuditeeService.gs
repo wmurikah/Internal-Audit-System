@@ -34,7 +34,7 @@ function getAuditeeFindings(filters, user) {
     if (wp.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) continue;
 
     // Check if user is assigned
-    var responsibleIds = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); });
+    var responsibleIds = parseIdList(wp.responsible_ids);
     if (!responsibleIds.includes(user.user_id)) continue;
 
     // Apply optional filters
@@ -104,7 +104,7 @@ function getAuditeeResponseData(workPaperId, user) {
   // Verify access: user must be a responsible party or SUPER_ADMIN
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
   var isAuditor = [ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
-  var responsibleIds = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); });
+  var responsibleIds = parseIdList(wp.responsible_ids);
   var isAssigned = responsibleIds.includes(user.user_id);
 
   if (!isSuperAdmin && !isAuditor && !isAssigned) {
@@ -181,7 +181,7 @@ function saveDraftResponse(workPaperId, data, user) {
 
   // Permission check
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
-  var responsibleIds = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); });
+  var responsibleIds = parseIdList(wp.responsible_ids);
   if (!isSuperAdmin && !responsibleIds.includes(user.user_id)) {
     throw new Error('Permission denied');
   }
@@ -226,7 +226,7 @@ function submitAuditeeResponse(workPaperId, data, user) {
 
   // Permission check
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
-  var responsibleIds = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); });
+  var responsibleIds = parseIdList(wp.responsible_ids);
   if (!isSuperAdmin && !responsibleIds.includes(user.user_id)) {
     throw new Error('Permission denied');
   }
@@ -452,7 +452,7 @@ function createAuditeeActionPlan(data, user) {
 
   // Permission: auditee must be assigned, or SUPER_ADMIN
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
-  var responsibleIds = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); });
+  var responsibleIds = parseIdList(wp.responsible_ids);
   if (!isSuperAdmin && !responsibleIds.includes(user.user_id)) {
     throw new Error('Permission denied');
   }
@@ -665,7 +665,7 @@ function queueResponseSubmittedNotification(workPaperId, workPaper, response, su
 }
 
 function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
-  var responsibleIds = String(workPaper.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var responsibleIds = parseIdList(workPaper.responsible_ids);
   var loginUrl = ScriptApp.getService().getUrl();
   var subject = 'Your Response Has Been Accepted - ' + (workPaper.observation_title || workPaperId);
 
@@ -692,7 +692,7 @@ function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
 }
 
 function queueResponseRejectedNotification(workPaperId, workPaper, comments, reviewer) {
-  var responsibleIds = String(workPaper.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var responsibleIds = parseIdList(workPaper.responsible_ids);
   var loginUrl = ScriptApp.getService().getUrl();
   var subject = 'Response Requires Revision - ' + (workPaper.observation_title || workPaperId);
 
@@ -723,7 +723,7 @@ function queueResponseRejectedNotification(workPaperId, workPaper, comments, rev
 function queueResponseEscalatedNotification(workPaperId, workPaper, reviewer) {
   // Notify CC recipients and responsible parties about escalation
   var ccEmails = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean);
-  var responsibleIds = String(workPaper.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var responsibleIds = parseIdList(workPaper.responsible_ids);
 
   var allEmails = ccEmails.slice(); // start with CC
   responsibleIds.forEach(function(userId) {

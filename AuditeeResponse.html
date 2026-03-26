@@ -232,8 +232,8 @@ function loadAuditeeResponse(params) {
   document.getElementById('auditeeResponseLoading').style.display = 'block';
   document.getElementById('auditeeResponseContent').style.display = 'none';
 
-  google.script.run
-    .withSuccessHandler(function(result) {
+  apiCall('getAuditeeResponseData', { workPaperId: _arWorkPaperId })
+    .then(function(result) {
       document.getElementById('auditeeResponseLoading').style.display = 'none';
       document.getElementById('auditeeResponseContent').style.display = 'block';
 
@@ -245,12 +245,11 @@ function loadAuditeeResponse(params) {
       _arData = result;
       renderAuditeeResponse();
     })
-    .withFailureHandler(function(err) {
+    .catch(function(err) {
       document.getElementById('auditeeResponseLoading').style.display = 'none';
       document.getElementById('auditeeResponseContent').style.display = 'block';
-      showToast('Error: ' + err.message, 'danger');
-    })
-    .apiCall('getAuditeeResponseData', { workPaperId: _arWorkPaperId });
+      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
+    });
 }
 
 function renderAuditeeResponse() {
@@ -450,8 +449,8 @@ function saveDraftResponseForm() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
 
-  google.script.run
-    .withSuccessHandler(function(result) {
+  apiCall('saveDraftResponse', { workPaperId: _arWorkPaperId, management_response: mgmtResponse })
+    .then(function(result) {
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-save me-1"></i>Save Draft';
       if (result && result.success) {
@@ -460,12 +459,11 @@ function saveDraftResponseForm() {
         showToast(result ? result.error : 'Save failed', 'danger');
       }
     })
-    .withFailureHandler(function(err) {
+    .catch(function(err) {
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-save me-1"></i>Save Draft';
-      showToast('Error: ' + err.message, 'danger');
-    })
-    .apiCall('saveDraftResponse', { workPaperId: _arWorkPaperId, management_response: mgmtResponse });
+      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
+    });
 }
 
 function submitResponseForm() {
@@ -484,27 +482,25 @@ function submitResponseForm() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Submitting...';
 
-  google.script.run
-    .withSuccessHandler(function(result) {
+  apiCall('submitAuditeeResponse', {
+    workPaperId: _arWorkPaperId,
+    management_response: mgmtResponse,
+    action_plan_ids: apIds
+  })
+    .then(function(result) {
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-send me-1"></i>Submit Response';
       if (result && result.success) {
         showToast(result.message || 'Response submitted successfully', 'success');
-        // Reload the page to reflect new state
         loadAuditeeResponse({ id: _arWorkPaperId });
       } else {
         showToast(result ? result.error : 'Submit failed', 'danger');
       }
     })
-    .withFailureHandler(function(err) {
+    .catch(function(err) {
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-send me-1"></i>Submit Response';
-      showToast('Error: ' + err.message, 'danger');
-    })
-    .apiCall('submitAuditeeResponse', {
-      workPaperId: _arWorkPaperId,
-      management_response: mgmtResponse,
-      action_plan_ids: apIds
+      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
     });
 }
 
@@ -520,26 +516,23 @@ function reviewResponseAction(action) {
 
   if (action === 'accept' && !confirm('Accept this auditee response?')) return;
 
-  google.script.run
-    .withSuccessHandler(function(result) {
+  apiCall('reviewAuditeeResponse', {
+    workPaperId: _arWorkPaperId,
+    action: action,
+    comments: comments
+  })
+    .then(function(result) {
       if (result && result.success) {
         showToast(result.message || 'Response reviewed successfully', 'success');
-        // Close modal if open
         var modal = bootstrap.Modal.getInstance(document.getElementById('rejectResponseModal'));
         if (modal) modal.hide();
-        // Reload
         loadAuditeeResponse({ id: _arWorkPaperId });
       } else {
         showToast(result ? result.error : 'Review failed', 'danger');
       }
     })
-    .withFailureHandler(function(err) {
-      showToast('Error: ' + err.message, 'danger');
-    })
-    .apiCall('reviewAuditeeResponse', {
-      workPaperId: _arWorkPaperId,
-      action: action,
-      comments: comments
+    .catch(function(err) {
+      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
     });
 }
 
@@ -564,22 +557,31 @@ function showAddActionPlanModal() {
 }
 
 function loadUsersForAPAssignment() {
-  google.script.run
-    .withSuccessHandler(function(result) {
+  if (window.appDropdowns && window.appDropdowns.users && window.appDropdowns.users.length > 0) {
+    var sel = document.getElementById('newAPOwner');
+    sel.innerHTML = '<option value="">-- Assign to myself --</option>';
+    window.appDropdowns.users.forEach(function(u) {
+      var opt = document.createElement('option');
+      opt.value = u.id || u.user_id;
+      opt.textContent = (u.name || u.full_name) + ' (' + (u.email || '') + ')';
+      sel.appendChild(opt);
+    });
+    return;
+  }
+
+  apiCall('getDropdowns', {})
+    .then(function(result) {
       var sel = document.getElementById('newAPOwner');
       sel.innerHTML = '<option value="">-- Assign to myself --</option>';
-      var users = (result && result.users) ? result.users : (result || []);
-      if (Array.isArray(users)) {
-        users.forEach(function(u) {
-          var opt = document.createElement('option');
-          opt.value = u.id || u.user_id;
-          opt.textContent = (u.name || u.full_name) + ' (' + (u.email || '') + ')';
-          sel.appendChild(opt);
-        });
-      }
+      var users = (result && result.users) ? result.users : [];
+      users.forEach(function(u) {
+        var opt = document.createElement('option');
+        opt.value = u.id || u.user_id;
+        opt.textContent = (u.name || u.full_name) + ' (' + (u.email || '') + ')';
+        sel.appendChild(opt);
+      });
     })
-    .withFailureHandler(function() { /* non-fatal */ })
-    .apiCall('getDropdowns', {});
+    .catch(function() { /* non-fatal */ });
 }
 
 function addAuditeeActionPlan() {
@@ -598,27 +600,25 @@ function addAuditeeActionPlan() {
   var ownerId = ownerSel.value || '';
   var ownerName = ownerId ? ownerSel.options[ownerSel.selectedIndex].textContent : '';
 
-  google.script.run
-    .withSuccessHandler(function(result) {
+  apiCall('createAuditeeActionPlan', {
+    work_paper_id: _arWorkPaperId,
+    action_description: desc,
+    owner_ids: ownerId,
+    owner_names: ownerName,
+    due_date: dueDate
+  })
+    .then(function(result) {
       if (result && result.success) {
         showToast('Action plan added', 'success');
         var modal = bootstrap.Modal.getInstance(document.getElementById('addAuditeeAPModal'));
         if (modal) modal.hide();
-        // Reload to see new AP
         loadAuditeeResponse({ id: _arWorkPaperId });
       } else {
         showToast(result ? result.error : 'Failed to add action plan', 'danger');
       }
     })
-    .withFailureHandler(function(err) {
-      showToast('Error: ' + err.message, 'danger');
-    })
-    .apiCall('createAuditeeActionPlan', {
-      work_paper_id: _arWorkPaperId,
-      action_description: desc,
-      owner_ids: ownerId,
-      owner_names: ownerName,
-      due_date: dueDate
+    .catch(function(err) {
+      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
     });
 }
 

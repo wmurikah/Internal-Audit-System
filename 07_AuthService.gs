@@ -68,7 +68,7 @@ function login(email, password) {
       permissions = JSON.parse(cachedPerm);
     } else {
       permissions = getUserPermissions(user.role_code);
-      cache.put('perm_' + user.role_code, JSON.stringify(permissions), 1800);
+      cache.put('perm_' + user.role_code, JSON.stringify(permissions), CONFIG.CACHE_TTL.PERMISSIONS);
     }
   } catch(e) {}
   
@@ -182,7 +182,7 @@ function prewarmUserCache(user) {
     const cache = CacheService.getScriptCache();
     
     const permissions = getUserPermissions(user.role_code);
-    cache.put('perm_' + user.role_code, JSON.stringify(permissions), 1800);
+    cache.put('perm_' + user.role_code, JSON.stringify(permissions), CONFIG.CACHE_TTL.PERMISSIONS);
     
     const roleName = getRoleName(user.role_code);
     cache.put('role_name_' + user.role_code, roleName, 3600);

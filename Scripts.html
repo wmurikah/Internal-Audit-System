@@ -310,11 +310,14 @@ function scheduleBackgroundLoads() {
   // Sidebar counts - 1 second after UI
   setTimeout(loadSidebarCountsBackground, 1000);
 
-  // Keep permissions and user flags fresh - every 60s to stay within API quotas
-  setInterval(silentRefreshInitData, 60000);
-  
-  // Periodic refresh every 60s
+  // Permission-specific fast refresh every 15s
+  setInterval(refreshPermissionsQuick, 15000);
+
+  // Periodic refresh every 60s (dropdowns, sidebar counts)
   setInterval(refreshBackgroundData, 60000);
+
+  // Full init data refresh every 5 minutes (catches user flag changes like must_change_password)
+  setInterval(silentRefreshInitData, 300000);
 }
 
 function loadDropdownsBackground() {
@@ -358,6 +361,28 @@ function refreshBackgroundData() {
       }
     })
     .catch(() => {});
+}
+
+// Fast permission refresh - checks every 15 seconds if permissions changed
+function refreshPermissionsQuick() {
+  apiCall('getInitDataLight', {})
+    .then(function(result) {
+      if (result && result.success && result.permissions) {
+        var newPermsStr = JSON.stringify(result.permissions);
+        var oldPermsStr = JSON.stringify(window.currentPermissions);
+        if (newPermsStr !== oldPermsStr) {
+          console.log('Permissions changed — updating UI');
+          window.currentPermissions = result.permissions;
+          setupNavigation(result.permissions);
+          var cached = LocalStore.get('initData');
+          if (cached) {
+            cached.permissions = result.permissions;
+            LocalStore.set('initData', cached, 15);
+          }
+        }
+      }
+    })
+    .catch(function() { /* silent fail */ });
 }
 
 // Silent refresh: update cached data without blocking UI

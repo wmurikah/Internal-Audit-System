@@ -399,7 +399,7 @@ function getActionPlansRaw(filters, user) {
     if (filters.work_paper_id && row[colMap['work_paper_id']] !== filters.work_paper_id) match = false;
     if (filters.status && row[colMap['status']] !== filters.status) match = false;
     if (filters.owner_id) {
-      const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
+      const ownerIds = parseIdList(row[colMap['owner_ids']]);
       if (!ownerIds.includes(filters.owner_id)) match = false;
     }
     
@@ -439,7 +439,7 @@ function getActionPlansRaw(filters, user) {
       }
       // All other roles not in seeAllRoles: only see action plans assigned to them
       else if (!seeAllRoles.includes(roleCode)) {
-        const ownerIds = String(row[colMap['owner_ids']] || '').split(',').map(s => s.trim());
+        const ownerIds = parseIdList(row[colMap['owner_ids']]);
         if (!ownerIds.includes(user.user_id)) {
           match = false;
         }
@@ -569,7 +569,7 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   if (!actionPlan) throw new Error('Action plan not found');
 
   // Verify user is an owner or has permission
-  const ownerIds = String(actionPlan.owner_ids || '').split(',').map(s => s.trim());
+  const ownerIds = parseIdList(actionPlan.owner_ids);
   const isOwner = ownerIds.includes(user.user_id);
   const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
 
@@ -837,7 +837,7 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
   if (!actionPlan) throw new Error('Action plan not found: ' + actionPlanId);
 
   // Only current owners or auditors can delegate
-  var currentOwnerIds = String(actionPlan.owner_ids || '').split(',').map(function(s) { return s.trim(); });
+  var currentOwnerIds = parseIdList(actionPlan.owner_ids);
   var isCurrentOwner = currentOwnerIds.includes(user.user_id);
   var isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
 
@@ -897,7 +897,7 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
  * Send delegation notification to the new owner(s)
  */
 function queueDelegationNotification(actionPlanId, actionPlan, previousVersion, delegator) {
-  var ownerIds = String(actionPlan.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var ownerIds = parseIdList(actionPlan.owner_ids);
   var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
   var observationTitle = parentWp ? parentWp.observation_title : '';
   var loginUrl = ScriptApp.getService().getUrl();
@@ -940,7 +940,7 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   if (!actionPlan) throw new Error('Action plan not found');
   
   // Verify user can add evidence
-  const ownerIds = String(actionPlan.owner_ids || '').split(',').map(s => s.trim());
+  const ownerIds = parseIdList(actionPlan.owner_ids);
   const isOwner = ownerIds.includes(user.user_id);
   const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR].includes(user.role_code);
   
@@ -1055,7 +1055,7 @@ function queueImplementationNotification(actionPlanId, actionPlan, implementer) 
  * Includes the action plan details + parent observation context.
  */
 function queueVerificationNotification(actionPlanId, actionPlan, action, verifier) {
-  var ownerIds = String(actionPlan.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var ownerIds = parseIdList(actionPlan.owner_ids);
   var actionText = action === 'approve' ? 'Verified' : action === 'reject' ? 'Rejected' : 'Returned for Revision';
 
   // Get parent work paper for observation context
