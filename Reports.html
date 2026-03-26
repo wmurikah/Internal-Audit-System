@@ -46,7 +46,7 @@
     </li>
     <li class="nav-item">
       <a class="nav-link" href="#" data-tab="findings" onclick="switchReportTab(event, 'findings')">
-        <i class="bi bi-search me-1"></i>Findings
+        <i class="bi bi-search me-1"></i>Observations
       </a>
     </li>
     <li class="nav-item">
@@ -327,7 +327,7 @@ function renderExecutiveSummary(container) {
     '<div class="kpi-label mt-2">Overall Audit Health</div>' +
     '<div class="kpi-sublabel">' + escapeHtml(scoreLabel) + '</div></div></div>';
   // KPIs
-  html += buildKPI('col-lg-3 col-md-6', e.totalFindings, 'Total Findings', '', 'bi-search');
+  html += buildKPI('col-lg-3 col-md-6', e.totalFindings, 'Total Observations', '', 'bi-search');
   html += buildKPI('col-lg-3 col-md-6', e.totalActionPlans, 'Action Plans', e.closedActionPlans + ' closed', 'bi-list-check');
   html += buildKPI('col-lg-3 col-md-6', e.overdueActionPlans, 'Overdue Items', '', 'bi-exclamation-triangle', e.overdueActionPlans > 0 ? 'var(--danger-color)' : 'var(--success-color)');
   html += '</div>';
@@ -338,14 +338,14 @@ function renderExecutiveSummary(container) {
   html += buildKPI('col-md-3', e.onTimeClosureRate + '%', 'On-Time Closure', '', 'bi-clock');
   html += buildKPI('col-md-3', e.avgRiskScore + '/100', 'Avg Risk Score', riskScoreLabel(e.avgRiskScore), 'bi-shield');
   var riskHigh = (e.riskDistribution.Extreme || 0) + (e.riskDistribution.High || 0);
-  html += buildKPI('col-md-3', riskHigh, 'High/Extreme Findings', 'of ' + e.totalFindings + ' total', 'bi-exclamation-circle', riskHigh > 0 ? '#fd7e14' : '#10b981');
+  html += buildKPI('col-md-3', riskHigh, 'High/Extreme Observations', 'of ' + e.totalFindings + ' total', 'bi-exclamation-circle', riskHigh > 0 ? '#fd7e14' : '#10b981');
   html += '</div>';
 
   // Charts row
   html += '<div class="row g-3 mb-4">';
   html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Risk Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptRiskPie"></canvas></div></div></div></div>';
   html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Action Plan Status</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAPStatus"></canvas></div></div></div></div>';
-  html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Findings by Affiliate</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAffBar"></canvas></div></div></div></div>';
+  html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Observations by Affiliate</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAffBar"></canvas></div></div></div></div>';
   html += '</div>';
 
   // Trend chart
@@ -354,7 +354,7 @@ function renderExecutiveSummary(container) {
   // Affiliate summary table
   html += '<div class="card"><div class="card-header">Performance by Affiliate</div><div class="card-body p-0">' +
     '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
-    '<th>Affiliate</th><th class="text-center">Findings</th><th class="text-center">Action Plans</th><th class="text-center">Closed</th><th class="text-center">Overdue</th><th class="text-center">Impl. Rate</th><th class="text-center">Score</th></tr></thead><tbody>';
+    '<th>Affiliate</th><th class="text-center">Observations</th><th class="text-center">Action Plans</th><th class="text-center">Closed</th><th class="text-center">Overdue</th><th class="text-center">Impl. Rate</th><th class="text-center">Score</th></tr></thead><tbody>';
   (reportData.byAffiliate || []).sort(function(a,b){ return b.score - a.score; }).forEach(function(a) {
     html += '<tr><td><strong>' + escapeHtml(a.name || a.code) + '</strong></td>' +
       '<td class="text-center">' + a.findings + '</td>' +
@@ -386,16 +386,16 @@ function renderExecutiveSummary(container) {
 function renderFindings(container) {
   var findings = reportData.findings || [];
   var html = '<div class="d-flex justify-content-between align-items-center mb-3">' +
-    '<h6 class="mb-0"><i class="bi bi-search me-2 text-primary"></i>Detailed Findings (' + findings.length + ')</h6></div>';
+    '<h6 class="mb-0"><i class="bi bi-search me-2 text-primary"></i>Detailed Observations (' + findings.length + ')</h6></div>';
 
   if (findings.length === 0) {
-    html += '<div class="text-center py-5 text-muted"><i class="bi bi-check-circle" style="font-size:3rem;"></i><p class="mt-2">No findings match the current filters.</p></div>';
+    html += '<div class="text-center py-5 text-muted"><i class="bi bi-check-circle" style="font-size:3rem;"></i><p class="mt-2">No observations match the current filters.</p></div>';
     container.innerHTML = html;
     return;
   }
 
   html += '<div class="table-responsive"><table class="table table-sm" id="findingsTable"><thead><tr>' +
-    '<th style="width:60px;">Risk</th><th>Finding</th><th>Affiliate</th><th>Audit Area</th><th>Status</th><th class="text-center">APs</th><th class="text-center">Overdue</th></tr></thead><tbody>';
+    '<th style="width:60px;">Risk</th><th>Observation</th><th>Affiliate</th><th>Audit Area</th><th>Status</th><th class="text-center">APs</th><th class="text-center">Overdue</th></tr></thead><tbody>';
 
   findings.forEach(function(f) {
     var apProgress = f.actionPlansTotal > 0 ? Math.round((f.actionPlansClosed / f.actionPlansTotal) * 100) : 0;
@@ -521,7 +521,7 @@ function renderPerformanceScorecard(container) {
   // Score table
   html += '<div class="card mb-4"><div class="card-header">Detailed Scorecard</div><div class="card-body p-0">' +
     '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
-    '<th>Audit Area</th><th class="text-center">Findings</th><th class="text-center">Action Plans</th>' +
+    '<th>Audit Area</th><th class="text-center">Observations</th><th class="text-center">Action Plans</th>' +
     '<th class="text-center">Impl. Rate</th><th class="text-center">Overdue</th>' +
     '<th class="text-center">Score</th><th class="text-center">Rating</th></tr></thead><tbody>';
   areas.forEach(function(a) {
@@ -684,7 +684,7 @@ function renderAffiliateBarChart(canvasId, byAff) {
   var data = byAff.map(function(a) { return a.findings; });
   reportCharts[canvasId] = new Chart(ctx, {
     type: 'bar',
-    data: { labels: labels, datasets: [{ label: 'Findings', data: data, backgroundColor: '#1a365d', borderRadius: 4 }] },
+    data: { labels: labels, datasets: [{ label: 'Observations', data: data, backgroundColor: '#1a365d', borderRadius: 4 }] },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: true, position: 'bottom', labels: { color: CHART_LABEL_COLOR, boxWidth: 10, padding: 12 } },
@@ -709,7 +709,7 @@ function renderTrendChart(canvasId, trends) {
     data: {
       labels: trends.labels,
       datasets: [
-        { label: 'Findings Created', data: trends.findingsCreated, borderColor: '#1a365d', backgroundColor: 'rgba(26,54,93,0.1)', fill: true, tension: 0.3, pointRadius: 3 },
+        { label: 'Observations Created', data: trends.findingsCreated, borderColor: '#1a365d', backgroundColor: 'rgba(26,54,93,0.1)', fill: true, tension: 0.3, pointRadius: 3 },
         { label: 'APs Created', data: trends.actionPlansCreated, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 3 },
         { label: 'APs Closed', data: trends.actionPlansClosed, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 3 }
       ]
@@ -909,7 +909,7 @@ function buildMethodologyBox() {
     '<ul>' +
     '<li><strong>Implementation Rate (40%):</strong> Percentage of action plans that have been closed (Implemented or Verified status).</li>' +
     '<li><strong>Timeliness (35%):</strong> Inverse of the overdue rate. Fewer overdue action plans result in a higher timeliness score.</li>' +
-    '<li><strong>Risk Profile (25%):</strong> Penalty applied proportional to the volume of findings. Areas with fewer findings score higher.</li>' +
+    '<li><strong>Risk Profile (25%):</strong> Penalty applied proportional to the volume of observations. Areas with fewer observations score higher.</li>' +
     '</ul>' +
     '<p><strong>Ratings:</strong> Effective (&ge;80) | Needs Improvement (60&ndash;79) | Ineffective (&lt;60)</p>' +
     '</div>';
@@ -924,7 +924,7 @@ function exportReportPDF() {
   var header = document.getElementById('printReportHeader');
   var title = document.getElementById('printReportTitle');
   var dateEl = document.getElementById('printReportDate');
-  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Findings', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
+  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Observations', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
   if (title) title.textContent = tabNames[currentReportTab] || 'Audit Report';
   if (dateEl) dateEl.textContent = 'Generated: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' });
   if (header) header.classList.remove('d-none');
@@ -937,7 +937,7 @@ function exportReportPDF() {
 function exportReportWord() {
   if (!reportData) { showToast('No report data to export', 'warning'); return; }
 
-  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Findings', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
+  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Observations', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
   var reportTitle = tabNames[currentReportTab] || 'Audit Report';
 
   // Build Word-compatible HTML
@@ -963,7 +963,7 @@ function exportReportWord() {
   html += '<h2>Executive Summary</h2>';
   html += '<table><tr><th>Metric</th><th>Value</th></tr>' +
     '<tr><td>Overall Audit Health Score</td><td class="score ' + (e.overallScore >= 80 ? 'effective' : e.overallScore >= 60 ? 'needs-improvement' : 'ineffective') + '">' + e.overallScore + ' / 100</td></tr>' +
-    '<tr><td>Total Findings</td><td>' + e.totalFindings + '</td></tr>' +
+    '<tr><td>Total Observations</td><td>' + e.totalFindings + '</td></tr>' +
     '<tr><td>Total Action Plans</td><td>' + e.totalActionPlans + '</td></tr>' +
     '<tr><td>Closed Action Plans</td><td>' + e.closedActionPlans + '</td></tr>' +
     '<tr><td>Overdue Action Plans</td><td>' + e.overdueActionPlans + '</td></tr>' +
@@ -979,7 +979,7 @@ function exportReportWord() {
     '<tr><td><span class="badge low">Low</span></td><td>' + (e.riskDistribution.Low||0) + '</td></tr></table>';
 
   html += '<h2>Performance by Affiliate</h2>';
-  html += '<table><tr><th>Affiliate</th><th>Findings</th><th>Action Plans</th><th>Closed</th><th>Overdue</th><th>Impl. Rate</th><th>Score</th></tr>';
+  html += '<table><tr><th>Affiliate</th><th>Observations</th><th>Action Plans</th><th>Closed</th><th>Overdue</th><th>Impl. Rate</th><th>Score</th></tr>';
   (reportData.byAffiliate||[]).forEach(function(a) {
     html += '<tr><td>' + (a.name||a.code) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td></tr>';
   });
@@ -987,7 +987,7 @@ function exportReportWord() {
 
   if (currentReportTab === 'scorecard' || currentReportTab === 'executive') {
     html += '<h2>Audit Area Scorecard</h2>';
-    html += '<table><tr><th>Audit Area</th><th>Findings</th><th>Action Plans</th><th>Impl. Rate</th><th>Score</th><th>Rating</th></tr>';
+    html += '<table><tr><th>Audit Area</th><th>Observations</th><th>Action Plans</th><th>Impl. Rate</th><th>Score</th><th>Rating</th></tr>';
     (reportData.byAuditArea||[]).forEach(function(a) {
       html += '<tr><td>' + a.name + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + a.rating + '</td></tr>';
     });
@@ -1008,7 +1008,7 @@ function exportReportWord() {
 function exportReportExcel() {
   if (!reportData) { showToast('No report data to export', 'warning'); return; }
 
-  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Findings', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
+  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Observations', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
   var reportTitle = tabNames[currentReportTab] || 'Audit Report';
 
   // Build Excel-compatible HTML table
@@ -1050,16 +1050,16 @@ function buildExcelSummarySheet() {
     '<tr><th colspan="2" style="background:#1a365d;color:#fff;font-size:14pt;">Executive Summary</th></tr>' +
     '<tr><td>Generated</td><td>' + new Date().toLocaleDateString() + '</td></tr>' +
     '<tr><td>Overall Score</td><td>' + e.overallScore + ' / 100</td></tr>' +
-    '<tr><td>Total Findings</td><td>' + e.totalFindings + '</td></tr>' +
+    '<tr><td>Total Observations</td><td>' + e.totalFindings + '</td></tr>' +
     '<tr><td>Total Action Plans</td><td>' + e.totalActionPlans + '</td></tr>' +
     '<tr><td>Closed Action Plans</td><td>' + e.closedActionPlans + '</td></tr>' +
     '<tr><td>Overdue Action Plans</td><td>' + e.overdueActionPlans + '</td></tr>' +
     '<tr><td>Implementation Rate</td><td>' + e.implementationRate + '%</td></tr>' +
     '<tr><td>On-Time Closure Rate</td><td>' + e.onTimeClosureRate + '%</td></tr>' +
-    '<tr><td>Extreme Risk Findings</td><td>' + (e.riskDistribution.Extreme||0) + '</td></tr>' +
-    '<tr><td>High Risk Findings</td><td>' + (e.riskDistribution.High||0) + '</td></tr>' +
-    '<tr><td>Medium Risk Findings</td><td>' + (e.riskDistribution.Medium||0) + '</td></tr>' +
-    '<tr><td>Low Risk Findings</td><td>' + (e.riskDistribution.Low||0) + '</td></tr>' +
+    '<tr><td>Extreme Risk Observations</td><td>' + (e.riskDistribution.Extreme||0) + '</td></tr>' +
+    '<tr><td>High Risk Observations</td><td>' + (e.riskDistribution.High||0) + '</td></tr>' +
+    '<tr><td>Medium Risk Observations</td><td>' + (e.riskDistribution.Medium||0) + '</td></tr>' +
+    '<tr><td>Low Risk Observations</td><td>' + (e.riskDistribution.Low||0) + '</td></tr>' +
     '</table></div>';
 }
 
@@ -1074,7 +1074,7 @@ function buildExcelFindingsSheet() {
 
 function buildExcelAffiliateSheet() {
   var html = '<div id="By Affiliate"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
-    '<th>Affiliate</th><th>Findings</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th><th>Implementation Rate</th><th>Score</th><th>Extreme</th><th>High</th><th>Medium</th><th>Low</th></tr>';
+    '<th>Affiliate</th><th>Observations</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th><th>Implementation Rate</th><th>Score</th><th>Extreme</th><th>High</th><th>Medium</th><th>Low</th></tr>';
   (reportData.byAffiliate||[]).forEach(function(a) {
     var r = a.riskDistribution||{};
     html += '<tr><td>' + escapeHtml(a.name||a.code) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + (r.Extreme||0) + '</td><td>' + (r.High||0) + '</td><td>' + (r.Medium||0) + '</td><td>' + (r.Low||0) + '</td></tr>';
@@ -1084,7 +1084,7 @@ function buildExcelAffiliateSheet() {
 
 function buildExcelScorecardSheet() {
   var html = '<div id="Scorecard"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
-    '<th>Audit Area</th><th>Findings</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th><th>Implementation Rate</th><th>Score</th><th>Rating</th></tr>';
+    '<th>Audit Area</th><th>Observations</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th><th>Implementation Rate</th><th>Score</th><th>Rating</th></tr>';
   (reportData.byAuditArea||[]).forEach(function(a) {
     html += '<tr><td>' + escapeHtml(a.name) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + a.rating + '</td></tr>';
   });

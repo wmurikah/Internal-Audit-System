@@ -403,11 +403,11 @@ function showPendingFindingsBanner(count, counts) {
 
   var message = '';
   if (pendingNew > 0 && rejected > 0) {
-    message = 'You have ' + pendingNew + ' new finding(s) and ' + rejected + ' finding(s) returned for revision.';
+    message = 'You have ' + pendingNew + ' new observation(s) and ' + rejected + ' observation(s) returned for revision.';
   } else if (pendingNew > 0) {
-    message = 'You have ' + pendingNew + ' new audit finding(s) requiring your response.';
+    message = 'You have ' + pendingNew + ' new audit observation(s) requiring your response.';
   } else {
-    message = 'You have ' + rejected + ' finding(s) returned for revision by the audit team.';
+    message = 'You have ' + rejected + ' observation(s) returned for revision by the audit team.';
   }
 
   var bannerHtml =
@@ -570,20 +570,10 @@ function setupNavigation(p) {
 
   // Insights section header is always visible since Dashboard is always visible
 
-  // User Management - driven by USER module permission
-  if (!p || !p.canManageUsers) {
+  // User Management & Settings: SUPER_ADMIN only
+  if (role !== 'SUPER_ADMIN') {
     document.getElementById('navUsers')?.classList.add('d-none');
-  }
-
-  // Settings - driven by CONFIG module permission
-  if (!p || !p.canManageSettings) {
     document.getElementById('navSettings')?.classList.add('d-none');
-  }
-
-  // Hide Admin section header if both Users and Settings are hidden
-  const usersHidden = document.getElementById('navUsers')?.classList.contains('d-none');
-  const settingsHidden = document.getElementById('navSettings')?.classList.contains('d-none');
-  if (usersHidden && settingsHidden) {
     document.getElementById('navAdminSection')?.classList.add('d-none');
   }
 
@@ -593,7 +583,7 @@ function setupNavigation(p) {
     document.getElementById('navQuickStats')?.classList.add('d-none');
   }
 
-  // Auditee section - show My Findings for auditee-type roles
+  // Auditee section: show My Observations for auditee-type roles
   var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
   if (auditeeRoles.includes(role)) {
     document.getElementById('navAuditeeSection')?.classList.remove('d-none');
@@ -694,8 +684,8 @@ function navigateTo(page, params, updateHash = true) {
     'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => { if (typeof loadActionPlans === 'function') loadActionPlans(params); } },
     'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: () => { if (typeof loadActionPlansOverdue === 'function') loadActionPlansOverdue(); else if (typeof loadActionPlans === 'function') loadActionPlans({ overdue: true }); } },
     'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => { if (typeof loadActionPlanView === 'function') loadActionPlanView(params); } },
-    'auditee-findings': { el: 'page-auditee-findings', title: 'My Findings', init: () => { if (typeof loadAuditeeFindings === 'function') loadAuditeeFindings(); } },
-    'auditee-response': { el: 'page-auditee-response', title: 'Finding Response', init: () => { if (typeof loadAuditeeResponse === 'function') loadAuditeeResponse(params); } },
+    'auditee-findings': { el: 'page-auditee-findings', title: 'My Audit Observations', init: () => { if (typeof loadAuditeeFindings === 'function') loadAuditeeFindings(); } },
+    'auditee-response': { el: 'page-auditee-response', title: 'Observation Response', init: () => { if (typeof loadAuditeeResponse === 'function') loadAuditeeResponse(params); } },
     'reports': { el: 'page-reports', title: 'Dashboard', init: () => { if (typeof loadReports === 'function') loadReports(); } },
     'users': { el: 'page-settings', title: 'User Management', init: () => { if (typeof loadSettings === 'function') loadSettings({ tab: 'users' }); } },
     'settings': { el: 'page-settings', title: 'Settings', init: () => { if (typeof loadSettings === 'function') loadSettings(params); } },

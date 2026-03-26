@@ -1,15 +1,15 @@
-<!-- Auditee Response Page - View finding & submit management response + action plans -->
+<!-- Auditee Response Page - View observation & submit management response + action plans -->
 <div class="auditee-response-page">
   <div id="auditeeResponseLoading" class="text-center py-5">
     <div class="spinner-border text-primary"></div>
-    <p class="mt-2 text-muted">Loading finding details...</p>
+    <p class="mt-2 text-muted">Loading observation details...</p>
   </div>
 
   <div id="auditeeResponseContent" style="display:none;">
     <!-- Back button -->
     <div class="mb-3">
       <button class="btn btn-outline-secondary btn-sm" onclick="navigateTo('auditee-findings')">
-        <i class="bi bi-arrow-left me-1"></i>Back to My Findings
+        <i class="bi bi-arrow-left me-1"></i>Back to My Observations
       </button>
     </div>
 
@@ -40,11 +40,11 @@
 
     <!-- Two Column Layout -->
     <div class="row g-4">
-      <!-- Left Column: Finding Details (Read-Only) -->
+      <!-- Left Column: Observation Details (Read-Only) -->
       <div class="col-lg-6">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-header bg-white border-bottom">
-            <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Audit Finding</h6>
+            <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Audit Observation</h6>
           </div>
           <div class="card-body">
             <div class="mb-3">
@@ -82,7 +82,7 @@
             <div class="mb-3" id="arResponseTextGroup">
               <label class="form-label fw-semibold">Management Response <span class="text-danger">*</span></label>
               <textarea class="form-control" id="arManagementResponse" rows="6" maxlength="2000"
-                        placeholder="Provide your management response to this audit finding..."></textarea>
+                        placeholder="Provide your management response to this audit observation..."></textarea>
               <div class="d-flex justify-content-between mt-1">
                 <small class="text-muted">Minimum 10 characters</small>
                 <small class="text-muted"><span id="arCharCount">0</span>/2000</small>
@@ -224,7 +224,7 @@ function loadAuditeeResponse(params) {
   params = params || {};
   _arWorkPaperId = params.id;
   if (!_arWorkPaperId) {
-    showToast('No finding ID provided', 'danger');
+    showToast('No observation ID provided', 'danger');
     navigateTo('auditee-findings');
     return;
   }
@@ -238,7 +238,7 @@ function loadAuditeeResponse(params) {
       document.getElementById('auditeeResponseContent').style.display = 'block';
 
       if (!result || !result.success) {
-        showToast(result ? result.error : 'Failed to load finding', 'danger');
+        showToast(result ? result.error : 'Failed to load observation', 'danger');
         return;
       }
 
@@ -259,7 +259,7 @@ function renderAuditeeResponse() {
   var isSuperAdmin = _arData.isSuperAdmin;
 
   // Header
-  document.getElementById('arFindingTitle').textContent = f.observation_title || 'Untitled Finding';
+  document.getElementById('arFindingTitle').textContent = f.observation_title || 'Untitled Observation';
   document.getElementById('arWorkPaperRef').innerHTML = '<i class="bi bi-hash me-1"></i>' + (f.work_paper_ref || f.work_paper_id);
   document.getElementById('arIssuedDate').innerHTML = f.sent_to_auditee_date ? '<i class="bi bi-calendar me-1"></i>Issued: ' + formatDate(f.sent_to_auditee_date) : '';
 
@@ -292,7 +292,7 @@ function renderAuditeeResponse() {
   // Round info
   document.getElementById('arRoundBadge').textContent = 'Round ' + (f.response_round || 0) + ' / ' + _arData.maxRounds;
 
-  // Finding details (read-only)
+  // Observation details (read-only)
   document.getElementById('arObservation').textContent = f.observation_description || '-';
   document.getElementById('arRiskSummary').textContent = f.risk_summary || '-';
   document.getElementById('arRecommendation').textContent = f.recommendation || '-';
@@ -345,6 +345,27 @@ function renderAuditeeResponse() {
     if ((isAuditor || isSuperAdmin) && responseStatus === 'Response Submitted') {
       document.getElementById('arAuditorReviewActions').style.display = 'flex';
     }
+  }
+
+  // SAFETY NET: Never show review buttons to non-auditor roles
+  var userRole = window.currentUser?.role_code || '';
+  var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+  if (!auditorRoles.includes(userRole)) {
+    var reviewActionsEl = document.getElementById('arAuditorReviewActions');
+    reviewActionsEl.style.display = 'none';
+    reviewActionsEl.style.setProperty('display', 'none', 'important');
+  }
+
+  // Enforce max round limit in UI
+  var maxRounds = _arData.maxRounds || 3;
+  if ((f.response_round || 0) >= maxRounds && responseStatus !== 'Response Accepted') {
+    document.getElementById('arResponseActions').style.display = 'none';
+    document.getElementById('btnAddActionPlan').style.display = 'none';
+    var escalatedMsg = document.createElement('div');
+    escalatedMsg.className = 'alert alert-danger mt-3';
+    escalatedMsg.innerHTML = '<i class="bi bi-exclamation-octagon me-2"></i>Maximum response rounds reached. This observation has been escalated.';
+    var responseActions = document.getElementById('arResponseActions');
+    responseActions.parentNode.insertBefore(escalatedMsg, responseActions);
   }
 
   // Action plans
@@ -491,7 +512,11 @@ function submitResponseForm() {
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-send me-1"></i>Submit Response';
       if (result && result.success) {
-        showToast(result.message || 'Response submitted successfully', 'success');
+        if (result.aiRejected) {
+          showToast(result.message || 'Your response was automatically reviewed. Please revise.', 'warning');
+        } else {
+          showToast(result.message || 'Response submitted successfully', 'success');
+        }
         loadAuditeeResponse({ id: _arWorkPaperId });
       } else {
         showToast(result ? result.error : 'Submit failed', 'danger');

@@ -320,6 +320,12 @@ function routeAction(action, data, user) {
     case 'getResponseHistory':
       return { success: true, responses: getResponseHistory(data.workPaperId) };
 
+    case 'batchSubmitAuditeeResponses':
+      return batchSubmitAuditeeResponses(data.workPaperIds, user);
+
+    case 'getQueuedResponses':
+      return getQueuedResponses(user);
+
     // ========== ACTION PLAN EVIDENCE ==========
     case 'addActionPlanEvidence':
       return addActionPlanEvidence(data.actionPlanId, data, user);
@@ -329,15 +335,15 @@ function routeAction(action, data, user) {
       
     // ========== USERS ==========
     case 'getUsers':
-      return getUsers(data.filters, user);
-      
     case 'createUser':
-      return createUser(data, user);
-      
     case 'updateUser':
-      return updateUser(data.userId, data, user);
-      
     case 'deactivateUser':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
+      }
+      if (action === 'getUsers') return getUsers(data.filters, user);
+      if (action === 'createUser') return createUser(data, user);
+      if (action === 'updateUser') return updateUser(data.userId, data, user);
       return deactivateUser(data.userId, user);
       
     // ========== REPORTS ==========
@@ -395,40 +401,40 @@ function routeAction(action, data, user) {
       }
       return { success: true, cleaned: cleanupExpiredSessions() };
 
-    // ========== SETTINGS ==========
+    // ========== SETTINGS (SUPER_ADMIN ONLY) ==========
     case 'getPermissions':
-      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, permissions: getPermissionsCached(data.roleCode) };
 
     case 'updatePermissions':
-      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return updatePermissions(data.roleCode, data.permissions, user);
 
     case 'getUserStats':
-      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, stats: getUserStats() };
 
     case 'getSystemConfig':
-      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, config: getSystemConfigValues() };
 
     case 'saveSystemConfig':
-      if (!canUserPerform(user, 'update', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return saveSystemConfigValues(data.config, user);
 
     case 'getAuditLog':
-      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, logs: getAuditLogs(data.action, data.page, data.pageSize), total: getAuditLogCount(data.action) };
 
@@ -480,21 +486,33 @@ function routeAction(action, data, user) {
 
     // ========== AI SERVICE ==========
     case 'getAIConfigStatus':
-      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, config: getAIConfigStatus() };
 
     case 'setAIApiKey':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
+      }
       return setAIApiKey(data.provider, data.apiKey, user);
 
     case 'removeAIApiKey':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
+      }
       return removeAIApiKey(data.provider, user);
 
     case 'setActiveAIProvider':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
+      }
       return setActiveAIProvider(data.provider, user);
 
     case 'testAIConnection':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
+      }
       return testAIConnection(data.provider, user);
 
     case 'getWorkPaperInsights':
@@ -508,21 +526,21 @@ function routeAction(action, data, user) {
 
     // ========== EMAIL (OUTLOOK / MICROSOFT GRAPH) ==========
     case 'getOutlookStatus':
-      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return getOutlookStatus();
 
     case 'testOutlookEmail':
-      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return testOutlookEmailAction(data.recipientEmail, user);
 
     // ========== EMAIL TEMPLATES ==========
     case 'getEmailTemplatesAll':
-      if (!canUserPerform(user, 'read', 'CONFIG', null)) {
-        return { success: false, error: 'Permission denied' };
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, templates: getEmailTemplatesAll() };
 

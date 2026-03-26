@@ -662,3 +662,59 @@ function routeAIAction(action, data, user) {
       return { success: false, error: 'Unknown AI action: ' + action };
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// AI Auto-Evaluation of Auditee Responses
+// ─────────────────────────────────────────────────────────────
+
+function evaluateAuditeeResponse(workPaperId, managementResponse, actionPlanIds, workPaper) {
+  var observation = workPaper.observation_description || '';
+  var recommendation = workPaper.recommendation || '';
+  var riskRating = workPaper.risk_rating || '';
+  var title = workPaper.observation_title || '';
+
+  // Get action plan descriptions
+  var actionPlanDescs = [];
+  if (actionPlanIds && actionPlanIds.length > 0) {
+    actionPlanIds.forEach(function(apId) {
+      try {
+        var ap = getActionPlanById(apId);
+        if (ap) actionPlanDescs.push(ap.action_description + ' (Due: ' + (ap.due_date || 'Not set') + ')');
+      } catch (e) { /* skip */ }
+    });
+  }
+
+  var systemPrompt = 'You are an internal audit quality assurance reviewer. ' +
+    'Your task is to evaluate whether a management response and proposed action plans ' +
+    'adequately address an audit observation. Be strict but fair. ' +
+    'A response is inadequate if it: (1) does not acknowledge the observation, ' +
+    '(2) provides vague or generic commitments without specific actions, ' +
+    '(3) has no action plans or action plans with no due dates, ' +
+    '(4) does not address the root cause identified in the recommendation, ' +
+    '(5) proposes timelines that are unreasonably long for the risk level. ' +
+    'Respond ONLY with JSON: {"adequate": true/false, "score": 0-100, "feedback": "specific explanation"}';
+
+  var userPrompt = 'Evaluate this management response:\n\n' +
+    'AUDIT OBSERVATION: ' + title + '\n' +
+    'DESCRIPTION: ' + observation + '\n' +
+    'RISK RATING: ' + riskRating + '\n' +
+    'AUDITOR RECOMMENDATION: ' + recommendation + '\n\n' +
+    'MANAGEMENT RESPONSE: ' + managementResponse + '\n\n' +
+    'PROPOSED ACTION PLANS:\n' + (actionPlanDescs.length > 0 ? actionPlanDescs.join('\n') : 'None proposed') + '\n\n' +
+    'Is this response adequate? Respond with JSON only.';
+
+  try {
+    var aiResponse = callAI(userPrompt, systemPrompt, { temperature: 0.2, maxTokens: 500 });
+    var jsonMatch = aiResponse.content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    var parsed = JSON.parse(jsonMatch[0]);
+    return {
+      autoReject: parsed.adequate === false && (parsed.score || 0) < 50,
+      feedback: parsed.feedback || 'Response does not adequately address the audit observation.',
+      score: parsed.score || 0
+    };
+  } catch (e) {
+    console.warn('AI evaluation failed:', e.message);
+    return null;
+  }
+}

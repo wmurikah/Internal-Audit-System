@@ -552,7 +552,7 @@ function sendToAuditee(workPaperId, user) {
 
       createActionPlan({
         work_paper_id: workPaperId,
-        action_description: workPaper.recommendation || workPaper.observation_title || 'Respond to audit finding',
+        action_description: workPaper.recommendation || workPaper.observation_title || 'Respond to audit observation',
         owner_ids: workPaper.responsible_ids,
         owner_names: ownerNames,
         due_date: defaultDue
@@ -857,7 +857,7 @@ function queueAuditeeNotification(workPaperId, workPaper, sender) {
 /**
  * Batch send auditee notifications for multiple work papers at once.
  * Call this when approving/sending multiple WPs to avoid spamming auditees.
- * Groups by auditee and sends ONE email per person with a table of all findings.
+ * Groups by auditee and sends ONE email per person with a table of all observations.
  * Collects all unique CC recipients across the batch.
  */
 function sendBatchedAuditeeNotifications(workPapers) {
@@ -1073,7 +1073,7 @@ function batchSendToAuditees(workPaperIds, user) {
 
           createActionPlan({
             work_paper_id: wp.work_paper_id,
-            action_description: wp.recommendation || wp.observation_title || 'Respond to audit finding',
+            action_description: wp.recommendation || wp.observation_title || 'Respond to audit observation',
             owner_ids: wp.responsible_ids,
             owner_names: ownerNames,
             due_date: defaultDue

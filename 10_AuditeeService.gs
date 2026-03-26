@@ -246,7 +246,7 @@ function submitAuditeeResponse(workPaperId, data, user) {
   // Check max rounds
   var currentRound = (wp.response_round || 0) + 1;
   if (currentRound > RESPONSE_DEFAULTS.MAX_ROUNDS) {
-    throw new Error('Maximum response rounds (' + RESPONSE_DEFAULTS.MAX_ROUNDS + ') exceeded. This finding will be escalated.');
+    throw new Error('Maximum response rounds (' + RESPONSE_DEFAULTS.MAX_ROUNDS + ') exceeded. This observation will be escalated.');
   }
 
   var now = new Date();
@@ -319,6 +319,38 @@ function submitAuditeeResponse(workPaperId, data, user) {
   // Add work paper revision
   addWorkPaperRevision(workPaperId, 'Response Submitted',
     'Auditee response submitted (Round ' + currentRound + ').', user);
+
+  // AI auto-evaluation (only if AI is configured)
+  var aiStatus = getAIConfigStatus();
+  if (aiStatus.aiEnabled) {
+    try {
+      var aiEval = evaluateAuditeeResponse(workPaperId, mgmtResponse, data.action_plan_ids || [], wp);
+      if (aiEval && aiEval.autoReject) {
+        // Auto-reject: update response status back to rejected
+        wpUpdates.response_status = STATUS.RESPONSE.REJECTED;
+        wpUpdates.response_review_comments = 'AI Assessment: ' + aiEval.feedback;
+        updatedWp.response_status = STATUS.RESPONSE.REJECTED;
+        updatedWp.response_review_comments = 'AI Assessment: ' + aiEval.feedback;
+        responseRecord.status = STATUS.REVIEW.REJECTED;
+        responseRecord.review_comments = aiEval.feedback;
+        responseRecord.reviewed_by_id = 'AI_SYSTEM';
+        responseRecord.reviewed_by_name = 'AI Auto-Review';
+        responseRecord.review_date = now;
+        syncToFirestore(SHEETS.AUDITEE_RESPONSES, responseId, responseRecord);
+        syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updatedWp);
+        // Queue rejection notification to auditee instead of auditor notification
+        queueResponseRejectedNotification(workPaperId, updatedWp, aiEval.feedback, { user_id: 'AI_SYSTEM', full_name: 'AI Auto-Review' });
+        logAuditEvent('AI_AUTO_REJECT', 'AUDITEE_RESPONSE', responseId, null, responseRecord, 'AI_SYSTEM', 'ai@system');
+        return sanitizeForClient({
+          success: true, responseId: responseId,
+          message: 'Your response was automatically reviewed. Please revise: ' + aiEval.feedback,
+          aiRejected: true
+        });
+      }
+    } catch (aiErr) {
+      console.warn('AI evaluation failed (non-fatal):', aiErr.message);
+    }
+  }
 
   // Queue notification to auditors
   queueResponseSubmittedNotification(workPaperId, updatedWp, responseRecord, user);
@@ -647,11 +679,11 @@ function queueResponseSubmittedNotification(workPaperId, workPaper, response, su
   auditors.forEach(function(auditor) {
     var firstName = auditor.name ? auditor.name.split(' ')[0] : 'Auditor';
     var intro = 'Dear ' + firstName + ',<br><br>' +
-      '<strong>' + (submitter.full_name || 'An auditee') + '</strong> has submitted a response to the following audit finding:';
+      '<strong>' + (submitter.full_name || 'An auditee') + '</strong> has submitted a response to the following audit observation:';
 
     var headers = ['Field', 'Details'];
     var rows = [
-      ['Finding', String(workPaper.observation_title || '-')],
+      ['Observation', String(workPaper.observation_title || '-')],
       ['Round', String(response.round_number || 1)],
       ['Risk Rating', String(workPaper.risk_rating || '-')],
       ['Submitted By', String(submitter.full_name || '-')],
@@ -675,11 +707,11 @@ function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
 
     var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Colleague';
     var intro = 'Dear ' + firstName + ',<br><br>' +
-      'Your response to the following audit finding has been <strong>accepted</strong> by ' + (reviewer.full_name || 'the audit team') + ':';
+      'Your response to the following audit observation has been <strong>accepted</strong> by ' + (reviewer.full_name || 'the audit team') + ':';
 
     var headers = ['Field', 'Details'];
     var rows = [
-      ['Finding', String(workPaper.observation_title || '-')],
+      ['Observation', String(workPaper.observation_title || '-')],
       ['Risk Rating', String(workPaper.risk_rating || '-')],
       ['Status', '<strong style="color:#28a745;">Response Accepted</strong>'],
       ['Reviewed By', String(reviewer.full_name || '-')]
@@ -703,12 +735,12 @@ function queueResponseRejectedNotification(workPaperId, workPaper, comments, rev
     var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Colleague';
     var remainingRounds = RESPONSE_DEFAULTS.MAX_ROUNDS - (workPaper.response_round || 0);
     var intro = 'Dear ' + firstName + ',<br><br>' +
-      'Your response to the following finding has been returned for revision by ' + (reviewer.full_name || 'the audit team') + '.' +
+      'Your response to the following audit observation has been returned for revision by ' + (reviewer.full_name || 'the audit team') + '.' +
       ' You have <strong>' + remainingRounds + ' round(s)</strong> remaining to submit a revised response.';
 
     var headers = ['Field', 'Details'];
     var rows = [
-      ['Finding', String(workPaper.observation_title || '-')],
+      ['Observation', String(workPaper.observation_title || '-')],
       ['Risk Rating', String(workPaper.risk_rating || '-')],
       ['Status', '<strong style="color:#dc3545;">Response Rejected</strong>'],
       ['Reviewer Comments', String(comments || 'No comments provided')]
@@ -734,23 +766,23 @@ function queueResponseEscalatedNotification(workPaperId, workPaper, reviewer) {
   });
 
   var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'ESCALATED: Audit Finding Response - ' + (workPaper.observation_title || workPaperId);
+  var subject = 'ESCALATED: Audit Observation Response - ' + (workPaper.observation_title || workPaperId);
 
   allEmails.forEach(function(email) {
     var intro = 'Dear Colleague,<br><br>' +
-      'The following audit finding has been <strong>escalated</strong> after reaching the maximum number of response rounds (' +
+      'The following audit observation has been <strong>escalated</strong> after reaching the maximum number of response rounds (' +
       RESPONSE_DEFAULTS.MAX_ROUNDS + '). Immediate attention is required.';
 
     var headers = ['Field', 'Details'];
     var rows = [
-      ['Finding', String(workPaper.observation_title || '-')],
+      ['Observation', String(workPaper.observation_title || '-')],
       ['Risk Rating', String(workPaper.risk_rating || '-')],
       ['Response Rounds Used', String(workPaper.response_round || 0) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
       ['Status', '<strong style="color:#dc3545;">ESCALATED</strong>'],
       ['Escalated By', String(reviewer.full_name || '-')]
     ];
 
-    var outro = 'This finding requires management intervention. Please <a href="' + loginUrl + '">log in</a> to review the full finding and response history.';
+    var outro = 'This observation requires management intervention. Please <a href="' + loginUrl + '">log in</a> to review the full finding and response history.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
     sendEmail(email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
   });
@@ -816,4 +848,58 @@ function getAuditeeFindingCounts(user) {
   });
 
   return counts;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Batch Submit Auditee Responses
+// ─────────────────────────────────────────────────────────────
+
+function batchSubmitAuditeeResponses(workPaperIds, user) {
+  if (!user) throw new Error('User required');
+  if (!workPaperIds || workPaperIds.length === 0) throw new Error('No work paper IDs provided');
+
+  var results = [];
+  var successCount = 0;
+  var failCount = 0;
+
+  workPaperIds.forEach(function(wpId) {
+    try {
+      var wp = getWorkPaperById(wpId);
+      if (!wp) { failCount++; return; }
+      if (wp.response_status !== STATUS.RESPONSE.DRAFT) { failCount++; return; }
+
+      var result = submitAuditeeResponse(wpId, {
+        management_response: wp.management_response || '',
+        action_plan_ids: (wp.action_plan_ids || '').split(',').filter(Boolean)
+      }, user);
+
+      if (result && result.success) {
+        successCount++;
+        results.push({ workPaperId: wpId, success: true });
+      } else {
+        failCount++;
+        results.push({ workPaperId: wpId, success: false, error: result ? result.error : 'Unknown error' });
+      }
+    } catch (e) {
+      failCount++;
+      results.push({ workPaperId: wpId, success: false, error: e.message });
+    }
+  });
+
+  return sanitizeForClient({
+    success: true,
+    message: successCount + ' response(s) submitted successfully' + (failCount > 0 ? ', ' + failCount + ' failed' : ''),
+    results: results,
+    successCount: successCount,
+    failCount: failCount
+  });
+}
+
+function getQueuedResponses(user) {
+  if (!user) throw new Error('User required');
+  var findings = getAuditeeFindings({}, user);
+  var queued = findings.filter(function(f) {
+    return f.response_status === STATUS.RESPONSE.DRAFT;
+  });
+  return sanitizeForClient({ success: true, queued: queued, count: queued.length });
 }
