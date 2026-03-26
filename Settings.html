@@ -608,12 +608,11 @@ let aiConfigStatus = null;
 let usersData = [];
 
 function loadSettings(params) {
-  // Restrict advanced tabs - only users with CONFIG update permission see them
+  // Settings and User Management are restricted to SUPER_ADMIN only
   var role = window.currentUser?.role_code || '';
-  var cfgPerms = window.currentPermissions || {};
 
-  if (role !== 'SUPER_ADMIN' && !cfgPerms.canManageSettings) {
-    var restrictedTabs = ['aiConfig', 'systemConfig', 'notificationConfig', 'dataBackup', 'auditLog'];
+  if (role !== 'SUPER_ADMIN') {
+    var restrictedTabs = ['aiConfig', 'systemConfig', 'notificationConfig', 'dataBackup', 'auditLog', 'userManagement', 'accessControl'];
     restrictedTabs.forEach(function(tabId) {
       var navLink = document.querySelector('a[href="#' + tabId + '"]');
       if (navLink) navLink.closest('li').style.display = 'none';
@@ -624,8 +623,8 @@ function loadSettings(params) {
   loadUsers();
   loadRoles();
 
-  // Only load restricted tabs if user has access
-  if (role === 'SUPER_ADMIN' || cfgPerms.canManageSettings) {
+  // Only load restricted tabs if SUPER_ADMIN
+  if (role === 'SUPER_ADMIN') {
     loadAIConfig();
     loadSystemConfig();
     loadOutlookConfig();

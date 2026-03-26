@@ -12,7 +12,7 @@
     --info-color: #3b82f6;
     
     /* Layout */
-    --sidebar-width: 280px;
+    --sidebar-width: clamp(220px, 18vw, 280px);
     --sidebar-collapsed-width: 70px;
     --topbar-height: 60px;
     --border-radius: 12px;
@@ -34,65 +34,65 @@
     --font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     
     /* Page Titles */
-    --font-size-page-title: 1.25rem;
+    --font-size-page-title: clamp(1rem, 0.85rem + 0.4vw, 1.25rem);
     --font-size-page-title-mobile: 1.1rem;
-    
+
     /* Section Titles */
-    --font-size-section-title: 1.1rem;
-    
+    --font-size-section-title: clamp(0.95rem, 0.85rem + 0.3vw, 1.1rem);
+
     /* Headings */
-    --font-size-h1: 1.5rem;
-    --font-size-h2: 1.25rem;
-    --font-size-h3: 1.1rem;
-    --font-size-h4: 1rem;
-    --font-size-h5: 0.9rem;
-    --font-size-h6: 0.85rem;
-    
+    --font-size-h1: clamp(1.2rem, 1rem + 0.5vw, 1.5rem);
+    --font-size-h2: clamp(1rem, 0.85rem + 0.4vw, 1.25rem);
+    --font-size-h3: clamp(0.95rem, 0.85rem + 0.3vw, 1.1rem);
+    --font-size-h4: clamp(0.875rem, 0.8rem + 0.2vw, 1rem);
+    --font-size-h5: clamp(0.8rem, 0.75rem + 0.15vw, 0.9rem);
+    --font-size-h6: clamp(0.75rem, 0.7rem + 0.15vw, 0.85rem);
+
     /* Body Text */
-    --font-size-base: 0.875rem;
-    --font-size-lg: 0.95rem;
-    --font-size-sm: 0.8rem;
-    --font-size-xs: 0.75rem;
-    --font-size-xxs: 0.7rem;
-    
+    --font-size-base: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+    --font-size-lg: clamp(0.85rem, 0.8rem + 0.15vw, 0.95rem);
+    --font-size-sm: clamp(0.7rem, 0.65rem + 0.15vw, 0.8rem);
+    --font-size-xs: clamp(0.65rem, 0.6rem + 0.15vw, 0.75rem);
+    --font-size-xxs: clamp(0.6rem, 0.55rem + 0.1vw, 0.7rem);
+
     /* KPI & Stats */
-    --font-size-kpi: 1.75rem;
+    --font-size-kpi: clamp(1.25rem, 1rem + 0.75vw, 1.75rem);
     --font-size-kpi-mobile: 1.5rem;
-    --font-size-stat: 1.75rem;
+    --font-size-stat: clamp(1.25rem, 1rem + 0.75vw, 1.75rem);
     --font-size-stat-mobile: 1.5rem;
-    
+
     /* Labels */
-    --font-size-label: 0.75rem;
-    --font-size-label-lg: 0.8rem;
-    
+    --font-size-label: clamp(0.65rem, 0.6rem + 0.15vw, 0.75rem);
+    --font-size-label-lg: clamp(0.7rem, 0.65rem + 0.15vw, 0.8rem);
+
     /* Tables */
-    --font-size-table: 0.85rem;
-    --font-size-table-header: 0.8rem;
-    --font-size-table-sm: 0.8rem;
-    
+    --font-size-table: clamp(0.7rem, 0.65rem + 0.2vw, 0.85rem);
+    --font-size-table-header: clamp(0.65rem, 0.6rem + 0.2vw, 0.8rem);
+    --font-size-table-sm: clamp(0.65rem, 0.6rem + 0.2vw, 0.8rem);
+
     /* Cards */
-    --font-size-card-header: 0.9rem;
-    --font-size-card-body: 0.875rem;
-    
+    --font-size-card-header: clamp(0.8rem, 0.75rem + 0.15vw, 0.9rem);
+    --font-size-card-body: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+
     /* Buttons */
-    --font-size-btn: 0.875rem;
-    --font-size-btn-sm: 0.8rem;
-    --font-size-btn-lg: 1rem;
-    
+    --font-size-btn: clamp(0.75rem, 0.7rem + 0.15vw, 0.875rem);
+    --font-size-btn-sm: clamp(0.7rem, 0.65rem + 0.15vw, 0.8rem);
+    --font-size-btn-lg: clamp(0.875rem, 0.8rem + 0.2vw, 1rem);
+
     /* Inputs */
-    --font-size-input: 0.875rem;
-    --font-size-input-sm: 0.8rem;
-    
+    --font-size-input: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+    --font-size-input-sm: clamp(0.7rem, 0.65rem + 0.15vw, 0.8rem);
+
     /* Badges */
-    --font-size-badge: 0.7rem;
-    --font-size-badge-lg: 0.75rem;
-    
+    --font-size-badge: clamp(0.6rem, 0.55rem + 0.1vw, 0.7rem);
+    --font-size-badge-lg: clamp(0.65rem, 0.6rem + 0.15vw, 0.75rem);
+
     /* Navigation */
-    --font-size-nav: 0.9rem;
-    --font-size-nav-sm: 0.85rem;
-    --font-size-nav-section: 0.7rem;
-    --font-size-breadcrumb: 0.85rem;
-    
+    --font-size-nav: clamp(0.8rem, 0.75rem + 0.15vw, 0.9rem);
+    --font-size-nav-sm: clamp(0.75rem, 0.7rem + 0.15vw, 0.85rem);
+    --font-size-nav-section: clamp(0.6rem, 0.55rem + 0.15vw, 0.7rem);
+    --font-size-breadcrumb: clamp(0.75rem, 0.7rem + 0.15vw, 0.85rem);
+
     /* Icons */
     --font-size-icon-sm: 0.9rem;
     --font-size-icon: 1rem;
@@ -100,9 +100,9 @@
     --font-size-icon-xl: 1.25rem;
     --font-size-icon-xxl: 1.5rem;
     --font-size-icon-huge: 2rem;
-    
+
     /* Code */
-    --font-size-code: 0.8rem;
+    --font-size-code: clamp(0.7rem, 0.65rem + 0.15vw, 0.8rem);
   }
 
   /* ============================================
@@ -1875,5 +1875,79 @@
 
   .data-freshness.stale .freshness-dot {
     background: var(--warning-color);
+  }
+
+  /* ============================================
+     RESPONSIVE AUTO-RESIZE LAYOUT
+     ============================================ */
+
+  /* Viewport-fitting layout */
+  .page-content {
+    height: calc(100vh - var(--topbar-height));
+    overflow-y: auto;
+    padding: clamp(12px, 1.5vw, 20px);
+  }
+
+  .table-responsive {
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+  }
+
+  /* Card body scaling */
+  .card-body { padding: clamp(12px, 1.5vw, 20px); }
+  .stat-card { padding: clamp(12px, 1.2vw, 20px); }
+  .stat-icon { width: clamp(40px, 4vw, 60px); height: clamp(40px, 4vw, 60px); }
+
+  /* Sidebar responsive width */
+  .sidebar { width: var(--sidebar-width); }
+  .main-content { margin-left: var(--sidebar-width); }
+
+  /* Gap and spacing scaling */
+  .row.g-3 > * { padding: clamp(6px, 0.5vw, 12px); }
+
+  /* Ultra-wide screens: limit content width */
+  @media (min-width: 1920px) {
+    .page-content { max-width: 1600px; margin: 0 auto; }
+  }
+
+  /* Large desktop scaling */
+  @media (max-width: 1440px) {
+    .stat-card { padding: clamp(10px, 1vw, 16px); }
+  }
+
+  /* Standard desktop scaling */
+  @media (max-width: 1280px) {
+    .sidebar { width: clamp(200px, 16vw, 260px); }
+    .main-content { margin-left: clamp(200px, 16vw, 260px); }
+  }
+
+  /* Tablet landscape */
+  @media (max-width: 1024px) {
+    .sidebar { width: clamp(180px, 15vw, 240px); }
+    .main-content { margin-left: clamp(180px, 15vw, 240px); }
+    .table-responsive { max-height: calc(100vh - 260px); }
+  }
+
+  /* Tablet portrait */
+  @media (max-width: 768px) {
+    .page-content { padding: clamp(8px, 1vw, 16px); }
+    .table-responsive { max-height: calc(100vh - 240px); }
+  }
+
+  /* Mobile */
+  @media (max-width: 480px) {
+    .page-content { padding: 8px; }
+    .card-body { padding: 10px; }
+    .stat-card { padding: 8px; }
+    .table-responsive { max-height: calc(100vh - 220px); }
+  }
+
+  /* Container queries for card components */
+  @supports (container-type: inline-size) {
+    .stat-card { container-type: inline-size; }
+    @container (max-width: 200px) {
+      .stat-icon { width: 36px; height: 36px; }
+      .stat-content h3 { font-size: 1.2rem; }
+    }
   }
 </style>

@@ -1,4 +1,4 @@
-<!-- Auditee Findings List Page (My Findings) -->
+<!-- Auditee Observations List Page (My Audit Observations) -->
 <div class="auditee-findings-list">
   <!-- Summary Cards -->
   <div class="row g-3 mb-4" id="findingSummaryCards">
@@ -6,7 +6,7 @@
       <div class="card border-0 shadow-sm h-100" onclick="filterFindingsByStatus('')" style="cursor:pointer;">
         <div class="card-body text-center py-3">
           <div class="fs-3 fw-bold text-primary" id="findingCountTotal">0</div>
-          <small class="text-muted">Total Findings</small>
+          <small class="text-muted">Total Observations</small>
         </div>
       </div>
     </div>
@@ -56,7 +56,7 @@
   <div class="filters-bar mb-3">
     <div class="input-group" style="max-width: 300px;">
       <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-      <input type="text" class="form-control" id="findingSearchInput" placeholder="Search findings..."
+      <input type="text" class="form-control" id="findingSearchInput" placeholder="Search observations..."
              onkeyup="debounceSearch(filterAuditeeFindings)">
     </div>
 
@@ -78,19 +78,22 @@
       <option value="Low">Low</option>
     </select>
 
-    <div class="ms-auto">
+    <div class="ms-auto d-flex align-items-center gap-2">
       <span class="text-muted small" id="findingResultCount"></span>
+      <button class="btn btn-sm btn-primary d-none" id="btnBatchSubmitResponses" onclick="batchSubmitAllResponses()">
+        <i class="bi bi-send-check me-1"></i>Submit All Responses <span class="badge bg-light text-primary ms-1" id="queuedResponseCount">0</span>
+      </button>
     </div>
   </div>
 
-  <!-- Findings Table -->
+  <!-- Observations Table -->
   <div class="card border-0 shadow-sm">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0" id="findingsTable">
         <thead class="table-light">
           <tr>
             <th style="width:60px;">#</th>
-            <th>Finding</th>
+            <th>Observation</th>
             <th style="width:100px;">Risk</th>
             <th style="width:140px;">Response Status</th>
             <th style="width:120px;">Deadline</th>
@@ -100,7 +103,7 @@
           </tr>
         </thead>
         <tbody id="findingsTableBody">
-          <tr><td colspan="8" class="text-center py-4 text-muted">Loading findings...</td></tr>
+          <tr><td colspan="8" class="text-center py-4 text-muted">Loading observations...</td></tr>
         </tbody>
       </table>
     </div>
@@ -113,7 +116,7 @@ var _filteredFindings = [];
 
 function loadAuditeeFindings() {
   var tbody = document.getElementById('findingsTableBody');
-  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div> Loading your findings...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div> Loading your observations...</td></tr>';
 
   apiCall('getAuditeeFindings', { filters: {} })
     .then(function(result) {
@@ -128,6 +131,7 @@ function loadAuditeeFindings() {
       _filteredFindings = _auditeeFindings;
       updateFindingSummary();
       renderFindingsTable();
+      updateBatchSubmitButton();
     })
     .catch(function(err) {
       tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + (err.message || 'Failed to load findings') + '</td></tr>';
@@ -179,10 +183,10 @@ function filterAuditeeFindings() {
 
 function renderFindingsTable() {
   var tbody = document.getElementById('findingsTableBody');
-  document.getElementById('findingResultCount').textContent = _filteredFindings.length + ' of ' + _auditeeFindings.length + ' findings';
+  document.getElementById('findingResultCount').textContent = _filteredFindings.length + ' of ' + _auditeeFindings.length + ' observations';
 
   if (_filteredFindings.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-inbox me-2"></i>No findings found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-inbox me-2"></i>No observations found</td></tr>';
     return;
   }
 
@@ -196,7 +200,10 @@ function renderFindingsTable() {
     var actionBtn = '';
 
     var rs = f.response_status || 'Pending Response';
-    if (rs === 'Pending Response' || rs === 'Draft Response' || rs === 'Response Rejected') {
+    if (rs === 'Escalated') {
+      actionBtn = '<button class="btn btn-sm btn-outline-dark" onclick="navigateTo(\'auditee-response\', {id:\'' + f.work_paper_id + '\'})">' +
+        '<i class="bi bi-eye me-1"></i>View</button>';
+    } else if (rs === 'Pending Response' || rs === 'Draft Response' || rs === 'Response Rejected') {
       actionBtn = '<button class="btn btn-sm btn-primary" onclick="navigateTo(\'auditee-response\', {id:\'' + f.work_paper_id + '\'})">' +
         '<i class="bi bi-reply me-1"></i>Respond</button>';
     } else {
@@ -240,6 +247,55 @@ function getRiskBadgeHtml(rating) {
   var map = { 'Extreme': 'bg-danger', 'High': 'bg-warning text-dark', 'Medium': 'bg-info text-dark', 'Low': 'bg-success' };
   var cls = map[rating] || 'bg-secondary';
   return '<span class="badge ' + cls + '">' + (rating || 'N/A') + '</span>';
+}
+
+// Update batch submit button visibility based on draft/queued responses
+function updateBatchSubmitButton() {
+  var draftCount = _auditeeFindings.filter(function(f) {
+    return f.response_status === 'Draft Response';
+  }).length;
+  var btn = document.getElementById('btnBatchSubmitResponses');
+  var badge = document.getElementById('queuedResponseCount');
+  if (draftCount > 0) {
+    btn.classList.remove('d-none');
+    badge.textContent = draftCount;
+  } else {
+    btn.classList.add('d-none');
+  }
+}
+
+function batchSubmitAllResponses() {
+  var draftWpIds = _auditeeFindings
+    .filter(function(f) { return f.response_status === 'Draft Response'; })
+    .map(function(f) { return f.work_paper_id; });
+
+  if (draftWpIds.length === 0) {
+    showToast('No draft responses to submit', 'info');
+    return;
+  }
+
+  if (!confirm('Submit all ' + draftWpIds.length + ' draft response(s)? This will notify the audit team.')) return;
+
+  var btn = document.getElementById('btnBatchSubmitResponses');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Submitting...';
+
+  apiCall('batchSubmitAuditeeResponses', { workPaperIds: draftWpIds })
+    .then(function(result) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-send-check me-1"></i>Submit All Responses <span class="badge bg-light text-primary ms-1" id="queuedResponseCount">0</span>';
+      if (result && result.success) {
+        showToast(result.message || 'All responses submitted successfully', 'success');
+        loadAuditeeFindings();
+      } else {
+        showToast(result ? result.error : 'Batch submit failed', 'danger');
+      }
+    })
+    .catch(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-send-check me-1"></i>Submit All Responses <span class="badge bg-light text-primary ms-1" id="queuedResponseCount">0</span>';
+      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
+    });
 }
 
 // formatDate() and escapeHtml() are provided by Scripts.html

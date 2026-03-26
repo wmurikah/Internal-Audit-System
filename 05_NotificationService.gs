@@ -392,16 +392,13 @@ function getSystemUrl() {
  */
 function buildCtaButton(url, label) {
   if (!url) return '';
-  label = label || 'Click Here to Access the Audit System';
-  return '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">' +
+  label = label || 'Open Audit System';
+  return '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">' +
     '<tr><td align="center">' +
-    '<table cellpadding="0" cellspacing="0" border="0" style="background-color:#e8f0fe; border:2px solid #1a73e8; border-radius:10px; min-width:320px;">' +
-    '<tr><td align="center" style="padding:20px 32px;">' +
-    '<a href="' + url + '" style="display:inline-block; background-color:#1a73e8; color:#ffffff; padding:14px 40px; ' +
-    'text-decoration:none; border-radius:8px; font-weight:700; font-size:15px; ' +
-    'font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 3px 10px rgba(26,115,232,0.35);">' +
+    '<a href="' + url + '" style="display:inline-block; background-color:#007AFF; color:#ffffff; padding:12px 32px; ' +
+    'text-decoration:none; border-radius:16px; font-weight:600; font-size:15px; height:44px; line-height:20px; ' +
+    'font-family:system-ui,-apple-system,sans-serif;">' +
     label + '</a>' +
-    '</td></tr></table>' +
     '</td></tr></table>';
 }
 
@@ -421,26 +418,22 @@ function linkifyUrls(text) {
   if (!text) return '';
   return text.replace(
     /(https?:\/\/[^\s<]+)/g,
-    '<a href="$1" style="display:inline-block; background-color:#1a365d; color:#ffffff; padding:12px 32px; text-decoration:none; border-radius:6px; font-weight:600; font-size:14px; margin:8px 0; font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px;">Open Audit System</a>'
+    '<a href="$1" style="display:inline-block; background-color:#007AFF; color:#ffffff; padding:12px 32px; text-decoration:none; border-radius:16px; font-weight:600; font-size:14px; margin:8px 0; font-family:system-ui,-apple-system,sans-serif;">Open Audit System</a>'
   );
 }
 
 /**
  * Format email body as clean branded HTML
- * Premium responsive design with Segoe UI, calming navy/gold palette
+ * Apple-minimalist responsive design
  */
 function formatEmailHtml(subject, body) {
-  var navy = '#1a365d';
-  var navyDark = '#0f2744';
-  var gold = '#c9a227';
-  var goldLight = '#dbb84a';
   var year = new Date().getFullYear();
 
-  // Strip raw URLs from body text - they'll be replaced by the CTA button
+  // Strip raw URLs from body text
   var cleanBody = stripUrls(body);
   var htmlBody = cleanBody.replace(/\n/g, '<br>');
 
-  // Always append a branded CTA button linking to the system
+  // Always append a branded CTA button
   var systemUrl = getSystemUrl();
   var ctaHtml = buildCtaButton(systemUrl);
 
@@ -456,64 +449,47 @@ function formatEmailHtml(subject, body) {
 '      .email-inner { width: 100% !important; min-width: 100% !important; border-radius: 0 !important; }' +
 '      .email-content { padding: 24px 20px !important; }' +
 '      .email-header { padding: 20px 20px !important; }' +
-'      .email-footer-inner { padding: 20px 20px !important; }' +
-'      .email-divider { margin: 0 20px !important; }' +
+'      .email-footer-inner { padding: 16px 20px !important; }' +
 '    }' +
 '  </style>' +
 '</head>' +
-'<body style="margin:0; padding:0; font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f0f2f7; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
-'    ' + subject + ' &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;' +
+'    ' + subject + ' &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
-'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f2f7;" class="email-outer">' +
-'    <tr><td align="center" style="padding:32px 16px;">' +
-'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(15,39,68,0.06), 0 12px 40px rgba(15,39,68,0.04);" class="email-inner">' +
-'        <!-- HEADER BAR -->' +
+'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
+'    <tr><td align="center" style="padding:40px 16px;">' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);" class="email-inner">' +
+'        <!-- HEADER -->' +
 '        <tr>' +
-'          <td style="background: linear-gradient(135deg, ' + navy + ' 0%, ' + navyDark + ' 100%); padding:24px 36px;" class="email-header">' +
-'            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
-'              <tr>' +
-'                <td>' +
-'                  <p style="margin:0 0 2px 0; color:' + gold + '; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; font-family:\'Segoe UI\',Arial,sans-serif;">HASS PETROLEUM</p>' +
-'                  <p style="margin:0; color:rgba(255,255,255,0.7); font-size:12px; font-weight:400; font-family:\'Segoe UI\',Arial,sans-serif;">Internal Audit</p>' +
-'                </td>' +
-'              </tr>' +
-'            </table>' +
+'          <td style="padding:28px 36px 0 36px; border-bottom: none;" class="email-header">' +
+'            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif;">Internal Audit</p>' +
 '          </td>' +
 '        </tr>' +
-'        <!-- GOLD ACCENT LINE -->' +
-'        <tr><td style="height:3px; background: linear-gradient(90deg, ' + gold + ', ' + goldLight + ', ' + gold + '); font-size:0; line-height:0;">&nbsp;</td></tr>' +
+'        <!-- SEPARATOR -->' +
+'        <tr><td style="padding:16px 36px 0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
 '        <!-- SUBJECT -->' +
 '        <tr>' +
-'          <td style="padding:28px 36px 0 36px;" class="email-content">' +
-'            <p style="margin:0 0 20px 0; color:' + navy + '; font-size:18px; font-weight:600; line-height:1.4; font-family:\'Segoe UI\',Arial,sans-serif;">' + subject + '</p>' +
-'            <div style="width:40px; height:2px; background-color:' + gold + '; border-radius:1px; margin-bottom:24px;"></div>' +
+'          <td style="padding:24px 36px 0 36px;" class="email-content">' +
+'            <p style="margin:0 0 20px 0; color:#1d1d1f; font-size:20px; font-weight:600; line-height:1.3; font-family:system-ui,-apple-system,sans-serif;">' + subject + '</p>' +
 '          </td>' +
 '        </tr>' +
 '        <!-- MAIN CONTENT -->' +
 '        <tr>' +
 '          <td style="padding:0 36px 36px 36px;" class="email-content">' +
-'            <div style="color:#374151; line-height:1.75; font-size:14px; font-family:\'Segoe UI\',Arial,sans-serif;">' + htmlBody + '</div>' +
+'            <div style="color:#424245; line-height:1.6; font-size:14px; font-family:system-ui,-apple-system,sans-serif;">' + htmlBody + '</div>' +
              ctaHtml +
 '          </td>' +
 '        </tr>' +
 '        <!-- FOOTER -->' +
 '        <tr>' +
-'          <td style="padding:0 36px;" class="email-divider">' +
-'            <div style="height:1px; background-color:#e5e7eb;"></div>' +
-'          </td>' +
+'          <td style="padding:0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td>' +
 '        </tr>' +
 '        <tr>' +
-'          <td style="padding:20px 36px 24px 36px;" class="email-footer-inner">' +
-'            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
-'              <tr>' +
-'                <td align="center">' +
-'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' +
-'                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
-'                </td>' +
-'              </tr>' +
-'            </table>' +
+'          <td style="padding:16px 36px;" class="email-footer-inner">' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
+'              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
 '          </td>' +
 '        </tr>' +
 '      </table>' +
@@ -525,7 +501,7 @@ function formatEmailHtml(subject, body) {
 
 /**
  * Format email with a professional data table
- * Premium responsive design with Segoe UI, calming navy/gold palette
+ * Apple-minimalist responsive design
  * @param {string} subject - Email subject
  * @param {string} intro - Intro paragraph text
  * @param {string[]} headers - Table column headers
@@ -533,28 +509,24 @@ function formatEmailHtml(subject, body) {
  * @param {string} [outro] - Optional closing paragraph
  */
 function formatTableEmailHtml(subject, intro, headers, rows, outro) {
-  var navy = '#1a365d';
-  var navyDark = '#0f2744';
-  var gold = '#c9a227';
-  var goldLight = '#dbb84a';
   var year = new Date().getFullYear();
 
   // Build table header cells
   var thCells = headers.map(function(h) {
-    return '<th style="background-color:' + navy + '; color:#ffffff; padding:11px 14px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; font-family:\'Segoe UI\',Arial,sans-serif; white-space:nowrap;">' + h + '</th>';
+    return '<th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:#86868b; border-bottom:2px solid #e5e5e5; font-family:system-ui,-apple-system,sans-serif; white-space:nowrap;">' + h + '</th>';
   }).join('');
 
   // Build table body rows
   var trRows = rows.map(function(row, idx) {
     var bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
     var cells = row.map(function(cell) {
-      return '<td style="padding:10px 14px; font-size:13px; color:#374151; border-bottom:1px solid #f0f1f3; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' + cell + '</td>';
+      return '<td style="padding:10px 14px; font-size:14px; color:#1d1d1f; border-bottom:1px solid #f0f0f0; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' + cell + '</td>';
     }).join('');
     return '<tr style="background-color:' + bg + ';">' + cells + '</tr>';
   }).join('');
 
   var outroClean = outro ? stripUrls(outro) : '';
-  var outroHtml = outroClean ? '<div style="color:#374151; line-height:1.6; font-size:14px; margin-top:24px; font-family:\'Segoe UI\',Arial,sans-serif;">' + outroClean.replace(/\n/g, '<br>') + '</div>' : '';
+  var outroHtml = outroClean ? '<div style="color:#374151; line-height:1.6; font-size:14px; margin-top:24px; font-family:system-ui,-apple-system,sans-serif;">' + outroClean.replace(/\n/g, '<br>') + '</div>' : '';
 
   // Always append CTA button linking to system
   var systemUrl = getSystemUrl();
@@ -578,44 +550,35 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '    }' +
 '  </style>' +
 '</head>' +
-'<body style="margin:0; padding:0; font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f0f2f7; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
 '    ' + subject + ' &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
-'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f2f7;" class="email-outer">' +
+'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
 '    <tr><td align="center" style="padding:32px 16px;">' +
-'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(15,39,68,0.06), 0 12px 40px rgba(15,39,68,0.04);" class="email-inner">' +
-'        <!-- HEADER BAR -->' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);" class="email-inner">' +
+'        <!-- HEADER -->' +
 '        <tr>' +
-'          <td style="background: linear-gradient(135deg, ' + navy + ' 0%, ' + navyDark + ' 100%); padding:24px 36px;" class="email-header">' +
-'            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
-'              <tr>' +
-'                <td>' +
-'                  <p style="margin:0 0 2px 0; color:' + gold + '; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; font-family:\'Segoe UI\',Arial,sans-serif;">HASS PETROLEUM</p>' +
-'                  <p style="margin:0; color:rgba(255,255,255,0.7); font-size:12px; font-weight:400; font-family:\'Segoe UI\',Arial,sans-serif;">Internal Audit</p>' +
-'                </td>' +
-'              </tr>' +
-'            </table>' +
+'          <td style="padding:28px 36px 0 36px;" class="email-header">' +
+'            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif;">Internal Audit</p>' +
 '          </td>' +
 '        </tr>' +
-'        <!-- GOLD ACCENT LINE -->' +
-'        <tr><td style="height:3px; background: linear-gradient(90deg, ' + gold + ', ' + goldLight + ', ' + gold + '); font-size:0; line-height:0;">&nbsp;</td></tr>' +
+'        <!-- SEPARATOR -->' +
+'        <tr><td style="padding:16px 36px 0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
 '        <!-- SUBJECT -->' +
 '        <tr>' +
-'          <td style="padding:28px 36px 0 36px;" class="email-content">' +
-'            <p style="margin:0 0 20px 0; color:' + navy + '; font-size:18px; font-weight:600; line-height:1.4; font-family:\'Segoe UI\',Arial,sans-serif;">' + subject + '</p>' +
-'            <div style="width:40px; height:2px; background-color:' + gold + '; border-radius:1px; margin-bottom:20px;"></div>' +
+'          <td style="padding:24px 36px 0 36px;" class="email-content">' +
+'            <p style="margin:0 0 20px 0; color:#1d1d1f; font-size:20px; font-weight:600; line-height:1.3; font-family:system-ui,-apple-system,sans-serif;">' + subject + '</p>' +
 '          </td>' +
 '        </tr>' +
 '        <!-- INTRO + TABLE -->' +
 '        <tr>' +
 '          <td style="padding:0 36px 32px 36px;" class="email-content">' +
-'            <div style="color:#374151; line-height:1.7; font-size:14px; margin-bottom:20px; font-family:\'Segoe UI\',Arial,sans-serif;">' + intro + '</div>' +
+'            <div style="color:#374151; line-height:1.7; font-size:14px; margin-bottom:20px; font-family:system-ui,-apple-system,sans-serif;">' + intro + '</div>' +
 '            <div class="email-table-wrap" style="border-radius:8px; overflow:hidden; border:1px solid #e5e7eb;">' +
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; min-width:100%;">' +
-'              <thead><tr>' + thCells + '</tr>' +
-'              <tr><td colspan="' + headers.length + '" style="height:2px; background-color:' + gold + '; font-size:0; line-height:0; padding:0;">&nbsp;</td></tr>' +
-'              </thead>' +
+'              <thead><tr>' + thCells + '</tr></thead>' +
 '              <tbody>' + trRows + '</tbody>' +
 '            </table>' +
 '            </div>' +
@@ -634,9 +597,9 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
 '              <tr>' +
 '                <td align="center">' +
-'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' +
+'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -663,14 +626,14 @@ function truncateWords(text, maxWords) {
  * Rating badge HTML for email tables
  */
 function ratingBadge(rating) {
-  if (!rating) return '<span style="color:#9ca3af; font-family:\'Segoe UI\',Arial,sans-serif;">-</span>';
+  if (!rating) return '<span style="color:#9ca3af; font-family:system-ui,-apple-system,sans-serif;">-</span>';
   var r = String(rating).toUpperCase();
   var bg = '#6b7280'; var color = '#ffffff';
   if (r === 'EXTREME' || r === 'CRITICAL') { bg = '#991b1b'; }
   else if (r === 'HIGH') { bg = '#dc2626'; }
   else if (r === 'MEDIUM') { bg = '#d97706'; color = '#ffffff'; }
   else if (r === 'LOW') { bg = '#059669'; }
-  return '<span style="display:inline-block; background-color:' + bg + '; color:' + color + '; padding:3px 10px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:0.3px; font-family:\'Segoe UI\',Arial,sans-serif; white-space:nowrap;">' + r + '</span>';
+  return '<span style="display:inline-block; background-color:' + bg + '; color:' + color + '; padding:3px 10px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:0.3px; font-family:system-ui,-apple-system,sans-serif; white-space:nowrap;">' + r + '</span>';
 }
 
 /**
@@ -776,7 +739,7 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   } else if (ctx.auditAreaName) {
     contextLine = 'Below are audit observations from <strong>' + ctx.auditAreaName + '</strong> audit.';
   } else {
-    contextLine = 'The following audit finding' + (workPapers.length > 1 ? 's have' : ' has') +
+    contextLine = 'The following audit observation' + (workPapers.length > 1 ? 's have' : ' has') +
       ' been reviewed and approved.';
   }
 
@@ -785,8 +748,8 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
 
   var subjectSuffix = ctx.auditAreaName ? ' - ' + ctx.auditAreaName : '';
   var subject = workPapers.length === 1
-    ? 'Audit Finding Requires Your Response' + subjectSuffix
-    : workPapers.length + ' Audit Findings Require Your Response' + subjectSuffix;
+    ? 'Audit Observation Requires Your Response' + subjectSuffix
+    : workPapers.length + ' Audit Observations Require Your Response' + subjectSuffix;
 
   var intro = 'Dear ' + firstName + ',<br><br>' +
     contextLine + ' Please respond with your action plan' + (workPapers.length > 1 ? 's.' : '.');
@@ -805,11 +768,73 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   var loginLink = systemUrl
     ? '<a href="' + systemUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a>'
     : 'log in';
-  var outro = '<p style="color:#6b7280; font-size:13px; text-align:center; font-family:\'Segoe UI\',Arial,sans-serif;">Please ' + loginLink + ' and submit your action plans at your earliest convenience.</p>';
+  var outro = '<p style="color:#6b7280; font-size:13px; text-align:center; font-family:system-ui,-apple-system,sans-serif;">Please ' + loginLink + ' and submit your action plans at your earliest convenience.</p>';
 
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
 
   sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'hassaudit@outlook.com');
+}
+
+function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
+  if (!responses || responses.length === 0 || !auditorEmail) return;
+
+  var firstName = (auditorName || '').split(' ')[0] || 'Auditor';
+  var subject = responses.length + ' Auditee Response(s) Submitted for Review';
+
+  var intro = 'Dear ' + firstName + ',<br><br>' +
+    '<strong>' + responses.length + '</strong> auditee response(s) have been submitted and require your review:';
+
+  var headers = ['Observation', 'Response Summary', 'Action Plans', 'Status'];
+  var rows = responses.map(function(r) {
+    return [
+      String(r.observation_title || r.work_paper_id || '-'),
+      truncateWords(r.management_response || '', 15),
+      String(r.action_plan_count || 0) + ' plan(s)',
+      'Submitted'
+    ];
+  });
+
+  var systemUrl = getSystemUrl();
+  var loginLink = systemUrl
+    ? '<a href="' + systemUrl + '" style="color:#007AFF; text-decoration:underline; font-weight:600;">log in</a>'
+    : 'log in';
+  var outro = '<p style="color:#86868b; font-size:13px; text-align:center; font-family:system-ui,-apple-system,sans-serif;">Please ' + loginLink + ' to review and accept or reject each response.</p>';
+
+  var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+  sendEmail(auditorEmail, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+}
+
+/**
+ * Send consolidated notification to auditors when multiple auditee responses are submitted.
+ * Groups responses into a single table email per auditor.
+ */
+function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
+  if (!responses || responses.length === 0 || !auditorEmail) return;
+
+  var firstName = (auditorName || '').split(' ')[0] || 'Auditor';
+  var subject = responses.length + ' Auditee Response(s) Submitted for Review';
+
+  var intro = 'Dear ' + firstName + ',<br><br>' +
+    '<strong>' + responses.length + '</strong> auditee response(s) have been submitted and require your review:';
+
+  var headers = ['Observation', 'Response Summary', 'Action Plans', 'Status'];
+  var rows = responses.map(function(r) {
+    return [
+      String(r.observation_title || r.work_paper_id || '-'),
+      truncateWords(r.management_response || '', 15),
+      String(r.action_plan_count || 0) + ' plan(s)',
+      'Submitted'
+    ];
+  });
+
+  var systemUrl = getSystemUrl();
+  var loginLink = systemUrl
+    ? '<a href="' + systemUrl + '" style="color:#007AFF; text-decoration:underline; font-weight:600;">log in</a>'
+    : 'log in';
+  var outro = '<p style="color:#86868b; font-size:13px; text-align:center; font-family:system-ui,-apple-system,sans-serif;">Please ' + loginLink + ' to review and accept or reject each response.</p>';
+
+  var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+  sendEmail(auditorEmail, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
 }
 
 /**
@@ -1412,10 +1437,6 @@ function testOutlookEmailAction(recipientEmail, user) {
  * @param {Object} opts - { fullName, firstName, email, tempPassword, roleName, loginUrl }
  */
 function formatWelcomeEmailHtml(opts) {
-  var navy = '#1a365d';
-  var navyDark = '#0f2744';
-  var gold = '#c9a227';
-  var goldLight = '#dbb84a';
   var year = new Date().getFullYear();
   var subject = 'Welcome to Hass Petroleum Internal Audit System';
 
@@ -1436,56 +1457,52 @@ function formatWelcomeEmailHtml(opts) {
 '    }' +
 '  </style>' +
 '</head>' +
-'<body style="margin:0; padding:0; font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f0f2f7; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
 '    Welcome to the Internal Audit System &mdash; Your account is ready &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
-'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f2f7;" class="email-outer">' +
+'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
 '    <tr><td align="center" style="padding:32px 16px;">' +
-'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(15,39,68,0.06), 0 12px 40px rgba(15,39,68,0.04);" class="email-inner">' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);" class="email-inner">' +
 '        <!-- HEADER -->' +
 '        <tr>' +
-'          <td style="background: linear-gradient(135deg, ' + navy + ' 0%, ' + navyDark + ' 100%); padding:32px 36px; text-align:center;" class="email-header">' +
-'            <p style="margin:0 0 4px 0; color:' + gold + '; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; font-family:\'Segoe UI\',Arial,sans-serif;">HASS PETROLEUM</p>' +
-'            <p style="margin:0 0 16px 0; color:rgba(255,255,255,0.7); font-size:12px; font-family:\'Segoe UI\',Arial,sans-serif;">Internal Audit Department</p>' +
-'            <p style="margin:0; color:#ffffff; font-size:22px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.3;">Welcome to the Audit System</p>' +
+'          <td style="padding:28px 36px; text-align:center;" class="email-header">' +
+'            <p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0 0 16px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif;">Internal Audit Department</p>' +
+'            <p style="margin:0; color:#1d1d1f; font-size:22px; font-weight:600; font-family:system-ui,-apple-system,sans-serif; line-height:1.3;">Welcome to the Audit System</p>' +
 '          </td>' +
 '        </tr>' +
-'        <!-- GOLD ACCENT -->' +
-'        <tr><td style="height:3px; background: linear-gradient(90deg, ' + gold + ', ' + goldLight + ', ' + gold + '); font-size:0; line-height:0;">&nbsp;</td></tr>' +
+'        <!-- SEPARATOR -->' +
+'        <tr><td style="padding:0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
 '        <!-- CONTENT -->' +
 '        <tr>' +
 '          <td style="padding:32px 36px;" class="email-content">' +
-'            <p style="margin:0 0 16px 0; color:' + navy + '; font-size:16px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif;">Dear ' + (opts.firstName || 'Colleague') + ',</p>' +
-'            <p style="margin:0 0 20px 0; color:#374151; font-size:14px; line-height:1.75; font-family:\'Segoe UI\',Arial,sans-serif;">' +
-'              Your account has been created for the Hass Petroleum Internal Audit System. You have been assigned the role of <strong style="color:' + navy + ';">' + (opts.roleName || opts.email) + '</strong>. Please use the credentials below to log in.</p>' +
+'            <p style="margin:0 0 16px 0; color:#1d1d1f; font-size:16px; font-weight:600; font-family:system-ui,-apple-system,sans-serif;">Dear ' + (opts.firstName || 'Colleague') + ',</p>' +
+'            <p style="margin:0 0 20px 0; color:#424245; font-size:14px; line-height:1.75; font-family:system-ui,-apple-system,sans-serif;">' +
+'              Your account has been created for the Hass Petroleum Internal Audit System. You have been assigned the role of <strong style="color:#1d1d1f;">' + (opts.roleName || opts.email) + '</strong>. Please use the credentials below to log in.</p>' +
 '            <!-- CREDENTIALS BOX -->' +
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc; border-radius:10px; border:1px solid #e5e7eb; margin:0 0 24px 0;" class="cred-table">' +
 '              <tr>' +
 '                <td style="padding:20px 24px;">' +
 '                  <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
 '                    <tr>' +
-'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:\'Segoe UI\',Arial,sans-serif; width:120px;">Email</td>' +
-'                      <td style="padding:6px 0; color:' + navy + '; font-size:14px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif;">' + opts.email + '</td>' +
+'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:system-ui,-apple-system,sans-serif; width:120px;">Email</td>' +
+'                      <td style="padding:6px 0; color:#1d1d1f; font-size:14px; font-weight:600; font-family:system-ui,-apple-system,sans-serif;">' + opts.email + '</td>' +
 '                    </tr>' +
 '                    <tr><td colspan="2" style="padding:0;"><div style="height:1px; background-color:#e5e7eb; margin:6px 0;"></div></td></tr>' +
 '                    <tr>' +
-'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:\'Segoe UI\',Arial,sans-serif;">Password</td>' +
-'                      <td style="padding:6px 0; color:' + navy + '; font-size:14px; font-weight:600; font-family:\'Courier New\',monospace; letter-spacing:1px;">' + opts.tempPassword + '</td>' +
+'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:system-ui,-apple-system,sans-serif;">Password</td>' +
+'                      <td style="padding:6px 0; color:#1d1d1f; font-size:14px; font-weight:600; font-family:\'Courier New\',monospace; letter-spacing:1px;">' + opts.tempPassword + '</td>' +
 '                    </tr>' +
 '                  </table>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
 '            <!-- CTA BUTTON -->' +
-'            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
+'            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">' +
 '              <tr>' +
 '                <td align="center" style="padding:4px 0 24px 0;">' +
-'                  <table cellpadding="0" cellspacing="0" border="0" style="background-color:#e8f0fe; border:2px solid #1a73e8; border-radius:10px; min-width:320px;">' +
-'                    <tr><td align="center" style="padding:20px 32px;">' +
-'                      <a href="' + opts.loginUrl + '" style="display:inline-block; background-color:#1a73e8; color:#ffffff; padding:14px 40px; text-decoration:none; border-radius:8px; font-weight:700; font-size:15px; font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 3px 10px rgba(26,115,232,0.35);">Click Here to Access the Audit System</a>' +
-'                    </td></tr>' +
-'                  </table>' +
+'                  <a href="' + opts.loginUrl + '" style="display:inline-block; background-color:#007AFF; color:#ffffff; padding:12px 32px; text-decoration:none; border-radius:16px; font-weight:600; font-size:15px; height:44px; line-height:20px; font-family:system-ui,-apple-system,sans-serif;">Open Audit System</a>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -1493,7 +1510,7 @@ function formatWelcomeEmailHtml(opts) {
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fffbeb; border-radius:8px; border:1px solid #fde68a;">' +
 '              <tr>' +
 '                <td style="padding:14px 18px;">' +
-'                  <p style="margin:0; color:#92400e; font-size:12px; line-height:1.6; font-family:\'Segoe UI\',Arial,sans-serif;">' +
+'                  <p style="margin:0; color:#92400e; font-size:12px; line-height:1.6; font-family:system-ui,-apple-system,sans-serif;">' +
 '                    <strong>Security Notice:</strong> You will be required to change your password on first login. Please do not share your credentials with anyone.</p>' +
 '                </td>' +
 '              </tr>' +
@@ -1511,9 +1528,9 @@ function formatWelcomeEmailHtml(opts) {
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
 '              <tr>' +
 '                <td align="center">' +
-'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' +
+'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -1539,10 +1556,6 @@ function formatWelcomeEmailHtml(opts) {
  * @param {string} opts.reason - 'admin_reset' or 'forgot'
  */
 function formatPasswordResetEmailHtml(opts) {
-  var navy = '#1a365d';
-  var navyDark = '#0f2744';
-  var gold = '#c9a227';
-  var goldLight = '#dbb84a';
   var year = new Date().getFullYear();
   var subject = 'Password Reset - Hass Petroleum Audit System';
 
@@ -1571,55 +1584,51 @@ function formatPasswordResetEmailHtml(opts) {
 '    }' +
 '  </style>' +
 '</head>' +
-'<body style="margin:0; padding:0; font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f0f2f7; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
 '    Your password has been reset &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
-'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f2f7;" class="email-outer">' +
+'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
 '    <tr><td align="center" style="padding:32px 16px;">' +
-'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(15,39,68,0.06), 0 12px 40px rgba(15,39,68,0.04);" class="email-inner">' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);" class="email-inner">' +
 '        <!-- HEADER -->' +
 '        <tr>' +
-'          <td style="background: linear-gradient(135deg, ' + navy + ' 0%, ' + navyDark + ' 100%); padding:28px 36px; text-align:center;" class="email-header">' +
-'            <p style="margin:0 0 4px 0; color:' + gold + '; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; font-family:\'Segoe UI\',Arial,sans-serif;">HASS PETROLEUM</p>' +
-'            <p style="margin:0 0 14px 0; color:rgba(255,255,255,0.7); font-size:12px; font-family:\'Segoe UI\',Arial,sans-serif;">Internal Audit Department</p>' +
-'            <p style="margin:0; color:#ffffff; font-size:20px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.3;">Password Reset</p>' +
+'          <td style="padding:28px 36px; text-align:center;" class="email-header">' +
+'            <p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0 0 14px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif;">Internal Audit Department</p>' +
+'            <p style="margin:0; color:#1d1d1f; font-size:20px; font-weight:600; font-family:system-ui,-apple-system,sans-serif; line-height:1.3;">Password Reset</p>' +
 '          </td>' +
 '        </tr>' +
-'        <!-- GOLD ACCENT -->' +
-'        <tr><td style="height:3px; background: linear-gradient(90deg, ' + gold + ', ' + goldLight + ', ' + gold + '); font-size:0; line-height:0;">&nbsp;</td></tr>' +
+'        <!-- SEPARATOR -->' +
+'        <tr><td style="padding:0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
 '        <!-- CONTENT -->' +
 '        <tr>' +
 '          <td style="padding:32px 36px;" class="email-content">' +
-'            <p style="margin:0 0 16px 0; color:' + navy + '; font-size:16px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif;">Dear ' + (opts.firstName || 'Colleague') + ',</p>' +
-'            <p style="margin:0 0 20px 0; color:#374151; font-size:14px; line-height:1.75; font-family:\'Segoe UI\',Arial,sans-serif;">' + introParagraph + '</p>' +
+'            <p style="margin:0 0 16px 0; color:#1d1d1f; font-size:16px; font-weight:600; font-family:system-ui,-apple-system,sans-serif;">Dear ' + (opts.firstName || 'Colleague') + ',</p>' +
+'            <p style="margin:0 0 20px 0; color:#424245; font-size:14px; line-height:1.75; font-family:system-ui,-apple-system,sans-serif;">' + introParagraph + '</p>' +
 '            <!-- CREDENTIALS BOX -->' +
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc; border-radius:10px; border:1px solid #e5e7eb; margin:0 0 24px 0;" class="cred-table">' +
 '              <tr>' +
 '                <td style="padding:20px 24px;">' +
 '                  <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
 '                    <tr>' +
-'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:\'Segoe UI\',Arial,sans-serif; width:160px;">Email</td>' +
-'                      <td style="padding:6px 0; color:' + navy + '; font-size:14px; font-weight:600; font-family:\'Segoe UI\',Arial,sans-serif;">' + opts.email + '</td>' +
+'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:system-ui,-apple-system,sans-serif; width:160px;">Email</td>' +
+'                      <td style="padding:6px 0; color:#1d1d1f; font-size:14px; font-weight:600; font-family:system-ui,-apple-system,sans-serif;">' + opts.email + '</td>' +
 '                    </tr>' +
 '                    <tr><td colspan="2" style="padding:0;"><div style="height:1px; background-color:#e5e7eb; margin:6px 0;"></div></td></tr>' +
 '                    <tr>' +
-'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:\'Segoe UI\',Arial,sans-serif;">Temporary Password</td>' +
-'                      <td style="padding:6px 0; color:' + navy + '; font-size:14px; font-weight:600; font-family:\'Courier New\',monospace; letter-spacing:1px;">' + opts.tempPassword + '</td>' +
+'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:system-ui,-apple-system,sans-serif;">Temporary Password</td>' +
+'                      <td style="padding:6px 0; color:#1d1d1f; font-size:14px; font-weight:600; font-family:\'Courier New\',monospace; letter-spacing:1px;">' + opts.tempPassword + '</td>' +
 '                    </tr>' +
 '                  </table>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
 '            <!-- CTA BUTTON -->' +
-'            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
+'            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">' +
 '              <tr>' +
 '                <td align="center" style="padding:4px 0 24px 0;">' +
-'                  <table cellpadding="0" cellspacing="0" border="0" style="background-color:#e8f0fe; border:2px solid #1a73e8; border-radius:10px; min-width:320px;">' +
-'                    <tr><td align="center" style="padding:20px 32px;">' +
-'                      <a href="' + opts.loginUrl + '" style="display:inline-block; background-color:#1a73e8; color:#ffffff; padding:14px 40px; text-decoration:none; border-radius:8px; font-weight:700; font-size:15px; font-family:\'Segoe UI\',Arial,sans-serif; letter-spacing:0.3px; box-shadow:0 3px 10px rgba(26,115,232,0.35);">Click Here to Access the Audit System</a>' +
-'                    </td></tr>' +
-'                  </table>' +
+'                  <a href="' + opts.loginUrl + '" style="display:inline-block; background-color:#007AFF; color:#ffffff; padding:12px 32px; text-decoration:none; border-radius:16px; font-weight:600; font-size:15px; height:44px; line-height:20px; font-family:system-ui,-apple-system,sans-serif;">Open Audit System</a>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -1627,7 +1636,7 @@ function formatPasswordResetEmailHtml(opts) {
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fffbeb; border-radius:8px; border:1px solid #fde68a;">' +
 '              <tr>' +
 '                <td style="padding:14px 18px;">' +
-'                  <p style="margin:0; color:#92400e; font-size:12px; line-height:1.6; font-family:\'Segoe UI\',Arial,sans-serif;">' +
+'                  <p style="margin:0; color:#92400e; font-size:12px; line-height:1.6; font-family:system-ui,-apple-system,sans-serif;">' +
 '                    <strong>Security Notice:</strong> You will be required to change your password on first login. ' + warningNote + '</p>' +
 '                </td>' +
 '              </tr>' +
@@ -1645,9 +1654,9 @@ function formatPasswordResetEmailHtml(opts) {
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
 '              <tr>' +
 '                <td align="center">' +
-'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:\'Segoe UI\',Arial,sans-serif; line-height:1.5;">' +
+'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:\'Segoe UI\',Arial,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
