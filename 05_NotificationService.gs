@@ -431,7 +431,28 @@ function formatEmailHtml(subject, body) {
 
   // Strip raw URLs from body text
   var cleanBody = stripUrls(body);
-  var htmlBody = cleanBody.replace(/\n/g, '<br>');
+
+  // Detect category tag from subject
+  var categoryLabel = 'NOTIFICATION';
+  if (/Submitted/i.test(subject)) categoryLabel = 'RESPONSE SUBMITTED';
+  else if (/Accepted/i.test(subject)) categoryLabel = 'RESPONSE ACCEPTED';
+  else if (/Rejected|Revision/i.test(subject)) categoryLabel = 'ACTION REQUIRED';
+  else if (/Delegat/i.test(subject)) categoryLabel = 'DELEGATION REQUEST';
+  else if (/Overdue/i.test(subject)) categoryLabel = 'OVERDUE REMINDER';
+  else if (/Verification|Verify/i.test(subject)) categoryLabel = 'VERIFICATION REQUIRED';
+  else if (/Approved/i.test(subject)) categoryLabel = 'APPROVED';
+  else if (/Summary/i.test(subject)) categoryLabel = 'BI-WEEKLY SUMMARY';
+
+  // Extract "Dear X," greeting if present
+  var greetingHtml = '';
+  var bodyForCard = cleanBody;
+  var dearMatch = cleanBody.match(/^Dear\s+([^,]+),/);
+  if (dearMatch) {
+    greetingHtml = '<p style="margin:0 0 16px 0; color:#424245; font-size:15px; line-height:1.6; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">Dear ' + dearMatch[1] + ',</p>';
+    bodyForCard = cleanBody.replace(/^Dear\s+[^,]+,\s*\n?/, '');
+  }
+
+  var htmlBody = bodyForCard.replace(/\n/g, '<br>');
 
   // Always append a branded CTA button
   var systemUrl = getSystemUrl();
@@ -453,32 +474,41 @@ function formatEmailHtml(subject, body) {
 '    }' +
 '  </style>' +
 '</head>' +
-'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
 '    ' + subject + ' &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
 '  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
 '    <tr><td align="center" style="padding:40px 16px;">' +
-'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);" class="email-inner">' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08); border-top:4px solid #c9a83e;" class="email-inner">' +
 '        <!-- HEADER -->' +
 '        <tr>' +
-'          <td style="padding:28px 36px 0 36px; border-bottom: none;" class="email-header">' +
-'            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">HASS PETROLEUM</p>' +
-'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif;">Internal Audit</p>' +
+'          <td style="padding:28px 36px 0 36px; border-bottom:none;" class="email-header">' +
+'            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">Internal Audit</p>' +
 '          </td>' +
 '        </tr>' +
 '        <!-- SEPARATOR -->' +
 '        <tr><td style="padding:16px 36px 0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
+'        <!-- CATEGORY TAG -->' +
+'        <tr>' +
+'          <td style="padding:20px 36px 0 36px;">' +
+'            <div style="border-left:3px solid #2563eb; padding-left:12px; color:#2563eb; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:1px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + categoryLabel + '</div>' +
+'          </td>' +
+'        </tr>' +
 '        <!-- SUBJECT -->' +
 '        <tr>' +
-'          <td style="padding:24px 36px 0 36px;" class="email-content">' +
-'            <p style="margin:0 0 20px 0; color:#1d1d1f; font-size:20px; font-weight:600; line-height:1.3; font-family:system-ui,-apple-system,sans-serif;">' + subject + '</p>' +
+'          <td style="padding:16px 36px 0 36px;" class="email-content">' +
+'            <p style="margin:0 0 20px 0; color:#1a202c; font-size:24px; font-weight:700; line-height:1.3; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + subject + '</p>' +
 '          </td>' +
 '        </tr>' +
 '        <!-- MAIN CONTENT -->' +
 '        <tr>' +
 '          <td style="padding:0 36px 36px 36px;" class="email-content">' +
-'            <div style="color:#424245; line-height:1.6; font-size:14px; font-family:system-ui,-apple-system,sans-serif;">' + htmlBody + '</div>' +
+             greetingHtml +
+'            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin:0 0 16px 0;">' +
+'              <div style="color:#424245; line-height:1.6; font-size:14px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + htmlBody + '</div>' +
+'            </div>' +
              ctaHtml +
 '          </td>' +
 '        </tr>' +
@@ -488,7 +518,7 @@ function formatEmailHtml(subject, body) {
 '        </tr>' +
 '        <tr>' +
 '          <td style="padding:16px 36px;" class="email-footer-inner">' +
-'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
 '              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
 '          </td>' +
 '        </tr>' +
@@ -511,22 +541,33 @@ function formatEmailHtml(subject, body) {
 function formatTableEmailHtml(subject, intro, headers, rows, outro) {
   var year = new Date().getFullYear();
 
-  // Build table header cells
+  // Detect category tag from subject
+  var categoryLabel = 'NOTIFICATION';
+  if (/Submitted/i.test(subject)) categoryLabel = 'RESPONSE SUBMITTED';
+  else if (/Accepted/i.test(subject)) categoryLabel = 'RESPONSE ACCEPTED';
+  else if (/Rejected|Revision/i.test(subject)) categoryLabel = 'ACTION REQUIRED';
+  else if (/Delegat/i.test(subject)) categoryLabel = 'DELEGATION REQUEST';
+  else if (/Overdue/i.test(subject)) categoryLabel = 'OVERDUE REMINDER';
+  else if (/Verification|Verify/i.test(subject)) categoryLabel = 'VERIFICATION REQUIRED';
+  else if (/Approved/i.test(subject)) categoryLabel = 'APPROVED';
+  else if (/Summary/i.test(subject)) categoryLabel = 'BI-WEEKLY SUMMARY';
+
+  // Build table header cells with navy background
   var thCells = headers.map(function(h) {
-    return '<th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:#86868b; border-bottom:2px solid #e5e5e5; font-family:system-ui,-apple-system,sans-serif; white-space:nowrap;">' + h + '</th>';
+    return '<th style="padding:12px 14px; text-align:left; font-size:11px; font-weight:600; color:#ffffff; background-color:#1a365d; text-transform:uppercase; letter-spacing:0.5px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; white-space:nowrap;">' + h + '</th>';
   }).join('');
 
-  // Build table body rows
+  // Build table body rows with alternating backgrounds
   var trRows = rows.map(function(row, idx) {
     var bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
     var cells = row.map(function(cell) {
-      return '<td style="padding:10px 14px; font-size:14px; color:#1d1d1f; border-bottom:1px solid #f0f0f0; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' + cell + '</td>';
+      return '<td style="padding:11px 14px; font-size:14px; color:#1d1d1f; border-bottom:1px solid #e2e8f0; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; line-height:1.5;">' + cell + '</td>';
     }).join('');
     return '<tr style="background-color:' + bg + ';">' + cells + '</tr>';
   }).join('');
 
   var outroClean = outro ? stripUrls(outro) : '';
-  var outroHtml = outroClean ? '<div style="color:#424245; line-height:1.6; font-size:14px; margin-top:24px; font-family:system-ui,-apple-system,sans-serif;">' + outroClean.replace(/\n/g, '<br>') + '</div>' : '';
+  var outroHtml = outroClean ? '<div style="background:#eff6ff; border-left:3px solid #2563eb; border-radius:6px; padding:16px 20px; margin-top:24px;"><div style="color:#1e40af; line-height:1.6; font-size:14px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + outroClean.replace(/\n/g, '<br>') + '</div></div>' : '';
 
   // Always append CTA button linking to system
   var systemUrl = getSystemUrl();
@@ -550,33 +591,39 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '    }' +
 '  </style>' +
 '</head>' +
-'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
 '    ' + subject + ' &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
 '  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
 '    <tr><td align="center" style="padding:40px 16px;">' +
-'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);" class="email-inner">' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08); border-top:4px solid #c9a83e;" class="email-inner">' +
 '        <!-- HEADER -->' +
 '        <tr>' +
 '          <td style="padding:28px 36px 0 36px; border-bottom:none;" class="email-header">' +
-'            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">HASS PETROLEUM</p>' +
-'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif;">Internal Audit</p>' +
+'            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">Internal Audit</p>' +
 '          </td>' +
 '        </tr>' +
 '        <!-- SEPARATOR -->' +
 '        <tr><td style="padding:16px 36px 0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
+'        <!-- CATEGORY TAG -->' +
+'        <tr>' +
+'          <td style="padding:20px 36px 0 36px;">' +
+'            <div style="border-left:3px solid #2563eb; padding-left:12px; color:#2563eb; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:1px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + categoryLabel + '</div>' +
+'          </td>' +
+'        </tr>' +
 '        <!-- SUBJECT -->' +
 '        <tr>' +
-'          <td style="padding:24px 36px 0 36px;" class="email-content">' +
-'            <p style="margin:0 0 20px 0; color:#1d1d1f; font-size:20px; font-weight:600; line-height:1.3; font-family:system-ui,-apple-system,sans-serif;">' + subject + '</p>' +
+'          <td style="padding:16px 36px 0 36px;" class="email-content">' +
+'            <p style="margin:0 0 20px 0; color:#1a202c; font-size:24px; font-weight:700; line-height:1.3; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + subject + '</p>' +
 '          </td>' +
 '        </tr>' +
 '        <!-- INTRO + TABLE -->' +
 '        <tr>' +
 '          <td style="padding:0 36px 36px 36px;" class="email-content">' +
-'            <div style="color:#424245; line-height:1.6; font-size:14px; margin-bottom:20px; font-family:system-ui,-apple-system,sans-serif;">' + intro + '</div>' +
-'            <div class="email-table-wrap" style="border-radius:8px; overflow:hidden; border:1px solid #e5e5e5;">' +
+'            <p style="color:#424245; line-height:1.6; font-size:14px; margin:0 0 20px 0; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + intro + '</p>' +
+'            <div class="email-table-wrap" style="border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">' +
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; min-width:100%;">' +
 '              <thead><tr>' + thCells + '</tr></thead>' +
 '              <tbody>' + trRows + '</tbody>' +
@@ -592,7 +639,7 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '        </tr>' +
 '        <tr>' +
 '          <td style="padding:16px 36px;" class="email-footer-inner">' +
-'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
 '              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
 '          </td>' +
 '        </tr>' +

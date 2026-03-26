@@ -553,10 +553,16 @@ function reviewResponseAction(action, event) {
     .then(function(result) {
       if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; }
       if (result && result.success) {
-        showToast(result.message || 'Response reviewed successfully', 'success');
         var modal = bootstrap.Modal.getInstance(document.getElementById('rejectResponseModal'));
         if (modal) modal.hide();
-        loadAuditeeResponse({ id: _arWorkPaperId });
+        var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+        var isAuditor = auditorRoles.indexOf(window.currentUser?.role_code) >= 0;
+        showToast('Response ' + (action === 'accept' ? 'accepted' : 'rejected') + ' successfully', 'success');
+        if (isAuditor && document.getElementById('page-responses-to-review')) {
+          setTimeout(function() { navigateTo('responses-to-review'); }, 500);
+        } else {
+          loadAuditeeResponse({ id: _arWorkPaperId });
+        }
       } else {
         showToast(result ? result.error : 'Review failed', 'danger');
       }

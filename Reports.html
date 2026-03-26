@@ -327,9 +327,19 @@ function renderExecutiveSummary(container) {
     '<div class="kpi-label mt-2">Overall Audit Health</div>' +
     '<div class="kpi-sublabel">' + escapeHtml(scoreLabel) + '</div></div></div>';
   // KPIs
-  html += buildKPI('col-lg-3 col-md-6', e.totalFindings, 'Total Observations', '', 'bi-search');
-  html += buildKPI('col-lg-3 col-md-6', e.totalActionPlans, 'Action Plans', e.closedActionPlans + ' closed', 'bi-list-check');
-  html += buildKPI('col-lg-3 col-md-6', e.overdueActionPlans, 'Overdue Items', '', 'bi-exclamation-triangle', e.overdueActionPlans > 0 ? 'var(--danger-color)' : 'var(--success-color)');
+  html += '<div class="col-lg-3 col-md-6"><div class="kpi-card h-100" onclick="navigateTo(\'work-papers\')" style="cursor:pointer;">' +
+    '<i class="bi bi-search" style="font-size:1.25rem; color:var(--primary-color); margin-bottom:8px;"></i>' +
+    '<div class="kpi-value" style="color:var(--primary-color);">' + e.totalFindings + '</div>' +
+    '<div class="kpi-label">Total Observations</div></div></div>';
+  html += '<div class="col-lg-3 col-md-6"><div class="kpi-card h-100" onclick="navigateTo(\'action-plans\')" style="cursor:pointer;">' +
+    '<i class="bi bi-list-check" style="font-size:1.25rem; color:var(--primary-color); margin-bottom:8px;"></i>' +
+    '<div class="kpi-value" style="color:var(--primary-color);">' + e.totalActionPlans + '</div>' +
+    '<div class="kpi-label">Action Plans</div>' +
+    '<div class="kpi-sublabel">' + escapeHtml(e.closedActionPlans + ' closed') + '</div></div></div>';
+  html += '<div class="col-lg-3 col-md-6"><div class="kpi-card h-100" onclick="navigateTo(\'action-plans\')" style="cursor:pointer;">' +
+    '<i class="bi bi-exclamation-triangle" style="font-size:1.25rem; color:' + (e.overdueActionPlans > 0 ? 'var(--danger-color)' : 'var(--success-color)') + '; margin-bottom:8px;"></i>' +
+    '<div class="kpi-value" style="color:' + (e.overdueActionPlans > 0 ? 'var(--danger-color)' : 'var(--success-color)') + ';">' + e.overdueActionPlans + '</div>' +
+    '<div class="kpi-label">Overdue Items</div></div></div>';
   html += '</div>';
 
   // Second row: rates
@@ -594,7 +604,7 @@ function renderAgingAnalysis(container) {
       '<th>Description</th><th>Owner</th><th>Affiliate</th><th>Risk</th><th class="text-center">Days Overdue</th><th>Status</th></tr></thead><tbody>';
     overdueItems.forEach(function(item) {
       var urgency = item.daysOverdue > 90 ? 'table-danger' : item.daysOverdue > 60 ? 'table-warning' : '';
-      html += '<tr class="' + urgency + '">' +
+      html += '<tr class="' + urgency + '" onclick="navigateTo(\'action-plan-view\', {id:\'' + item.id + '\'})" style="cursor:pointer;">' +
         '<td>' + escapeHtml(item.description) + '</td>' +
         '<td>' + escapeHtml(item.owner) + '</td>' +
         '<td>' + escapeHtml(item.affiliate) + '</td>' +

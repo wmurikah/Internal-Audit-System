@@ -195,3 +195,147 @@
     </div>
   </div>
 </div>
+
+<!-- Delegate Action Plan Modal -->
+<div class="modal fade" id="delegateAPModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Delegate Action Plan</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="delegateAPId">
+        <p class="text-muted small">Reassign this action plan to a different person.</p>
+        <div class="mb-3">
+          <label class="form-label">Current Owner</label>
+          <input type="text" class="form-control" id="delegateCurrentOwner" readonly>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">New Owner <span class="text-danger">*</span></label>
+          <select class="form-select" id="delegateNewOwner" multiple size="4"></select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Delegation Notes</label>
+          <textarea class="form-control" id="delegateNotes" rows="3" placeholder="Reason for delegation..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitDelegation()">
+          <i class="bi bi-person-plus me-1"></i>Delegate
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Delegation Modal -->
+<div class="modal fade" id="rejectDelegationModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="bi bi-x-circle me-2"></i>Reject Delegation</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="rejectDelegationAPId">
+        <div class="mb-3">
+          <label class="form-label">Reason for Rejection <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="rejectDelegationReason" rows="3" minlength="5" placeholder="Please explain why you are rejecting this delegation (min 5 characters)..." required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="submitRejectDelegation()">
+          <i class="bi bi-x-circle me-1"></i>Reject Delegation
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Verify Action Plan Modal -->
+<div class="modal fade" id="verifyAPModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="verifyAPModalLabel">Verify Action Plan</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="verifyAPAction">
+        <input type="hidden" id="verifyAPId">
+        <div class="alert alert-info small" id="verifyAPInfo">Review the implementation and evidence before making a decision.</div>
+        <div class="mb-3">
+          <label class="form-label">Comments</label>
+          <textarea class="form-control" id="verifyAPComments" rows="4" placeholder="Enter verification comments..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="verifyAPSubmitBtn" onclick="submitAPVerification()">Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HOA Review Action Plan Modal -->
+<div class="modal fade" id="hoaReviewAPModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="hoaReviewAPModalLabel">HOA Final Review</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="hoaReviewAPAction">
+        <input type="hidden" id="hoaReviewAPId">
+        <div class="alert alert-info small" id="hoaReviewAPInfo">As Head of Audit, provide your final review decision.</div>
+        <div class="mb-3">
+          <label class="form-label">Comments</label>
+          <textarea class="form-control" id="hoaReviewAPComments" rows="4" placeholder="Enter review comments..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="hoaReviewAPSubmitBtn" onclick="submitHOAReview()">Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Action Plan Modal -->
+<div class="modal fade" id="editAPModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Action Plan</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editAPId">
+        <div class="mb-3">
+          <label class="form-label">Action Description <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="editAPDesc" rows="3" required></textarea>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Owner(s)</label>
+            <select class="form-select" id="editAPOwners" multiple size="4"></select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Due Date <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="editAPDueDate" required>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitEditAP()">
+          <i class="bi bi-save me-1"></i>Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

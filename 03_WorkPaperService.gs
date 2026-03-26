@@ -502,6 +502,41 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   // Log audit event
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
 
+  // Notify the submitting auditor about the review outcome
+  if (action !== 'start_review') {
+    try {
+      var submitter = getUserById(workPaper.created_by);
+      if (submitter && submitter.user_id !== user.user_id) {
+        var actionLabel = action === 'approve' ? 'Approved' : action === 'reject' ? 'Rejected' : 'Returned for Revision';
+        var notifSubject = 'Work Paper ' + actionLabel + ' - ' + (workPaper.observation_title || workPaperId);
+        var notifBody = 'Dear ' + (submitter.full_name || 'Colleague') + ',\n\n' +
+          'Your work paper "' + (workPaper.observation_title || workPaperId) + '" has been ' + actionLabel.toLowerCase() + ' by ' + (user.full_name || 'the reviewer') + '.\n\n';
+        if (comments) {
+          notifBody += 'Review Comments:\n' + comments + '\n\n';
+        }
+        notifBody += 'Please log in to the Audit System to view the details.';
+
+        var session = null;
+        try {
+          var sessions = firestoreQuery(SHEETS.SESSIONS, 'user_id', 'EQUAL', submitter.user_id);
+          session = sessions && sessions.length > 0 ? sessions[0] : null;
+        } catch(e) {}
+
+        var twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        var lastActivity = session ? new Date(session.last_activity || session.created_at) : null;
+        var isOffline = !lastActivity || lastActivity < twoHoursAgo;
+
+        if (isOffline) {
+          sendImmediateEmail(submitter.email, notifSubject, notifBody);
+        } else {
+          queueEmail(submitter.email, notifSubject, notifBody);
+        }
+      }
+    } catch(e) {
+      console.warn('Failed to notify auditor of WP review:', e.message);
+    }
+  }
+
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 

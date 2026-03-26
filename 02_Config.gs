@@ -163,6 +163,22 @@ const ROLES = {
   EXTERNAL_AUDITOR: 'EXTERNAL_AUDITOR'
 };
 
+// Display name overrides — used by getRolesDropdown() and getRoleDisplayName()
+// Maps role_code to the user-facing display name.
+// OBSERVER must display as "Board Member" everywhere in the UI.
+const ROLE_DISPLAY_NAMES = {
+  OBSERVER: 'Board Member'
+};
+
+/**
+ * Get the display name for a role code, applying overrides.
+ * Falls back to the Firestore role_name if no override exists.
+ */
+function getRoleDisplayName(roleCode) {
+  if (ROLE_DISPLAY_NAMES[roleCode]) return ROLE_DISPLAY_NAMES[roleCode];
+  return getRoleName(roleCode);
+}
+
 var _idBlockCache = {};
 var ID_BLOCK_SIZE = 10;
 
@@ -390,7 +406,8 @@ function getRolesDropdown() {
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (isActive(row[activeIdx])) {
-      roles.push({ code: row[codeIdx], name: row[nameIdx], level: row[levelIdx] });
+      var displayName = ROLE_DISPLAY_NAMES[row[codeIdx]] || row[nameIdx];
+      roles.push({ code: row[codeIdx], name: displayName, level: row[levelIdx] });
     }
   }
   
