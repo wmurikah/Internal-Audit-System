@@ -1131,6 +1131,17 @@ function getInitDataOptimized(user) {
     response.permissions = {};
   }
 
+  // Add pending finding counts for auditee roles
+  var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  if (auditeeRoles.indexOf(user.role_code) >= 0) {
+    try {
+      response.pendingFindings = getAuditeeFindingCounts(user);
+    } catch (e) {
+      console.warn('Failed to get pending finding counts for auditee init:', e.message);
+      response.pendingFindings = null;
+    }
+  }
+
   console.log('getInitDataOptimized completed in', new Date().getTime() - startTime, 'ms');
   return sanitizeForClient(response);
 }
@@ -1193,6 +1204,17 @@ function getInitDataLight(user) {
   } catch (e) {
     console.error('Error loading permissions:', e);
     response.permissions = {};
+  }
+
+  // Add pending finding counts for auditee roles
+  var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  if (auditeeRoles.indexOf(user.role_code) >= 0) {
+    try {
+      response.pendingFindings = getAuditeeFindingCounts(user);
+    } catch (e) {
+      console.warn('Failed to get pending finding counts for auditee init:', e.message);
+      response.pendingFindings = null;
+    }
   }
 
   console.log('getInitDataLight completed in', new Date().getTime() - startTime, 'ms');

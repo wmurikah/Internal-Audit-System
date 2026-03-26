@@ -242,17 +242,5 @@ function getRiskBadgeHtml(rating) {
   return '<span class="badge ' + cls + '">' + (rating || 'N/A') + '</span>';
 }
 
-function formatDate(d) {
-  if (!d) return '-';
-  try {
-    var dt = new Date(d);
-    return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch(e) { return String(d); }
-}
-
-function escapeHtml(str) {
-  var div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
+// formatDate() and escapeHtml() are provided by Scripts.html
 </script>

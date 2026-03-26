@@ -516,13 +516,25 @@
           _needsCleanup: result._needsCleanup || false
         }));
 
-        // Hide loading and form, show success view with clickable link
-        setLoading(false);
-        document.getElementById('loginFormView').style.display = 'none';
-        document.getElementById('successView').style.display = 'block';
-        document.getElementById('welcomeName').textContent = result.user ? result.user.full_name : 'User';
-        document.getElementById('continueBtn').href = APP_URL;
-        document.getElementById('continueBtn').focus();
+        // Keep loading overlay visible during redirect — no intermediate success screen
+        document.getElementById('loadingText').textContent = 'Welcome, ' + (result.user ? result.user.full_name : '') + '...';
+
+        // Auto-redirect immediately (preserves target="_top" iframe breakout)
+        var a = document.createElement('a');
+        a.href = APP_URL;
+        a.target = '_top';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+
+        // Fallback: if click doesn't navigate within 3s, show manual link
+        setTimeout(function() {
+          setLoading(false);
+          document.getElementById('loginFormView').style.display = 'none';
+          document.getElementById('successView').style.display = 'block';
+          document.getElementById('welcomeName').textContent = result.user ? result.user.full_name : 'User';
+          document.getElementById('continueBtn').href = APP_URL;
+        }, 3000);
       } else {
         setLoading(false);
         document.getElementById('password').value = '';

@@ -607,26 +607,45 @@ let permissionsData = {};
 let aiConfigStatus = null;
 let usersData = [];
 
-function loadSettings() {
+function loadSettings(params) {
   // Restrict advanced tabs - only users with CONFIG update permission see them
-  const role = window.currentUser?.role_code;
-  const cfgPerms = window.currentPermissions || {};
+  var role = window.currentUser?.role_code || '';
+  var cfgPerms = window.currentPermissions || {};
+
   if (role !== 'SUPER_ADMIN' && !cfgPerms.canManageSettings) {
-    const restrictedTabs = ['aiConfig', 'systemConfig', 'notificationConfig', 'dataBackup', 'auditLog'];
-    restrictedTabs.forEach(tabId => {
-      const navLink = document.querySelector(`a[href="#${tabId}"]`);
+    var restrictedTabs = ['aiConfig', 'systemConfig', 'notificationConfig', 'dataBackup', 'auditLog'];
+    restrictedTabs.forEach(function(tabId) {
+      var navLink = document.querySelector('a[href="#' + tabId + '"]');
       if (navLink) navLink.closest('li').style.display = 'none';
     });
   }
 
+  // Always load these (visible to all settings users)
   loadUsers();
   loadRoles();
-  loadAIConfig();
-  loadSystemConfig();
-  loadOutlookConfig();
-  loadNotificationConfig();
-  loadBackupStatus();
-  loadAuditLog();
+
+  // Only load restricted tabs if user has access
+  if (role === 'SUPER_ADMIN' || cfgPerms.canManageSettings) {
+    loadAIConfig();
+    loadSystemConfig();
+    loadOutlookConfig();
+    loadNotificationConfig();
+    loadBackupStatus();
+    loadAuditLog();
+  }
+
+  // Auto-switch to requested tab
+  if (params && params.tab) {
+    var tabMap = { 'users': 'userManagement', 'access': 'accessControl', 'ai': 'aiConfig', 'notifications': 'notificationConfig', 'config': 'systemConfig', 'backup': 'dataBackup', 'log': 'auditLog' };
+    var tabId = tabMap[params.tab];
+    if (tabId) {
+      var tabEl = document.querySelector('a[href="#' + tabId + '"]');
+      if (tabEl && tabEl.closest('li').style.display !== 'none') {
+        var tab = new bootstrap.Tab(tabEl);
+        tab.show();
+      }
+    }
+  }
 }
 
 // User management
