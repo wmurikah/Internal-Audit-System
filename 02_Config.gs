@@ -817,25 +817,8 @@ function canUserPerform(user, action, entityType, entity) {
 
   if (typeof checkPermission === 'function') {
     if (!checkPermission(roleCode, entityType, action)) {
-      var auditorRoles = [ROLES.AUDITOR, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF];
-      var wpFallbackActions = ['create', 'read', 'update'];
-      if (entityType === 'WORK_PAPER' && auditorRoles.indexOf(roleCode) !== -1 && wpFallbackActions.indexOf(action) !== -1) {
-        console.log('Permission granted via auditor WP fallback:', roleCode, entityType, action);
-      }
-      else if (entityType === 'ACTION_PLAN' && auditorRoles.indexOf(roleCode) !== -1) {
-        console.log('Permission granted via auditor AP fallback:', roleCode, entityType, action);
-      }
-      else if (entityType === 'ACTION_PLAN' && roleCode === ROLES.AUDITEE && (action === 'read' || action === 'update')) {
-        console.log('Permission granted via auditee AP fallback:', roleCode, entityType, action);
-      }
-      else if (entityType === 'ACTION_PLAN' && action === 'read' &&
-        [ROLES.MANAGEMENT, ROLES.SENIOR_MGMT, ROLES.BOARD, ROLES.OBSERVER, ROLES.EXTERNAL_AUDITOR, ROLES.UNIT_MANAGER].indexOf(roleCode) !== -1) {
-        console.log('Permission granted via read-only AP fallback:', roleCode, entityType, action);
-      }
-      else {
-        console.log('Permission denied by database:', roleCode, entityType, action);
-        return false;
-      }
+      console.log('Permission denied by database:', roleCode, entityType, action);
+      return false;
     }
   }
   
@@ -851,7 +834,7 @@ function canUserPerform(user, action, entityType, entity) {
     }
     
     if (entityType === 'ACTION_PLAN' && roleCode === ROLES.AUDITEE) {
-      const ownerIds = String(entity.owner_ids || '').split(',').map(s => s.trim());
+      const ownerIds = parseIdList(entity.owner_ids);
       if (!ownerIds.includes(user.user_id)) {
         console.log('Auditee not owner of action plan');
         return false;

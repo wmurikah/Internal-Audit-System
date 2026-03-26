@@ -510,6 +510,23 @@ function sendToAuditee(workPaperId, user) {
   // Write to Firestore
   syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
 
+  // Verify critical fields were persisted
+  var verification = firestoreGet(SHEETS.WORK_PAPERS, workPaperId);
+  if (!verification || verification.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+    console.error('sendToAuditee: Firestore write verification FAILED for', workPaperId,
+      'Expected status:', STATUS.WORK_PAPER.SENT_TO_AUDITEE,
+      'Got:', verification ? verification.status : 'null document');
+    throw new Error('Failed to update work paper status in database. Please try again.');
+  }
+  if (!verification.responsible_ids) {
+    console.error('sendToAuditee: responsible_ids is empty after write for', workPaperId);
+    throw new Error('Responsible parties were not saved correctly. Please verify and try again.');
+  }
+  console.log('sendToAuditee: Verified —', workPaperId,
+    'status:', verification.status,
+    'responsible_ids:', verification.responsible_ids,
+    'response_status:', verification.response_status);
+
   // Invalidate in-memory cache so subsequent reads (e.g. createActionPlan)
   // see the new SENT_TO_AUDITEE status instead of stale APPROVED status
   invalidateSheetData(SHEETS.WORK_PAPERS);
@@ -524,7 +541,7 @@ function sendToAuditee(workPaperId, user) {
     var existingAPs = getActionPlansByWorkPaperRaw(workPaperId);
     if (existingAPs.length === 0) {
       // Resolve owner names from responsible_ids
-      var ownerIds = String(workPaper.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      var ownerIds = parseIdList(workPaper.responsible_ids);
       var ownerNames = ownerIds.map(function(id) {
         var u = getUserById(id);
         return u ? u.full_name : id;
