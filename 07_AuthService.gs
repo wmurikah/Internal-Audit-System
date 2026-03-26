@@ -380,20 +380,13 @@ function createSession(user) {
 
 function getSessionByToken(token) {
   if (!token) return null;
-
-  // Read from Firestore via getSheetData (Firestore-primary)
-  var data = getSheetData(SHEETS.SESSIONS);
-  if (!data || data.length < 2) return null;
-  var headers = data[0];
-  var tokenIdx = headers.indexOf('session_token');
-
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][tokenIdx] === token) {
-      return rowToObject(headers, data[i]);
-    }
+  try {
+    var results = firestoreQuery(SHEETS.SESSIONS, 'session_token', 'EQUAL', token);
+    return (results && results.length > 0) ? results[0] : null;
+  } catch (e) {
+    console.warn('Session lookup failed:', e.message);
+    return null;
   }
-
-  return null;
 }
 
 function invalidateSession(sessionId) {

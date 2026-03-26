@@ -78,7 +78,7 @@
       <span>Pending Reviews</span>
     </div>
     <div class="row g-4">
-      <div class="col-md-6">
+      <div class="col-md-4">
         <div class="card">
           <div class="card-header">
             <span><i class="bi bi-file-earmark-check me-2"></i>Work Papers to Review</span>
@@ -91,7 +91,7 @@
           </div>
         </div>
       </div>
-      <div class="col-md-6">
+      <div class="col-md-4">
         <div class="card">
           <div class="card-header">
             <span><i class="bi bi-check2-square me-2"></i>Action Plans to Verify</span>
@@ -99,6 +99,19 @@
           </div>
           <div class="card-body p-0">
             <ul class="list-group list-group-flush" id="pendingAPVerifyList">
+              <li class="list-group-item text-center text-muted py-3">Loading...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-chat-left-dots me-2"></i>Auditee Responses</span>
+            <span class="badge bg-warning text-dark" id="pendingResponseCount">0</span>
+          </div>
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="pendingResponseList">
               <li class="list-group-item text-center text-muted py-3">Loading...</li>
             </ul>
           </div>
@@ -218,6 +231,20 @@ function loadAuditWorkbench() {
       if (data && data.success !== false) {
         renderWorkbench(data);
         renderWorkbenchSections(data);
+        // Start live counter refresh for stat cards (15s interval)
+        if (!window._workbenchRefreshInterval) {
+          window._workbenchRefreshInterval = setInterval(function() {
+            apiCall('getSidebarCounts', {}).then(function(r) {
+              if (r && r.success) {
+                var el;
+                el = document.getElementById('statPendingReview');
+                if (el) el.textContent = r.pendingReview || 0;
+                el = document.getElementById('statOverdue');
+                if (el) el.textContent = r.overdueActionPlans || 0;
+              }
+            }).catch(function() {});
+          }, 15000);
+        }
       } else {
         console.error('Workbench load failed:', data?.error);
         showToast(data?.error || 'Failed to load workbench', 'danger');
@@ -290,6 +317,7 @@ function renderWorkbenchSections(data) {
 
   // Pending reviews - always visible on workbench (auditor-only page)
   renderPendingReviews(data.pendingReviews || {});
+  renderPendingResponses(data.pendingResponses || []);
 
   quickActions.innerHTML = `
     <button class="btn btn-primary" onclick="navigateTo('work-paper-form')">
@@ -345,6 +373,31 @@ function renderPendingReviews(pendingReviews) {
         <span class="badge bg-success">Implemented</span>
       </li>
     `).join('');
+  }
+}
+
+function renderPendingResponses(responses) {
+  const list = document.getElementById('pendingResponseList');
+  const badge = document.getElementById('pendingResponseCount');
+  if (!list) return;
+
+  badge.textContent = responses.length;
+
+  if (responses.length === 0) {
+    list.innerHTML = '<li class="list-group-item text-center text-muted py-3"><i class="bi bi-check-circle me-2"></i>No pending responses</li>';
+  } else {
+    list.innerHTML = responses.slice(0, 5).map(r => `
+      <li class="list-group-item d-flex justify-content-between align-items-center" onclick="navigateTo('auditee-response', {id: '${r.work_paper_id}'})" style="cursor:pointer;">
+        <div>
+          <span class="fw-bold text-truncate d-inline-block" style="max-width: 160px;">${escapeHtml(r.observation_title || '-')}</span>
+          <br><small class="text-muted">${escapeHtml(r.submitted_by_name || '-')} &middot; Round ${r.response_round || 1}</small>
+        </div>
+        <span class="badge ${getRiskClass(r.risk_rating)}">${r.risk_rating || '-'}</span>
+      </li>
+    `).join('');
+    if (responses.length > 5) {
+      list.innerHTML += '<li class="list-group-item text-center"><a href="#responses-to-review" onclick="navigateTo(\'responses-to-review\')" class="text-primary small">View all ' + responses.length + ' responses</a></li>';
+    }
   }
 }
 

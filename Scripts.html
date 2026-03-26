@@ -316,8 +316,8 @@ function scheduleBackgroundLoads() {
   // Permission-specific fast refresh every 15s
   setInterval(refreshPermissionsQuick, 15000);
 
-  // Periodic refresh every 60s (dropdowns, sidebar counts)
-  setInterval(refreshBackgroundData, 60000);
+  // Periodic refresh every 15s (dropdowns, sidebar counts)
+  setInterval(refreshBackgroundData, 15000);
 
   // Full init data refresh every 5 minutes (catches user flag changes like must_change_password)
   setInterval(silentRefreshInitData, 300000);
@@ -351,6 +351,8 @@ function loadSidebarCountsBackground() {
       if (result && result.success) {
         updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0);
         window.loadingState.sidebarCounts = true;
+        var respBadge = document.getElementById('responsesReviewCount');
+        if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
       }
     })
     .catch(err => console.error('Sidebar counts error:', err));
@@ -361,6 +363,8 @@ function refreshBackgroundData() {
     .then(result => {
       if (result && result.success) {
         updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0);
+        var respBadge = document.getElementById('responsesReviewCount');
+        if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
       }
     })
     .catch(() => {});
@@ -535,6 +539,7 @@ function setupNavigation(p) {
     document.getElementById('navMyWorkPapers')?.classList.remove('d-none');
     document.getElementById('navPendingReview')?.classList.remove('d-none');
     document.getElementById('navSendQueue')?.classList.remove('d-none');
+    document.getElementById('navResponsesReview')?.classList.remove('d-none');
     document.getElementById('navAuditeeSection')?.classList.remove('d-none');
     document.getElementById('navAuditeeMenu')?.classList.remove('d-none');
     return;
@@ -555,6 +560,7 @@ function setupNavigation(p) {
   // Send Queue - only reviewers (approve permission) can batch-send to auditees
   if (!p || !p.canApproveWorkPaper) {
     document.getElementById('navSendQueue')?.classList.add('d-none');
+    document.getElementById('navResponsesReview')?.classList.add('d-none');
   }
   if (!p || !p.canCreateWorkPaper) {
     document.getElementById('navMyWorkPapers')?.classList.add('d-none');
@@ -681,6 +687,7 @@ function navigateTo(page, params, updateHash = true) {
     'work-paper-form': { el: 'page-work-paper-form', title: params.id ? 'Edit Work Paper' : 'New Work Paper', init: () => { if (typeof initWorkPaperForm === 'function') initWorkPaperForm(params); else console.error('initWorkPaperForm not found!'); } },
     'work-paper-view': { el: 'page-work-paper-view', title: 'Work Paper Details', init: () => { if (typeof loadWorkPaperView === 'function') loadWorkPaperView(params); else console.error('loadWorkPaperView not found!'); } },
     'send-queue': { el: 'page-send-queue', title: 'Send Queue', init: () => { if (typeof loadSendQueue === 'function') loadSendQueue(); } },
+    'responses-to-review': { el: 'page-responses-to-review', title: 'Responses to Review', init: () => { if (typeof loadResponsesToReview === 'function') loadResponsesToReview(); } },
     'action-plans': { el: 'page-action-plans', title: 'Action Plans', init: () => { if (typeof loadActionPlans === 'function') loadActionPlans(params); } },
     'action-plans-overdue': { el: 'page-action-plans', title: 'Overdue Action Plans', init: () => { if (typeof loadActionPlansOverdue === 'function') loadActionPlansOverdue(); else if (typeof loadActionPlans === 'function') loadActionPlans({ overdue: true }); } },
     'action-plan-view': { el: 'page-action-plan-view', title: 'Action Plan Details', init: () => { if (typeof loadActionPlanView === 'function') loadActionPlanView(params); } },
@@ -739,6 +746,18 @@ function refreshCurrentPage() {
   navigateTo(currentPage, pageParams, false);
 }
 
+// Write actions that should trigger sidebar count refresh after completion
+var WRITE_ACTIONS = [
+  'submitWorkPaper', 'reviewWorkPaper', 'sendToAuditee', 'batchSendToAuditees',
+  'createWorkPaper', 'updateWorkPaper', 'deleteWorkPaper',
+  'createActionPlan', 'createActionPlansBatch', 'updateActionPlan', 'deleteActionPlan',
+  'markAsImplemented', 'verifyImplementation', 'hoaReview', 'delegateActionPlan',
+  'submitAuditeeResponse', 'reviewAuditeeResponse', 'saveDraftResponse',
+  'createAuditeeActionPlan', 'batchSubmitAuditeeResponses',
+  'addWorkPaperFile', 'deleteWorkPaperFile',
+  'addActionPlanEvidence', 'deleteActionPlanEvidence'
+];
+
 // In-flight request deduplication map.
 // If the same action+data is already pending, reuse its Promise instead of
 // firing a duplicate google.script.run call.  This eliminates redundant
@@ -768,6 +787,10 @@ function apiCall(action, data) {
           redirectToLogin();
         } else {
           resolve(result);
+          // Auto-refresh sidebar counts after successful write actions
+          if (WRITE_ACTIONS.indexOf(action) >= 0 && result && result.success !== false) {
+            setTimeout(refreshSidebarCounts, 500);
+          }
         }
       })
       .withFailureHandler(function(error) {
@@ -1432,6 +1455,8 @@ function refreshSidebarCounts() {
     .then(result => {
       if (result.success) {
         updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
+        var respBadge = document.getElementById('responsesReviewCount');
+        if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
       }
     })
     .catch(err => console.error('Error refreshing sidebar counts:', err));

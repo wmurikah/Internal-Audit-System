@@ -163,62 +163,79 @@ const ROLES = {
   EXTERNAL_AUDITOR: 'EXTERNAL_AUDITOR'
 };
 
-function generateId(entityType) {
-  var lock = LockService.getScriptLock();
+var _idBlockCache = {};
+var ID_BLOCK_SIZE = 10;
 
+var _ID_CONFIG_KEY_MAP = {
+  'WORK_PAPER': 'NEXT_WP_ID',
+  'ACTION_PLAN': 'NEXT_AP_ID',
+  'USER': 'NEXT_USER_ID',
+  'REQUIREMENT': 'NEXT_REQ_ID',
+  'FILE': 'NEXT_FILE_ID',
+  'REVISION': 'NEXT_REV_ID',
+  'EVIDENCE': 'NEXT_EVIDENCE_ID',
+  'HISTORY': 'NEXT_HISTORY_ID',
+  'SESSION': 'NEXT_SESSION_ID',
+  'NOTIFICATION': 'NEXT_NOTIF_ID',
+  'LOG': 'NEXT_LOG_ID',
+  'AUDITEE_RESPONSE': 'NEXT_AR_ID'
+};
+
+var _ID_PREFIX_MAP = {
+  'WORK_PAPER': 'WP-',
+  'ACTION_PLAN': 'AP-',
+  'USER': 'USR-',
+  'REQUIREMENT': 'REQ-',
+  'FILE': 'FILE-',
+  'REVISION': 'REV-',
+  'EVIDENCE': 'EVI-',
+  'HISTORY': 'HIST-',
+  'SESSION': 'SES-',
+  'NOTIFICATION': 'NOTIF-',
+  'LOG': 'LOG-',
+  'AUDITEE_RESPONSE': 'AR-'
+};
+
+function generateId(entityType) {
+  // Check cached block first (no lock needed)
+  if (_idBlockCache[entityType] && _idBlockCache[entityType].remaining > 0) {
+    var cached = _idBlockCache[entityType];
+    var id = cached.prefix + String(cached.next).padStart(6, '0');
+    cached.next++;
+    cached.remaining--;
+    return id;
+  }
+
+  // Allocate a new block (requires lock + Firestore)
+  var configKey = _ID_CONFIG_KEY_MAP[entityType];
+  var prefix = _ID_PREFIX_MAP[entityType];
+  if (!configKey || !prefix) throw new Error('Unknown entity type: ' + entityType);
+
+  var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
 
-    var configKeyMap = {
-      'WORK_PAPER': 'NEXT_WP_ID',
-      'ACTION_PLAN': 'NEXT_AP_ID',
-      'USER': 'NEXT_USER_ID',
-      'REQUIREMENT': 'NEXT_REQ_ID',
-      'FILE': 'NEXT_FILE_ID',
-      'REVISION': 'NEXT_REV_ID',
-      'EVIDENCE': 'NEXT_EVIDENCE_ID',
-      'HISTORY': 'NEXT_HISTORY_ID',
-      'SESSION': 'NEXT_SESSION_ID',
-      'NOTIFICATION': 'NEXT_NOTIF_ID',
-      'LOG': 'NEXT_LOG_ID',
-      'AUDITEE_RESPONSE': 'NEXT_AR_ID'
-    };
-
-    var prefixMap = {
-      'WORK_PAPER': 'WP-',
-      'ACTION_PLAN': 'AP-',
-      'USER': 'USR-',
-      'REQUIREMENT': 'REQ-',
-      'FILE': 'FILE-',
-      'REVISION': 'REV-',
-      'EVIDENCE': 'EVI-',
-      'HISTORY': 'HIST-',
-      'SESSION': 'SES-',
-      'NOTIFICATION': 'NOTIF-',
-      'LOG': 'LOG-',
-      'AUDITEE_RESPONSE': 'AR-'
-    };
-
-    var configKey = configKeyMap[entityType];
-    var prefix = prefixMap[entityType];
-    if (!configKey || !prefix) throw new Error('Unknown entity type: ' + entityType);
-
-    var currentValue = 1;
-
     var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
-    currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
+    var currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
 
+    // Allocate block: increment by ID_BLOCK_SIZE instead of 1
     firestoreSet(SHEETS.CONFIG, configKey, {
       config_key: configKey,
-      config_value: currentValue + 1,
+      config_value: currentValue + ID_BLOCK_SIZE,
       description: 'Auto-generated ID counter',
       updated_at: new Date().toISOString()
     });
 
-    return prefix + String(currentValue).padStart(6, '0');
+    _idBlockCache[entityType] = {
+      prefix: prefix,
+      next: currentValue,
+      remaining: ID_BLOCK_SIZE
+    };
 
-  } finally {
     lock.releaseLock();
+    return generateId(entityType); // Recurse to use cached block
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
   }
 }
 
