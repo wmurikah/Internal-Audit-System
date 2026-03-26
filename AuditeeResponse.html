@@ -261,7 +261,7 @@ function renderAuditeeResponse() {
   // Header
   document.getElementById('arFindingTitle').textContent = f.observation_title || 'Untitled Finding';
   document.getElementById('arWorkPaperRef').innerHTML = '<i class="bi bi-hash me-1"></i>' + (f.work_paper_ref || f.work_paper_id);
-  document.getElementById('arIssuedDate').innerHTML = f.sent_to_auditee_date ? '<i class="bi bi-calendar me-1"></i>Issued: ' + formatDateAr(f.sent_to_auditee_date) : '';
+  document.getElementById('arIssuedDate').innerHTML = f.sent_to_auditee_date ? '<i class="bi bi-calendar me-1"></i>Issued: ' + formatDate(f.sent_to_auditee_date) : '';
 
   // Badges
   document.getElementById('arRiskBadge').innerHTML = getRiskBadgeAr(f.risk_rating);
@@ -277,13 +277,13 @@ function renderAuditeeResponse() {
     banner.style.removeProperty('display');
     if (daysLeft < 0) {
       banner.className = 'alert alert-danger mt-3 mb-0 py-2 d-flex align-items-center';
-      document.getElementById('arDeadlineText').textContent = 'Response is OVERDUE by ' + Math.abs(daysLeft) + ' day(s). Deadline was ' + formatDateAr(f.response_deadline);
+      document.getElementById('arDeadlineText').textContent = 'Response is OVERDUE by ' + Math.abs(daysLeft) + ' day(s). Deadline was ' + formatDate(f.response_deadline);
     } else if (daysLeft <= 3) {
       banner.className = 'alert alert-warning mt-3 mb-0 py-2 d-flex align-items-center';
-      document.getElementById('arDeadlineText').textContent = daysLeft + ' day(s) remaining. Deadline: ' + formatDateAr(f.response_deadline);
+      document.getElementById('arDeadlineText').textContent = daysLeft + ' day(s) remaining. Deadline: ' + formatDate(f.response_deadline);
     } else {
       banner.className = 'alert alert-info mt-3 mb-0 py-2 d-flex align-items-center';
-      document.getElementById('arDeadlineText').textContent = 'Response deadline: ' + formatDateAr(f.response_deadline) + ' (' + daysLeft + ' days remaining)';
+      document.getElementById('arDeadlineText').textContent = 'Response deadline: ' + formatDate(f.response_deadline) + ' (' + daysLeft + ' days remaining)';
     }
   } else {
     banner.style.display = 'none';
@@ -368,8 +368,8 @@ function renderFindingFiles(files) {
     var icon = getFileIcon(f.mime_type || f.file_name);
     html += '<div class="d-flex align-items-center gap-2 mb-2">' +
       '<i class="bi ' + icon + '"></i>' +
-      (f.drive_url ? '<a href="' + f.drive_url + '" target="_blank">' + escapeHtmlAr(f.file_name) + '</a>' :
-        '<span>' + escapeHtmlAr(f.file_name) + '</span>') +
+      (f.drive_url ? '<a href="' + f.drive_url + '" target="_blank">' + escapeHtml(f.file_name) + '</a>' :
+        '<span>' + escapeHtml(f.file_name) + '</span>') +
       '<small class="text-muted ms-auto">' + (f.file_category || '') + '</small>' +
     '</div>';
   });
@@ -386,15 +386,15 @@ function renderAuditeeActionPlans(plans) {
   var html = '';
   plans.forEach(function(ap) {
     var statusBadge = getAPStatusBadge(ap.status);
-    var dueDate = ap.due_date ? formatDateAr(ap.due_date) : '-';
+    var dueDate = ap.due_date ? formatDate(ap.due_date) : '-';
     var isProposed = ap.auditee_proposed ? '<span class="badge bg-info text-dark ms-1">Proposed</span>' : '';
 
     html += '<div class="border rounded p-3 mb-2">' +
       '<div class="d-flex justify-content-between align-items-start">' +
         '<div class="flex-grow-1">' +
-          '<div class="fw-semibold">' + escapeHtmlAr(ap.action_description || 'No description') + '</div>' +
+          '<div class="fw-semibold">' + escapeHtml(ap.action_description || 'No description') + '</div>' +
           '<div class="small text-muted mt-1">' +
-            '<span class="me-3"><i class="bi bi-person me-1"></i>' + escapeHtmlAr(ap.owner_names || '-') + '</span>' +
+            '<span class="me-3"><i class="bi bi-person me-1"></i>' + escapeHtml(ap.owner_names || '-') + '</span>' +
             '<span class="me-3"><i class="bi bi-calendar me-1"></i>Due: ' + dueDate + '</span>' +
             statusBadge + isProposed +
           '</div>' +
@@ -425,9 +425,9 @@ function renderResponseHistory(responses) {
         '<strong>Round ' + (r.round_number || '?') + '</strong>' +
         '<span class="badge bg-' + statusCls + '">' + (r.status || 'Pending') + '</span>' +
       '</div>' +
-      '<div class="small text-muted">Submitted by ' + escapeHtmlAr(r.submitted_by_name || '-') + ' on ' + formatDateAr(r.submitted_date) + '</div>' +
-      '<div class="mt-1" style="white-space:pre-wrap;">' + escapeHtmlAr(r.management_response || '') + '</div>' +
-      (r.review_comments ? '<div class="mt-2 p-2 bg-light rounded"><small class="fw-semibold text-muted">Reviewer: </small>' + escapeHtmlAr(r.review_comments) + '</div>' : '') +
+      '<div class="small text-muted">Submitted by ' + escapeHtml(r.submitted_by_name || '-') + ' on ' + formatDate(r.submitted_date) + '</div>' +
+      '<div class="mt-1" style="white-space:pre-wrap;">' + escapeHtml(r.management_response || '') + '</div>' +
+      (r.review_comments ? '<div class="mt-2 p-2 bg-light rounded"><small class="fw-semibold text-muted">Reviewer: </small>' + escapeHtml(r.review_comments) + '</div>' : '') +
     '</div>';
   });
   container.innerHTML = html;
@@ -624,17 +624,7 @@ function addAuditeeActionPlan() {
 
 // ── Helper Functions ──
 
-function formatDateAr(d) {
-  if (!d) return '-';
-  try { return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch(e) { return String(d); }
-}
-
-function escapeHtmlAr(str) {
-  var div = document.createElement('div');
-  div.textContent = str || '';
-  return div.innerHTML;
-}
+// formatDate() and escapeHtml() are provided by Scripts.html
 
 function getRiskBadgeAr(rating) {
   var m = { 'Extreme': 'bg-danger', 'High': 'bg-warning text-dark', 'Medium': 'bg-info text-dark', 'Low': 'bg-success' };
@@ -659,12 +649,5 @@ function getAPStatusBadge(status) {
   return '<span class="badge ' + (m[status] || 'bg-secondary') + '">' + (status || '-') + '</span>';
 }
 
-function getFileIcon(nameOrMime) {
-  var s = (nameOrMime || '').toLowerCase();
-  if (s.includes('pdf')) return 'bi-file-earmark-pdf text-danger';
-  if (s.includes('image') || s.includes('jpg') || s.includes('png')) return 'bi-file-earmark-image text-success';
-  if (s.includes('sheet') || s.includes('xls') || s.includes('csv')) return 'bi-file-earmark-spreadsheet text-success';
-  if (s.includes('doc') || s.includes('word')) return 'bi-file-earmark-word text-primary';
-  return 'bi-file-earmark text-secondary';
-}
+// getFileIcon() is provided by Scripts.html
 </script>

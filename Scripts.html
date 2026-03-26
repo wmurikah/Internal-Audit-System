@@ -310,6 +310,9 @@ function scheduleBackgroundLoads() {
   // Sidebar counts - 1 second after UI
   setTimeout(loadSidebarCountsBackground, 1000);
 
+  // Show pending findings banner for auditees after 1.5s
+  setTimeout(checkAndShowPendingFindings, 1500);
+
   // Permission-specific fast refresh every 15s
   setInterval(refreshPermissionsQuick, 15000);
 
@@ -364,6 +367,84 @@ function refreshBackgroundData() {
 }
 
 // Fast permission refresh - checks every 15 seconds if permissions changed
+function checkAndShowPendingFindings() {
+  if (sessionStorage.getItem('findings_banner_dismissed') === 'true') return;
+
+  var role = window.currentUser?.role_code || '';
+  if (!['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'].includes(role)) return;
+
+  // Use pre-loaded data from init if available
+  var cached = LocalStore.get('initData');
+  if (cached && cached.pendingFindings) {
+    var counts = cached.pendingFindings;
+    var pending = (counts.pendingResponse || 0) + (counts.rejected || 0);
+    if (pending > 0) {
+      showPendingFindingsBanner(pending, counts);
+    }
+    return;
+  }
+
+  // Fallback: make API call
+  apiCall('getAuditeeFindingCounts', {})
+    .then(function(result) {
+      if (result && result.success && result.counts) {
+        var pending = (result.counts.pendingResponse || 0) + (result.counts.rejected || 0);
+        if (pending > 0) {
+          showPendingFindingsBanner(pending, result.counts);
+        }
+      }
+    })
+    .catch(function() {});
+}
+
+function showPendingFindingsBanner(count, counts) {
+  var rejected = counts.rejected || 0;
+  var pendingNew = counts.pendingResponse || 0;
+
+  var message = '';
+  if (pendingNew > 0 && rejected > 0) {
+    message = 'You have ' + pendingNew + ' new finding(s) and ' + rejected + ' finding(s) returned for revision.';
+  } else if (pendingNew > 0) {
+    message = 'You have ' + pendingNew + ' new audit finding(s) requiring your response.';
+  } else {
+    message = 'You have ' + rejected + ' finding(s) returned for revision by the audit team.';
+  }
+
+  var bannerHtml =
+    '<div id="pendingFindingsBanner" class="pending-findings-banner">' +
+    '  <div class="banner-content">' +
+    '    <div class="banner-icon"><i class="bi bi-bell-fill"></i></div>' +
+    '    <div class="banner-text">' +
+    '      <strong>Action Required</strong>' +
+    '      <p>' + message + '</p>' +
+    '    </div>' +
+    '    <div class="banner-actions">' +
+    '      <button class="btn btn-light btn-sm" onclick="navigateTo(\'auditee-findings\'); dismissFindingsBanner();">' +
+    '        <i class="bi bi-arrow-right me-1"></i>View Findings' +
+    '      </button>' +
+    '      <button class="btn btn-outline-light btn-sm" onclick="dismissFindingsBanner();">' +
+    '        Dismiss' +
+    '      </button>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  var pageContent = document.getElementById('pageContent');
+  if (pageContent) {
+    pageContent.insertAdjacentHTML('afterbegin', bannerHtml);
+  }
+}
+
+function dismissFindingsBanner() {
+  var banner = document.getElementById('pendingFindingsBanner');
+  if (banner) {
+    banner.style.opacity = '0';
+    banner.style.transform = 'translateY(-20px)';
+    setTimeout(function() { banner.remove(); }, 300);
+  }
+  sessionStorage.setItem('findings_banner_dismissed', 'true');
+}
+
 function refreshPermissionsQuick() {
   apiCall('getInitDataLight', {})
     .then(function(result) {
@@ -543,7 +624,10 @@ function loadAuditeeFindingCounts() {
 
 // Navigation
 function getDefaultPage() {
-  // Dashboard is the default landing page for ALL users/roles
+  var role = window.currentUser?.role_code || '';
+  if (['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER'].includes(role)) {
+    return 'auditee-findings';
+  }
   return 'reports';
 }
 
@@ -826,9 +910,9 @@ function toggleSidebar(show) {
 // Formatting helpers
 function formatDate(date) {
   if (!date) return '-';
-  const d = new Date(date);
+  var d = new Date(date);
   if (isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function formatDateTime(date) {
