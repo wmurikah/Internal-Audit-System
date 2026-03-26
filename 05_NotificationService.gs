@@ -526,7 +526,7 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
   }).join('');
 
   var outroClean = outro ? stripUrls(outro) : '';
-  var outroHtml = outroClean ? '<div style="color:#374151; line-height:1.6; font-size:14px; margin-top:24px; font-family:system-ui,-apple-system,sans-serif;">' + outroClean.replace(/\n/g, '<br>') + '</div>' : '';
+  var outroHtml = outroClean ? '<div style="color:#424245; line-height:1.6; font-size:14px; margin-top:24px; font-family:system-ui,-apple-system,sans-serif;">' + outroClean.replace(/\n/g, '<br>') + '</div>' : '';
 
   // Always append CTA button linking to system
   var systemUrl = getSystemUrl();
@@ -552,14 +552,14 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '</head>' +
 '<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
-'    ' + subject + ' &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
+'    ' + subject + ' &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
 '  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
-'    <tr><td align="center" style="padding:32px 16px;">' +
+'    <tr><td align="center" style="padding:40px 16px;">' +
 '      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);" class="email-inner">' +
 '        <!-- HEADER -->' +
 '        <tr>' +
-'          <td style="padding:28px 36px 0 36px;" class="email-header">' +
+'          <td style="padding:28px 36px 0 36px; border-bottom:none;" class="email-header">' +
 '            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">HASS PETROLEUM</p>' +
 '            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif;">Internal Audit</p>' +
 '          </td>' +
@@ -574,9 +574,9 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '        </tr>' +
 '        <!-- INTRO + TABLE -->' +
 '        <tr>' +
-'          <td style="padding:0 36px 32px 36px;" class="email-content">' +
-'            <div style="color:#374151; line-height:1.7; font-size:14px; margin-bottom:20px; font-family:system-ui,-apple-system,sans-serif;">' + intro + '</div>' +
-'            <div class="email-table-wrap" style="border-radius:8px; overflow:hidden; border:1px solid #e5e7eb;">' +
+'          <td style="padding:0 36px 36px 36px;" class="email-content">' +
+'            <div style="color:#424245; line-height:1.6; font-size:14px; margin-bottom:20px; font-family:system-ui,-apple-system,sans-serif;">' + intro + '</div>' +
+'            <div class="email-table-wrap" style="border-radius:8px; overflow:hidden; border:1px solid #e5e5e5;">' +
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; min-width:100%;">' +
 '              <thead><tr>' + thCells + '</tr></thead>' +
 '              <tbody>' + trRows + '</tbody>' +
@@ -588,21 +588,12 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '        </tr>' +
 '        <!-- FOOTER -->' +
 '        <tr>' +
-'          <td style="padding:0 36px;" class="email-divider">' +
-'            <div style="height:1px; background-color:#e5e7eb;"></div>' +
-'          </td>' +
+'          <td style="padding:0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td>' +
 '        </tr>' +
 '        <tr>' +
-'          <td style="padding:20px 36px 24px 36px;" class="email-footer-inner">' +
-'            <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
-'              <tr>' +
-'                <td align="center">' +
-'                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
-'                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
-'                </td>' +
-'              </tr>' +
-'            </table>' +
+'          <td style="padding:16px 36px;" class="email-footer-inner">' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
+'              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
 '          </td>' +
 '        </tr>' +
 '      </table>' +
@@ -775,39 +766,6 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'hassaudit@outlook.com');
 }
 
-function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
-  if (!responses || responses.length === 0 || !auditorEmail) return;
-
-  var firstName = (auditorName || '').split(' ')[0] || 'Auditor';
-  var subject = responses.length + ' Auditee Response(s) Submitted for Review';
-
-  var intro = 'Dear ' + firstName + ',<br><br>' +
-    '<strong>' + responses.length + '</strong> auditee response(s) have been submitted and require your review:';
-
-  var headers = ['Observation', 'Response Summary', 'Action Plans', 'Status'];
-  var rows = responses.map(function(r) {
-    return [
-      String(r.observation_title || r.work_paper_id || '-'),
-      truncateWords(r.management_response || '', 15),
-      String(r.action_plan_count || 0) + ' plan(s)',
-      'Submitted'
-    ];
-  });
-
-  var systemUrl = getSystemUrl();
-  var loginLink = systemUrl
-    ? '<a href="' + systemUrl + '" style="color:#007AFF; text-decoration:underline; font-weight:600;">log in</a>'
-    : 'log in';
-  var outro = '<p style="color:#86868b; font-size:13px; text-align:center; font-family:system-ui,-apple-system,sans-serif;">Please ' + loginLink + ' to review and accept or reject each response.</p>';
-
-  var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-  sendEmail(auditorEmail, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
-}
-
-/**
- * Send consolidated notification to auditors when multiple auditee responses are submitted.
- * Groups responses into a single table email per auditor.
- */
 function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
   if (!responses || responses.length === 0 || !auditorEmail) return;
 
