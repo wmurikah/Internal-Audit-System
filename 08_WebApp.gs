@@ -574,6 +574,13 @@ function routeAction(action, data, user) {
       }
       return setupNotificationTriggers();
 
+    // ========== BOARD REPORTS ==========
+    case 'generateBoardReport':
+      if (user.role_code !== ROLES.OBSERVER && user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Board Members and Head of Internal Audit only' };
+      }
+      return generateBoardReport(data.filters, data.reportType, user);
+
     // ========== EXPORT ==========
     case 'exportWorkPapersCSV':
       if (!canUserPerform(user, 'export', 'REPORT', null)) {
@@ -1455,4 +1462,416 @@ function rebuildAllIndexesQuickFix() {
 
   console.log('Index rebuild complete!');
   return { success: true, message: 'All indexes rebuilt and caches warmed' };
+}
+
+/**
+ * Generate a board-level audit report
+ * Creates a Google Doc, populates with filtered report data, exports as .docx
+ * @param {Object} filters - Date range, affiliate, risk rating, status filters
+ * @param {string} reportType - 'executive', 'detailed', 'action-tracker', 'overdue'
+ * @param {Object} user - Authenticated user (OBSERVER or SUPER_ADMIN only)
+ */
+function generateBoardReport(filters, reportType, user) {
+  try {
+    filters = filters || {};
+    reportType = reportType || 'executive';
+
+    // Get comprehensive report data (reuse existing function)
+    var reportData = getComprehensiveReportData(filters);
+    var workPapers = reportData.workPapers || [];
+    var actionPlans = reportData.actionPlans || [];
+
+    // Apply date range filter
+    if (filters.dateFrom || filters.dateTo) {
+      var dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : null;
+      var dateTo = filters.dateTo ? new Date(filters.dateTo) : null;
+      if (dateFrom) dateFrom.setHours(0, 0, 0, 0);
+      if (dateTo) dateTo.setHours(23, 59, 59, 999);
+
+      workPapers = workPapers.filter(function(wp) {
+        var wpDate = new Date(wp.created_at || wp.work_paper_date || 0);
+        if (dateFrom && wpDate < dateFrom) return false;
+        if (dateTo && wpDate > dateTo) return false;
+        return true;
+      });
+    }
+
+    // Apply risk rating filter
+    if (filters.riskRatings && filters.riskRatings.length > 0) {
+      workPapers = workPapers.filter(function(wp) {
+        return filters.riskRatings.indexOf(wp.risk_rating) >= 0;
+      });
+    }
+
+    // Apply status filter
+    if (filters.statuses && filters.statuses.length > 0) {
+      workPapers = workPapers.filter(function(wp) {
+        return filters.statuses.indexOf(wp.status) >= 0;
+      });
+    }
+
+    // Apply affiliate filter
+    if (filters.affiliate && filters.affiliate !== 'All') {
+      workPapers = workPapers.filter(function(wp) {
+        return wp.affiliate_code === filters.affiliate;
+      });
+    }
+
+    // Filter action plans to match remaining work papers
+    var wpIds = {};
+    workPapers.forEach(function(wp) { wpIds[wp.work_paper_id] = true; });
+    actionPlans = actionPlans.filter(function(ap) { return wpIds[ap.work_paper_id]; });
+
+    // Build report statistics
+    var stats = {
+      totalObservations: workPapers.length,
+      totalActionPlans: actionPlans.length,
+      riskDistribution: { Extreme: 0, High: 0, Medium: 0, Low: 0 },
+      statusDistribution: {},
+      overdueAPs: 0,
+      implementedAPs: 0
+    };
+
+    workPapers.forEach(function(wp) {
+      if (stats.riskDistribution.hasOwnProperty(wp.risk_rating)) {
+        stats.riskDistribution[wp.risk_rating]++;
+      }
+      stats.statusDistribution[wp.status] = (stats.statusDistribution[wp.status] || 0) + 1;
+    });
+
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+
+    actionPlans.forEach(function(ap) {
+      if (ap.status === 'Implemented' || ap.status === 'Verified') stats.implementedAPs++;
+      if (ap.due_date && !closedStatuses.includes(ap.status)) {
+        var due = new Date(ap.due_date);
+        due.setHours(0, 0, 0, 0);
+        if (due < today) stats.overdueAPs++;
+      }
+    });
+
+    var implementationRate = stats.totalActionPlans > 0
+      ? Math.round((stats.implementedAPs / stats.totalActionPlans) * 100)
+      : 0;
+
+    // Create Google Doc
+    var reportTypeLabels = {
+      'executive': 'Executive Summary',
+      'detailed': 'Detailed Observations',
+      'action-tracker': 'Action Plan Tracker',
+      'overdue': 'Overdue & At-Risk'
+    };
+    var reportLabel = reportTypeLabels[reportType] || 'Audit Report';
+    var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd-MMM-yyyy');
+    var docTitle = 'Hass Petroleum - ' + reportLabel + ' - ' + dateStr;
+
+    var doc = DocumentApp.create(docTitle);
+    var body = doc.getBody();
+
+    // Styling constants
+    var navyColor = '#1A365D';
+    var goldColor = '#C9A83E';
+
+    // ── COVER PAGE ──
+    var cover = body.appendParagraph('HASS PETROLEUM');
+    cover.setFontFamily('Arial');
+    cover.setFontSize(28);
+    cover.setBold(true);
+    cover.setForegroundColor(navyColor);
+    cover.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+    var subtitle = body.appendParagraph('Internal Audit Division');
+    subtitle.setFontFamily('Arial');
+    subtitle.setFontSize(14);
+    subtitle.setForegroundColor(goldColor);
+    subtitle.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+    body.appendParagraph('').setSpacingAfter(20);
+
+    var reportTitle = body.appendParagraph(reportLabel);
+    reportTitle.setFontFamily('Arial');
+    reportTitle.setFontSize(22);
+    reportTitle.setBold(true);
+    reportTitle.setForegroundColor(navyColor);
+    reportTitle.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+    var dateRange = '';
+    if (filters.dateFrom && filters.dateTo) {
+      dateRange = filters.dateFrom + ' to ' + filters.dateTo;
+    } else if (filters.dateFrom) {
+      dateRange = 'From ' + filters.dateFrom;
+    } else if (filters.dateTo) {
+      dateRange = 'Up to ' + filters.dateTo;
+    } else {
+      dateRange = 'All available data';
+    }
+    var datePara = body.appendParagraph('Period: ' + dateRange);
+    datePara.setFontFamily('Arial');
+    datePara.setFontSize(12);
+    datePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    datePara.setForegroundColor('#666666');
+
+    var genDate = body.appendParagraph('Generated: ' + dateStr);
+    genDate.setFontFamily('Arial');
+    genDate.setFontSize(10);
+    genDate.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    genDate.setForegroundColor('#999999');
+
+    body.appendPageBreak();
+
+    // ── EXECUTIVE SUMMARY ──
+    var execHeader = body.appendParagraph('Executive Summary');
+    execHeader.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    execHeader.setFontFamily('Arial');
+    execHeader.setForegroundColor(navyColor);
+
+    // KPI Table
+    var kpiData = [
+      ['Metric', 'Value'],
+      ['Total Observations', String(stats.totalObservations)],
+      ['Total Action Plans', String(stats.totalActionPlans)],
+      ['Overdue Action Plans', String(stats.overdueAPs)],
+      ['Implementation Rate', implementationRate + '%'],
+      ['Extreme Risk', String(stats.riskDistribution.Extreme)],
+      ['High Risk', String(stats.riskDistribution.High)],
+      ['Medium Risk', String(stats.riskDistribution.Medium)],
+      ['Low Risk', String(stats.riskDistribution.Low)]
+    ];
+
+    var kpiTable = body.appendTable(kpiData);
+    kpiTable.setBorderColor(navyColor);
+    var headerRow = kpiTable.getRow(0);
+    for (var ci = 0; ci < headerRow.getNumCells(); ci++) {
+      headerRow.getCell(ci).setBackgroundColor(navyColor);
+      headerRow.getCell(ci).editAsText().setForegroundColor('#FFFFFF').setFontFamily('Arial').setBold(true);
+    }
+    for (var ri = 1; ri < kpiTable.getNumRows(); ri++) {
+      for (var ci2 = 0; ci2 < kpiTable.getRow(ri).getNumCells(); ci2++) {
+        kpiTable.getRow(ri).getCell(ci2).editAsText().setFontFamily('Arial').setFontSize(10);
+      }
+    }
+
+    if (reportType === 'executive') {
+      // Executive summary is already shown above — done
+    }
+
+    // ── DETAILED OBSERVATIONS ──
+    if (reportType === 'detailed' || reportType === 'executive') {
+      body.appendParagraph('');
+      var obsHeader = body.appendParagraph('Observations');
+      obsHeader.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      obsHeader.setFontFamily('Arial');
+      obsHeader.setForegroundColor(navyColor);
+
+      if (workPapers.length === 0) {
+        body.appendParagraph('No observations match the selected filters.');
+      } else {
+        workPapers.forEach(function(wp, idx) {
+          var wpTitle = body.appendParagraph((idx + 1) + '. ' + (wp.observation_title || 'Untitled'));
+          wpTitle.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+          wpTitle.setFontFamily('Arial');
+          wpTitle.setForegroundColor(navyColor);
+
+          var detailData = [
+            ['Field', 'Details'],
+            ['Risk Rating', wp.risk_rating || 'N/A'],
+            ['Status', wp.status || 'N/A'],
+            ['Affiliate', wp.affiliate_code || 'N/A'],
+            ['Description', wp.observation_description || 'N/A'],
+            ['Recommendation', wp.recommendation || 'N/A']
+          ];
+          var detailTable = body.appendTable(detailData);
+          detailTable.setBorderColor('#CCCCCC');
+          var dHeaderRow = detailTable.getRow(0);
+          for (var dci = 0; dci < dHeaderRow.getNumCells(); dci++) {
+            dHeaderRow.getCell(dci).setBackgroundColor(navyColor);
+            dHeaderRow.getCell(dci).editAsText().setForegroundColor('#FFFFFF').setFontFamily('Arial').setBold(true).setFontSize(9);
+          }
+          for (var dri = 1; dri < detailTable.getNumRows(); dri++) {
+            for (var dci2 = 0; dci2 < detailTable.getRow(dri).getNumCells(); dci2++) {
+              detailTable.getRow(dri).getCell(dci2).editAsText().setFontFamily('Arial').setFontSize(9);
+            }
+          }
+
+          // Nested action plans
+          var wpAps = actionPlans.filter(function(ap) { return ap.work_paper_id === wp.work_paper_id; });
+          if (wpAps.length > 0) {
+            var apSubHeader = body.appendParagraph('Action Plans:');
+            apSubHeader.setFontFamily('Arial');
+            apSubHeader.setFontSize(10);
+            apSubHeader.setBold(true);
+            apSubHeader.setForegroundColor(goldColor);
+
+            var apTableData = [['#', 'Description', 'Owner', 'Due Date', 'Status']];
+            wpAps.forEach(function(ap, apIdx) {
+              apTableData.push([
+                String(apIdx + 1),
+                ap.action_description || 'N/A',
+                ap.owner_names || 'N/A',
+                ap.due_date || 'N/A',
+                ap.status || 'N/A'
+              ]);
+            });
+            var apTable = body.appendTable(apTableData);
+            apTable.setBorderColor('#CCCCCC');
+            var apHdr = apTable.getRow(0);
+            for (var aci = 0; aci < apHdr.getNumCells(); aci++) {
+              apHdr.getCell(aci).setBackgroundColor(goldColor);
+              apHdr.getCell(aci).editAsText().setForegroundColor('#FFFFFF').setFontFamily('Arial').setBold(true).setFontSize(8);
+            }
+            for (var ari = 1; ari < apTable.getNumRows(); ari++) {
+              for (var aci2 = 0; aci2 < apTable.getRow(ari).getNumCells(); aci2++) {
+                apTable.getRow(ari).getCell(aci2).editAsText().setFontFamily('Arial').setFontSize(8);
+              }
+            }
+          }
+          body.appendParagraph('');
+        });
+      }
+    }
+
+    // ── ACTION PLAN TRACKER ──
+    if (reportType === 'action-tracker') {
+      body.appendParagraph('');
+      var apTrackerHeader = body.appendParagraph('Action Plan Tracker');
+      apTrackerHeader.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      apTrackerHeader.setFontFamily('Arial');
+      apTrackerHeader.setForegroundColor(navyColor);
+
+      if (actionPlans.length === 0) {
+        body.appendParagraph('No action plans match the selected filters.');
+      } else {
+        var trackerData = [['Observation', 'Action Plan', 'Owner', 'Due Date', 'Status', 'Evidence']];
+        actionPlans.forEach(function(ap) {
+          var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === ap.work_paper_id; });
+          trackerData.push([
+            parentWp ? (parentWp.observation_title || 'N/A') : 'N/A',
+            ap.action_description || 'N/A',
+            ap.owner_names || 'N/A',
+            ap.due_date || 'N/A',
+            ap.status || 'N/A',
+            ap.implementation_notes ? 'Yes' : 'No'
+          ]);
+        });
+        var trackerTable = body.appendTable(trackerData);
+        trackerTable.setBorderColor('#CCCCCC');
+        var tHdr = trackerTable.getRow(0);
+        for (var ti = 0; ti < tHdr.getNumCells(); ti++) {
+          tHdr.getCell(ti).setBackgroundColor(navyColor);
+          tHdr.getCell(ti).editAsText().setForegroundColor('#FFFFFF').setFontFamily('Arial').setBold(true).setFontSize(8);
+        }
+        for (var tri = 1; tri < trackerTable.getNumRows(); tri++) {
+          for (var tci = 0; tci < trackerTable.getRow(tri).getNumCells(); tci++) {
+            trackerTable.getRow(tri).getCell(tci).editAsText().setFontFamily('Arial').setFontSize(8);
+          }
+        }
+      }
+    }
+
+    // ── OVERDUE & AT-RISK ──
+    if (reportType === 'overdue') {
+      body.appendParagraph('');
+      var overdueHeader = body.appendParagraph('Overdue & At-Risk Items');
+      overdueHeader.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      overdueHeader.setFontFamily('Arial');
+      overdueHeader.setForegroundColor(navyColor);
+
+      var overdueAps = actionPlans.filter(function(ap) {
+        if (!ap.due_date || closedStatuses.includes(ap.status)) return false;
+        var due = new Date(ap.due_date);
+        due.setHours(0, 0, 0, 0);
+        return due < today;
+      });
+
+      if (overdueAps.length === 0) {
+        body.appendParagraph('No overdue action plans found for the selected filters.');
+      } else {
+        var overdueData = [['Observation', 'Action Plan', 'Owner', 'Due Date', 'Days Overdue', 'Status']];
+        overdueAps.forEach(function(ap) {
+          var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === ap.work_paper_id; });
+          var due = new Date(ap.due_date);
+          var daysOverdue = Math.floor((today - due) / (1000 * 60 * 60 * 24));
+          overdueData.push([
+            parentWp ? (parentWp.observation_title || 'N/A') : 'N/A',
+            ap.action_description || 'N/A',
+            ap.owner_names || 'N/A',
+            ap.due_date || 'N/A',
+            String(daysOverdue),
+            ap.status || 'N/A'
+          ]);
+        });
+        var overdueTable = body.appendTable(overdueData);
+        overdueTable.setBorderColor('#CCCCCC');
+        var oHdr = overdueTable.getRow(0);
+        for (var oi2 = 0; oi2 < oHdr.getNumCells(); oi2++) {
+          oHdr.getCell(oi2).setBackgroundColor('#DC3545');
+          oHdr.getCell(oi2).editAsText().setForegroundColor('#FFFFFF').setFontFamily('Arial').setBold(true).setFontSize(8);
+        }
+        for (var ori = 1; ori < overdueTable.getNumRows(); ori++) {
+          for (var oci = 0; oci < overdueTable.getRow(ori).getNumCells(); oci++) {
+            overdueTable.getRow(ori).getCell(oci).editAsText().setFontFamily('Arial').setFontSize(8);
+          }
+        }
+      }
+    }
+
+    // ── APPENDIX ──
+    body.appendPageBreak();
+    var appHeader = body.appendParagraph('Appendix: Risk Framework');
+    appHeader.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    appHeader.setFontFamily('Arial');
+    appHeader.setForegroundColor(navyColor);
+
+    var riskDefs = [
+      ['Risk Rating', 'Definition'],
+      ['Extreme', 'Critical control failure with potential for material loss or regulatory breach. Requires immediate board attention.'],
+      ['High', 'Significant control weakness likely to result in notable financial or operational impact. Requires urgent management action.'],
+      ['Medium', 'Moderate control weakness that could lead to inefficiencies or minor losses. Requires management attention within agreed timelines.'],
+      ['Low', 'Minor control improvement opportunity. Addressed as part of normal business operations.']
+    ];
+    var riskTable = body.appendTable(riskDefs);
+    riskTable.setBorderColor('#CCCCCC');
+    var riskHdr = riskTable.getRow(0);
+    for (var rki = 0; rki < riskHdr.getNumCells(); rki++) {
+      riskHdr.getCell(rki).setBackgroundColor(navyColor);
+      riskHdr.getCell(rki).editAsText().setForegroundColor('#FFFFFF').setFontFamily('Arial').setBold(true).setFontSize(9);
+    }
+    for (var rri = 1; rri < riskTable.getNumRows(); rri++) {
+      for (var rci = 0; rci < riskTable.getRow(rri).getNumCells(); rci++) {
+        riskTable.getRow(rri).getCell(rci).editAsText().setFontFamily('Arial').setFontSize(9);
+      }
+    }
+
+    // Save and export
+    doc.saveAndClose();
+
+    var docFile = DriveApp.getFileById(doc.getId());
+    var blob = docFile.getAs('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    blob.setName(docTitle + '.docx');
+
+    // Save to Exports folder
+    var folders = DriveApp.getFoldersByName('Audit Report Exports');
+    var exportFolder;
+    if (folders.hasNext()) {
+      exportFolder = folders.next();
+    } else {
+      exportFolder = DriveApp.createFolder('Audit Report Exports');
+    }
+    var exportFile = exportFolder.createFile(blob);
+
+    // Clean up temp Google Doc
+    docFile.setTrashed(true);
+
+    return {
+      success: true,
+      downloadUrl: exportFile.getDownloadUrl(),
+      fileName: docTitle + '.docx',
+      stats: stats
+    };
+  } catch (e) {
+    console.error('Error generating board report:', e);
+    return { success: false, error: 'Failed to generate report: ' + e.message };
+  }
 }

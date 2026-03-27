@@ -349,10 +349,11 @@ function loadSidebarCountsBackground() {
   apiCall('getSidebarCounts', {})
     .then(result => {
       if (result && result.success) {
-        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0);
+        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
         window.loadingState.sidebarCounts = true;
         var respBadge = document.getElementById('responsesReviewCount');
         if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
+        updateNewBadges(result);
       }
     })
     .catch(err => console.error('Sidebar counts error:', err));
@@ -362,12 +363,31 @@ function refreshBackgroundData() {
   apiCall('getSidebarCounts', {})
     .then(result => {
       if (result && result.success) {
-        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0);
+        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
         var respBadge = document.getElementById('responsesReviewCount');
         if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
+        updateNewBadges(result);
       }
     })
     .catch(() => {});
+}
+
+function updateNewBadges(result) {
+  // My Work Papers badge
+  var wpBadge = document.getElementById('wpListCount');
+  if (wpBadge) { var c = result.myWorkPapers || 0; wpBadge.textContent = c; wpBadge.style.display = c > 0 ? '' : 'none'; }
+
+  // My Action Plans badge
+  var apBadge = document.getElementById('actionPlansCount');
+  if (apBadge) { var c = result.myActionPlans || 0; apBadge.textContent = c; apBadge.style.display = c > 0 ? '' : 'none'; }
+
+  // Overdue badge (RED)
+  var odBadge = document.getElementById('overdueCount');
+  if (odBadge) { var c = result.myOverdue || 0; odBadge.textContent = c; odBadge.style.display = c > 0 ? '' : 'none'; }
+
+  // My Observations badge
+  var obsBadge = document.getElementById('myObservationsCount');
+  if (obsBadge) { var c = result.myObservations || 0; obsBadge.textContent = c; obsBadge.style.display = c > 0 ? '' : 'none'; }
 }
 
 // Fast permission refresh - checks every 15 seconds if permissions changed
@@ -632,6 +652,12 @@ function setupNavigation(p) {
     document.getElementById('navAuditeeSection')?.classList.add('d-none');
     document.getElementById('navAuditeeMenu')?.classList.add('d-none');
   }
+
+  // C) Board Reports: visible only for OBSERVER (Board Member) and SUPER_ADMIN
+  var boardReportRoles = ['OBSERVER', 'SUPER_ADMIN'];
+  if (boardReportRoles.indexOf(role) === -1) {
+    document.getElementById('navBoardReports')?.classList.add('d-none');
+  }
 }
 
 function loadAuditeeFindingCounts() {
@@ -639,7 +665,7 @@ function loadAuditeeFindingCounts() {
     .withSuccessHandler(function(result) {
       if (result && result.success && result.counts) {
         var pending = (result.counts.pendingResponse || 0) + (result.counts.rejected || 0);
-        var badge = document.getElementById('auditeeNewFindingCount');
+        var badge = document.getElementById('myObservationsCount');
         if (badge && pending > 0) {
           badge.textContent = pending;
           badge.style.display = 'inline-block';
@@ -695,6 +721,28 @@ function navigateTo(page, params, updateHash = true) {
     return;
   }
 
+  // Page-level access guard: restrict WP pages to allowed roles
+  var userRole = window.currentUser ? window.currentUser.role_code : '';
+  var wpPages = ['work-papers', 'work-paper-form', 'work-paper-view', 'pending-review', 'send-queue', 'responses-to-review'];
+  var wpAllowedRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'OBSERVER'];
+  if (wpPages.indexOf(page) >= 0 && wpAllowedRoles.indexOf(userRole) === -1) {
+    showToast('You do not have access to this page', 'danger');
+    navigateTo(getDefaultPage(), {}, false);
+    return;
+  }
+  // OBSERVER cannot access create/edit pages
+  if (page === 'work-paper-form' && userRole === 'OBSERVER') {
+    showToast('Board Members have view-only access', 'warning');
+    navigateTo('work-papers', {}, false);
+    return;
+  }
+  // Board Reports: only OBSERVER and SUPER_ADMIN
+  if (page === 'board-reports' && userRole !== 'OBSERVER' && userRole !== 'SUPER_ADMIN') {
+    showToast('You do not have access to this page', 'danger');
+    navigateTo(getDefaultPage(), {}, false);
+    return;
+  }
+
   currentPage = page;
   pageParams = params;
 
@@ -728,7 +776,8 @@ function navigateTo(page, params, updateHash = true) {
     'reports': { el: 'page-reports', title: 'Dashboard', init: () => { if (typeof loadReports === 'function') loadReports(); } },
     'users': { el: 'page-settings', title: 'User Management', init: () => { if (typeof loadSettings === 'function') loadSettings({ tab: 'users' }); } },
     'settings': { el: 'page-settings', title: 'Settings', init: () => { if (typeof loadSettings === 'function') loadSettings(params); } },
-    'analytics': { el: 'page-analytics', title: 'AI Assist', init: () => { if (typeof initAnalyticsPage === 'function') initAnalyticsPage(); } }
+    'analytics': { el: 'page-analytics', title: 'AI Assist', init: () => { if (typeof initAnalyticsPage === 'function') initAnalyticsPage(); } },
+    'board-reports': { el: 'page-board-reports', title: 'Audit Reports', init: () => { if (typeof loadBoardReports === 'function') loadBoardReports(); } }
   };
 
   const config = pageMap[page];
@@ -1489,6 +1538,7 @@ function refreshSidebarCounts() {
         updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
         var respBadge = document.getElementById('responsesReviewCount');
         if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
+        updateNewBadges(result);
       }
     })
     .catch(err => console.error('Error refreshing sidebar counts:', err));

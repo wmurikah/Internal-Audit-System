@@ -1,0 +1,411 @@
+<!-- Board Reports Page - Audit Report Generation for Board Members -->
+<div class="container-fluid py-4">
+  <div class="row">
+    <!-- Report Filters -->
+    <div class="col-lg-4 mb-4">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Report Filters</h5>
+        </div>
+        <div class="card-body">
+          <!-- Date Range -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Date Range</label>
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label small text-muted">From</label>
+                <input type="date" class="form-control form-control-sm" id="reportDateFrom">
+              </div>
+              <div class="col-6">
+                <label class="form-label small text-muted">To</label>
+                <input type="date" class="form-control form-control-sm" id="reportDateTo">
+              </div>
+            </div>
+          </div>
+
+          <!-- Affiliate -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Affiliate</label>
+            <select class="form-select form-select-sm" id="reportAffiliate">
+              <option value="All">All Affiliates</option>
+            </select>
+          </div>
+
+          <!-- Risk Rating -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Risk Rating</label>
+            <div class="d-flex flex-wrap gap-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="Extreme" id="riskExtreme" checked>
+                <label class="form-check-label small" for="riskExtreme">
+                  <span class="badge bg-danger">Extreme</span>
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="High" id="riskHigh" checked>
+                <label class="form-check-label small" for="riskHigh">
+                  <span class="badge bg-warning text-dark">High</span>
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="Medium" id="riskMedium" checked>
+                <label class="form-check-label small" for="riskMedium">
+                  <span class="badge bg-info">Medium</span>
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="Low" id="riskLow" checked>
+                <label class="form-check-label small" for="riskLow">
+                  <span class="badge bg-secondary">Low</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Status</label>
+            <div class="d-flex flex-wrap gap-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="Approved" id="statusApproved" checked>
+                <label class="form-check-label small" for="statusApproved">Approved</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="Sent to Auditee" id="statusSent" checked>
+                <label class="form-check-label small" for="statusSent">Sent to Auditee</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="Submitted" id="statusSubmitted" checked>
+                <label class="form-check-label small" for="statusSubmitted">Submitted</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="Draft" id="statusDraft">
+                <label class="form-check-label small" for="statusDraft">Draft</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Report Type -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Report Type</label>
+            <div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" name="reportType" value="executive" id="typeExecutive" checked>
+                <label class="form-check-label" for="typeExecutive">
+                  <strong>Executive Summary</strong>
+                  <br><small class="text-muted">KPIs, risk distribution, implementation progress</small>
+                </label>
+              </div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" name="reportType" value="detailed" id="typeDetailed">
+                <label class="form-check-label" for="typeDetailed">
+                  <strong>Detailed Observations</strong>
+                  <br><small class="text-muted">Full observations with risk, action plans, status</small>
+                </label>
+              </div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" name="reportType" value="action-tracker" id="typeTracker">
+                <label class="form-check-label" for="typeTracker">
+                  <strong>Action Plan Tracker</strong>
+                  <br><small class="text-muted">Action plans grouped by observation with due dates, owners</small>
+                </label>
+              </div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" name="reportType" value="overdue" id="typeOverdue">
+                <label class="form-check-label" for="typeOverdue">
+                  <strong>Overdue & At-Risk</strong>
+                  <br><small class="text-muted">Only overdue/approaching items needing board attention</small>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="d-grid gap-2">
+            <button class="btn btn-outline-primary" onclick="previewBoardReport()">
+              <i class="bi bi-eye me-2"></i>Preview Report
+            </button>
+            <button class="btn btn-primary" onclick="downloadBoardReport()">
+              <i class="bi bi-file-earmark-word me-2"></i>Download as Word Document
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Report Preview -->
+    <div class="col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Report Preview</h5>
+          <span class="text-muted small" id="reportPreviewStatus">Select filters and click Preview</span>
+        </div>
+        <div class="card-body" id="reportPreviewBody" style="min-height: 400px;">
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-file-earmark-richtext" style="font-size: 3rem;"></i>
+            <p class="mt-3">Configure your filters and click <strong>Preview Report</strong> to see a preview here.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function loadBoardReports() {
+  // Set default date range (last 6 months)
+  var today = new Date();
+  var sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  document.getElementById('reportDateTo').value = today.toISOString().split('T')[0];
+  document.getElementById('reportDateFrom').value = sixMonthsAgo.toISOString().split('T')[0];
+
+  // Populate affiliate dropdown from cached data
+  var affiliateSelect = document.getElementById('reportAffiliate');
+  if (window.appDropdowns && window.appDropdowns.affiliates) {
+    window.appDropdowns.affiliates.forEach(function(aff) {
+      var opt = document.createElement('option');
+      opt.value = aff.affiliate_code || aff.value;
+      opt.textContent = aff.affiliate_name || aff.label;
+      affiliateSelect.appendChild(opt);
+    });
+  }
+}
+
+function getBoardReportFilters() {
+  var riskRatings = [];
+  if (document.getElementById('riskExtreme').checked) riskRatings.push('Extreme');
+  if (document.getElementById('riskHigh').checked) riskRatings.push('High');
+  if (document.getElementById('riskMedium').checked) riskRatings.push('Medium');
+  if (document.getElementById('riskLow').checked) riskRatings.push('Low');
+
+  var statuses = [];
+  if (document.getElementById('statusApproved').checked) statuses.push('Approved');
+  if (document.getElementById('statusSent').checked) statuses.push('Sent to Auditee');
+  if (document.getElementById('statusSubmitted').checked) statuses.push('Submitted');
+  if (document.getElementById('statusDraft').checked) statuses.push('Draft');
+
+  var reportType = document.querySelector('input[name="reportType"]:checked').value;
+
+  return {
+    filters: {
+      dateFrom: document.getElementById('reportDateFrom').value,
+      dateTo: document.getElementById('reportDateTo').value,
+      affiliate: document.getElementById('reportAffiliate').value,
+      riskRatings: riskRatings,
+      statuses: statuses
+    },
+    reportType: reportType
+  };
+}
+
+function previewBoardReport() {
+  var config = getBoardReportFilters();
+  var previewBody = document.getElementById('reportPreviewBody');
+  var previewStatus = document.getElementById('reportPreviewStatus');
+
+  previewStatus.textContent = 'Loading preview...';
+  previewBody.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Generating preview...</p></div>';
+
+  apiCall('getComprehensiveReportData', { filters: config.filters })
+    .then(function(result) {
+      if (!result || result.success === false) {
+        previewBody.innerHTML = '<div class="alert alert-danger">Failed to load report data: ' + (result ? result.error : 'No response') + '</div>';
+        previewStatus.textContent = 'Error';
+        return;
+      }
+
+      var workPapers = result.workPapers || [];
+      var actionPlans = result.actionPlans || [];
+
+      // Apply client-side filters
+      if (config.filters.dateFrom || config.filters.dateTo) {
+        var dateFrom = config.filters.dateFrom ? new Date(config.filters.dateFrom) : null;
+        var dateTo = config.filters.dateTo ? new Date(config.filters.dateTo) : null;
+        workPapers = workPapers.filter(function(wp) {
+          var wpDate = new Date(wp.created_at || wp.work_paper_date || 0);
+          if (dateFrom && wpDate < dateFrom) return false;
+          if (dateTo && wpDate > new Date(dateTo + 'T23:59:59')) return false;
+          return true;
+        });
+      }
+
+      if (config.filters.riskRatings && config.filters.riskRatings.length > 0 && config.filters.riskRatings.length < 4) {
+        workPapers = workPapers.filter(function(wp) {
+          return config.filters.riskRatings.indexOf(wp.risk_rating) >= 0;
+        });
+      }
+
+      if (config.filters.statuses && config.filters.statuses.length > 0) {
+        workPapers = workPapers.filter(function(wp) {
+          return config.filters.statuses.indexOf(wp.status) >= 0;
+        });
+      }
+
+      if (config.filters.affiliate && config.filters.affiliate !== 'All') {
+        workPapers = workPapers.filter(function(wp) {
+          return wp.affiliate_code === config.filters.affiliate;
+        });
+      }
+
+      var wpIds = {};
+      workPapers.forEach(function(wp) { wpIds[wp.work_paper_id] = true; });
+      actionPlans = actionPlans.filter(function(ap) { return wpIds[ap.work_paper_id]; });
+
+      // Build preview HTML
+      var html = renderBoardReportPreview(workPapers, actionPlans, config.reportType);
+      previewBody.innerHTML = html;
+      previewStatus.textContent = workPapers.length + ' observations, ' + actionPlans.length + ' action plans';
+    })
+    .catch(function(err) {
+      previewBody.innerHTML = '<div class="alert alert-danger">Error: ' + (err.message || err) + '</div>';
+      previewStatus.textContent = 'Error';
+    });
+}
+
+function renderBoardReportPreview(workPapers, actionPlans, reportType) {
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+
+  // Stats
+  var stats = { total: workPapers.length, aps: actionPlans.length, risk: { Extreme: 0, High: 0, Medium: 0, Low: 0 }, overdue: 0, implemented: 0 };
+  workPapers.forEach(function(wp) { if (stats.risk[wp.risk_rating] !== undefined) stats.risk[wp.risk_rating]++; });
+  actionPlans.forEach(function(ap) {
+    if (ap.status === 'Implemented' || ap.status === 'Verified') stats.implemented++;
+    if (ap.due_date && closedStatuses.indexOf(ap.status) === -1) {
+      var due = new Date(ap.due_date); due.setHours(0,0,0,0);
+      if (due < today) stats.overdue++;
+    }
+  });
+  var implRate = stats.aps > 0 ? Math.round((stats.implemented / stats.aps) * 100) : 0;
+
+  var riskBadge = function(r) {
+    var colors = { Extreme: 'danger', High: 'warning text-dark', Medium: 'info', Low: 'secondary' };
+    return '<span class="badge bg-' + (colors[r] || 'secondary') + '">' + r + '</span>';
+  };
+
+  var html = '';
+
+  // Executive Summary (shown for all types)
+  html += '<div class="mb-4">';
+  html += '<h5 style="color:#1A365D;border-bottom:2px solid #C9A83E;padding-bottom:8px;">Executive Summary</h5>';
+  html += '<div class="row g-3 mb-3">';
+  html += '<div class="col-md-3"><div class="card border-0 bg-light text-center p-3"><h3 class="mb-0">' + stats.total + '</h3><small class="text-muted">Observations</small></div></div>';
+  html += '<div class="col-md-3"><div class="card border-0 bg-light text-center p-3"><h3 class="mb-0">' + stats.aps + '</h3><small class="text-muted">Action Plans</small></div></div>';
+  html += '<div class="col-md-3"><div class="card border-0 bg-light text-center p-3"><h3 class="mb-0 text-danger">' + stats.overdue + '</h3><small class="text-muted">Overdue</small></div></div>';
+  html += '<div class="col-md-3"><div class="card border-0 bg-light text-center p-3"><h3 class="mb-0">' + implRate + '%</h3><small class="text-muted">Implementation</small></div></div>';
+  html += '</div>';
+  html += '<div class="d-flex gap-3 flex-wrap">';
+  html += '<span>' + riskBadge('Extreme') + ' ' + stats.risk.Extreme + '</span>';
+  html += '<span>' + riskBadge('High') + ' ' + stats.risk.High + '</span>';
+  html += '<span>' + riskBadge('Medium') + ' ' + stats.risk.Medium + '</span>';
+  html += '<span>' + riskBadge('Low') + ' ' + stats.risk.Low + '</span>';
+  html += '</div></div>';
+
+  if (reportType === 'executive') return html;
+
+  // Detailed Observations
+  if (reportType === 'detailed') {
+    html += '<h5 style="color:#1A365D;border-bottom:2px solid #C9A83E;padding-bottom:8px;">Observations</h5>';
+    if (workPapers.length === 0) {
+      html += '<p class="text-muted">No observations match the selected filters.</p>';
+    }
+    workPapers.forEach(function(wp, i) {
+      html += '<div class="card mb-3 border-start border-3" style="border-color:#1A365D !important;">';
+      html += '<div class="card-body">';
+      html += '<h6>' + (i + 1) + '. ' + (wp.observation_title || 'Untitled') + ' ' + riskBadge(wp.risk_rating) + ' <span class="badge bg-secondary">' + (wp.status || '') + '</span></h6>';
+      html += '<p class="small text-muted mb-1"><strong>Affiliate:</strong> ' + (wp.affiliate_code || 'N/A') + '</p>';
+      html += '<p class="small mb-1">' + (wp.observation_description || 'No description').substring(0, 300) + '</p>';
+      html += '<p class="small mb-0"><strong>Recommendation:</strong> ' + (wp.recommendation || 'N/A').substring(0, 200) + '</p>';
+
+      var wpAps = actionPlans.filter(function(ap) { return ap.work_paper_id === wp.work_paper_id; });
+      if (wpAps.length > 0) {
+        html += '<div class="mt-2"><small class="fw-bold" style="color:#C9A83E;">Action Plans:</small>';
+        html += '<table class="table table-sm table-bordered mt-1" style="font-size:0.8rem;"><thead class="table-dark"><tr><th>#</th><th>Description</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>';
+        wpAps.forEach(function(ap, j) {
+          html += '<tr><td>' + (j + 1) + '</td><td>' + (ap.action_description || '').substring(0, 100) + '</td><td>' + (ap.owner_names || 'N/A') + '</td><td>' + (ap.due_date || 'N/A') + '</td><td>' + (ap.status || 'N/A') + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div></div>';
+    });
+    return html;
+  }
+
+  // Action Plan Tracker
+  if (reportType === 'action-tracker') {
+    html += '<h5 style="color:#1A365D;border-bottom:2px solid #C9A83E;padding-bottom:8px;">Action Plan Tracker</h5>';
+    if (actionPlans.length === 0) {
+      html += '<p class="text-muted">No action plans match the selected filters.</p>';
+    } else {
+      html += '<table class="table table-sm table-bordered table-hover" style="font-size:0.85rem;"><thead class="table-dark"><tr><th>Observation</th><th>Action Plan</th><th>Owner</th><th>Due Date</th><th>Status</th><th>Evidence</th></tr></thead><tbody>';
+      actionPlans.forEach(function(ap) {
+        var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === ap.work_paper_id; });
+        html += '<tr><td>' + (parentWp ? (parentWp.observation_title || 'N/A').substring(0, 60) : 'N/A') + '</td>';
+        html += '<td>' + (ap.action_description || 'N/A').substring(0, 80) + '</td>';
+        html += '<td>' + (ap.owner_names || 'N/A') + '</td>';
+        html += '<td>' + (ap.due_date || 'N/A') + '</td>';
+        html += '<td>' + (ap.status || 'N/A') + '</td>';
+        html += '<td>' + (ap.implementation_notes ? 'Yes' : 'No') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    return html;
+  }
+
+  // Overdue & At-Risk
+  if (reportType === 'overdue') {
+    html += '<h5 style="color:#1A365D;border-bottom:2px solid #C9A83E;padding-bottom:8px;">Overdue & At-Risk Items</h5>';
+    var overdueAps = actionPlans.filter(function(ap) {
+      if (!ap.due_date || closedStatuses.indexOf(ap.status) >= 0) return false;
+      var due = new Date(ap.due_date); due.setHours(0,0,0,0);
+      return due < today;
+    });
+    if (overdueAps.length === 0) {
+      html += '<p class="text-muted">No overdue action plans found.</p>';
+    } else {
+      html += '<table class="table table-sm table-bordered" style="font-size:0.85rem;"><thead style="background:#DC3545;color:#fff;"><tr><th>Observation</th><th>Action Plan</th><th>Owner</th><th>Due Date</th><th>Days Overdue</th><th>Status</th></tr></thead><tbody>';
+      overdueAps.forEach(function(ap) {
+        var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === ap.work_paper_id; });
+        var due = new Date(ap.due_date);
+        var daysOverdue = Math.floor((today - due) / (1000 * 60 * 60 * 24));
+        html += '<tr><td>' + (parentWp ? (parentWp.observation_title || 'N/A').substring(0, 60) : 'N/A') + '</td>';
+        html += '<td>' + (ap.action_description || 'N/A').substring(0, 80) + '</td>';
+        html += '<td>' + (ap.owner_names || 'N/A') + '</td>';
+        html += '<td>' + (ap.due_date || 'N/A') + '</td>';
+        html += '<td class="text-danger fw-bold">' + daysOverdue + '</td>';
+        html += '<td>' + (ap.status || 'N/A') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    return html;
+  }
+
+  return html;
+}
+
+function downloadBoardReport() {
+  var config = getBoardReportFilters();
+
+  showLoading('Generating Word document...');
+
+  apiCall('generateBoardReport', { filters: config.filters, reportType: config.reportType })
+    .then(function(result) {
+      hideLoading();
+      if (result && result.success) {
+        showToast('Report generated successfully! Starting download...', 'success');
+        if (result.downloadUrl) {
+          window.open(result.downloadUrl, '_blank');
+        }
+      } else {
+        showToast('Failed to generate report: ' + (result ? result.error : 'Unknown error'), 'danger');
+      }
+    })
+    .catch(function(err) {
+      hideLoading();
+      showToast('Error generating report: ' + (err.message || err), 'danger');
+    });
+}
+</script>

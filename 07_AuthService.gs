@@ -798,6 +798,14 @@ function updateUser(userId, userData, adminUser) {
   syncToFirestore(SHEETS.USERS, userId, updated);
   invalidateSheetData(SHEETS.USERS);
 
+  // If role changed, invalidate all sessions for this user to force re-login
+  var oldRole = user.role_code;
+  var newRole = updated.role_code;
+  if (oldRole && newRole && oldRole !== newRole) {
+    invalidateUserSessions(userId);
+    console.log('Role changed from ' + oldRole + ' to ' + newRole + ' for user ' + userId + ' — sessions invalidated');
+  }
+
   invalidateUserCache(user.email, user.user_id);
   if (updates.email && updates.email !== user.email) {
     invalidateUserCache(updates.email);

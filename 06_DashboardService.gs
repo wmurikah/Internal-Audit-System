@@ -165,12 +165,6 @@ function getSidebarCounts(user) {
     const roleCode = user ? user.role_code : '';
     const userId = user ? user.user_id : '';
 
-    // Roles that should not see operational counts
-    const nonOperationalRoles = [ROLES.OBSERVER, ROLES.EXTERNAL_AUDITOR, ROLES.BOARD, ROLES.SENIOR_MGMT];
-    if (nonOperationalRoles.includes(roleCode)) {
-      return { success: true, pendingReview: 0, overdueActionPlans: 0 };
-    }
-
     // ── CACHE: avoid 2 full-sheet reads on every sidebar refresh ──
     var cache = CacheService.getScriptCache();
     var cacheKey = 'sidebar_counts_all';
@@ -192,10 +186,40 @@ function getSidebarCounts(user) {
       var pendingResponsesAll = 0;
       var wpResponsibleIdx = wpHeaders.indexOf ? wpHeaders.indexOf('responsible_ids') : -1;
       var wpResponseStatusIdx = wpHeaders.indexOf ? wpHeaders.indexOf('response_status') : -1;
+      var wpPreparedByIdx = wpHeaders.indexOf ? wpHeaders.indexOf('prepared_by_id') : -1;
+
+      // Per-user WP tracking
+      var wpByCreator = {};
+      // Per-user observations tracking (WPs sent to auditee needing attention)
+      var obsByResponsible = {};
+      var totalPendingObservations = 0;
+
       for (var wi = 1; wi < (wpData ? wpData.length : 0); wi++) {
-        if (wpStatusIdx >= 0 && wpData[wi][wpStatusIdx] === 'Submitted') pendingReviewAll++;
-        if (wpStatusIdx >= 0 && wpData[wi][wpStatusIdx] === 'Approved' && wpResponsibleIdx >= 0 && wpData[wi][wpResponsibleIdx]) approvedQueueAll++;
+        var wpStatus = wpStatusIdx >= 0 ? wpData[wi][wpStatusIdx] : '';
+        if (wpStatus === 'Submitted') pendingReviewAll++;
+        if (wpStatus === 'Approved' && wpResponsibleIdx >= 0 && wpData[wi][wpResponsibleIdx]) approvedQueueAll++;
         if (wpResponseStatusIdx >= 0 && wpData[wi][wpResponseStatusIdx] === 'Response Submitted') pendingResponsesAll++;
+
+        // Count WPs per creator
+        if (wpPreparedByIdx >= 0 && wpData[wi][wpPreparedByIdx]) {
+          var creator = String(wpData[wi][wpPreparedByIdx]).trim();
+          if (creator) wpByCreator[creator] = (wpByCreator[creator] || 0) + 1;
+        }
+
+        // Count observations: WPs sent to auditee that still need attention
+        if (wpStatus === 'Sent to Auditee') {
+          var respStatus = wpResponseStatusIdx >= 0 ? String(wpData[wi][wpResponseStatusIdx] || '') : '';
+          if (respStatus !== 'Accepted') {
+            totalPendingObservations++;
+            if (wpResponsibleIdx >= 0 && wpData[wi][wpResponsibleIdx]) {
+              var respParties = String(wpData[wi][wpResponsibleIdx]).split(',');
+              for (var ri = 0; ri < respParties.length; ri++) {
+                var rpId = respParties[ri].trim();
+                if (rpId) obsByResponsible[rpId] = (obsByResponsible[rpId] || 0) + 1;
+              }
+            }
+          }
+        }
       }
 
       var apData = getSheetData(SHEETS.ACTION_PLANS);
@@ -210,34 +234,69 @@ function getSidebarCounts(user) {
 
       var overdueAll = 0;
       var overdueByOwner = {};
+      // Per-user active AP tracking
+      var activeApByOwner = {};
+      var totalActiveAps = 0;
 
       for (var ai = 1; ai < apData.length; ai++) {
         var apStatus = apData[ai][apStatusIdx];
         var apDue = apData[ai][apDueDateIdx];
+        var apOwners = String(apData[ai][apOwnerIdx] || '').split(',');
+
+        // Count active APs per owner
+        if (apStatus && !closedStatuses.includes(apStatus)) {
+          totalActiveAps++;
+          for (var aoi = 0; aoi < apOwners.length; aoi++) {
+            var aoId = apOwners[aoi].trim();
+            if (aoId) activeApByOwner[aoId] = (activeApByOwner[aoId] || 0) + 1;
+          }
+        }
+
         if (apStatus && !closedStatuses.includes(apStatus) && apDue) {
           var due = new Date(apDue);
           due.setHours(0, 0, 0, 0);
           if (due < today) {
             overdueAll++;
-            // Track per-owner for auditee filtering
-            var owners = String(apData[ai][apOwnerIdx] || '').split(',');
-            for (var oi = 0; oi < owners.length; oi++) {
-              var oid = owners[oi].trim();
+            // Track per-owner for filtering
+            for (var oi = 0; oi < apOwners.length; oi++) {
+              var oid = apOwners[oi].trim();
               if (oid) overdueByOwner[oid] = (overdueByOwner[oid] || 0) + 1;
             }
           }
         }
       }
 
-      allCounts = { pendingReview: pendingReviewAll, overdueAll: overdueAll, overdueByOwner: overdueByOwner, approvedQueue: approvedQueueAll, pendingResponses: pendingResponsesAll };
+      allCounts = {
+        pendingReview: pendingReviewAll,
+        overdueAll: overdueAll,
+        overdueByOwner: overdueByOwner,
+        approvedQueue: approvedQueueAll,
+        pendingResponses: pendingResponsesAll,
+        wpByCreator: wpByCreator,
+        totalWps: (wpData ? wpData.length - 1 : 0),
+        activeApByOwner: activeApByOwner,
+        totalActiveAps: totalActiveAps,
+        obsByResponsible: obsByResponsible,
+        totalPendingObservations: totalPendingObservations
+      };
       cache.put(cacheKey, JSON.stringify(allCounts), 20);
     }
 
     // Role-specific result
     var pendingReview = allCounts.pendingReview;
     var overdueActionPlans = allCounts.overdueAll;
-    if (roleCode === ROLES.AUDITEE && userId) {
-      overdueActionPlans = allCounts.overdueByOwner[userId] || 0;
+
+    // Per-user overdue
+    var myOverdue = 0;
+    if (userId) {
+      myOverdue = allCounts.overdueByOwner[userId] || 0;
+    }
+    if (roleCode === ROLES.AUDITEE || roleCode === ROLES.MANAGEMENT || roleCode === ROLES.UNIT_MANAGER || roleCode === ROLES.SENIOR_MGMT) {
+      overdueActionPlans = myOverdue;
+    }
+    // SUPER_ADMIN sees global overdue
+    if (roleCode === ROLES.SUPER_ADMIN) {
+      myOverdue = allCounts.overdueAll;
     }
 
     var approvedQueue = allCounts.approvedQueue || 0;
@@ -253,7 +312,42 @@ function getSidebarCounts(user) {
       pendingResponses = 0;
     }
 
-    return { success: true, pendingReview: pendingReview, overdueActionPlans: overdueActionPlans, approvedQueue: approvedQueue, pendingResponses: pendingResponses };
+    // My Work Papers count
+    var myWorkPapers = 0;
+    if (roleCode === ROLES.SUPER_ADMIN) {
+      myWorkPapers = allCounts.totalWps || 0;
+    } else if (auditorRoles.includes(roleCode) || roleCode === ROLES.OBSERVER) {
+      myWorkPapers = userId ? (allCounts.wpByCreator[userId] || 0) : 0;
+    }
+
+    // My Action Plans count
+    var myActionPlans = 0;
+    if (roleCode === ROLES.SUPER_ADMIN) {
+      myActionPlans = allCounts.totalActiveAps || 0;
+    } else if (userId) {
+      myActionPlans = allCounts.activeApByOwner[userId] || 0;
+    }
+
+    // My Observations count
+    var myObservations = 0;
+    var obsRoles = [ROLES.SENIOR_MGMT, ROLES.MANAGEMENT, ROLES.UNIT_MANAGER, ROLES.AUDITEE];
+    if (roleCode === ROLES.SUPER_ADMIN) {
+      myObservations = allCounts.totalPendingObservations || 0;
+    } else if (obsRoles.includes(roleCode) && userId) {
+      myObservations = allCounts.obsByResponsible[userId] || 0;
+    }
+
+    return {
+      success: true,
+      pendingReview: pendingReview,
+      overdueActionPlans: overdueActionPlans,
+      approvedQueue: approvedQueue,
+      pendingResponses: pendingResponses,
+      myWorkPapers: myWorkPapers,
+      myActionPlans: myActionPlans,
+      myOverdue: myOverdue,
+      myObservations: myObservations
+    };
   } catch (e) {
     console.error('Error getting sidebar counts:', e);
     return { success: false, error: e.message, pendingReview: 0, overdueActionPlans: 0 };
