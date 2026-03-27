@@ -126,8 +126,9 @@
             <i class="bi bi-chevron-down submenu-icon rotate"></i>
           </a>
           <ul class="nav-submenu show" id="wpSubmenu">
-            <li><a href="#work-papers" class="nav-link" data-page="work-papers" onclick="navigateTo('work-papers')">
+            <li id="navWPList"><a href="#work-papers" class="nav-link" data-page="work-papers" onclick="navigateTo('work-papers')">
               <i class="bi bi-list-ul"></i><span>All Work Papers</span>
+              <span class="badge bg-primary ms-auto" id="wpListCount" style="display:none;">0</span>
             </a></li>
             <li id="navMyWorkPapers"><a href="#work-papers" class="nav-link" data-page="work-papers-mine" onclick="navigateTo('work-papers', {mine: true})">
               <i class="bi bi-person-badge"></i><span>My Work Papers</span>
@@ -163,6 +164,7 @@
             </a></li>
             <li id="navMyActionPlans"><a href="#action-plans" class="nav-link" data-page="action-plans-mine" onclick="navigateTo('action-plans', {mine: true})">
               <i class="bi bi-person-badge"></i><span>My Action Plans</span>
+              <span class="badge bg-info text-dark ms-auto" id="actionPlansCount" style="display:none;">0</span>
             </a></li>
             <li><a href="#action-plans-overdue" class="nav-link" data-page="action-plans-overdue" onclick="navigateTo('action-plans-overdue')">
               <i class="bi bi-exclamation-triangle text-danger"></i><span>Overdue</span>
@@ -182,9 +184,17 @@
           <ul class="nav-submenu show" id="auditeeSubmenu">
             <li><a href="#auditee-findings" class="nav-link" data-page="auditee-findings" onclick="navigateTo('auditee-findings')">
               <i class="bi bi-list-ul"></i><span>All Observations</span>
-              <span class="badge bg-warning text-dark ms-auto" id="auditeeNewFindingCount" style="display:none;">0</span>
+              <span class="badge bg-warning text-dark ms-auto" id="myObservationsCount" style="display:none;">0</span>
             </a></li>
           </ul>
+        </li>
+
+        <!-- Board Reports Section (OBSERVER + SUPER_ADMIN only) -->
+        <li class="nav-item" id="navBoardReports">
+          <a href="#board-reports" class="nav-link" data-page="board-reports" onclick="navigateTo('board-reports')">
+            <i class="bi bi-file-earmark-word"></i>
+            <span>Audit Reports</span>
+          </a>
         </li>
 
         <!-- Insights Section -->
@@ -356,6 +366,11 @@
         <!-- Analytics Page -->
         <div class="page" id="page-analytics" style="display:none;">
           <?!= include('Analytics'); ?>
+        </div>
+
+        <!-- Board Reports Page -->
+        <div class="page" id="page-board-reports" style="display:none;">
+          <?!= include('BoardReports'); ?>
         </div>
       </div>
     </main>

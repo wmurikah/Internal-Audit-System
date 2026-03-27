@@ -282,7 +282,7 @@ function getWorkPapersRaw(filters, user) {
     
     if (user) {
       const roleCode = user.role_code;
-      
+
       if (roleCode === ROLES.AUDITEE) {
         if (row[colMap['status']] !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
           match = false;
@@ -292,9 +292,20 @@ function getWorkPapersRaw(filters, user) {
           match = false;
         }
       }
-      
+
       if (roleCode === ROLES.JUNIOR_STAFF) {
         if (row[colMap['prepared_by_id']] !== user.user_id) {
+          match = false;
+        }
+      }
+
+      // SENIOR_MGMT, MANAGEMENT, UNIT_MANAGER: only see WPs assigned to them
+      if (roleCode === ROLES.SENIOR_MGMT || roleCode === ROLES.MANAGEMENT || roleCode === ROLES.UNIT_MANAGER) {
+        if (row[colMap['status']] !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+          match = false;
+        }
+        const responsibleIds = String(row[colMap['responsible_ids']] || '').split(',').map(s => s.trim());
+        if (!responsibleIds.includes(user.user_id)) {
           match = false;
         }
       }
