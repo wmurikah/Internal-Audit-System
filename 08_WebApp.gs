@@ -576,7 +576,7 @@ function routeAction(action, data, user) {
 
     // ========== BOARD REPORTS ==========
     case 'generateBoardReport':
-      if (user.role_code !== ROLES.OBSERVER && user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.BOARD_MEMBER && user.role_code !== ROLES.SUPER_ADMIN) {
         return { success: false, error: 'Access restricted to Board Members and Head of Internal Audit only' };
       }
       return generateBoardReport(data.filters, data.reportType, user);
@@ -743,15 +743,9 @@ function warmAllCaches() {
     console.log('Cached dropdowns');
     
     // 2. Cache all role permissions
-    const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
-    roles.forEach(role => {
-      try {
-        const perms = getPermissions(role);
-        cache.put('perm_' + role, JSON.stringify(perms), CONFIG.CACHE_TTL.PERMISSIONS);
-      } catch (e) {
-        console.warn('Failed to cache permissions for role:', role);
-      }
-    });
+    const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
+    // Permissions are now hardcoded in ROLE_PERMISSIONS — no need to cache from Firestore
+    console.log('Permissions are hardcoded — skipping permission cache warming');
     results.cached.push('permissions');
     console.log('Cached permissions');
     
@@ -804,7 +798,7 @@ function clearAllCaches() {
   ];
   
   // Clear all role permission caches
-  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'UNIT_MANAGER', 'MANAGEMENT', 'SENIOR_MGMT', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT', 'BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
   roles.forEach(role => {
     keysToRemove.push('perm_' + role);
     keysToRemove.push('role_name_' + role);
@@ -1162,7 +1156,7 @@ function getInitDataOptimized(user) {
   }
 
   // Add pending finding counts for auditee roles
-  var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  var auditeeRoles = ['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'];
   if (auditeeRoles.indexOf(user.role_code) >= 0) {
     try {
       response.pendingFindings = getAuditeeFindingCounts(user);
@@ -1237,7 +1231,7 @@ function getInitDataLight(user) {
   }
 
   // Add pending finding counts for auditee roles
-  var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  var auditeeRoles = ['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'];
   if (auditeeRoles.indexOf(user.role_code) >= 0) {
     try {
       response.pendingFindings = getAuditeeFindingCounts(user);
@@ -1469,7 +1463,7 @@ function rebuildAllIndexesQuickFix() {
  * Creates a Google Doc, populates with filtered report data, exports as .docx
  * @param {Object} filters - Date range, affiliate, risk rating, status filters
  * @param {string} reportType - 'executive', 'detailed', 'action-tracker', 'overdue'
- * @param {Object} user - Authenticated user (OBSERVER or SUPER_ADMIN only)
+ * @param {Object} user - Authenticated user (BOARD_MEMBER or SUPER_ADMIN only)
  */
 function generateBoardReport(filters, reportType, user) {
   try {

@@ -283,35 +283,14 @@ function getWorkPapersRaw(filters, user) {
     if (user) {
       const roleCode = user.role_code;
 
-      if (roleCode === ROLES.AUDITEE) {
-        if (row[colMap['status']] !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
-          match = false;
-        }
-        const responsibleIds = String(row[colMap['responsible_ids']] || '').split(',').map(s => s.trim());
-        if (!responsibleIds.includes(user.user_id)) {
-          match = false;
-        }
+      // JUNIOR_STAFF (Audit Client), SENIOR_MGMT, UNIT_MANAGER: NO ACCESS to Work Papers module
+      // They interact with observations via Path 2 (AuditeeFindings/AuditeeResponse)
+      if (roleCode === ROLES.JUNIOR_STAFF || roleCode === ROLES.SENIOR_MGMT || roleCode === ROLES.UNIT_MANAGER) {
+        match = false;
       }
 
-      if (roleCode === ROLES.JUNIOR_STAFF) {
-        if (row[colMap['prepared_by_id']] !== user.user_id) {
-          match = false;
-        }
-      }
-
-      // SENIOR_MGMT, MANAGEMENT, UNIT_MANAGER: only see WPs assigned to them
-      if (roleCode === ROLES.SENIOR_MGMT || roleCode === ROLES.MANAGEMENT || roleCode === ROLES.UNIT_MANAGER) {
-        if (row[colMap['status']] !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
-          match = false;
-        }
-        const responsibleIds = String(row[colMap['responsible_ids']] || '').split(',').map(s => s.trim());
-        if (!responsibleIds.includes(user.user_id)) {
-          match = false;
-        }
-      }
-
-      // OBSERVER and EXTERNAL_AUDITOR can only see approved/sent work papers
-      if (roleCode === ROLES.OBSERVER || roleCode === ROLES.EXTERNAL_AUDITOR) {
+      // BOARD_MEMBER and EXTERNAL_AUDITOR can only see approved/sent work papers
+      if (roleCode === ROLES.BOARD_MEMBER || roleCode === ROLES.EXTERNAL_AUDITOR) {
         const viewableStatuses = [STATUS.WORK_PAPER.APPROVED, STATUS.WORK_PAPER.SENT_TO_AUDITEE];
         if (!viewableStatuses.includes(row[colMap['status']])) {
           match = false;

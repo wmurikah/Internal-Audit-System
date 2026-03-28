@@ -115,7 +115,7 @@ function getDashboardData(user) {
     try {
       const permissions = getUserPermissions(roleCode);
       
-      if (roleCode === ROLES.AUDITEE) {
+      if (roleCode === ROLES.JUNIOR_STAFF) {
         dashboard.myActionPlans = getMyActionPlans(user);
       } else if (permissions.canCreateWorkPaper && !permissions.canReviewWorkPaper) {
         // Junior staff equivalent - can create but not review
@@ -291,7 +291,7 @@ function getSidebarCounts(user) {
     if (userId) {
       myOverdue = allCounts.overdueByOwner[userId] || 0;
     }
-    if (roleCode === ROLES.AUDITEE || roleCode === ROLES.MANAGEMENT || roleCode === ROLES.UNIT_MANAGER || roleCode === ROLES.SENIOR_MGMT) {
+    if (roleCode === ROLES.JUNIOR_STAFF || roleCode === ROLES.UNIT_MANAGER || roleCode === ROLES.SENIOR_MGMT) {
       overdueActionPlans = myOverdue;
     }
     // SUPER_ADMIN sees global overdue
@@ -316,7 +316,7 @@ function getSidebarCounts(user) {
     var myWorkPapers = 0;
     if (roleCode === ROLES.SUPER_ADMIN) {
       myWorkPapers = allCounts.totalWps || 0;
-    } else if (auditorRoles.includes(roleCode) || roleCode === ROLES.OBSERVER) {
+    } else if (auditorRoles.includes(roleCode) || roleCode === ROLES.BOARD_MEMBER) {
       myWorkPapers = userId ? (allCounts.wpByCreator[userId] || 0) : 0;
     }
 
@@ -330,7 +330,7 @@ function getSidebarCounts(user) {
 
     // My Observations count
     var myObservations = 0;
-    var obsRoles = [ROLES.SENIOR_MGMT, ROLES.MANAGEMENT, ROLES.UNIT_MANAGER, ROLES.AUDITEE];
+    var obsRoles = [ROLES.SENIOR_MGMT, ROLES.UNIT_MANAGER, ROLES.JUNIOR_STAFF];
     if (roleCode === ROLES.SUPER_ADMIN) {
       myObservations = allCounts.totalPendingObservations || 0;
     } else if (obsRoles.includes(roleCode) && userId) {
