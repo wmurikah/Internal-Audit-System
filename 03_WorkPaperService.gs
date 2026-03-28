@@ -517,8 +517,8 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   if (action !== 'start_review') {
     try {
       var submitter = getUserById(workPaper.created_by);
-      if (submitter && submitter.user_id !== user.user_id) {
-        var actionLabel = action === 'approve' ? 'Approved' : action === 'reject' ? 'Rejected' : 'Returned for Revision';
+      if (submitter && submitter.user_id !== user.user_id && isActive(submitter.is_active)) {
+        var actionLabel = action === 'approve' ? 'Approved' : 'Returned for Revision';
         var notifSubject = 'Work Paper ' + actionLabel + ' - ' + (workPaper.observation_title || workPaperId);
         var notifBody = 'Dear ' + (submitter.full_name || 'Colleague') + ',\n\n' +
           'Your work paper "' + (workPaper.observation_title || workPaperId) + '" has been ' + actionLabel.toLowerCase() + ' by ' + (user.full_name || 'the reviewer') + '.\n\n';
@@ -623,6 +623,15 @@ function sendToAuditee(workPaperId, user) {
     if (existingAPs.length === 0) {
       // Resolve owner names from responsible_ids
       var ownerIds = parseIdList(workPaper.responsible_ids);
+      // Filter out inactive responsible parties
+      var activeOwnerIds = ownerIds.filter(function(id) {
+        var u = getUserById(id);
+        return u && isActive(u.is_active);
+      });
+      if (activeOwnerIds.length === 0) {
+        throw new Error('All assigned responsible parties are inactive. Please reassign before sending.');
+      }
+      ownerIds = activeOwnerIds;
       var ownerNames = ownerIds.map(function(id) {
         var u = getUserById(id);
         return u ? u.full_name : id;
@@ -935,7 +944,7 @@ function queueAuditeeNotification(workPaperId, workPaper, sender) {
 
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
-    if (auditee && auditee.email) {
+    if (auditee && auditee.email && isActive(auditee.is_active)) {
       var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Auditee';
       // Send immediately using the grouped observation + AP table format with CC
       sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name, firstName, ccEmails, actionPlansByWp);
@@ -985,7 +994,7 @@ function sendBatchedAuditeeNotifications(workPapers) {
 
   Object.keys(byAuditee).forEach(function(userId) {
     var auditee = getUserById(userId);
-    if (auditee && auditee.email) {
+    if (auditee && auditee.email && isActive(auditee.is_active)) {
       // Deduplicate CC against the auditee's own email
       var filteredCc = ccString;
       if (ccString && auditee.email) {

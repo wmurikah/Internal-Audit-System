@@ -726,7 +726,7 @@ function queueResponseSubmittedNotification(workPaperId, workPaper, response, su
   });
 
   var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Audit Response [Round ' + (response.round_number || 1) + '/' + RESPONSE_DEFAULTS.MAX_ROUNDS + '] Submitted - ' + (workPaper.observation_title || workPaperId);
+  var subject = 'Auditee Response Received (Round ' + (response.round_number || 1) + ') \u2014 ' + (workPaper.observation_title || workPaperId);
 
   // Collect CC emails from the work paper, removing auditor duplicates
   var ccEmails = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean);
@@ -767,7 +767,7 @@ function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
 
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
-    if (!auditee || !auditee.email) return;
+    if (!auditee || !auditee.email || !isActive(auditee.is_active)) return;
 
     var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Colleague';
     var intro = 'Dear ' + firstName + ',<br><br>' +
@@ -790,7 +790,7 @@ function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
 function queueResponseRejectedNotification(workPaperId, workPaper, comments, reviewer) {
   var responsibleIds = parseIdList(workPaper.responsible_ids);
   var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Audit Response [Round ' + (workPaper.response_round || 1) + '/' + RESPONSE_DEFAULTS.MAX_ROUNDS + '] Requires Revision - ' + (workPaper.observation_title || workPaperId);
+  var subject = 'Audit Response \u2014 Additional Information Requested (Round ' + (workPaper.response_round || 1) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS + ') \u2014 ' + (workPaper.observation_title || workPaperId);
 
   // Collect CC emails, removing duplicates with responsible party emails
   var responsibleEmails = [];
@@ -800,19 +800,19 @@ function queueResponseRejectedNotification(workPaperId, workPaper, comments, rev
 
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
-    if (!auditee || !auditee.email) return;
+    if (!auditee || !auditee.email || !isActive(auditee.is_active)) return;
 
     var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Colleague';
     var remainingRounds = RESPONSE_DEFAULTS.MAX_ROUNDS - (workPaper.response_round || 0);
     var intro = 'Dear ' + firstName + ',<br><br>' +
-      'Your response to the following audit observation has been returned for revision by ' + (reviewer.full_name || 'the audit team') + '.' +
+      'The audit team has reviewed your response to the following observation and has requested additional information or clarification. Please review the feedback below and submit a revised response.' +
       ' You have <strong>' + remainingRounds + ' round(s)</strong> remaining to submit a revised response.';
 
     var headers = ['Field', 'Details'];
     var rows = [
       ['Observation', String(workPaper.observation_title || '-')],
       ['Risk Rating', String(workPaper.risk_rating || '-')],
-      ['Status', '<strong style="color:#dc3545;">Response Rejected</strong>'],
+      ['Status', '<strong style="color:#2563eb;">Additional Information Requested</strong>'],
       ['Reviewer Comments', String(comments || 'No comments provided')]
     ];
 
@@ -830,25 +830,25 @@ function queueResponseEscalatedNotification(workPaperId, workPaper, reviewer) {
   var allEmails = ccEmails.slice(); // start with CC
   responsibleIds.forEach(function(userId) {
     var u = getUserById(userId);
-    if (u && u.email && allEmails.indexOf(u.email) === -1) {
+    if (u && u.email && isActive(u.is_active) && allEmails.indexOf(u.email) === -1) {
       allEmails.push(u.email);
     }
   });
 
   var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'ESCALATED: Audit Observation Response - ' + (workPaper.observation_title || workPaperId);
+  var subject = 'Management Attention Requested \u2014 Audit Observation: ' + (workPaper.observation_title || workPaperId);
 
   allEmails.forEach(function(email) {
     var intro = 'Dear Colleague,<br><br>' +
-      'The following audit observation has been <strong>escalated</strong> after reaching the maximum number of response rounds (' +
-      RESPONSE_DEFAULTS.MAX_ROUNDS + '). Immediate attention is required.';
+      'The following audit observation has reached the maximum number of response rounds (' +
+      RESPONSE_DEFAULTS.MAX_ROUNDS + ') without resolution. Management review is requested to determine the appropriate path forward.';
 
     var headers = ['Field', 'Details'];
     var rows = [
       ['Observation', String(workPaper.observation_title || '-')],
       ['Risk Rating', String(workPaper.risk_rating || '-')],
       ['Response Rounds Used', String(workPaper.response_round || 0) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
-      ['Status', '<strong style="color:#dc3545;">ESCALATED</strong>'],
+      ['Status', '<strong style="color:#1a365d;">Referred to Management</strong>'],
       ['Escalated By', String(reviewer.full_name || '-')]
     ];
 
@@ -863,11 +863,11 @@ function queueDelegationRejectedNotification(actionPlanId, actionPlan, reason, r
   if (!delegatorId) return;
 
   var delegator = getUserById(delegatorId);
-  if (!delegator || !delegator.email) return;
+  if (!delegator || !delegator.email || !isActive(delegator.is_active)) return;
 
   var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
   var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Action Plan Delegation Rejected - ' + actionPlanId;
+  var subject = 'Action Plan Delegation \u2014 Reassignment Needed (' + actionPlanId + ')';
 
   var firstName = delegator.first_name || (delegator.full_name || '').split(' ')[0] || 'Colleague';
   var intro = 'Dear ' + firstName + ',<br><br>' +
