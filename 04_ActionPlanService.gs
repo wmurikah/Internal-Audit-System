@@ -904,9 +904,9 @@ function queueDelegationNotification(actionPlanId, actionPlan, previousVersion, 
 
   ownerIds.forEach(function(ownerId) {
     var owner = getUserById(ownerId);
-    if (!owner || !owner.email) return;
+    if (!owner || !owner.email || !isActive(owner.is_active)) return;
 
-    var subject = 'Action Plan Delegated to You - ' + actionPlanId;
+    var subject = 'Action Plan Assignment — ' + (observationTitle || actionPlanId);
     var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
     var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
       '<strong>' + (delegator.full_name || 'A colleague') + '</strong> has delegated the following action plan to you:';
@@ -1067,9 +1067,10 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
 
   ownerIds.forEach(function(ownerId) {
     var owner = getUserById(ownerId);
-    if (!owner || !owner.email) return;
+    if (!owner || !owner.email || !isActive(owner.is_active)) return;
 
-    var subject = 'Action Plan ' + actionText + ' by Auditor';
+    var actionTextMap = { 'approve': 'Verified', 'reject': 'Returned with Feedback', 'return': 'Returned for Additional Work' };
+    var subject = 'Action Plan ' + (actionTextMap[action] || actionText) + ' — Auditor Review';
     var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
     var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
       'The following action plan has been <strong>' + actionText.toLowerCase() + '</strong> by ' +
@@ -1093,7 +1094,7 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
     if (action === 'return') {
       outro = 'Please log in, review the auditor\'s comments, and update your action plan accordingly.<br><br>' + loginUrl;
     } else if (action === 'reject') {
-      outro = 'The action plan has been rejected. Please log in to review the feedback.<br><br>' + loginUrl;
+      outro = 'The auditor has provided feedback on this action plan. Please log in to review the comments and update your response accordingly.<br><br>' + loginUrl;
     } else {
       outro = 'Your action plan has been verified. No further action is required.<br><br>' + loginUrl;
     }

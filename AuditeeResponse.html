@@ -362,8 +362,8 @@ function renderAuditeeResponse() {
     document.getElementById('arResponseActions').style.display = 'none';
     document.getElementById('btnAddActionPlan').style.display = 'none';
     var escalatedMsg = document.createElement('div');
-    escalatedMsg.className = 'alert alert-danger mt-3';
-    escalatedMsg.innerHTML = '<i class="bi bi-exclamation-octagon me-2"></i>Maximum response rounds reached. This observation has been escalated.';
+    escalatedMsg.className = 'alert alert-secondary mt-3';
+    escalatedMsg.innerHTML = '<i class="bi bi-info-circle me-2"></i>The maximum number of response rounds has been reached. This observation has been referred to management for further review.';
     var responseActions = document.getElementById('arResponseActions');
     responseActions.parentNode.insertBefore(escalatedMsg, responseActions);
   }
@@ -672,9 +672,13 @@ function getResponseStatusBadgeAr(status) {
   var m = {
     'Pending Response': 'bg-warning text-dark', 'Draft Response': 'bg-info text-dark',
     'Response Submitted': 'bg-primary', 'Response Accepted': 'bg-success',
-    'Response Rejected': 'bg-danger', 'Escalated': 'bg-dark'
+    'Response Rejected': 'bg-secondary', 'Escalated': 'bg-secondary'
   };
-  return '<span class="badge ' + (m[status] || 'bg-secondary') + '">' + status + '</span>';
+  var labelMap = {
+    'Response Rejected': 'Revision Requested',
+    'Escalated': 'Under Management Review'
+  };
+  return '<span class="badge ' + (m[status] || 'bg-secondary') + '">' + (labelMap[status] || status) + '</span>';
 }
 
 function getAPStatusBadge(status) {

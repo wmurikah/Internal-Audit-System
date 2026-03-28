@@ -452,7 +452,7 @@ function renderKanbanBoard() {
               ${escapeHtml((ap.owner_names || '-').split(',')[0])}
             </div>
             <div class="card-due">
-              ${isOverdue ? `<span class="overdue-badge">${ap.days_overdue}d overdue</span>` :
+              ${isOverdue ? `<span class="overdue-badge">${ap.days_overdue}d past due</span>` :
                 `<i class="bi bi-calendar"></i> ${ap.due_date ? formatDate(ap.due_date) : '-'}`}
             </div>
           </div>

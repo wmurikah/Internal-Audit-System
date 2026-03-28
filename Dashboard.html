@@ -583,8 +583,8 @@ function renderAttentionSection(data, wp, ap) {
     items.push({
       type: 'danger',
       icon: 'bi-exclamation-triangle-fill',
-      title: overdueCount + ' overdue action plan' + (overdueCount > 1 ? 's' : ''),
-      subtitle: 'Require immediate attention',
+      title: overdueCount + ' action plan(s) past target date',
+      subtitle: 'Review recommended',
       action: 'View Overdue',
       onclick: "navigateTo('action-plans-overdue')"
     });

@@ -433,17 +433,17 @@ function formatEmailHtml(subject, body) {
   var cleanBody = stripUrls(body);
 
   // Detect category tag from subject
-  var categoryLabel = 'NOTIFICATION';
-  if (/Submitted/i.test(subject)) categoryLabel = 'RESPONSE SUBMITTED';
-  else if (/Accepted/i.test(subject)) categoryLabel = 'RESPONSE ACCEPTED';
-  else if (/Rejected|Revision/i.test(subject)) categoryLabel = 'ACTION REQUIRED';
-  else if (/Delegat/i.test(subject)) categoryLabel = 'DELEGATION REQUEST';
-  else if (/Overdue/i.test(subject)) categoryLabel = 'OVERDUE REMINDER';
-  else if (/Evidence Required/i.test(subject)) categoryLabel = 'EVIDENCE REQUIRED';
-  else if (/Not Yet Sent/i.test(subject)) categoryLabel = 'REMINDER';
-  else if (/Verification|Verify/i.test(subject)) categoryLabel = 'VERIFICATION REQUIRED';
-  else if (/Approved/i.test(subject)) categoryLabel = 'APPROVED';
-  else if (/Summary/i.test(subject)) categoryLabel = 'BI-WEEKLY SUMMARY';
+  var categoryLabel = 'Notification';
+  if (/Submitted/i.test(subject)) categoryLabel = 'Response Received';
+  else if (/Accepted/i.test(subject)) categoryLabel = 'Response Accepted';
+  else if (/Rejected|Revision/i.test(subject)) categoryLabel = 'Review Feedback';
+  else if (/Delegat/i.test(subject)) categoryLabel = 'Assignment Update';
+  else if (/Overdue/i.test(subject)) categoryLabel = 'Status Update';
+  else if (/Evidence/i.test(subject)) categoryLabel = 'Follow-Up';
+  else if (/Not Yet Sent/i.test(subject)) categoryLabel = 'Follow-Up';
+  else if (/Verification|Verify/i.test(subject)) categoryLabel = 'Review Requested';
+  else if (/Approved/i.test(subject)) categoryLabel = 'Status Update';
+  else if (/Summary/i.test(subject)) categoryLabel = 'Periodic Summary';
 
   // Extract "Dear X," greeting if present
   var greetingHtml = '';
@@ -495,7 +495,7 @@ function formatEmailHtml(subject, body) {
 '        <!-- CATEGORY TAG -->' +
 '        <tr>' +
 '          <td style="padding:20px 36px 0 36px;">' +
-'            <div style="border-left:3px solid #2563eb; padding-left:12px; color:#2563eb; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:1px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + categoryLabel + '</div>' +
+'            <div style="border-left:3px solid #2563eb; padding-left:12px; color:#2563eb; font-weight:600; font-size:12px; letter-spacing:1px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + categoryLabel + '</div>' +
 '          </td>' +
 '        </tr>' +
 '        <!-- SUBJECT -->' +
@@ -544,17 +544,17 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
   var year = new Date().getFullYear();
 
   // Detect category tag from subject
-  var categoryLabel = 'NOTIFICATION';
-  if (/Submitted/i.test(subject)) categoryLabel = 'RESPONSE SUBMITTED';
-  else if (/Accepted/i.test(subject)) categoryLabel = 'RESPONSE ACCEPTED';
-  else if (/Rejected|Revision/i.test(subject)) categoryLabel = 'ACTION REQUIRED';
-  else if (/Delegat/i.test(subject)) categoryLabel = 'DELEGATION REQUEST';
-  else if (/Overdue/i.test(subject)) categoryLabel = 'OVERDUE REMINDER';
-  else if (/Evidence Required/i.test(subject)) categoryLabel = 'EVIDENCE REQUIRED';
-  else if (/Not Yet Sent/i.test(subject)) categoryLabel = 'REMINDER';
-  else if (/Verification|Verify/i.test(subject)) categoryLabel = 'VERIFICATION REQUIRED';
-  else if (/Approved/i.test(subject)) categoryLabel = 'APPROVED';
-  else if (/Summary/i.test(subject)) categoryLabel = 'BI-WEEKLY SUMMARY';
+  var categoryLabel = 'Notification';
+  if (/Submitted/i.test(subject)) categoryLabel = 'Response Received';
+  else if (/Accepted/i.test(subject)) categoryLabel = 'Response Accepted';
+  else if (/Rejected|Revision/i.test(subject)) categoryLabel = 'Review Feedback';
+  else if (/Delegat/i.test(subject)) categoryLabel = 'Assignment Update';
+  else if (/Overdue/i.test(subject)) categoryLabel = 'Status Update';
+  else if (/Evidence/i.test(subject)) categoryLabel = 'Follow-Up';
+  else if (/Not Yet Sent/i.test(subject)) categoryLabel = 'Follow-Up';
+  else if (/Verification|Verify/i.test(subject)) categoryLabel = 'Review Requested';
+  else if (/Approved/i.test(subject)) categoryLabel = 'Status Update';
+  else if (/Summary/i.test(subject)) categoryLabel = 'Periodic Summary';
 
   // Build table header cells with navy background
   var thCells = headers.map(function(h) {
@@ -614,7 +614,7 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '        <!-- CATEGORY TAG -->' +
 '        <tr>' +
 '          <td style="padding:20px 36px 0 36px;">' +
-'            <div style="border-left:3px solid #2563eb; padding-left:12px; color:#2563eb; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:1px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + categoryLabel + '</div>' +
+'            <div style="border-left:3px solid #2563eb; padding-left:12px; color:#2563eb; font-weight:600; font-size:12px; letter-spacing:1px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + categoryLabel + '</div>' +
 '          </td>' +
 '        </tr>' +
 '        <!-- SUBJECT -->' +
@@ -669,12 +669,12 @@ function truncateWords(text, maxWords) {
  */
 function ratingBadge(rating) {
   if (!rating) return '<span style="color:#9ca3af; font-family:system-ui,-apple-system,sans-serif;">-</span>';
-  var r = String(rating).toUpperCase();
+  var r = String(rating).charAt(0).toUpperCase() + String(rating).slice(1).toLowerCase();
   var bg = '#6b7280'; var color = '#ffffff';
-  if (r === 'EXTREME' || r === 'CRITICAL') { bg = '#991b1b'; }
-  else if (r === 'HIGH') { bg = '#dc2626'; }
-  else if (r === 'MEDIUM') { bg = '#d97706'; color = '#ffffff'; }
-  else if (r === 'LOW') { bg = '#059669'; }
+  if (r === 'Extreme' || r === 'Critical') { bg = '#991b1b'; }
+  else if (r === 'High') { bg = '#dc2626'; }
+  else if (r === 'Medium') { bg = '#d97706'; color = '#ffffff'; }
+  else if (r === 'Low') { bg = '#059669'; }
   return '<span style="display:inline-block; background-color:' + bg + '; color:' + color + '; padding:3px 10px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:0.3px; font-family:system-ui,-apple-system,sans-serif; white-space:nowrap;">' + r + '</span>';
 }
 
@@ -829,12 +829,12 @@ function buildCalloutBox(text, variant) {
  * Called when work papers are sent to auditees — groups by auditee and sends ONE email per person.
  *
  * Email format:
- *   AUDIT OBSERVATIONS ASSIGNED
+ *   Audit Observations Assigned
  *   Dear [First Name],
  *   [Context line]
  *   [Grouped table: Observation headers with risk badge → AP rows underneath with due dates]
  *   [Callout: evidence requirements + upcoming reminders]
- *   CTA: Login to View Details
+ *   CTA: View in Audit System
  *
  * @param {Object[]} workPapers - Array of work paper objects sent to this auditee
  * @param {string} auditeeEmail - Recipient email
@@ -887,7 +887,7 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   var year = new Date().getFullYear();
   var systemUrl = getSystemUrl();
 
-  var introHtml = '<p style="margin:0 0 6px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">AUDIT OBSERVATIONS ASSIGNED</p>' +
+  var introHtml = '<p style="margin:0 0 6px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,sans-serif;">Audit Observations Assigned</p>' +
     '<p style="margin:0 0 16px 0; color:#1d1d1f; font-size:20px; font-weight:600; line-height:1.3; font-family:system-ui,-apple-system,sans-serif;">New Audit Observations, ' + firstName + '</p>' +
     '<p style="margin:0 0 20px 0; color:#424245; font-size:14px; line-height:1.6; font-family:system-ui,-apple-system,sans-serif;">' +
     'Dear ' + (auditeeName || firstName) + ',<br><br>' +
@@ -899,12 +899,12 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
 
   // Callout box about evidence and reminders
   var calloutHtml = buildCalloutBox(
-    '<strong>Evidence Required:</strong> You will receive reminders before each due date. Evidence upload is required to mark action plans as implemented.',
+    'You will receive periodic reminders as due dates approach. Supporting documentation should be uploaded when marking action plans as implemented.',
     'info'
   );
 
   // CTA button
-  var ctaHtml = buildCtaButton(systemUrl, 'Login to View Details');
+  var ctaHtml = buildCtaButton(systemUrl, 'View in Audit System');
 
   // Footer
   var footerHtml = '<p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
@@ -967,7 +967,7 @@ function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
   if (!responses || responses.length === 0 || !auditorEmail) return;
 
   var firstName = (auditorName || '').split(' ')[0] || 'Auditor';
-  var subject = responses.length + ' Auditee Response(s) Submitted for Review';
+  var subject = responses.length + ' Auditee Response(s) Received for Review';
 
   var intro = 'Dear ' + firstName + ',<br><br>' +
     '<strong>' + responses.length + '</strong> auditee response(s) have been submitted and require your review:';
@@ -1035,17 +1035,17 @@ function sendOverdueReminders() {
   // Send one table-formatted email per owner
   Object.keys(byOwner).forEach(function(ownerId) {
     const owner = getUserById(ownerId);
-    if (!owner || !owner.email) return;
+    if (!owner || !owner.email || !isActive(owner.is_active)) return;
 
     const plans = byOwner[ownerId];
-    const subject = 'Action Required: ' + plans.length + ' Overdue Action Plan(s)';
+    const subject = 'Status Update: ' + plans.length + ' Action Plan(s) Past Target Date';
     const ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
     const intro = 'Dear ' + ownerFirstName + ',<br><br>' +
-      'You have <strong>' + plans.length + '</strong> overdue action plan(s) that require your immediate attention:';
+      'You have <strong>' + plans.length + '</strong> overdue action plan(s) that have passed their target completion date. Please review and provide an updated status or revised timeline:';
 
     const rows = plans.map(function(ap) {
       var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-      var daysOver = ap.days_overdue ? '<span style="color:#dc2626; font-weight:600;">' + ap.days_overdue + '</span>' : '-';
+      var daysOver = ap.days_overdue ? '<span style="color:#92400e; font-weight:500;">' + ap.days_overdue + '</span>' : '-';
       return [
         String(ap._observation_title || ap.action_plan_id || '-').substring(0, 50),
         truncateWords(ap.action_description || '', 8),
@@ -1056,8 +1056,8 @@ function sendOverdueReminders() {
     });
 
     const loginLink = loginUrl
-      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> and update the status of these items immediately.'
-      : 'Please log in and update the status of these items immediately.';
+      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> and review these items and provide an update.'
+      : 'Please log in and review these items and provide an update.';
     const outro = loginLink;
     const htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
     sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
@@ -1070,11 +1070,11 @@ function sendOverdueReminders() {
   });
 
   if (actionPlans.length > 0 && auditors.length > 0) {
-    const summarySubject = 'Weekly Summary: ' + actionPlans.length + ' Overdue Action Plans';
+    const summarySubject = 'Weekly Status Summary: ' + actionPlans.length + ' Action Plan(s) Past Target Date';
     const summaryIntro = 'The following action plans are currently overdue across all owners:';
     const summaryRows = actionPlans.slice(0, 50).map(function(ap) {
       var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-      var daysOver = ap.days_overdue ? '<span style="color:#dc2626; font-weight:600;">' + ap.days_overdue + '</span>' : '-';
+      var daysOver = ap.days_overdue ? '<span style="color:#92400e; font-weight:500;">' + ap.days_overdue + '</span>' : '-';
       return [
         String(ap._observation_title || ap.action_plan_id || '-').substring(0, 50),
         truncateWords(ap.action_description || '', 8),
@@ -1162,13 +1162,13 @@ function sendUpcomingDueReminders() {
 
   Object.keys(byOwner).forEach(function(ownerId) {
     var owner = getUserById(ownerId);
-    if (!owner || !owner.email) return;
+    if (!owner || !owner.email || !isActive(owner.is_active)) return;
 
     var plans = byOwner[ownerId];
-    var subject = 'Reminder: ' + plans.length + ' Action Plan(s) Due Soon';
+    var subject = 'Upcoming Due Dates: ' + plans.length + ' Action Plan(s) Due Within Two Weeks';
     var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
     var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
-      'You have <strong>' + plans.length + '</strong> action plan(s) due within the next two weeks:';
+      'You have <strong>' + plans.length + '</strong> action plan(s) are approaching their target completion dates within the next two weeks:';
 
     var rows = plans.map(function(ap) {
       var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
@@ -1293,16 +1293,17 @@ function sendEvidenceReminders() {
 
   Object.keys(byOwner).forEach(function(ownerId) {
     var owner = getUserById(ownerId);
-    if (!owner || !owner.email) return;
+    if (!owner || !owner.email || !isActive(owner.is_active)) return;
 
     var plans = byOwner[ownerId];
     var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
 
     // Determine subject based on whether any are due today
     var hasDueToday = plans.some(function(ap) { return ap._reminderType === 'day_0'; });
+    var primaryObsTitle = (plans[0] && plans[0]._observation_title) || 'Action Plan';
     var subject = hasDueToday
-      ? 'Action Plan Due Today \u2014 Evidence Required'
-      : 'Action Plan Reminder \u2014 Evidence Required by ' + new Date(plans[0].due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      ? 'Reminder: Supporting Documentation Due \u2014 ' + primaryObsTitle
+      : 'Upcoming: Supporting Documentation Reminder \u2014 ' + primaryObsTitle + ' \u2014 Due by ' + new Date(plans[0].due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
     // Group APs by observation for the email
     var byObservation = {};
@@ -1315,7 +1316,7 @@ function sendEvidenceReminders() {
     // Build intro
     var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
       'The following action plans are ' + (hasDueToday ? '<strong>due today</strong>' : 'due soon') +
-      ' and you have <strong>not yet uploaded any supporting evidence</strong>:';
+      '. Supporting documentation has not yet been uploaded for these items:';
 
     // Build table rows: AP Description | Observation | Due Date | Evidence Status
     var tableHeaders = ['Action Plan', 'Observation', 'Due Date', 'Evidence'];
@@ -1324,20 +1325,20 @@ function sendEvidenceReminders() {
         ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         : '-';
       var daysLabel = ap._daysUntilDue === 0
-        ? '<span style="color:#dc2626; font-weight:600;">Due Today</span>'
+        ? '<span style="color:#92400e; font-weight:500;">Target date today</span>'
         : '<span style="color:#f59e0b; font-weight:600;">' + ap._daysUntilDue + ' days left</span>';
       return [
         truncateWords(ap.action_description || '-', 10),
         String(ap._observation_title || '-').substring(0, 40),
         dueStr + '<br>' + daysLabel,
-        '<span style="color:#dc2626; font-weight:600;">\u26A0 No evidence</span>'
+        '<span style="color:#6b7280; font-style:italic;">Not yet uploaded</span>'
       ];
     });
 
     // Callout
     var calloutHtml = buildCalloutBox(
-      '<strong>Evidence upload is required</strong> to mark action plans as implemented. Please log in and upload your supporting documents before the due date.',
-      'warning'
+      'Supporting documentation is needed to close action plans. Please upload relevant documents at your earliest convenience.',
+      'info'
     );
 
     var loginLink = systemUrl
@@ -1450,7 +1451,7 @@ function sendOverdueEvidenceEscalation() {
 
   Object.keys(byOwner).forEach(function(ownerId) {
     var owner = getUserById(ownerId);
-    if (!owner || !owner.email) return;
+    if (!owner || !owner.email || !isActive(owner.is_active)) return;
 
     var plans = byOwner[ownerId];
     var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
@@ -1463,9 +1464,9 @@ function sendOverdueEvidenceEscalation() {
     var primaryObs = plans[0]._observation_title || 'Action Plan';
     var subject;
     if (hasDay7) {
-      subject = 'OVERDUE (7 Days): Action Plan Evidence Still Outstanding \u2014 ' + primaryObs;
+      subject = 'Follow-Up: Action Plan Documentation Outstanding \u2014 ' + primaryObs;
     } else {
-      subject = 'OVERDUE: Action Plan Evidence Not Submitted \u2014 ' + primaryObs;
+      subject = 'Follow-Up: Action Plan Documentation Pending \u2014 ' + primaryObs;
     }
 
     // Build intro with appropriate tone
@@ -1473,11 +1474,11 @@ function sendOverdueEvidenceEscalation() {
     if (hasDay7) {
       intro = 'Dear ' + ownerFirstName + ',<br><br>' +
         'The following action plan(s) have been <strong>overdue for ' + maxDaysOverdue + ' day(s)</strong> with no evidence submitted. ' +
-        'Please take action or delegate to someone who can.';
+        'Please provide an update on the status of these items or arrange for delegation if appropriate.';
     } else {
       intro = 'Dear ' + ownerFirstName + ',<br><br>' +
         'The following action plan(s) are now <strong>overdue</strong> with no evidence uploaded. ' +
-        'Please log in to provide your update and upload evidence, or delegate to someone who can.';
+        'Please provide an update at your earliest convenience.';
     }
 
     // Build table
@@ -1490,8 +1491,8 @@ function sendOverdueEvidenceEscalation() {
         truncateWords(ap.action_description || '-', 10),
         String(ap._observation_title || '-').substring(0, 40),
         dueStr,
-        '<span style="color:#dc2626; font-weight:600;">' + ap._daysOverdue + ' day(s)</span>',
-        '<span style="color:#dc2626; font-weight:600;">\u26A0 No evidence</span>'
+        '<span style="color:#92400e; font-weight:500;">' + ap._daysOverdue + '</span>',
+        '<span style="color:#6b7280; font-style:italic;">Not yet uploaded</span>'
       ];
     });
 
@@ -1570,14 +1571,14 @@ function sendAuditorUnsentWorkPaperNudge() {
 
   Object.keys(byAuditor).forEach(function(auditorId) {
     var auditor = getUserById(auditorId);
-    if (!auditor || !auditor.email) return;
+    if (!auditor || !auditor.email || !isActive(auditor.is_active)) return;
 
     var wps = byAuditor[auditorId];
     var firstName = auditor.first_name || (auditor.full_name || '').split(' ')[0] || 'Auditor';
 
-    var subject = 'Reminder: ' + wps.length + ' Approved Work Paper(s) Not Yet Sent to Auditees';
+    var subject = 'Follow-Up: ' + wps.length + ' Approved Work Paper(s) Pending Dispatch';
     var intro = 'Dear ' + firstName + ',<br><br>' +
-      'You have <strong>' + wps.length + '</strong> approved work paper(s) with assigned auditees that have not yet been sent. ' +
+      'You have <strong>' + wps.length + '</strong> approved work paper(s) with assigned auditees but have not yet been dispatched. ' +
       'Please review and send them at your earliest convenience:';
 
     var tableHeaders = ['Observation', 'Risk Rating', 'Approved Since', 'Auditees Assigned'];
@@ -1640,7 +1641,7 @@ function sendBiweeklySummary() {
     apRows.push([entry[0], '<strong>' + entry[1] + '</strong>']);
   });
 
-  var subject = 'Biweekly Audit Summary Report';
+  var subject = 'Internal Audit \u2014 Periodic Summary Report';
   var intro = 'Here is your biweekly audit summary as of <strong>' +
     new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) + '</strong>.' +
     '<br><br><strong>Work Papers (' + wpCounts.total + ' total):</strong>';

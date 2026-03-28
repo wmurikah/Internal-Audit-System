@@ -235,11 +235,15 @@ function getResponseStatusBadge(status) {
     'Draft Response': 'bg-info text-dark',
     'Response Submitted': 'bg-primary',
     'Response Accepted': 'bg-success',
-    'Response Rejected': 'bg-danger',
-    'Escalated': 'bg-dark'
+    'Response Rejected': 'bg-secondary',
+    'Escalated': 'bg-secondary'
+  };
+  var labelMap = {
+    'Response Rejected': 'Revision Requested',
+    'Escalated': 'Under Management Review'
   };
   var cls = map[status] || 'bg-secondary';
-  var label = status.replace('Response ', '');
+  var label = labelMap[status] || status.replace('Response ', '');
   return '<span class="badge ' + cls + '">' + label + '</span>';
 }
 
