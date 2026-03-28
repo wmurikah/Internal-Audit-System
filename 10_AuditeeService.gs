@@ -547,7 +547,7 @@ function createAuditeeActionPlan(data, user) {
     created_by: user.user_id,
     updated_at: now,
     updated_by: user.user_id,
-    created_by_role: user.role_code || 'AUDITEE',
+    created_by_role: user.role_code || 'JUNIOR_STAFF',
     auditee_proposed: true,
     response_id: data.response_id || ''
   };

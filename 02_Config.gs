@@ -153,13 +153,10 @@ const ROLES = {
   SUPER_ADMIN: 'SUPER_ADMIN',
   SENIOR_AUDITOR: 'SENIOR_AUDITOR',
   JUNIOR_STAFF: 'JUNIOR_STAFF',
-  AUDITEE: 'AUDITEE',
-  MANAGEMENT: 'MANAGEMENT',
   SENIOR_MGMT: 'SENIOR_MGMT',
-  OBSERVER: 'OBSERVER',
+  BOARD_MEMBER: 'BOARD_MEMBER',
   AUDITOR: 'AUDITOR',
   UNIT_MANAGER: 'UNIT_MANAGER',
-  BOARD: 'BOARD',
   EXTERNAL_AUDITOR: 'EXTERNAL_AUDITOR'
 };
 
@@ -167,7 +164,9 @@ const ROLES = {
 // Maps role_code to the user-facing display name.
 // OBSERVER must display as "Board Member" everywhere in the UI.
 const ROLE_DISPLAY_NAMES = {
-  OBSERVER: 'Board Member'
+  JUNIOR_STAFF: 'Audit Client',
+  UNIT_MANAGER: 'Head of Department',
+  BOARD_MEMBER: 'Board Member'
 };
 
 /**
@@ -178,6 +177,101 @@ function getRoleDisplayName(roleCode) {
   if (ROLE_DISPLAY_NAMES[roleCode]) return ROLE_DISPLAY_NAMES[roleCode];
   return getRoleName(roleCode);
 }
+
+/**
+ * Hardcoded role-permission matrix — the ONLY source of truth for what each role can do.
+ * SUPER_ADMIN also has a code-level bypass in canUserPerform().
+ */
+const ROLE_PERMISSIONS = {
+  SUPER_ADMIN: {
+    WORK_PAPER:        {can_create: true, can_read: true, can_update: true, can_delete: true, can_approve: true, can_export: true},
+    AUDITEE_RESPONSE:  {can_read_observation: true, can_write_mgmt_response: false, can_create_action_plan: false, can_update_action_plan: false, can_delegate: false, can_view_rounds: true, can_export: true},
+    ACTION_PLAN:       {can_create: true, can_read: true, can_update: true, can_delete: true, can_approve: true, can_export: true},
+    USER:              {can_create: true, can_read: true, can_update: true, can_delete: true, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    AI_ASSIST:         {can_create: true, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: true, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false}
+  },
+  SENIOR_AUDITOR: {
+    WORK_PAPER:        {can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: true, can_export: true},
+    AUDITEE_RESPONSE:  {can_read_observation: true, can_write_mgmt_response: false, can_create_action_plan: false, can_update_action_plan: false, can_delegate: false, can_view_rounds: true, can_export: true},
+    ACTION_PLAN:       {can_create: true, can_read: true, can_update: true, can_delete: true, can_approve: true, can_export: true},
+    USER:              {can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    AI_ASSIST:         {can_create: true, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: true, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false}
+  },
+  AUDITOR: {
+    WORK_PAPER:        {can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: true},
+    AUDITEE_RESPONSE:  {can_read_observation: false, can_write_mgmt_response: false, can_create_action_plan: false, can_update_action_plan: false, can_delegate: false, can_view_rounds: false, can_export: false},
+    ACTION_PLAN:       {can_create: true, can_read: true, can_update: true, can_delete: true, can_approve: true, can_export: true},
+    USER:              {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    AI_ASSIST:         {can_create: true, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: true, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false}
+  },
+  JUNIOR_STAFF: {
+    WORK_PAPER:        {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDITEE_RESPONSE:  {can_read_observation: true, can_write_mgmt_response: true, can_create_action_plan: true, can_update_action_plan: true, can_delegate: true, can_view_rounds: true, can_export: false},
+    ACTION_PLAN:       {can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false},
+    USER:              {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AI_ASSIST:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false}
+  },
+  SENIOR_MGMT: {
+    WORK_PAPER:        {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDITEE_RESPONSE:  {can_read_observation: true, can_write_mgmt_response: true, can_create_action_plan: true, can_update_action_plan: true, can_delegate: true, can_view_rounds: true, can_export: true},
+    ACTION_PLAN:       {can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: true},
+    USER:              {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    AI_ASSIST:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false}
+  },
+  UNIT_MANAGER: {
+    WORK_PAPER:        {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDITEE_RESPONSE:  {can_read_observation: true, can_write_mgmt_response: true, can_create_action_plan: true, can_update_action_plan: true, can_delegate: true, can_view_rounds: true, can_export: false},
+    ACTION_PLAN:       {can_create: true, can_read: true, can_update: true, can_delete: false, can_approve: false, can_export: false},
+    USER:              {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AI_ASSIST:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false}
+  },
+  BOARD_MEMBER: {
+    WORK_PAPER:        {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDITEE_RESPONSE:  {can_read_observation: false, can_write_mgmt_response: false, can_create_action_plan: false, can_update_action_plan: false, can_delegate: false, can_view_rounds: false, can_export: false},
+    ACTION_PLAN:       {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    USER:              {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    AI_ASSIST:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false}
+  },
+  EXTERNAL_AUDITOR: {
+    WORK_PAPER:        {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDITEE_RESPONSE:  {can_read_observation: false, can_write_mgmt_response: false, can_create_action_plan: false, can_update_action_plan: false, can_delegate: false, can_view_rounds: false, can_export: false},
+    ACTION_PLAN:       {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    USER:              {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    AI_ASSIST:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false}
+  }
+};
 
 var _idBlockCache = {};
 var ID_BLOCK_SIZE = 10;
@@ -361,12 +455,13 @@ function clearAllCaches() {
     'perm_SENIOR_AUDITOR',
     'perm_AUDITOR',
     'perm_JUNIOR_STAFF',
-    'perm_AUDITEE',
     'perm_UNIT_MANAGER',
-    'perm_MANAGEMENT',
     'perm_SENIOR_MGMT',
-    'perm_BOARD',
+    'perm_BOARD_MEMBER',
     'perm_EXTERNAL_AUDITOR',
+    'perm_AUDITEE',
+    'perm_MANAGEMENT',
+    'perm_BOARD',
     'perm_OBSERVER'
   ];
   
@@ -578,8 +673,8 @@ function getAuditorsDropdown() {
 function getAuditeesDropdown() {
   const allUsers = getUsersDropdown();
   const auditeeRoles = [
-    'AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT', 'JUNIOR_STAFF',
-    ROLES.AUDITEE, ROLES.MANAGEMENT, ROLES.UNIT_MANAGER
+    'JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT',
+    ROLES.JUNIOR_STAFF, ROLES.UNIT_MANAGER, ROLES.SENIOR_MGMT
   ];
   const auditees = allUsers.filter(u => auditeeRoles.includes(u.roleCode));
   return auditees.length > 0 ? auditees : allUsers;
@@ -867,7 +962,7 @@ function canUserPerform(user, action, entityType, entity) {
       }
     }
     
-    if (entityType === 'ACTION_PLAN' && roleCode === ROLES.AUDITEE) {
+    if (entityType === 'ACTION_PLAN' && roleCode === ROLES.JUNIOR_STAFF) {
       const ownerIds = parseIdList(entity.owner_ids);
       if (!ownerIds.includes(user.user_id)) {
         console.log('Auditee not owner of action plan');

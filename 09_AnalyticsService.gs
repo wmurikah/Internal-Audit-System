@@ -266,75 +266,7 @@ function getUserStats() {
  * Update role permissions
  */
 function updatePermissions(roleCode, permissions, user) {
-  if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
-    return { success: false, error: 'Permission denied' };
-  }
-
-  var data = getSheetData(SHEETS.PERMISSIONS);
-  if (!data || data.length < 2) data = [['role_code','module','can_create','can_read','can_update','can_delete','can_approve','can_export','permission_id','field_restrictions']];
-  const headers = data[0];
-
-  const roleIdx = headers.indexOf('role_code');
-  const moduleIdx = headers.indexOf('module');
-  const createIdx = headers.indexOf('can_create');
-  const readIdx = headers.indexOf('can_read');
-  const updateIdx = headers.indexOf('can_update');
-  const deleteIdx = headers.indexOf('can_delete');
-  const approveIdx = headers.indexOf('can_approve');
-  const exportIdx = headers.indexOf('can_export');
-
-  // Write to Firestore
-  if (typeof firestoreSet === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-    Object.entries(permissions).forEach(([module, perms]) => {
-      var permId = roleCode + '_' + module;
-      firestoreSet('02_Permissions', permId, {
-        permission_id: permId,
-        role_code: roleCode,
-        module: module,
-        can_create: perms.can_create === true,
-        can_read: perms.can_read === true,
-        can_update: perms.can_update === true,
-        can_delete: perms.can_delete === true,
-        can_approve: perms.can_approve === true,
-        can_export: perms.can_export === true,
-        field_restrictions: ''
-      });
-    });
-  }
-
-  // Invalidate ALL permission caches to ensure changes take effect immediately
-  try {
-    const cache = CacheService.getScriptCache();
-    // Clear cache for this specific role
-    cache.remove('perm_' + roleCode);
-    // Clear caches for all common roles to be safe
-    const allRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER', 'SENIOR_MGMT'];
-    allRoles.forEach(r => {
-      cache.remove('perm_' + r);
-    });
-    console.log('All permission caches invalidated');
-  } catch (e) {
-    console.warn('Failed to invalidate cache:', e);
-  }
-
-  // Invalidate in-memory sheet data cache so subsequent reads in this execution get fresh data
-  invalidateSheetData(SHEETS.PERMISSIONS);
-
-  // Write a permissions version counter so clients can detect changes faster
-  try {
-    firestoreSet('00_Config', 'permissions_version', {
-      config_key: 'permissions_version',
-      config_value: String(Date.now()),
-      description: 'Incremented when any role permissions change',
-      updated_at: new Date().toISOString()
-    });
-  } catch (e) {
-    console.warn('Failed to update permissions version counter:', e.message);
-  }
-
-  logAuditEvent('UPDATE_PERMISSIONS', 'ROLE', roleCode, null, permissions, user.user_id, user.email);
-
-  return { success: true, message: 'Permissions updated. Changes will propagate to active users within 15 seconds.' };
+  return { success: false, error: 'Permissions are hardcoded in the system and cannot be modified from the UI. Contact the system developer to change role permissions.' };
 }
 
 /**

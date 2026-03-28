@@ -285,7 +285,7 @@ function updateActionPlan(actionPlanId, data, user) {
   const updates = { updated_at: now, updated_by: user.user_id };
 
   // Determine which fields can be updated based on role
-  const isAuditee = user.role_code === ROLES.AUDITEE;
+  const isAuditee = user.role_code === ROLES.JUNIOR_STAFF;
   const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
   
   if (isAuditee) {
@@ -430,8 +430,8 @@ function getActionPlansRaw(filters, user) {
       // Roles that see ALL action plans (no ownership filter)
       const seeAllRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR, ROLES.SENIOR_MGMT];
 
-      // OBSERVER and EXTERNAL_AUDITOR: read-only, only see closed/verified action plans
-      if (roleCode === ROLES.OBSERVER || roleCode === ROLES.EXTERNAL_AUDITOR) {
+      // BOARD_MEMBER and EXTERNAL_AUDITOR: read-only, only see closed/verified action plans
+      if (roleCode === ROLES.BOARD_MEMBER || roleCode === ROLES.EXTERNAL_AUDITOR) {
         const viewableStatuses = ['Implemented', 'Verified', 'Closed'];
         if (!viewableStatuses.includes(row[colMap['status']])) {
           match = false;
