@@ -1680,7 +1680,7 @@ function sendBiweeklySummary() {
  */
 
 function getNotificationBulkRoles_() {
-  return [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR, ROLES.MANAGEMENT, ROLES.SENIOR_MGMT];
+  return [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR, ROLES.SENIOR_MGMT];
 }
 
 function getAllowedNotificationRecipientEmails_() {

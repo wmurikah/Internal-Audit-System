@@ -7,37 +7,7 @@
  */
 function getPermissions(roleCode, forceFresh) {
   if (!roleCode) return {};
-  
-  if (forceFresh === true) {
-    return getPermissionsFresh(roleCode);
-  }
-  
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'perm_' + roleCode;
-  
-  try {
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Object.keys(parsed).length > 0) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.warn('Cache read failed for permissions:', e);
-  }
-  
-  const permissions = getPermissionsFresh(roleCode);
-  
-  try {
-    if (Object.keys(permissions).length > 0) {
-      cache.put(cacheKey, JSON.stringify(permissions), 300);
-    }
-  } catch (e) {
-    console.warn('Failed to cache permissions:', e);
-  }
-  
-  return permissions;
+  return ROLE_PERMISSIONS[roleCode] || {};
 }
 
 /**
@@ -88,22 +58,13 @@ function warmAllCachesOnDeploy() {
     results.errors.push('dropdowns: ' + e.message);
   }
   
-  // 2. Warm role permissions
-  console.log('[2/4] Caching role permissions...');
-  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT'];
-  try {
-    const permStart = new Date().getTime();
-    roles.forEach(role => {
-      const perms = getPermissionsFresh(role);
-      cache.put('perm_' + role, JSON.stringify(perms), CONFIG.CACHE_TTL.PERMISSIONS);
-    });
-    results.cached.push('permissions (' + (new Date().getTime() - permStart) + 'ms)');
-  } catch (e) {
-    results.errors.push('permissions: ' + e.message);
-  }
-  
+  // 2. Permissions are now hardcoded in ROLE_PERMISSIONS — no cache warming needed
+  console.log('[2/4] Permissions hardcoded — skipping');
+  results.cached.push('permissions (hardcoded)');
+
   // 3. Warm role names
   console.log('[3/4] Caching role names...');
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
   try {
     const roleStart = new Date().getTime();
     roles.forEach(role => {
@@ -228,37 +189,7 @@ function getDropdownDataFresh() {
  */
 function getPermissionsFresh(roleCode) {
   if (!roleCode) return {};
-  const permissions = {};
-  try {
-    var data = getSheetData(SHEETS.PERMISSIONS);
-    if (data && data.length > 1) {
-      var headers = data[0];
-      var roleIdx = headers.indexOf('role_code');
-      var moduleIdx = headers.indexOf('module');
-      var createIdx = headers.indexOf('can_create');
-      var readIdx = headers.indexOf('can_read');
-      var updateIdx = headers.indexOf('can_update');
-      var deleteIdx = headers.indexOf('can_delete');
-      var approveIdx = headers.indexOf('can_approve');
-      var exportIdx = headers.indexOf('can_export');
-      var fieldRestIdx = headers.indexOf('field_restrictions');
-      for (var i = 1; i < data.length; i++) {
-        if (data[i][roleIdx] === roleCode) {
-          var module = data[i][moduleIdx];
-          permissions[module] = {
-            can_create: isActive(data[i][createIdx]),
-            can_read: isActive(data[i][readIdx]),
-            can_update: isActive(data[i][updateIdx]),
-            can_delete: isActive(data[i][deleteIdx]),
-            can_approve: isActive(data[i][approveIdx]),
-            can_export: isActive(data[i][exportIdx]),
-            field_restrictions: fieldRestIdx >= 0 ? parseStringArray(data[i][fieldRestIdx]) : []
-          };
-        }
-      }
-    }
-  } catch (e) { console.warn('Failed to load permissions:', e); }
-  return permissions;
+  return ROLE_PERMISSIONS[roleCode] || {};
 }
 
 function getRoleNameFresh(roleCode) {
@@ -302,7 +233,7 @@ function getCacheStatus() {
   
   const keysToCheck = [
     'dropdown_data_all', 'config_SYSTEM_NAME',
-    'perm_SUPER_ADMIN', 'perm_SENIOR_AUDITOR', 'perm_JUNIOR_STAFF', 'perm_AUDITEE',
+    'perm_SUPER_ADMIN', 'perm_SENIOR_AUDITOR', 'perm_JUNIOR_STAFF', 'perm_BOARD_MEMBER',
     'role_name_SUPER_ADMIN'
   ];
   
@@ -345,7 +276,7 @@ function clearAllCachesForced() {
     'config_PASSWORD_MIN_LENGTH', 'config_MAX_LOGIN_ATTEMPTS', 'config_AUDIT_FILES_FOLDER_ID'
   ];
   
-  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT'];
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
   roles.forEach(role => {
     allKeys.push('perm_' + role);
     allKeys.push('role_name_' + role);

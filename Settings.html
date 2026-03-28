@@ -83,66 +83,35 @@
       </div>
     </div>
 
-    <!-- Access Control Tab -->
+    <!-- Access Control Tab (Read-Only) -->
     <div class="tab-pane fade" id="accessControl">
-      <div class="row">
-        <!-- Roles Panel -->
-        <div class="col-lg-4 mb-4">
-          <div class="card">
-            <div class="card-header">
-              <i class="bi bi-people me-2"></i>Roles
-            </div>
-            <div class="card-body p-0">
-              <ul class="list-group list-group-flush" id="rolesList">
-                <li class="list-group-item text-center text-muted py-4">
-                  <div class="spinner-border spinner-border-sm"></div>
-                </li>
-              </ul>
-            </div>
-          </div>
+      <div class="alert alert-info mb-4">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Read-Only:</strong> Role permissions are hardcoded in the system code. Changes to role access require a code update. Contact the system developer.
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-shield-lock me-2"></i>Role Permissions Matrix
         </div>
-
-        <!-- Permissions Panel -->
-        <div class="col-lg-8 mb-4">
-          <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <span><i class="bi bi-key me-2"></i>Permissions for: <strong id="selectedRoleName">-</strong></span>
-              <button class="btn btn-sm btn-primary" onclick="savePermissions()" id="btnSavePermissions" disabled>
-                <i class="bi bi-save me-1"></i>Save Changes
-              </button>
-            </div>
-            <div class="card-body">
-              <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                  <thead>
-                    <tr>
-                      <th>Module</th>
-                      <th class="text-center">Create</th>
-                      <th class="text-center">Read</th>
-                      <th class="text-center">Update</th>
-                      <th class="text-center">Delete</th>
-                      <th class="text-center">Approve</th>
-                      <th class="text-center">Export</th>
-                    </tr>
-                  </thead>
-                  <tbody id="permissionsTable">
-                    <tr><td colspan="7" class="text-center text-muted py-4">Select a role to view permissions</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- System Actions -->
-          <div class="card mt-4">
-            <div class="card-header">
-              <i class="bi bi-gear me-2"></i>System Actions
-            </div>
-            <div class="card-body">
-              <button class="btn btn-outline-secondary" onclick="rebuildIndexes()">
-                <i class="bi bi-arrow-repeat me-1"></i>Rebuild All Indexes
-              </button>
-            </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-bordered table-hover table-sm mb-0" id="permissionsMatrixTable">
+              <thead class="table-light">
+                <tr>
+                  <th>Role</th>
+                  <th class="text-center">Module</th>
+                  <th class="text-center">Create</th>
+                  <th class="text-center">Read</th>
+                  <th class="text-center">Update</th>
+                  <th class="text-center">Delete</th>
+                  <th class="text-center">Approve</th>
+                  <th class="text-center">Export</th>
+                </tr>
+              </thead>
+              <tbody id="permissionsMatrixBody">
+                <tr><td colspan="8" class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Loading...</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -794,53 +763,28 @@ function deactivateUser(id) {
 
 // Access control
 function loadRoles() {
-  apiCall('getDropdownData', {}).then(r => {
-    if (!r.dropdowns?.roles) return;
-
-    const list = document.getElementById('rolesList');
-    list.innerHTML = r.dropdowns.roles.map(role => `
-      <li class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-          onclick="selectRole('${role.code}')" id="role-${role.code}" style="cursor:pointer;">
-        <div>
-          <strong>${escapeHtml(role.name)}</strong>
-          <br><small class="text-muted">Level: ${role.level}</small>
-        </div>
-        <i class="bi bi-chevron-right"></i>
-      </li>
-    `).join('');
-  });
-}
-
-function selectRole(roleCode) {
-  selectedRole = roleCode;
-
-  // Highlight selected
-  document.querySelectorAll('#rolesList .list-group-item').forEach(el => {
-    el.classList.remove('active');
-  });
-  document.getElementById('role-' + roleCode)?.classList.add('active');
-
-  document.getElementById('selectedRoleName').textContent = roleCode;
-  document.getElementById('btnSavePermissions').disabled = false;
-
-  loadPermissions(roleCode);
-}
-
-function loadPermissions(roleCode) {
-  apiCall('getPermissions', { roleCode }).then(r => {
-    if (!r.permissions) return;
-
-    permissionsData = r.permissions;
-    renderPermissionsTable();
+  // Render read-only permissions matrix from server
+  apiCall('getPermissions', { roleCode: 'ALL' }).then(r => {
+    renderPermissionsMatrix(r.permissions || {});
   }).catch(() => {
-    // Fallback - show empty permissions
-    permissionsData = {};
-    renderPermissionsTable();
+    // Fallback: render empty
+    renderPermissionsMatrix({});
   });
 }
 
-function renderPermissionsTable() {
-  const modules = [
+function renderPermissionsMatrix(allPermissions) {
+  var roleDisplayNames = {
+    SUPER_ADMIN: 'Head of Internal Audit',
+    SENIOR_AUDITOR: 'Senior Auditor',
+    AUDITOR: 'Auditor',
+    JUNIOR_STAFF: 'Audit Client',
+    SENIOR_MGMT: 'Senior Management',
+    UNIT_MANAGER: 'Head of Department',
+    BOARD_MEMBER: 'Board Member',
+    EXTERNAL_AUDITOR: 'External Auditor'
+  };
+  var roleOrder = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
+  var modules = [
     { key: 'WORK_PAPER', label: 'Work Paper' },
     { key: 'ACTION_PLAN', label: 'Action Plan' },
     { key: 'USER', label: 'User Management' },
@@ -850,68 +794,32 @@ function renderPermissionsTable() {
     { key: 'AUDIT_WORKBENCH', label: 'Audit Workbench' },
     { key: 'CONFIG', label: 'Config' }
   ];
-  const actions = ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'];
+  var actions = ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'];
 
-  // Define which actions are relevant per module (grey out irrelevant ones)
-  const relevantActions = {
-    'WORK_PAPER': ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'],
-    'ACTION_PLAN': ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'],
-    'USER': ['can_create', 'can_read', 'can_update', 'can_delete'],
-    'REPORT': ['can_read', 'can_export'],
-    'DASHBOARD': ['can_read', 'can_export'],
-    'AI_ASSIST': ['can_create', 'can_read'],
-    'AUDIT_WORKBENCH': ['can_create', 'can_read'],
-    'CONFIG': ['can_read', 'can_update']
-  };
+  var tbody = document.getElementById('permissionsMatrixBody');
+  var html = '';
 
-  const tbody = document.getElementById('permissionsTable');
-  tbody.innerHTML = modules.map(mod => {
-    const perm = permissionsData[mod.key] || {};
-    const relevant = relevantActions[mod.key] || actions;
-    return `
-      <tr>
-        <td>${mod.label}</td>
-        ${actions.map(act => {
-          const isRelevant = relevant.includes(act);
-          return `
-          <td class="text-center">
-            ${isRelevant ? `<input type="checkbox" class="form-check-input" data-module="${mod.key}" data-action="${act}"
-              ${perm[act] ? 'checked' : ''} onchange="markPermissionChanged()">` : '<span class="text-muted">-</span>'}
-          </td>`;
-        }).join('')}
-      </tr>
-    `;
-  }).join('');
-}
+  roleOrder.forEach(function(roleCode) {
+    var rolePerm = allPermissions[roleCode] || {};
+    var displayName = roleDisplayNames[roleCode] || roleCode;
+    var modCount = modules.length;
 
-function markPermissionChanged() {
-  document.getElementById('btnSavePermissions').classList.add('btn-warning');
-}
-
-function savePermissions() {
-  if (!selectedRole) return;
-
-  const permissions = {};
-  document.querySelectorAll('#permissionsTable input[type="checkbox"]').forEach(cb => {
-    const mod = cb.dataset.module;
-    const act = cb.dataset.action;
-    if (!permissions[mod]) permissions[mod] = {};
-    permissions[mod][act] = cb.checked;
+    modules.forEach(function(mod, idx) {
+      var perm = rolePerm[mod.key] || {};
+      html += '<tr>';
+      if (idx === 0) {
+        html += '<td rowspan="' + modCount + '" class="fw-bold align-middle" style="background:#f8f9fa;">' + escapeHtml(displayName) + '<br><small class="text-muted">' + roleCode + '</small></td>';
+      }
+      html += '<td>' + mod.label + '</td>';
+      actions.forEach(function(act) {
+        var val = perm[act] === true;
+        html += '<td class="text-center">' + (val ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-x-circle text-muted" style="opacity:0.3;"></i>') + '</td>';
+      });
+      html += '</tr>';
+    });
   });
 
-  showLoading('Saving permissions...');
-  apiCall('updatePermissions', { roleCode: selectedRole, permissions }).then(r => {
-    hideLoading();
-    if (r.success) {
-      showToast('Permissions saved', 'success');
-      document.getElementById('btnSavePermissions').classList.remove('btn-warning');
-    } else {
-      showToast(r.error || 'Error saving', 'danger');
-    }
-  }).catch(() => {
-    hideLoading();
-    showToast('Error saving permissions', 'danger');
-  });
+  tbody.innerHTML = html || '<tr><td colspan="8" class="text-center text-muted py-4">No permissions data available</td></tr>';
 }
 
 function rebuildIndexes() {

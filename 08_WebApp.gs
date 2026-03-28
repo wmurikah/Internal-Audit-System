@@ -411,6 +411,9 @@ function routeAction(action, data, user) {
       if (user.role_code !== ROLES.SUPER_ADMIN) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
+      if (data.roleCode === 'ALL') {
+        return { success: true, permissions: ROLE_PERMISSIONS };
+      }
       return { success: true, permissions: getPermissionsCached(data.roleCode) };
 
     case 'updatePermissions':
@@ -576,7 +579,7 @@ function routeAction(action, data, user) {
 
     // ========== BOARD REPORTS ==========
     case 'generateBoardReport':
-      if (user.role_code !== ROLES.OBSERVER && user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.BOARD_MEMBER && user.role_code !== ROLES.SUPER_ADMIN) {
         return { success: false, error: 'Access restricted to Board Members and Head of Internal Audit only' };
       }
       return generateBoardReport(data.filters, data.reportType, user);
@@ -743,7 +746,7 @@ function warmAllCaches() {
     console.log('Cached dropdowns');
     
     // 2. Cache all role permissions
-    const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'MANAGEMENT', 'SENIOR_MGMT', 'AUDITOR', 'UNIT_MANAGER', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
+    const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
     roles.forEach(role => {
       try {
         const perms = getPermissions(role);
@@ -804,7 +807,7 @@ function clearAllCaches() {
   ];
   
   // Clear all role permission caches
-  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'AUDITEE', 'UNIT_MANAGER', 'MANAGEMENT', 'SENIOR_MGMT', 'BOARD', 'EXTERNAL_AUDITOR', 'OBSERVER'];
+  const roles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
   roles.forEach(role => {
     keysToRemove.push('perm_' + role);
     keysToRemove.push('role_name_' + role);
@@ -1162,7 +1165,7 @@ function getInitDataOptimized(user) {
   }
 
   // Add pending finding counts for auditee roles
-  var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  var auditeeRoles = ['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'];
   if (auditeeRoles.indexOf(user.role_code) >= 0) {
     try {
       response.pendingFindings = getAuditeeFindingCounts(user);
@@ -1237,7 +1240,7 @@ function getInitDataLight(user) {
   }
 
   // Add pending finding counts for auditee roles
-  var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  var auditeeRoles = ['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'];
   if (auditeeRoles.indexOf(user.role_code) >= 0) {
     try {
       response.pendingFindings = getAuditeeFindingCounts(user);

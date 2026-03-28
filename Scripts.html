@@ -395,7 +395,7 @@ function checkAndShowPendingFindings() {
   if (sessionStorage.getItem('findings_banner_dismissed') === 'true') return;
 
   var role = window.currentUser?.role_code || '';
-  if (!['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'].includes(role)) return;
+  if (!['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'].includes(role)) return;
 
   // Use pre-loaded data from init if available
   var cached = LocalStore.get('initData');
@@ -610,7 +610,7 @@ function setupNavigation(p) {
   }
 
   // Auditee section: show My Observations for auditee-type roles
-  var auditeeRoles = ['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  var auditeeRoles = ['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'];
   if (auditeeRoles.includes(role)) {
     document.getElementById('navAuditeeSection')?.classList.remove('d-none');
     document.getElementById('navAuditeeMenu')?.classList.remove('d-none');
@@ -625,7 +625,7 @@ function setupNavigation(p) {
 
   // A) Work Papers sidebar: only auditor roles + Board Member (view-only)
   var wpFullRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
-  var wpViewOnlyRoles = ['OBSERVER']; // Board Member — WP list only
+  var wpViewOnlyRoles = ['BOARD_MEMBER']; // Board Member — WP list only
 
   if (wpFullRoles.indexOf(role) === -1 && wpViewOnlyRoles.indexOf(role) === -1) {
     // Non-auditor, non-Board Member: hide entire WP section
@@ -646,7 +646,7 @@ function setupNavigation(p) {
   }
 
   // B) My Observations: visible only for auditee roles + SUPER_ADMIN (HOA oversight)
-  var myObsRoles = ['SUPER_ADMIN', 'SENIOR_MGMT', 'MANAGEMENT', 'UNIT_MANAGER', 'AUDITEE'];
+  var myObsRoles = ['SUPER_ADMIN', 'SENIOR_MGMT', 'UNIT_MANAGER', 'JUNIOR_STAFF'];
   if (myObsRoles.indexOf(role) === -1) {
     // Hide My Observations for: AUDITOR, SENIOR_AUDITOR, OBSERVER (Board), EXTERNAL_AUDITOR
     document.getElementById('navAuditeeSection')?.classList.add('d-none');
@@ -654,7 +654,7 @@ function setupNavigation(p) {
   }
 
   // C) Board Reports: visible only for OBSERVER (Board Member) and SUPER_ADMIN
-  var boardReportRoles = ['OBSERVER', 'SUPER_ADMIN'];
+  var boardReportRoles = ['BOARD_MEMBER', 'SUPER_ADMIN'];
   if (boardReportRoles.indexOf(role) === -1) {
     document.getElementById('navBoardReports')?.classList.add('d-none');
   }
@@ -679,7 +679,7 @@ function loadAuditeeFindingCounts() {
 // Navigation
 function getDefaultPage() {
   var role = window.currentUser?.role_code || '';
-  if (['AUDITEE', 'MANAGEMENT', 'UNIT_MANAGER'].includes(role)) {
+  if (['JUNIOR_STAFF', 'UNIT_MANAGER'].includes(role)) {
     return 'auditee-findings';
   }
   return 'reports';
@@ -724,20 +724,20 @@ function navigateTo(page, params, updateHash = true) {
   // Page-level access guard: restrict WP pages to allowed roles
   var userRole = window.currentUser ? window.currentUser.role_code : '';
   var wpPages = ['work-papers', 'work-paper-form', 'work-paper-view', 'pending-review', 'send-queue', 'responses-to-review'];
-  var wpAllowedRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'OBSERVER'];
+  var wpAllowedRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'BOARD_MEMBER'];
   if (wpPages.indexOf(page) >= 0 && wpAllowedRoles.indexOf(userRole) === -1) {
     showToast('You do not have access to this page', 'danger');
     navigateTo(getDefaultPage(), {}, false);
     return;
   }
   // OBSERVER cannot access create/edit pages
-  if (page === 'work-paper-form' && userRole === 'OBSERVER') {
+  if (page === 'work-paper-form' && userRole === 'BOARD_MEMBER') {
     showToast('Board Members have view-only access', 'warning');
     navigateTo('work-papers', {}, false);
     return;
   }
-  // Board Reports: only OBSERVER and SUPER_ADMIN
-  if (page === 'board-reports' && userRole !== 'OBSERVER' && userRole !== 'SUPER_ADMIN') {
+  // Board Reports: only BOARD_MEMBER and SUPER_ADMIN
+  if (page === 'board-reports' && userRole !== 'BOARD_MEMBER' && userRole !== 'SUPER_ADMIN') {
     showToast('You do not have access to this page', 'danger');
     navigateTo(getDefaultPage(), {}, false);
     return;

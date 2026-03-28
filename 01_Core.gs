@@ -166,7 +166,7 @@ const Cache = {
     // Remove all well-known dynamic keys that match the pattern.
     var cache = CacheService.getScriptCache();
     var keysToRemove = [];
-    var roles = ['SUPER_ADMIN','SENIOR_AUDITOR','AUDITOR','JUNIOR_STAFF','AUDITEE','UNIT_MANAGER','MANAGEMENT','SENIOR_MGMT','BOARD','EXTERNAL_AUDITOR','OBSERVER'];
+    var roles = ['SUPER_ADMIN','SENIOR_AUDITOR','AUDITOR','JUNIOR_STAFF','UNIT_MANAGER','SENIOR_MGMT','BOARD_MEMBER','EXTERNAL_AUDITOR'];
 
     if (pattern === '*' || pattern === 'perm_' || pattern === 'perm') {
       roles.forEach(function(r) { keysToRemove.push('perm_' + r); });
@@ -558,34 +558,8 @@ function checkPermission(roleCode, module, action) {
 }
 
 function getPermissions(roleCode) {
-  const cacheKey = 'perm_' + roleCode;
-  
-  // Check cache
-  let permissions = Cache.get(cacheKey);
-  if (permissions) return permissions;
-  
-  // Load from sheet
-  const data = DB.getAll('02_Permissions');
-  permissions = {};
-  
-  data.forEach(row => {
-    if (row.role_code === roleCode) {
-      permissions[row.module] = {
-        can_create: isActive(row.can_create),
-        can_read: isActive(row.can_read),
-        can_update: isActive(row.can_update),
-        can_delete: isActive(row.can_delete),
-        can_approve: isActive(row.can_approve),
-        can_export: isActive(row.can_export),
-        field_restrictions: parseStringArray(row.field_restrictions)
-      };
-    }
-  });
-  
-  // Cache for 10 minutes
-  Cache.set(cacheKey, permissions, CONFIG.CACHE_TTL.PERMISSIONS);
-  
-  return permissions;
+  if (!roleCode) return {};
+  return ROLE_PERMISSIONS[roleCode] || {};
 }
 
 function getRoleName(roleCode) {

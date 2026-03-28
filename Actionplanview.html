@@ -241,7 +241,7 @@ function renderAPActions(ap) {
   var isAuditor = auditorRoles.indexOf(role) >= 0;
   var isHOA = hoaRoles.indexOf(role) >= 0;
   var isOwner = _apvIsOwner(ap, user);
-  var readOnlyRoles = ['OBSERVER', 'EXTERNAL_AUDITOR'];
+  var readOnlyRoles = ['BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
   var isReadOnly = readOnlyRoles.indexOf(role) >= 0;
   var terminalStatuses = ['Verified', 'Closed', 'Not Implemented'];
   var isTerminal = terminalStatuses.indexOf(ap.status) >= 0;
