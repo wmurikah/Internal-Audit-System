@@ -273,6 +273,158 @@ const ROLE_PERMISSIONS = {
   }
 };
 
+/**
+ * Role Workflow Access — maps each role to capabilities at each audit lifecycle stage.
+ * This is a governance reference constant. Do not modify without a code review.
+ */
+var ROLE_WORKFLOW_ACCESS = {
+  SUPER_ADMIN: {
+    role_description: "System owner with unrestricted access. Oversees the entire audit lifecycle, manages users, configures system settings, and has final approval authority on all work papers.",
+    access_path: "Path 1 (Work Papers) + Path 2 (Response Review)",
+    nav_sections: ["Work Papers", "Send Queue", "Responses to Review", "Action Plans", "My Observations", "Board Reports", "AI Assist", "Audit Workbench", "User Management", "System Settings", "Analytics"],
+    stages: {
+      "1_planning":        {access: "FULL", actions: ["Create work papers", "Assign risk ratings", "Set scope and objectives", "Assign audit team members"]},
+      "2_fieldwork":       {access: "FULL", actions: ["Edit work papers", "Document observations", "Attach evidence", "Use AI Assist for drafting"]},
+      "3_review":          {access: "FULL", actions: ["Review submitted work papers", "Approve or return with feedback", "Add review comments"]},
+      "4_approval":        {access: "FULL", actions: ["Final approval of work papers", "Override review decisions"]},
+      "5_communication":   {access: "FULL", actions: ["Send observations to auditees", "Assign responsible parties", "Batch-send multiple work papers", "Manage send queue"]},
+      "6_auditee_response":{access: "REVIEW", actions: ["View auditee responses via Responses to Review", "Accept or reject responses", "Trigger next round or escalation"]},
+      "7_follow_up":       {access: "FULL", actions: ["View all action plans", "Monitor overdue items", "View evidence uploads", "Track due dates"]},
+      "8_verification":    {access: "FULL", actions: ["Verify action plan implementation", "Accept or return action plans", "Close verified items"]},
+      "9_reporting":       {access: "FULL", actions: ["Generate board reports (Word)", "View analytics dashboard", "Export data", "View periodic summaries"]},
+      "10_closure":        {access: "FULL", actions: ["Archive completed audits", "Delete draft work papers"]}
+    }
+  },
+  SENIOR_AUDITOR: {
+    role_description: "Senior audit team member who reviews work papers, manages the send queue, and reviews auditee responses. Can create users but cannot delete work papers.",
+    access_path: "Path 1 (Work Papers) + Path 2 (Response Review)",
+    nav_sections: ["Work Papers", "Send Queue", "Responses to Review", "Action Plans", "AI Assist", "Audit Workbench", "Analytics"],
+    stages: {
+      "1_planning":        {access: "FULL", actions: ["Create work papers", "Assign risk ratings", "Set scope"]},
+      "2_fieldwork":       {access: "FULL", actions: ["Edit work papers", "Document observations", "Attach evidence", "Use AI Assist"]},
+      "3_review":          {access: "FULL", actions: ["Review submitted work papers", "Approve or return with feedback"]},
+      "4_approval":        {access: "FULL", actions: ["Approve work papers"]},
+      "5_communication":   {access: "FULL", actions: ["Send to auditees", "Assign responsible parties", "Batch-send", "Manage send queue"]},
+      "6_auditee_response":{access: "REVIEW", actions: ["View responses via Responses to Review", "Accept or reject responses", "Trigger next round or escalation"]},
+      "7_follow_up":       {access: "FULL", actions: ["View all action plans", "Monitor overdue items", "Track due dates"]},
+      "8_verification":    {access: "FULL", actions: ["Verify action plan implementation", "Accept or return action plans"]},
+      "9_reporting":       {access: "READ", actions: ["View analytics dashboard", "Export reports"]},
+      "10_closure":        {access: "NONE", actions: ["Cannot delete work papers"]}
+    }
+  },
+  AUDITOR: {
+    role_description: "Core audit team member who creates and executes work papers. Can verify action plans but cannot approve work papers or access the send queue.",
+    access_path: "Path 1 (Work Papers)",
+    nav_sections: ["Work Papers", "Action Plans", "AI Assist", "Audit Workbench", "Analytics"],
+    stages: {
+      "1_planning":        {access: "FULL", actions: ["Create work papers", "Assign risk ratings", "Set scope"]},
+      "2_fieldwork":       {access: "FULL", actions: ["Edit work papers", "Document observations", "Attach evidence", "Use AI Assist"]},
+      "3_review":          {access: "SUBMIT", actions: ["Submit work papers for review (cannot approve)"]},
+      "4_approval":        {access: "NONE", actions: ["Cannot approve work papers"]},
+      "5_communication":   {access: "NONE", actions: ["Cannot send to auditees", "Cannot access send queue"]},
+      "6_auditee_response":{access: "NONE", actions: ["Cannot review auditee responses"]},
+      "7_follow_up":       {access: "FULL", actions: ["View all action plans", "Monitor items", "Track due dates"]},
+      "8_verification":    {access: "FULL", actions: ["Verify action plan implementation", "Accept or return action plans"]},
+      "9_reporting":       {access: "READ", actions: ["View analytics dashboard", "Export reports"]},
+      "10_closure":        {access: "NONE", actions: ["Cannot delete work papers"]}
+    }
+  },
+  JUNIOR_STAFF: {
+    role_description: "Audit client (auditee) who receives observations, writes management responses, creates action plans, and delegates to responsible persons within their department.",
+    access_path: "Path 2 (Auditee Response) only",
+    nav_sections: ["My Observations", "Action Plans (own)", "AI Assist (read)", "Dashboard"],
+    stages: {
+      "1_planning":        {access: "NONE", actions: ["No access"]},
+      "2_fieldwork":       {access: "NONE", actions: ["No access"]},
+      "3_review":          {access: "NONE", actions: ["No access"]},
+      "4_approval":        {access: "NONE", actions: ["No access"]},
+      "5_communication":   {access: "RECEIVE", actions: ["Receives observations sent by auditors", "Gets email notification with assigned observations"]},
+      "6_auditee_response":{access: "FULL", actions: ["Read observation detail and risk rating", "Write management response", "Create action plans", "Update own action plans", "Delegate to responsible persons", "View response rounds history", "Submit response for auditor review"]},
+      "7_follow_up":       {access: "OWN", actions: ["View own action plans only", "Upload evidence for own action plans", "Track own due dates"]},
+      "8_verification":    {access: "NONE", actions: ["Cannot verify (auditor function)"]},
+      "9_reporting":       {access: "NONE", actions: ["No report access"]},
+      "10_closure":        {access: "NONE", actions: ["No access"]}
+    }
+  },
+  SENIOR_MGMT: {
+    role_description: "Senior management (C-suite, directors) who receive observations, respond with management positions, and have visibility across all action plans in the organization for oversight.",
+    access_path: "Path 2 (Auditee Response) only",
+    nav_sections: ["My Observations", "All Action Plans", "Dashboard", "Reports (read)", "AI Assist (read)"],
+    stages: {
+      "1_planning":        {access: "NONE", actions: ["No access"]},
+      "2_fieldwork":       {access: "NONE", actions: ["No access"]},
+      "3_review":          {access: "NONE", actions: ["No access"]},
+      "4_approval":        {access: "NONE", actions: ["No access"]},
+      "5_communication":   {access: "RECEIVE", actions: ["Receives observations", "Gets escalation notifications"]},
+      "6_auditee_response":{access: "FULL", actions: ["Read observation detail", "Write management response", "Create and update action plans", "Delegate to responsible persons", "View response rounds", "Export responses"]},
+      "7_follow_up":       {access: "ALL", actions: ["View ALL action plans across organization (not just own)", "Monitor overdue items org-wide", "Export action plan data"]},
+      "8_verification":    {access: "NONE", actions: ["Cannot verify"]},
+      "9_reporting":       {access: "READ", actions: ["View reports (read only)", "View dashboard with export"]},
+      "10_closure":        {access: "NONE", actions: ["No access"]}
+    }
+  },
+  UNIT_MANAGER: {
+    role_description: "Head of Department who receives observations for their unit, writes management responses, and manages action plans within their department scope.",
+    access_path: "Path 2 (Auditee Response) only",
+    nav_sections: ["My Observations", "Action Plans (own)", "Dashboard", "AI Assist (read)"],
+    stages: {
+      "1_planning":        {access: "NONE", actions: ["No access"]},
+      "2_fieldwork":       {access: "NONE", actions: ["No access"]},
+      "3_review":          {access: "NONE", actions: ["No access"]},
+      "4_approval":        {access: "NONE", actions: ["No access"]},
+      "5_communication":   {access: "RECEIVE", actions: ["Receives observations for their department"]},
+      "6_auditee_response":{access: "FULL", actions: ["Read observation detail", "Write management response", "Create and update action plans", "Delegate within department", "View response rounds"]},
+      "7_follow_up":       {access: "OWN", actions: ["View own action plans", "Upload evidence", "Track due dates"]},
+      "8_verification":    {access: "NONE", actions: ["Cannot verify"]},
+      "9_reporting":       {access: "NONE", actions: ["No report access"]},
+      "10_closure":        {access: "NONE", actions: ["No access"]}
+    }
+  },
+  BOARD_MEMBER: {
+    role_description: "Board member with read-only oversight access. Can view approved work papers, completed action plans, and generate board-level summary reports. Cannot modify any data.",
+    access_path: "Path 1 (Work Papers, read only)",
+    nav_sections: ["Work Papers (read only)", "Action Plans (read only)", "Board Reports", "Dashboard"],
+    stages: {
+      "1_planning":        {access: "NONE", actions: ["No access (cannot see drafts)"]},
+      "2_fieldwork":       {access: "NONE", actions: ["No access"]},
+      "3_review":          {access: "NONE", actions: ["No access"]},
+      "4_approval":        {access: "NONE", actions: ["No access"]},
+      "5_communication":   {access: "READ", actions: ["Can see work papers after they are approved or sent to auditee (read only)"]},
+      "6_auditee_response":{access: "NONE", actions: ["No access to response workflow"]},
+      "7_follow_up":       {access: "READ", actions: ["View action plans (Implemented, Verified, Closed only)", "Read only"]},
+      "8_verification":    {access: "NONE", actions: ["Cannot verify"]},
+      "9_reporting":       {access: "FULL", actions: ["Generate board reports (Word document)", "View dashboard", "Export summaries"]},
+      "10_closure":        {access: "NONE", actions: ["No access"]}
+    }
+  },
+  EXTERNAL_AUDITOR: {
+    role_description: "External auditor with limited read-only access to approved work papers and completed action plans. Cannot generate board reports.",
+    access_path: "Path 1 (Work Papers, read only)",
+    nav_sections: ["Work Papers (read only)", "Action Plans (read only)", "Dashboard"],
+    stages: {
+      "1_planning":        {access: "NONE", actions: ["No access"]},
+      "2_fieldwork":       {access: "NONE", actions: ["No access"]},
+      "3_review":          {access: "NONE", actions: ["No access"]},
+      "4_approval":        {access: "NONE", actions: ["No access"]},
+      "5_communication":   {access: "READ", actions: ["Can see approved and sent work papers (read only)"]},
+      "6_auditee_response":{access: "NONE", actions: ["No access"]},
+      "7_follow_up":       {access: "READ", actions: ["View completed action plans (read only)"]},
+      "8_verification":    {access: "NONE", actions: ["Cannot verify"]},
+      "9_reporting":       {access: "READ", actions: ["View dashboard", "Export reports"]},
+      "10_closure":        {access: "NONE", actions: ["No access"]}
+    }
+  }
+};
+
+/**
+ * Get role workflow access data
+ */
+function getRoleWorkflowAccess(roleCode) {
+  if (!roleCode) return null;
+  if (roleCode === 'ALL') return ROLE_WORKFLOW_ACCESS;
+  return ROLE_WORKFLOW_ACCESS[roleCode] || null;
+}
+
 var _idBlockCache = {};
 var ID_BLOCK_SIZE = 10;
 

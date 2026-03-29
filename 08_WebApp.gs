@@ -407,6 +407,12 @@ function routeAction(action, data, user) {
       return { success: true, cleaned: cleanupExpiredSessions() };
 
     // ========== SETTINGS (SUPER_ADMIN ONLY) ==========
+    case 'getAccessControlDashboardData':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted to Head of Internal Audit only' };
+      }
+      return { success: true, data: getAccessControlDashboardData() };
+
     case 'getPermissions':
       if (user.role_code !== ROLES.SUPER_ADMIN) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };

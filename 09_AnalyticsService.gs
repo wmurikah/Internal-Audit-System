@@ -266,7 +266,19 @@ function getUserStats() {
  * Update role permissions
  */
 function updatePermissions(roleCode, permissions, user) {
-  return { success: false, error: 'Permissions are hardcoded in the system and cannot be modified from the UI. Contact the system developer to change role permissions.' };
+  return { success: false, error: 'Permissions are system-managed and cannot be modified from the UI. Contact the system administrator.' };
+}
+
+/**
+ * Returns dashboard data for the read-only Access Control tab
+ */
+function getAccessControlDashboardData() {
+  return {
+    permissions: ROLE_PERMISSIONS,
+    workflow: ROLE_WORKFLOW_ACCESS,
+    roles: ROLES,
+    displayNames: ROLE_DISPLAY_NAMES
+  };
 }
 
 /**
