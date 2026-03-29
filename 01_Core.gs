@@ -256,72 +256,6 @@ const DB = {
 // DBWrite and Transaction have been removed (Firestore-only mode).
 // All writes go directly through firestoreSet / firestoreUpdate / firestoreDelete.
 
-/**
- * Generate a unique ID using consolidated counters in Firestore.
- * Uses a single 'counters' document in system_settings collection
- * for all entity types, with atomic increment via script lock.
- */
-function getNextId(prefix) {
-  var lock = LockService.getScriptLock();
-
-  try {
-    lock.waitLock(10000);
-
-    var counterKey = prefix.toLowerCase() + '_counter';
-
-    // Read from consolidated counters document
-    var countersDoc = firestoreGet('00_Config', 'counters');
-    var currentVal = (countersDoc && countersDoc[counterKey]) ? parseInt(countersDoc[counterKey]) : 1;
-
-    // Atomic increment via partial update
-    var incrementFields = {};
-    incrementFields[counterKey] = currentVal + 1;
-    incrementFields.updated_at = new Date().toISOString();
-
-    if (countersDoc) {
-      // Update existing counters document
-      var updated = {};
-      for (var k in countersDoc) { updated[k] = countersDoc[k]; }
-      for (var k2 in incrementFields) { updated[k2] = incrementFields[k2]; }
-      firestoreSet('00_Config', 'counters', updated);
-    } else {
-      // Create counters document
-      incrementFields.config_key = 'counters';
-      incrementFields.description = 'Consolidated ID counters';
-      firestoreSet('00_Config', 'counters', incrementFields);
-    }
-
-    lock.releaseLock();
-    Cache.remove('config_all');
-
-    var padded = String(currentVal).padStart(6, '0');
-    return getIdPrefix(prefix) + padded;
-
-  } catch (e) {
-    try { lock.releaseLock(); } catch (ignored) {}
-    throw e;
-  }
-}
-
-/** Alias for backward compatibility */
-function generateId(entityType) {
-  return getNextId(entityType);
-}
-
-function getIdPrefix(prefix) {
-  const prefixMap = {
-    'WORK_PAPER': 'WP-',
-    'ACTION_PLAN': 'AP-',
-    'REQUIREMENT': 'REQ-',
-    'FILE': 'FILE-',
-    'USER': 'USR-',
-    'SESSION': 'SESS-',
-    'LOG': 'LOG-',
-    'NOTIFICATION': 'NOTIF-'
-  };
-  return prefixMap[prefix] || prefix + '-';
-}
-
 function getConfig(key) {
   const allConfig = getAllConfig();
   return allConfig[key];
@@ -501,7 +435,7 @@ function formatStringArray(arr) {
 
 function logAudit(action, entityType, entityId, oldData, newData, userId) {
   try {
-    var logId = getNextId('LOG');
+    var logId = generateId('LOG');
     var logData = {
       log_id: logId,
       action: action,
