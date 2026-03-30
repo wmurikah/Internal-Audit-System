@@ -802,8 +802,16 @@ function loadAccessControlDashboard() {
   }
   apiCall('getAccessControlDashboardData', {}).then(function(r) {
     if (r.success && r.data) {
-      _acDashboardCache = r.data;
-      renderFullAccessControlDashboard(r.data);
+      // Normalize: data may arrive at r.data or r.data.data depending on wrapping
+      var d = r.data;
+      if (d.data && d.data.permissions) d = d.data;
+      // Check for backend error nested inside the data envelope
+      if (d.error && (!d.permissions || Object.keys(d.permissions).length === 0)) {
+        document.getElementById('accessControlContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(d.error) + '</div>';
+        return;
+      }
+      _acDashboardCache = d;
+      renderFullAccessControlDashboard(d);
     } else {
       var msg = (r && (r.error || r.message)) || 'Unknown error loading access control data.';
       document.getElementById('accessControlContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(msg) + '</div>';
@@ -819,7 +827,7 @@ function _acBadge(access) {
 }
 
 function _acCheck(val) {
-  return val === true
+  return (val === true || val === 'true' || val === 1)
     ? '<span style="color:#198754;font-weight:bold;">&#10003;</span>'
     : '<span style="color:#adb5bd;">&mdash;</span>';
 }
@@ -829,6 +837,12 @@ function _acSectionHeader(num, title) {
 }
 
 function renderFullAccessControlDashboard(data) {
+  // Ensure top-level keys exist to prevent null-reference errors
+  data = data || {};
+  data.permissions = data.permissions || {};
+  data.workflow = data.workflow || {};
+  data.roles = data.roles || {};
+  data.displayNames = data.displayNames || {};
   var html = '';
 
   // ===== Section 1: Header Banner =====
