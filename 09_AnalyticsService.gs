@@ -274,30 +274,26 @@ function updatePermissions(roleCode, permissions, user) {
  */
 function getAccessControlDashboardData() {
   try {
-    if (typeof ROLE_PERMISSIONS === 'undefined' || typeof ROLE_WORKFLOW_ACCESS === 'undefined') {
-      return {
-        error: 'Role configuration constants are not defined. Check 02_Config.gs for duplicate declarations.',
-        permissions: {},
-        workflow: {},
-        roles: {},
-        displayNames: {}
-      };
-    }
-    return {
-      permissions: ROLE_PERMISSIONS,
-      workflow: ROLE_WORKFLOW_ACCESS,
-      roles: ROLES,
-      displayNames: ROLE_DISPLAY_NAMES
-    };
+    var permissions = (typeof ROLE_PERMISSIONS !== 'undefined') ? ROLE_PERMISSIONS : {};
+    var workflow = (typeof ROLE_WORKFLOW_ACCESS !== 'undefined') ? ROLE_WORKFLOW_ACCESS : {};
+    var roles = (typeof ROLES !== 'undefined') ? ROLES : {};
+    var displayNames = (typeof ROLE_DISPLAY_NAMES !== 'undefined') ? ROLE_DISPLAY_NAMES : {};
+
+    return sanitizeForClient({
+      permissions: permissions,
+      workflow: workflow,
+      roles: roles,
+      displayNames: displayNames
+    });
   } catch (error) {
     console.error('getAccessControlDashboardData error:', error);
-    return {
+    return sanitizeForClient({
       error: 'Failed to load access control data: ' + error.message,
       permissions: {},
       workflow: {},
       roles: {},
       displayNames: {}
-    };
+    });
   }
 }
 
