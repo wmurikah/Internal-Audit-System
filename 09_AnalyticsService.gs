@@ -275,7 +275,13 @@ function updatePermissions(roleCode, permissions, user) {
 function getAccessControlDashboardData() {
   try {
     if (typeof ROLE_PERMISSIONS === 'undefined' || typeof ROLE_WORKFLOW_ACCESS === 'undefined') {
-      throw new Error('Role configuration constants are not defined. Check 02_Config.gs for duplicate declarations.');
+      return {
+        error: 'Role configuration constants are not defined. Check 02_Config.gs for duplicate declarations.',
+        permissions: {},
+        workflow: {},
+        roles: {},
+        displayNames: {}
+      };
     }
     return {
       permissions: ROLE_PERMISSIONS,
@@ -285,7 +291,13 @@ function getAccessControlDashboardData() {
     };
   } catch (error) {
     console.error('getAccessControlDashboardData error:', error);
-    throw new Error('Failed to load access control data: ' + error.message);
+    return {
+      error: 'Failed to load access control data: ' + error.message,
+      permissions: {},
+      workflow: {},
+      roles: {},
+      displayNames: {}
+    };
   }
 }
 
