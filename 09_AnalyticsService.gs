@@ -273,12 +273,20 @@ function updatePermissions(roleCode, permissions, user) {
  * Returns dashboard data for the read-only Access Control tab
  */
 function getAccessControlDashboardData() {
-  return {
-    permissions: ROLE_PERMISSIONS,
-    workflow: ROLE_WORKFLOW_ACCESS,
-    roles: ROLES,
-    displayNames: ROLE_DISPLAY_NAMES
-  };
+  try {
+    if (typeof ROLE_PERMISSIONS === 'undefined' || typeof ROLE_WORKFLOW_ACCESS === 'undefined') {
+      throw new Error('Role configuration constants are not defined. Check 02_Config.gs for duplicate declarations.');
+    }
+    return {
+      permissions: ROLE_PERMISSIONS,
+      workflow: ROLE_WORKFLOW_ACCESS,
+      roles: ROLES,
+      displayNames: ROLE_DISPLAY_NAMES
+    };
+  } catch (error) {
+    console.error('getAccessControlDashboardData error:', error);
+    throw new Error('Failed to load access control data: ' + error.message);
+  }
 }
 
 /**
