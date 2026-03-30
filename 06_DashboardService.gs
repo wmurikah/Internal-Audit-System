@@ -1432,6 +1432,163 @@ function getComprehensiveReportData(filters) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Dashboard V2 — Single-call API for redesigned dashboard
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * getDashboardDataV2(params)
+ *
+ * Returns ALL raw observations and action plans in one response,
+ * with computed fields and metadata for client-side filtering.
+ * This is the single data source for the redesigned 3-tab dashboard.
+ *
+ * No role-based filtering — returns ALL data (SUPER_ADMIN level).
+ * Role filtering is handled elsewhere.
+ */
+function getDashboardDataV2(params) {
+  try {
+    params = params || {};
+    var startTime = new Date().getTime();
+
+    // ── Fetch all work papers (observations) ──
+    var workPapers = getWorkPapers({}, null);
+
+    // ── Fetch all action plans ──
+    var actionPlans = getActionPlans({}, null);
+
+    // ── Build lookup: work_paper_id → action plans[] ──
+    var apByWp = {};
+    actionPlans.forEach(function(ap) {
+      var wpId = ap.work_paper_id;
+      if (!apByWp[wpId]) apByWp[wpId] = [];
+      apByWp[wpId].push(ap);
+    });
+
+    // ── Build area lookup for enrichment ──
+    var areaLookup = {};
+    try {
+      var areaData = getSheetData(SHEETS.AUDIT_AREAS);
+      if (areaData && areaData.length > 1) {
+        var areaHeaders = areaData[0];
+        var areaIdIdx = areaHeaders.indexOf('area_id');
+        var areaNameIdx = areaHeaders.indexOf('area_name');
+        var areaCodeIdx = areaHeaders.indexOf('area_code');
+        for (var ai = 1; ai < areaData.length; ai++) {
+          var aid = areaData[ai][areaIdIdx];
+          if (aid) areaLookup[aid] = areaData[ai][areaNameIdx] || areaData[ai][areaCodeIdx] || aid;
+          var acode = areaData[ai][areaCodeIdx];
+          if (acode && !areaLookup[acode]) areaLookup[acode] = areaData[ai][areaNameIdx] || acode;
+        }
+      }
+    } catch (e) { console.warn('getDashboardDataV2: area lookup failed:', e.message); }
+
+    // ── Build WP lookup for AP enrichment ──
+    var wpLookup = {};
+    workPapers.forEach(function(wp) { wpLookup[wp.work_paper_id] = wp; });
+
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+
+    // ── Compute per-observation fields ──
+    var observations = workPapers.map(function(wp) {
+      // Enrich with area name
+      if (!wp.audit_area_name && wp.audit_area_id && areaLookup[wp.audit_area_id]) {
+        wp.audit_area_name = areaLookup[wp.audit_area_id];
+      }
+
+      var linkedAPs = apByWp[wp.work_paper_id] || [];
+      wp.action_plan_count = linkedAPs.length;
+      wp.overdue_ap_count = linkedAPs.filter(function(ap) {
+        if (closedStatuses.indexOf(ap.status) !== -1) return false;
+        if (!ap.due_date) return false;
+        var due = new Date(ap.due_date);
+        due.setHours(0, 0, 0, 0);
+        return due < today;
+      }).length;
+
+      return wp;
+    });
+
+    // ── Compute per-action-plan fields ──
+    var enrichedAPs = actionPlans.map(function(ap) {
+      // days_overdue: only for active (non-closed) APs past due
+      if (closedStatuses.indexOf(ap.status) === -1 && ap.due_date) {
+        var due = new Date(ap.due_date);
+        due.setHours(0, 0, 0, 0);
+        ap.days_overdue = Math.max(0, Math.floor((today - due) / 86400000));
+      } else {
+        ap.days_overdue = 0;
+      }
+
+      // Enrich with parent WP's affiliate_code and audit_area for client filtering
+      var parentWP = wpLookup[ap.work_paper_id];
+      if (parentWP) {
+        ap.affiliate_code = parentWP.affiliate_code || '';
+        ap.audit_area_id = parentWP.audit_area_id || '';
+        ap.audit_area_name = parentWP.audit_area_name || '';
+        ap.risk_rating = parentWP.risk_rating || '';
+      }
+
+      return ap;
+    });
+
+    // ── Extract metadata ──
+    var affiliateSet = {};
+    var auditAreaSet = {};
+    var yearSet = {};
+    var earliestDate = null;
+
+    observations.forEach(function(wp) {
+      if (wp.affiliate_code) affiliateSet[wp.affiliate_code] = true;
+      var areaName = wp.audit_area_name || wp.audit_area_id;
+      if (areaName) auditAreaSet[areaName] = true;
+
+      var d = wp.created_at ? new Date(wp.created_at) : null;
+      if (d && !isNaN(d.getTime())) {
+        yearSet[d.getFullYear()] = true;
+        if (!earliestDate || d < earliestDate) earliestDate = d;
+      }
+    });
+
+    enrichedAPs.forEach(function(ap) {
+      if (ap.affiliate_code) affiliateSet[ap.affiliate_code] = true;
+
+      var d = ap.created_at ? new Date(ap.created_at) : null;
+      if (d && !isNaN(d.getTime())) {
+        yearSet[d.getFullYear()] = true;
+        if (!earliestDate || d < earliestDate) earliestDate = d;
+      }
+    });
+
+    var affiliates = Object.keys(affiliateSet).sort();
+    var auditAreas = Object.keys(auditAreaSet).sort();
+    var years = Object.keys(yearSet).map(Number).sort(function(a, b) { return a - b; });
+
+    console.log('getDashboardDataV2 completed in', new Date().getTime() - startTime, 'ms',
+      '— observations:', observations.length, ', actionPlans:', enrichedAPs.length);
+
+    return sanitizeForClient({
+      success: true,
+      observations: observations,
+      actionPlans: enrichedAPs,
+      meta: {
+        affiliates: affiliates,
+        auditAreas: auditAreas,
+        years: years,
+        earliestDate: earliestDate ? earliestDate.toISOString() : null,
+        totalObservations: observations.length,
+        totalActionPlans: enrichedAPs.length
+      }
+    });
+
+  } catch (e) {
+    console.error('getDashboardDataV2 error:', e);
+    return { success: false, error: 'Failed to load dashboard data: ' + e.message };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // Dashboard Summary - Atomic increment/decrement helpers
 // ─────────────────────────────────────────────────────────────
 

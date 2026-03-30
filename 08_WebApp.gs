@@ -374,6 +374,10 @@ function routeAction(action, data, user) {
       // Dashboard is visible to ALL authenticated users regardless of role
       return { success: true, ...getComprehensiveReportData(data.filters) };
 
+    case 'getDashboardDataV2':
+      // Redesigned dashboard — returns all raw data for client-side filtering
+      return getDashboardDataV2(data);
+
     // ========== NOTIFICATIONS ==========
     case 'getNotificationQueueStatus':
       return { success: true, status: getNotificationQueueStatus() };

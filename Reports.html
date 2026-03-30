@@ -1,23 +1,41 @@
-<!-- Dashboard Page - Comprehensive Internal Audit Reporting Module -->
+<!-- Dashboard Page - Redesigned Internal Audit Reporting Module (V2) -->
 <div class="reports-page">
 
-  <!-- Report Header & Filters -->
+  <!-- Filter Bar -->
   <div class="card mb-3">
     <div class="card-body py-3">
-      <div class="d-flex flex-wrap align-items-center gap-3">
+      <div class="d-flex flex-wrap align-items-center gap-2">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
           <i class="bi bi-funnel text-primary"></i>
           <strong class="small text-uppercase text-muted">Filters</strong>
         </div>
-        <select class="form-select form-select-sm" id="rptFilterYear" style="max-width:120px;" onchange="loadReportData()">
+
+        <!-- Year Dropdown -->
+        <select class="form-select form-select-sm" id="dashYear" style="max-width:120px;" onchange="onDashFilterChange()">
           <option value="">All Years</option>
         </select>
-        <select class="form-select form-select-sm" id="rptFilterAffiliate" style="max-width:180px;" onchange="loadReportData()">
+
+        <!-- Quarter Pills -->
+        <div class="btn-group btn-group-sm" id="dashQuarterGroup">
+          <button type="button" class="btn btn-outline-secondary active" data-quarter="all" onclick="selectQuarterPill(this)">All</button>
+          <button type="button" class="btn btn-outline-secondary" data-quarter="q1" onclick="selectQuarterPill(this)">Q1</button>
+          <button type="button" class="btn btn-outline-secondary" data-quarter="q2" onclick="selectQuarterPill(this)">Q2</button>
+          <button type="button" class="btn btn-outline-secondary" data-quarter="q3" onclick="selectQuarterPill(this)">Q3</button>
+          <button type="button" class="btn btn-outline-secondary" data-quarter="q4" onclick="selectQuarterPill(this)">Q4</button>
+          <button type="button" class="btn btn-outline-secondary" data-quarter="ytd" onclick="selectQuarterPill(this)">YTD</button>
+        </div>
+
+        <!-- Affiliate Dropdown -->
+        <select class="form-select form-select-sm" id="dashAffiliate" style="max-width:180px;" onchange="onDashFilterChange()">
           <option value="">All Affiliates</option>
         </select>
-        <select class="form-select form-select-sm" id="rptFilterAuditArea" style="max-width:200px;" onchange="loadReportData()">
+
+        <!-- Audit Area Dropdown -->
+        <select class="form-select form-select-sm" id="dashAuditArea" style="max-width:200px;" onchange="onDashFilterChange()">
           <option value="">All Audit Areas</option>
         </select>
+
+        <!-- Export & Refresh -->
         <div class="ms-auto d-flex gap-2 flex-shrink-0">
           <div class="dropdown">
             <button class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown">
@@ -29,7 +47,7 @@
               <li><a class="dropdown-item" href="#" onclick="exportReportExcel()"><i class="bi bi-file-earmark-excel me-2 text-success"></i>Export as Excel</a></li>
             </ul>
           </div>
-          <button class="btn btn-sm btn-outline-secondary" onclick="loadReportData()" title="Refresh">
+          <button class="btn btn-sm btn-outline-secondary" onclick="refreshDashboard()" title="Refresh data">
             <i class="bi bi-arrow-clockwise"></i>
           </button>
         </div>
@@ -37,47 +55,38 @@
     </div>
   </div>
 
-  <!-- Report Tabs -->
+  <!-- Dashboard Tabs (3 new tabs) -->
   <ul class="nav nav-tabs nav-tabs-custom mb-0" id="reportTabs">
     <li class="nav-item">
-      <a class="nav-link active" href="#" data-tab="executive" onclick="switchReportTab(event, 'executive')">
-        <i class="bi bi-speedometer2 me-1"></i>Executive Summary
+      <a class="nav-link active" href="#" data-tab="overview" onclick="onDashTabChange(event, 'overview')">
+        <i class="bi bi-speedometer2 me-1"></i>Overview
       </a>
     </li>
     <li class="nav-item">
-      <a class="nav-link" href="#" data-tab="findings" onclick="switchReportTab(event, 'findings')">
-        <i class="bi bi-search me-1"></i>Observations
+      <a class="nav-link" href="#" data-tab="risk" onclick="onDashTabChange(event, 'risk')">
+        <i class="bi bi-shield-exclamation me-1"></i>Risk &amp; Performance
       </a>
     </li>
     <li class="nav-item">
-      <a class="nav-link" href="#" data-tab="actionplans" onclick="switchReportTab(event, 'actionplans')">
-        <i class="bi bi-list-check me-1"></i>Action Plans
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" href="#" data-tab="risk" onclick="switchReportTab(event, 'risk')">
-        <i class="bi bi-shield-exclamation me-1"></i>Risk Assessment
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" href="#" data-tab="scorecard" onclick="switchReportTab(event, 'scorecard')">
-        <i class="bi bi-graph-up me-1"></i>Performance Scorecard
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" href="#" data-tab="aging" onclick="switchReportTab(event, 'aging')">
-        <i class="bi bi-clock-history me-1"></i>Aging Analysis
+      <a class="nav-link" href="#" data-tab="detail" onclick="onDashTabChange(event, 'detail')">
+        <i class="bi bi-table me-1"></i>Detail
       </a>
     </li>
   </ul>
 
-  <!-- Report Content Area -->
+  <!-- Tab Content Area -->
   <div class="card card-tabs-report" id="reportContentArea">
-    <div class="card-body" id="reportBody">
-      <div class="text-center py-5">
+    <div class="card-body" id="pane-overview">
+      <div class="text-center text-muted py-5">
         <div class="spinner-border text-primary" role="status"></div>
-        <p class="mt-3 text-muted">Loading report data...</p>
+        <p class="mt-3">Loading dashboard data...</p>
       </div>
+    </div>
+    <div class="card-body d-none" id="pane-risk">
+      <div class="text-center text-muted py-5">Risk &amp; Performance tab content — will be built in Part 3</div>
+    </div>
+    <div class="card-body d-none" id="pane-detail">
+      <div class="text-center text-muted py-5">Detail tab content — will be built in Part 3</div>
     </div>
   </div>
 </div>
@@ -96,6 +105,22 @@
 .card-tabs-report {
   border-radius: 0 0 12px 12px;
   border-top: none;
+}
+
+/* Quarter pill styles */
+#dashQuarterGroup .btn.active {
+  background: #c9a227 !important;
+  color: #fff !important;
+  border-color: #c9a227 !important;
+}
+#dashQuarterGroup .btn:not(.active) {
+  background: #f8f9fa;
+  color: #495057;
+  border-color: #dee2e6;
+}
+#dashQuarterGroup .btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* Score gauge */
@@ -180,6 +205,20 @@
 .report-chart { position: relative; height: 260px; width: 100%; }
 .report-chart-sm { position: relative; height: 200px; width: 100%; }
 
+/* Loading skeleton shimmer */
+@keyframes dash-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+.dash-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: dash-shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+.dash-skeleton-card { height: 100px; margin-bottom: 12px; }
+.dash-skeleton-chart { height: 200px; margin-bottom: 12px; }
+
 /* Print styles */
 @media print {
   .reports-page .card:first-child,
@@ -195,827 +234,444 @@
 
 <script>
 // ============================================================
-// REPORTS MODULE - Professional Internal Audit Reporting
+// DASHBOARD V2 MODULE — Client-Side Data Architecture
 // ============================================================
 
-let reportData = null;
-let reportCharts = {};
-let currentReportTab = 'executive';
+// ── Global State ──
+var _dashboardCache = null;       // Raw API response (never filtered)
+var _dashboardFiltered = null;    // Currently filtered data
+var _chartInstances = {};         // Chart.js instances for cleanup
+var _currentDashTab = 'overview'; // Active tab
+var _currentDashFilters = {
+  year: '',    // '' = all years, or a number like 2025
+  quarter: 'all',
+  affiliate: '',
+  auditArea: ''
+};
+
+// LEGACY: keep reportData/reportCharts for export functions that reference them
+var reportData = null;
+var reportCharts = {};
+var currentReportTab = 'overview';
+
+// ============================================================
+// ENTRY POINT
+// ============================================================
 
 function loadReports() {
-  // Hide export dropdown if user lacks export permission
-  var p = window.currentPermissions || {};
-  var role = window.currentUser?.role_code || '';
-  if (role !== 'SUPER_ADMIN' && !p.canExportDashboard && !p.canExportData) {
-    var exportBtn = document.querySelector('.reports-page .dropdown-toggle');
-    if (exportBtn) exportBtn.closest('.dropdown').style.display = 'none';
+  loadDashboardV2();
+}
+
+function loadDashboardV2() {
+  // Show loading skeleton in active pane
+  var pane = document.getElementById('pane-overview');
+  if (pane) {
+    pane.innerHTML =
+      '<div class="row g-3 mb-3">' +
+        '<div class="col-md-3"><div class="dash-skeleton dash-skeleton-card"></div></div>' +
+        '<div class="col-md-3"><div class="dash-skeleton dash-skeleton-card"></div></div>' +
+        '<div class="col-md-3"><div class="dash-skeleton dash-skeleton-card"></div></div>' +
+        '<div class="col-md-3"><div class="dash-skeleton dash-skeleton-card"></div></div>' +
+      '</div>' +
+      '<div class="row g-3">' +
+        '<div class="col-md-6"><div class="dash-skeleton dash-skeleton-chart"></div></div>' +
+        '<div class="col-md-6"><div class="dash-skeleton dash-skeleton-chart"></div></div>' +
+      '</div>';
   }
 
-  initReportFilters();
-  loadReportData();
-}
-
-function initReportFilters() {
-  // Year filter
-  var yearSelect = document.getElementById('rptFilterYear');
-  yearSelect.innerHTML = '<option value="">All Years</option>';
-  var currentYear = new Date().getFullYear();
-  for (var y = currentYear; y >= currentYear - 4; y--) {
-    yearSelect.innerHTML += '<option value="' + y + '">' + y + '</option>';
-  }
-
-  // Affiliate filter
-  var affSelect = document.getElementById('rptFilterAffiliate');
-  affSelect.innerHTML = '<option value="">All Affiliates</option>';
-  (window.appDropdowns?.affiliates || []).forEach(function(a) {
-    affSelect.innerHTML += '<option value="' + a.code + '">' + escapeHtml(a.display || a.code) + '</option>';
-  });
-
-  // Audit Area filter
-  var areaSelect = document.getElementById('rptFilterAuditArea');
-  areaSelect.innerHTML = '<option value="">All Audit Areas</option>';
-  (window.appDropdowns?.auditAreas || []).forEach(function(a) {
-    areaSelect.innerHTML += '<option value="' + a.id + '">' + escapeHtml(a.display || a.name) + '</option>';
-  });
-}
-
-function getReportFilters() {
-  var filters = {};
-  var year = document.getElementById('rptFilterYear')?.value;
-  var affiliate = document.getElementById('rptFilterAffiliate')?.value;
-  var auditArea = document.getElementById('rptFilterAuditArea')?.value;
-  if (year) filters.year = year;
-  if (affiliate) filters.affiliate_code = affiliate;
-  if (auditArea) filters.audit_area_id = auditArea;
-  return filters;
-}
-
-function loadReportData() {
-  // Use inline loading indicator instead of full-screen blocking overlay
-  // so users can still navigate to other pages while the report loads
-  document.getElementById('reportBody').innerHTML =
-    '<div class="text-center py-5">' +
-    '<div class="spinner-border text-primary" role="status"></div>' +
-    '<p class="mt-3 text-muted">Loading report data...</p>' +
-    '</div>';
-
-  var filters = getReportFilters();
-  apiCall('getComprehensiveReportData', { filters: filters })
-    .then(function(r) {
-      if (r && r.success !== false && r.generatedAt) {
-        reportData = r;
-        renderCurrentTab();
-      } else if (r && r.requireLogin) {
-        // Session expired - redirect to login
-        return;
+  apiCall('getDashboardDataV2', {})
+    .then(function(response) {
+      if (response && response.success !== false && response.observations) {
+        _dashboardCache = response;
+        populateDashFilters(response.meta);
+        setDefaultYear(response.meta);
+        onDashFilterChange();
       } else {
-        document.getElementById('reportBody').innerHTML =
-          '<div class="text-center py-5"><i class="bi bi-exclamation-circle text-warning" style="font-size:3rem;"></i>' +
-          '<p class="mt-3">' + escapeHtml(r?.error || 'Unable to generate report. Please try again.') + '</p>' +
-          '<button class="btn btn-sm btn-primary mt-2" onclick="loadReportData()"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button></div>';
+        showDashError(response ? response.error : 'No response from server');
       }
     })
     .catch(function(err) {
-      console.error('Report error:', err);
-      document.getElementById('reportBody').innerHTML =
-        '<div class="text-center py-5"><i class="bi bi-exclamation-circle text-danger" style="font-size:3rem;"></i>' +
-        '<p class="mt-3">Error generating report. Please try again.</p>' +
-        '<button class="btn btn-sm btn-primary mt-2" onclick="loadReportData()"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button></div>';
+      console.error('Dashboard V2 load error:', err);
+      showDashError('Error loading dashboard: ' + (err.message || err));
     });
 }
 
-function switchReportTab(event, tab) {
-  event.preventDefault();
-  currentReportTab = tab;
-  document.querySelectorAll('#reportTabs .nav-link').forEach(function(l) {
-    l.classList.toggle('active', l.dataset.tab === tab);
-  });
+function showDashError(msg) {
+  var pane = document.getElementById('pane-' + _currentDashTab);
+  if (pane) {
+    pane.innerHTML =
+      '<div class="text-center py-5">' +
+        '<i class="bi bi-exclamation-circle text-danger" style="font-size:3rem;"></i>' +
+        '<p class="mt-3">' + escapeHtml(msg || 'Unable to load dashboard.') + '</p>' +
+        '<button class="btn btn-sm btn-primary mt-2" onclick="loadDashboardV2()">' +
+          '<i class="bi bi-arrow-clockwise me-1"></i>Retry' +
+        '</button>' +
+      '</div>';
+  }
+}
+
+// ============================================================
+// FILTER POPULATION
+// ============================================================
+
+function populateDashFilters(meta) {
+  if (!meta) return;
+
+  // Year dropdown
+  var yearEl = document.getElementById('dashYear');
+  if (yearEl) {
+    yearEl.innerHTML = '<option value="">All Years</option>';
+    (meta.years || []).slice().reverse().forEach(function(y) {
+      yearEl.innerHTML += '<option value="' + y + '">' + y + '</option>';
+    });
+  }
+
+  // Affiliate dropdown
+  var affEl = document.getElementById('dashAffiliate');
+  if (affEl) {
+    affEl.innerHTML = '<option value="">All Affiliates</option>';
+    (meta.affiliates || []).forEach(function(a) {
+      affEl.innerHTML += '<option value="' + a + '">' + escapeHtml(a) + '</option>';
+    });
+  }
+
+  // Audit Area dropdown
+  var areaEl = document.getElementById('dashAuditArea');
+  if (areaEl) {
+    areaEl.innerHTML = '<option value="">All Audit Areas</option>';
+    (meta.auditAreas || []).forEach(function(a) {
+      areaEl.innerHTML += '<option value="' + a + '">' + escapeHtml(a) + '</option>';
+    });
+  }
+}
+
+function setDefaultYear(meta) {
+  var currentYear = new Date().getFullYear();
+  var yearEl = document.getElementById('dashYear');
+  if (!yearEl || !meta || !meta.years) return;
+
+  if (meta.years.indexOf(currentYear) !== -1) {
+    yearEl.value = String(currentYear);
+  } else {
+    yearEl.value = '';
+  }
+  _currentDashFilters.year = yearEl.value;
+  updateQuarterPillState();
+}
+
+// ============================================================
+// QUARTER PILL LOGIC
+// ============================================================
+
+function selectQuarterPill(btn) {
+  if (btn.disabled) return;
+  var group = document.getElementById('dashQuarterGroup');
+  if (!group) return;
+
+  var buttons = group.querySelectorAll('.btn');
+  buttons.forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+
+  onDashFilterChange();
+}
+
+function updateQuarterPillState() {
+  var yearVal = (document.getElementById('dashYear') || {}).value || '';
+  var group = document.getElementById('dashQuarterGroup');
+  if (!group) return;
+
+  var buttons = group.querySelectorAll('.btn');
+  if (!yearVal) {
+    // All Years selected — disable all except 'All', force 'All' active
+    buttons.forEach(function(b) {
+      if (b.dataset.quarter === 'all') {
+        b.disabled = false;
+        b.classList.add('active');
+      } else {
+        b.disabled = true;
+        b.classList.remove('active');
+      }
+    });
+  } else {
+    // Specific year — enable all
+    buttons.forEach(function(b) {
+      b.disabled = false;
+    });
+  }
+}
+
+function getActiveQuarter() {
+  var group = document.getElementById('dashQuarterGroup');
+  if (!group) return 'all';
+  var active = group.querySelector('.btn.active');
+  return active ? (active.dataset.quarter || 'all') : 'all';
+}
+
+// ============================================================
+// FILTER CHANGE HANDLER
+// ============================================================
+
+function onDashFilterChange() {
+  // Read filter values from DOM
+  _currentDashFilters.year = (document.getElementById('dashYear') || {}).value || '';
+  _currentDashFilters.quarter = getActiveQuarter();
+  _currentDashFilters.affiliate = (document.getElementById('dashAffiliate') || {}).value || '';
+  _currentDashFilters.auditArea = (document.getElementById('dashAuditArea') || {}).value || '';
+
+  // Handle quarter pill enable/disable
+  updateQuarterPillState();
+
+  // If pills forced quarter to 'all' when year='', re-read
+  if (!_currentDashFilters.year) {
+    _currentDashFilters.quarter = 'all';
+  }
+
+  if (!_dashboardCache) return;
+
+  // Apply filters
+  _dashboardFiltered = applyDashboardFilters(
+    { observations: _dashboardCache.observations, actionPlans: _dashboardCache.actionPlans },
+    _currentDashFilters
+  );
+
   renderCurrentTab();
 }
 
-function renderCurrentTab() {
-  if (!reportData) return;
-  // Destroy existing charts before rendering new content
-  Object.keys(reportCharts).forEach(function(k) {
-    if (reportCharts[k]) { reportCharts[k].destroy(); delete reportCharts[k]; }
-  });
-
-  var body = document.getElementById('reportBody');
-  switch (currentReportTab) {
-    case 'executive':  renderExecutiveSummary(body); break;
-    case 'findings':   renderFindings(body); break;
-    case 'actionplans':renderActionPlans(body); break;
-    case 'risk':       renderRiskAssessment(body); break;
-    case 'scorecard':  renderPerformanceScorecard(body); break;
-    case 'aging':      renderAgingAnalysis(body); break;
-    default:           renderExecutiveSummary(body);
-  }
-}
-
 // ============================================================
-// EXECUTIVE SUMMARY
+// CLIENT-SIDE FILTERING (pure function)
 // ============================================================
-function renderExecutiveSummary(container) {
-  var e = reportData.executive;
-  var scoreColor = e.overallScore >= 80 ? '#10b981' : e.overallScore >= 60 ? '#f59e0b' : '#ef4444';
-  var scoreLabel = e.overallScore >= 80 ? 'Good' : e.overallScore >= 60 ? 'Fair' : 'Attention Needed';
 
-  var html = '<div class="row g-3 mb-4">';
-  // Overall score gauge
-  html += '<div class="col-lg-3 col-md-6"><div class="kpi-card h-100">' +
-    buildScoreGauge(e.overallScore, scoreColor) +
-    '<div class="kpi-label mt-2">Overall Audit Health</div>' +
-    '<div class="kpi-sublabel">' + escapeHtml(scoreLabel) + '</div></div></div>';
-  // KPIs
-  html += '<div class="col-lg-3 col-md-6"><div class="kpi-card h-100" onclick="navigateTo(\'work-papers\')" style="cursor:pointer;">' +
-    '<i class="bi bi-search" style="font-size:1.25rem; color:var(--primary-color); margin-bottom:8px;"></i>' +
-    '<div class="kpi-value" style="color:var(--primary-color);">' + e.totalFindings + '</div>' +
-    '<div class="kpi-label">Total Observations</div></div></div>';
-  html += '<div class="col-lg-3 col-md-6"><div class="kpi-card h-100" onclick="navigateTo(\'action-plans\')" style="cursor:pointer;">' +
-    '<i class="bi bi-list-check" style="font-size:1.25rem; color:var(--primary-color); margin-bottom:8px;"></i>' +
-    '<div class="kpi-value" style="color:var(--primary-color);">' + e.totalActionPlans + '</div>' +
-    '<div class="kpi-label">Action Plans</div>' +
-    '<div class="kpi-sublabel">' + escapeHtml(e.closedActionPlans + ' closed') + '</div></div></div>';
-  html += '<div class="col-lg-3 col-md-6"><div class="kpi-card h-100" onclick="navigateTo(\'action-plans\')" style="cursor:pointer;">' +
-    '<i class="bi bi-exclamation-triangle" style="font-size:1.25rem; color:' + (e.overdueActionPlans > 0 ? 'var(--danger-color)' : 'var(--success-color)') + '; margin-bottom:8px;"></i>' +
-    '<div class="kpi-value" style="color:' + (e.overdueActionPlans > 0 ? 'var(--danger-color)' : 'var(--success-color)') + ';">' + e.overdueActionPlans + '</div>' +
-    '<div class="kpi-label">Overdue Items</div></div></div>';
-  html += '</div>';
+function applyDashboardFilters(rawData, filters) {
+  var filteredObs = (rawData.observations || []).slice();
+  var filteredAPs = (rawData.actionPlans || []).slice();
 
-  // Second row: rates
-  html += '<div class="row g-3 mb-4">';
-  html += buildKPI('col-md-3', e.implementationRate + '%', 'Implementation Rate', '', 'bi-check-circle');
-  html += buildKPI('col-md-3', e.onTimeClosureRate + '%', 'On-Time Closure', '', 'bi-clock');
-  html += buildKPI('col-md-3', e.avgRiskScore + '/100', 'Avg Risk Score', riskScoreLabel(e.avgRiskScore), 'bi-shield');
-  var riskHigh = (e.riskDistribution.Extreme || 0) + (e.riskDistribution.High || 0);
-  html += buildKPI('col-md-3', riskHigh, 'High/Extreme Observations', 'of ' + e.totalFindings + ' total', 'bi-exclamation-circle', riskHigh > 0 ? '#fd7e14' : '#10b981');
-  html += '</div>';
-
-  // Implementation Progress chart row
-  html += '<div class="row g-3 mb-4">';
-  html += '<div class="col-12"><div class="card"><div class="card-header">Implementation Progress</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptImplProgress"></canvas></div></div></div></div>';
-  html += '</div>';
-
-  // Charts row
-  html += '<div class="row g-3 mb-4">';
-  html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Risk Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptRiskPie"></canvas></div></div></div></div>';
-  html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Action Plan Status</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAPStatus"></canvas></div></div></div></div>';
-  html += '<div class="col-md-4"><div class="card h-100"><div class="card-header">Observations by Affiliate</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAffBar"></canvas></div></div></div></div>';
-  html += '</div>';
-
-  // Trend chart
-  html += '<div class="card mb-4"><div class="card-header">12-Month Trend</div><div class="card-body"><div class="report-chart"><canvas id="rptTrendLine"></canvas></div></div></div>';
-
-  // Affiliate summary table
-  html += '<div class="card"><div class="card-header">Performance by Affiliate</div><div class="card-body p-0">' +
-    '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
-    '<th>Affiliate</th><th class="text-center">Observations</th><th class="text-center">Action Plans</th><th class="text-center">Closed</th><th class="text-center">Overdue</th><th class="text-center">Impl. Rate</th><th class="text-center">Score</th></tr></thead><tbody>';
-  (reportData.byAffiliate || []).sort(function(a,b){ return b.score - a.score; }).forEach(function(a) {
-    html += '<tr><td><strong>' + escapeHtml(a.name || a.code) + '</strong></td>' +
-      '<td class="text-center">' + a.findings + '</td>' +
-      '<td class="text-center">' + a.actionPlans + '</td>' +
-      '<td class="text-center">' + a.closedAPs + '</td>' +
-      '<td class="text-center">' + (a.overdueAPs > 0 ? '<span class="text-danger fw-bold">' + a.overdueAPs + '</span>' : '0') + '</td>' +
-      '<td class="text-center">' + buildMiniProgress(a.implementationRate) + '</td>' +
-      '<td class="text-center">' + buildScoreBadge(a.score) + '</td></tr>';
-  });
-  html += '</tbody></table></div></div></div>';
-
-  // Methodology
-  html += buildMethodologyBox();
-
-  container.innerHTML = html;
-
-  // Render charts
-  setTimeout(function() {
-    // Implementation Progress chart
-    var dist = reportData.apStatusDistribution || {};
-    var implementedCount = (dist['Implemented']||0) + (dist['Pending Verification']||0) + (dist['Verified']||0) + (dist['Closed']||0);
-    var activeCount = (dist['Pending']||0) + (dist['In Progress']||0) + (dist['Overdue']||0) + (dist['Rejected']||0);
-    var notDueCount = dist['Not Due'] || 0;
-    renderImplementationProgressChart('rptImplProgress', implementedCount, activeCount, notDueCount);
-
-    renderRiskPieChart('rptRiskPie', e.riskDistribution);
-    renderAPStatusChart('rptAPStatus', reportData.apStatusDistribution);
-    renderAffiliateBarChart('rptAffBar', reportData.byAffiliate);
-    renderTrendChart('rptTrendLine', reportData.trends);
-  }, 50);
-}
-
-// ============================================================
-// DETAILED FINDINGS
-// ============================================================
-function renderFindings(container) {
-  var findings = reportData.findings || [];
-  var html = '<div class="d-flex justify-content-between align-items-center mb-3">' +
-    '<h6 class="mb-0"><i class="bi bi-search me-2 text-primary"></i>Detailed Observations (' + findings.length + ')</h6></div>';
-
-  if (findings.length === 0) {
-    html += '<div class="text-center py-5 text-muted"><i class="bi bi-check-circle" style="font-size:3rem;"></i><p class="mt-2">No observations match the current filters.</p></div>';
-    container.innerHTML = html;
-    return;
-  }
-
-  html += '<div class="table-responsive"><table class="table table-sm" id="findingsTable"><thead><tr>' +
-    '<th style="width:60px;">Risk</th><th>Observation</th><th>Affiliate</th><th>Audit Area</th><th>Status</th><th class="text-center">APs</th><th class="text-center">Overdue</th></tr></thead><tbody>';
-
-  findings.forEach(function(f) {
-    var apProgress = f.actionPlansTotal > 0 ? Math.round((f.actionPlansClosed / f.actionPlansTotal) * 100) : 0;
-    html += '<tr onclick="navigateTo(\'work-paper-view\', {id:\'' + f.id + '\'})" style="cursor:pointer;">' +
-      '<td><span class="badge ' + getRiskClass(f.riskRating) + '">' + escapeHtml(f.riskRating || 'N/A') + '</span></td>' +
-      '<td><strong>' + escapeHtml(f.title) + '</strong><br><small class="text-muted">' + escapeHtml(f.description) + '</small></td>' +
-      '<td>' + escapeHtml(f.affiliate) + '</td>' +
-      '<td>' + escapeHtml(f.auditArea) + '</td>' +
-      '<td><span class="badge ' + getStatusClass(f.status) + '">' + escapeHtml(f.status) + '</span></td>' +
-      '<td class="text-center"><span title="' + f.actionPlansClosed + '/' + f.actionPlansTotal + ' closed">' + f.actionPlansClosed + '/' + f.actionPlansTotal + '</span></td>' +
-      '<td class="text-center">' + (f.actionPlansOverdue > 0 ? '<span class="text-danger fw-bold">' + f.actionPlansOverdue + '</span>' : '-') + '</td></tr>';
-  });
-  html += '</tbody></table></div>';
-
-  container.innerHTML = html;
-}
-
-// ============================================================
-// ACTION PLAN TRACKER
-// ============================================================
-function renderActionPlans(container) {
-  var e = reportData.executive;
-  var apDist = reportData.apStatusDistribution || {};
-
-  var html = '<div class="row g-3 mb-4">';
-  html += buildKPI('col-md-3', e.totalActionPlans, 'Total Action Plans', '', 'bi-list-check');
-  html += buildKPI('col-md-3', e.closedActionPlans, 'Closed / Verified', '', 'bi-check-circle-fill', '#10b981');
-  html += buildKPI('col-md-3', e.overdueActionPlans, 'Overdue', '', 'bi-exclamation-triangle-fill', e.overdueActionPlans > 0 ? '#ef4444' : '#10b981');
-  html += buildKPI('col-md-3', e.implementationRate + '%', 'Implementation Rate', '', 'bi-graph-up');
-  html += '</div>';
-
-  // Status breakdown chart
-  html += '<div class="row g-3 mb-4">';
-  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Status Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAPStatusFull"></canvas></div></div></div></div>';
-  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Implementation by Affiliate</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAPImplBar"></canvas></div></div></div></div>';
-  html += '</div>';
-
-  // Status breakdown table
-  html += '<div class="card"><div class="card-header">Status Breakdown</div><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Status</th><th class="text-center">Count</th><th>Distribution</th></tr></thead><tbody>';
-  var statusOrder = ['Not Due', 'Pending', 'In Progress', 'Overdue', 'Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
-  statusOrder.forEach(function(s) {
-    var count = apDist[s] || 0;
-    if (count === 0) return;
-    var pct = e.totalActionPlans > 0 ? Math.round((count / e.totalActionPlans) * 100) : 0;
-    html += '<tr><td><span class="badge ' + getStatusClass(s) + '">' + s + '</span></td>' +
-      '<td class="text-center">' + count + '</td>' +
-      '<td>' + buildMiniProgress(pct) + '</td></tr>';
-  });
-  // Show any statuses not in the predefined order
-  Object.keys(apDist).forEach(function(s) {
-    if (statusOrder.indexOf(s) === -1 && apDist[s] > 0) {
-      var count = apDist[s];
-      var pct = e.totalActionPlans > 0 ? Math.round((count / e.totalActionPlans) * 100) : 0;
-      html += '<tr><td><span class="badge bg-secondary">' + escapeHtml(s) + '</span></td>' +
-        '<td class="text-center">' + count + '</td>' +
-        '<td>' + buildMiniProgress(pct) + '</td></tr>';
-    }
-  });
-  html += '</tbody></table></div></div></div>';
-
-  container.innerHTML = html;
-
-  setTimeout(function() {
-    renderAPStatusChart('rptAPStatusFull', apDist);
-    renderImplByAffiliateChart('rptAPImplBar', reportData.byAffiliate);
-  }, 50);
-}
-
-// ============================================================
-// RISK ASSESSMENT
-// ============================================================
-function renderRiskAssessment(container) {
-  var e = reportData.executive;
-  var rd = e.riskDistribution;
-
-  var html = '<div class="row g-3 mb-4">';
-  html += '<div class="col-md-3"><div class="kpi-card h-100 text-center" style="border-left:4px solid #dc3545;"><div class="kpi-value" style="color:#dc3545;">' + (rd.Extreme || 0) + '</div><div class="kpi-label">Extreme Risk</div></div></div>';
-  html += '<div class="col-md-3"><div class="kpi-card h-100 text-center" style="border-left:4px solid #fd7e14;"><div class="kpi-value" style="color:#fd7e14;">' + (rd.High || 0) + '</div><div class="kpi-label">High Risk</div></div></div>';
-  html += '<div class="col-md-3"><div class="kpi-card h-100 text-center" style="border-left:4px solid #ffc107;"><div class="kpi-value" style="color:#b45309;">' + (rd.Medium || 0) + '</div><div class="kpi-label">Medium Risk</div></div></div>';
-  html += '<div class="col-md-3"><div class="kpi-card h-100 text-center" style="border-left:4px solid #28a745;"><div class="kpi-value" style="color:#28a745;">' + (rd.Low || 0) + '</div><div class="kpi-label">Low Risk</div></div></div>';
-  html += '</div>';
-
-  // Risk chart
-  html += '<div class="row g-3 mb-4">';
-  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Risk Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptRiskDoughnut"></canvas></div></div></div></div>';
-  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Risk by Audit Area</div><div class="card-body"><div class="report-chart"><canvas id="rptRiskByArea"></canvas></div></div></div></div>';
-  html += '</div>';
-
-  // Risk heat map: Affiliate x Risk
-  html += '<div class="card mb-4"><div class="card-header"><i class="bi bi-grid-3x3 me-2"></i>Risk Heat Map (Affiliate x Severity)</div><div class="card-body p-0">' +
-    '<div class="table-responsive"><table class="table table-sm mb-0 text-center"><thead><tr><th class="text-start">Affiliate</th><th>Extreme</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead><tbody>';
-  (reportData.byAffiliate || []).forEach(function(a) {
-    var r = a.riskDistribution || {};
-    html += '<tr><td class="text-start"><strong>' + escapeHtml(a.name || a.code) + '</strong></td>' +
-      '<td><div class="risk-heat ' + (r.Extreme ? 'extreme' : 'zero') + '">' + (r.Extreme || 0) + '</div></td>' +
-      '<td><div class="risk-heat ' + (r.High ? 'high' : 'zero') + '">' + (r.High || 0) + '</div></td>' +
-      '<td><div class="risk-heat ' + (r.Medium ? 'medium' : 'zero') + '">' + (r.Medium || 0) + '</div></td>' +
-      '<td><div class="risk-heat ' + (r.Low ? 'low' : 'zero') + '">' + (r.Low || 0) + '</div></td>' +
-      '<td><strong>' + a.findings + '</strong></td></tr>';
-  });
-  html += '</tbody></table></div></div></div>';
-
-  container.innerHTML = html;
-
-  setTimeout(function() {
-    renderRiskPieChart('rptRiskDoughnut', rd);
-    renderRiskByAreaChart('rptRiskByArea', reportData.byAuditArea);
-  }, 50);
-}
-
-// ============================================================
-// PERFORMANCE SCORECARD
-// ============================================================
-function renderPerformanceScorecard(container) {
-  var areas = (reportData.byAuditArea || []).sort(function(a,b){ return a.score - b.score; });
-
-  var html = '<div class="d-flex justify-content-between align-items-center mb-3">' +
-    '<h6 class="mb-0"><i class="bi bi-graph-up me-2 text-primary"></i>Audit Area Performance Scores</h6></div>';
-
-  // Score chart
-  html += '<div class="card mb-4"><div class="card-header">Control Effectiveness by Audit Area</div><div class="card-body"><div class="report-chart"><canvas id="rptScoreBar"></canvas></div></div></div>';
-
-  // Score table
-  html += '<div class="card mb-4"><div class="card-header">Detailed Scorecard</div><div class="card-body p-0">' +
-    '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
-    '<th>Audit Area</th><th class="text-center">Observations</th><th class="text-center">Action Plans</th>' +
-    '<th class="text-center">Impl. Rate</th><th class="text-center">Overdue</th>' +
-    '<th class="text-center">Score</th><th class="text-center">Rating</th></tr></thead><tbody>';
-  areas.forEach(function(a) {
-    var ratingClass = a.rating === 'Effective' ? 'effective' : a.rating === 'Needs Improvement' ? 'needs-improvement' : 'ineffective';
-    html += '<tr><td><strong>' + escapeHtml(a.name) + '</strong></td>' +
-      '<td class="text-center">' + a.findings + '</td>' +
-      '<td class="text-center">' + a.actionPlans + '</td>' +
-      '<td class="text-center">' + buildMiniProgress(a.implementationRate) + '</td>' +
-      '<td class="text-center">' + (a.overdueAPs > 0 ? '<span class="text-danger fw-bold">' + a.overdueAPs + '</span>' : '0') + '</td>' +
-      '<td class="text-center">' + buildScoreBadge(a.score) + '</td>' +
-      '<td class="text-center"><span class="score-badge ' + ratingClass + '">' + a.rating + '</span></td></tr>';
-  });
-  html += '</tbody></table></div></div></div>';
-
-  // Methodology
-  html += buildMethodologyBox();
-
-  container.innerHTML = html;
-
-  setTimeout(function() {
-    renderScoreBarChart('rptScoreBar', areas);
-  }, 50);
-}
-
-// ============================================================
-// AGING ANALYSIS
-// ============================================================
-function renderAgingAnalysis(container) {
-  var ag = reportData.aging;
-  var totalOpen = ag.current.count + ag.overdue1to30.count + ag.overdue31to60.count + ag.overdue61to90.count + ag.overdue90plus.count;
-  var totalOverdue = ag.overdue1to30.count + ag.overdue31to60.count + ag.overdue61to90.count + ag.overdue90plus.count;
-
-  // Bucket cards
-  var html = '<div class="row g-3 mb-4">';
-  html += buildAgingBucket('col', 'Current', ag.current.count, '#10b981', 'Not yet due');
-  html += buildAgingBucket('col', '1-30 Days', ag.overdue1to30.count, '#f59e0b', 'Overdue');
-  html += buildAgingBucket('col', '31-60 Days', ag.overdue31to60.count, '#f97316', 'Overdue');
-  html += buildAgingBucket('col', '61-90 Days', ag.overdue61to90.count, '#ef4444', 'Overdue');
-  html += buildAgingBucket('col', '90+ Days', ag.overdue90plus.count, '#991b1b', 'Critical');
-  html += '</div>';
-
-  // Chart
-  html += '<div class="row g-3 mb-4">';
-  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Aging Distribution</div><div class="card-body"><div class="report-chart-sm"><canvas id="rptAgingPie"></canvas></div></div></div></div>';
-  html += '<div class="col-md-6"><div class="card h-100"><div class="card-header">Summary</div><div class="card-body">' +
-    '<div class="mb-3"><strong>Total Open Action Plans:</strong> ' + totalOpen + '</div>' +
-    '<div class="mb-3"><strong>Total Overdue:</strong> <span class="text-danger fw-bold">' + totalOverdue + '</span></div>' +
-    '<div class="mb-3"><strong>Overdue Rate:</strong> ' + (totalOpen > 0 ? Math.round((totalOverdue / totalOpen) * 100) : 0) + '%</div>' +
-    buildMiniProgress(totalOpen > 0 ? Math.round(((totalOpen - totalOverdue) / totalOpen) * 100) : 100, 'Current vs Overdue') +
-    '</div></div></div>';
-  html += '</div>';
-
-  // Detailed overdue items
-  var overdueItems = [].concat(ag.overdue90plus.items, ag.overdue61to90.items, ag.overdue31to60.items, ag.overdue1to30.items);
-  if (overdueItems.length > 0) {
-    html += '<div class="card"><div class="card-header"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Overdue Action Plans (' + overdueItems.length + ')</div>' +
-      '<div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
-      '<th>Description</th><th>Owner</th><th>Affiliate</th><th>Risk</th><th class="text-center">Days Overdue</th><th>Status</th></tr></thead><tbody>';
-    overdueItems.forEach(function(item) {
-      var urgency = item.daysOverdue > 90 ? 'table-danger' : item.daysOverdue > 60 ? 'table-warning' : '';
-      html += '<tr class="' + urgency + '" onclick="navigateTo(\'action-plan-view\', {id:\'' + item.id + '\'})" style="cursor:pointer;">' +
-        '<td>' + escapeHtml(item.description) + '</td>' +
-        '<td>' + escapeHtml(item.owner) + '</td>' +
-        '<td>' + escapeHtml(item.affiliate) + '</td>' +
-        '<td><span class="badge ' + getRiskClass(item.riskRating) + '">' + escapeHtml(item.riskRating || 'N/A') + '</span></td>' +
-        '<td class="text-center fw-bold text-danger">' + item.daysOverdue + '</td>' +
-        '<td><span class="badge ' + getStatusClass(item.status) + '">' + escapeHtml(item.status) + '</span></td></tr>';
+  // Year filter
+  if (filters.year) {
+    var yr = parseInt(filters.year, 10);
+    filteredObs = filteredObs.filter(function(o) {
+      // Use 'year' field if available, else parse created_at
+      if (o.year) return parseInt(o.year, 10) === yr;
+      if (o.created_at) return new Date(o.created_at).getFullYear() === yr;
+      return false;
     });
-    html += '</tbody></table></div></div></div>';
+    filteredAPs = filteredAPs.filter(function(ap) {
+      if (ap.created_at) return new Date(ap.created_at).getFullYear() === yr;
+      return false;
+    });
   }
 
-  container.innerHTML = html;
-
-  setTimeout(function() {
-    renderAgingChart('rptAgingPie', ag);
-  }, 50);
-}
-
-// ============================================================
-// CHART RENDERERS
-// ============================================================
-var CHART_PALETTE = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b'];
-var CHART_LABEL_COLOR = '#1f2937';
-function renderRiskPieChart(canvasId, rd) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  var chartColors = ['#ef4444', '#f97316', '#f59e0b', '#10b981'];
-  reportCharts[canvasId] = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Extreme', 'High', 'Medium', 'Low'],
-      datasets: [{ data: [rd.Extreme||0, rd.High||0, rd.Medium||0, rd.Low||0],
-        backgroundColor: chartColors, borderWidth: 0 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false,
-      layout: { padding: 40 },
-      plugins: {
-        legend: { display: true, position: 'bottom', labels: { color: CHART_LABEL_COLOR, boxWidth: 10, padding: 12 } },
-        datalabels: {
-          display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
-          color: CHART_LABEL_COLOR,
-          backgroundColor: '#ffffff',
-          borderColor: null,
-          borderWidth: 0,
-          borderRadius: 0,
-          padding: 0,
-          font: { size: 11, weight: '600' },
-          anchor: 'end',
-          align: 'end',
-          offset: 18,
-          clamp: true,
-          formatter: function(value, context) {
-            return context.chart.data.labels[context.dataIndex] + ': ' + value;
-          }
-        }
-      }
-    }
-  });
-}
-
-function renderAPStatusChart(canvasId, dist) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  var labels = Object.keys(dist);
-  var data = Object.values(dist);
-  var colors = labels.map(function(s) { return getStatusChartColor(s); });
-  reportCharts[canvasId] = new Chart(ctx, {
-    type: 'doughnut',
-    data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }] },
-    options: { responsive: true, maintainAspectRatio: false,
-      layout: { padding: 40 },
-      plugins: {
-        legend: { display: true, position: 'bottom', labels: { color: CHART_LABEL_COLOR, boxWidth: 10, padding: 12 } },
-        datalabels: {
-          display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
-          color: CHART_LABEL_COLOR,
-          backgroundColor: '#ffffff',
-          borderColor: null,
-          borderWidth: 0,
-          borderRadius: 0,
-          padding: 0,
-          font: { size: 11, weight: '600' },
-          anchor: 'end',
-          align: 'end',
-          offset: 18,
-          clamp: true,
-          formatter: function(value, context) {
-            return labels[context.dataIndex] + ': ' + value;
-          }
-        }
-      }
-    }
-  });
-}
-
-function renderAffiliateBarChart(canvasId, byAff) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  var labels = byAff.map(function(a) { return a.code; });
-  var data = byAff.map(function(a) { return a.findings; });
-  reportCharts[canvasId] = new Chart(ctx, {
-    type: 'bar',
-    data: { labels: labels, datasets: [{ label: 'Observations', data: data, backgroundColor: '#1a365d', borderRadius: 4 }] },
-    options: { responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: true, position: 'bottom', labels: { color: CHART_LABEL_COLOR, boxWidth: 10, padding: 12 } },
-        datalabels: {
-          display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
-          color: '#1a365d',
-          font: { size: 11, weight: '700' },
-          anchor: 'end',
-          align: 'top',
-          offset: 2
-        }
-      },
-      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-  });
-}
-
-function renderTrendChart(canvasId, trends) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  reportCharts[canvasId] = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: trends.labels,
-      datasets: [
-        { label: 'Observations Created', data: trends.findingsCreated, borderColor: '#1a365d', backgroundColor: 'rgba(26,54,93,0.1)', fill: true, tension: 0.3, pointRadius: 3 },
-        { label: 'APs Created', data: trends.actionPlansCreated, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 3 },
-        { label: 'APs Closed', data: trends.actionPlansClosed, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 3 }
-      ]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
-      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-  });
-}
-
-function renderRiskByAreaChart(canvasId, areas) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  var labels = areas.map(function(a) { return a.name; });
-  reportCharts[canvasId] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [
-        { label: 'Extreme', data: areas.map(function(a) { return (a.riskDistribution||{}).Extreme||0; }), backgroundColor: '#dc3545', borderRadius: 2 },
-        { label: 'High', data: areas.map(function(a) { return (a.riskDistribution||{}).High||0; }), backgroundColor: '#fd7e14', borderRadius: 2 },
-        { label: 'Medium', data: areas.map(function(a) { return (a.riskDistribution||{}).Medium||0; }), backgroundColor: '#ffc107', borderRadius: 2 },
-        { label: 'Low', data: areas.map(function(a) { return (a.riskDistribution||{}).Low||0; }), backgroundColor: '#28a745', borderRadius: 2 }
-      ]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
-      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } } }
-  });
-}
-
-function renderImplByAffiliateChart(canvasId, byAff) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  var sorted = byAff.slice().sort(function(a,b) { return b.implementationRate - a.implementationRate; });
-  reportCharts[canvasId] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: sorted.map(function(a) { return a.code; }),
-      datasets: [{ label: 'Implementation Rate %', data: sorted.map(function(a) { return a.implementationRate; }),
-        backgroundColor: sorted.map(function(a) { return a.implementationRate >= 80 ? '#10b981' : a.implementationRate >= 60 ? '#f59e0b' : '#ef4444'; }),
-        borderRadius: 4 }]
-    },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        datalabels: {
-          color: CHART_LABEL_COLOR,
-          font: { size: 11, weight: '700' },
-          anchor: 'end',
-          align: 'top',
-          offset: 2,
-          formatter: function(value) { return value + '%'; }
-        }
-      },
-      scales: { x: { beginAtZero: true, max: 100 } } }
-  });
-}
-
-function renderScoreBarChart(canvasId, areas) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  var sorted = areas.slice().sort(function(a,b) { return a.score - b.score; });
-  reportCharts[canvasId] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: sorted.map(function(a) { return a.name; }),
-      datasets: [{ label: 'Score', data: sorted.map(function(a) { return a.score; }),
-        backgroundColor: sorted.map(function(a) { return a.score >= 80 ? '#10b981' : a.score >= 60 ? '#f59e0b' : '#ef4444'; }),
-        borderRadius: 4 }]
-    },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        datalabels: {
-          color: CHART_LABEL_COLOR,
-          font: { size: 11, weight: '700' },
-          anchor: 'end',
-          align: 'top',
-          offset: 2
-        },
-        annotation: { annotations: {
-          threshold80: { type: 'line', xMin: 80, xMax: 80, borderColor: '#10b981', borderDash: [5,5], borderWidth: 1, label: { content: 'Effective', enabled: true, position: 'end' } },
-          threshold60: { type: 'line', xMin: 60, xMax: 60, borderColor: '#f59e0b', borderDash: [5,5], borderWidth: 1 }
-        }}
-      },
-      scales: { x: { beginAtZero: true, max: 100 } } }
-  });
-}
-
-function renderAgingChart(canvasId, ag) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  var agingColors = ['#10b981', '#f59e0b', '#f97316', '#ef4444', '#7f1d1d'];
-  var agingLabels = ['Current', '1-30 Days', '31-60 Days', '61-90 Days', '90+ Days'];
-  reportCharts[canvasId] = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: agingLabels,
-      datasets: [{ data: [ag.current.count, ag.overdue1to30.count, ag.overdue31to60.count, ag.overdue61to90.count, ag.overdue90plus.count],
-        backgroundColor: agingColors, borderWidth: 0 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false,
-      layout: { padding: 40 },
-      plugins: {
-        legend: { display: true, position: 'bottom', labels: { color: CHART_LABEL_COLOR, boxWidth: 10, padding: 12 } },
-        datalabels: {
-          display: function(context) { return context.dataset.data[context.dataIndex] > 0; },
-          color: CHART_LABEL_COLOR,
-          backgroundColor: '#ffffff',
-          borderColor: null,
-          borderWidth: 0,
-          borderRadius: 0,
-          padding: 0,
-          font: { size: 11, weight: '600' },
-          anchor: 'end',
-          align: 'end',
-          offset: 18,
-          clamp: true,
-          formatter: function(value, context) {
-            return agingLabels[context.dataIndex] + ': ' + value;
-          }
-        }
-      }
-    }
-  });
-}
-
-function getStatusChartColor(status) {
-  var map = {
-    'Draft':'#6c757d','Submitted':'#17a2b8','Under Review':'#ffc107','Revision Required':'#fd7e14',
-    'Approved':'#28a745','Sent to Auditee':'#1a365d',
-    'Not Due':'#6c757d','Pending':'#17a2b8','In Progress':'#ffc107','Overdue':'#dc3545',
-    'Implemented':'#28a745','Verified':'#1a365d','Not Implemented':'#dc3545','Closed':'#198754','Rejected':'#6f42c1'
-  };
-  return map[status] || '#adb5bd';
-}
-
-// ============================================================
-// UI HELPERS
-// ============================================================
-function buildKPI(colClass, value, label, sublabel, icon, color) {
-  color = color || 'var(--primary-color)';
-  return '<div class="' + colClass + '"><div class="kpi-card h-100">' +
-    (icon ? '<i class="bi ' + icon + '" style="font-size:1.25rem; color:' + color + '; margin-bottom:8px;"></i>' : '') +
-    '<div class="kpi-value" style="color:' + color + ';">' + value + '</div>' +
-    '<div class="kpi-label">' + label + '</div>' +
-    (sublabel ? '<div class="kpi-sublabel">' + escapeHtml(sublabel) + '</div>' : '') +
-    '</div></div>';
-}
-
-function buildScoreGauge(score, color) {
-  var pct = Math.min(100, Math.max(0, score));
-  var angle = (pct / 100) * 360;
-  var r = 54; var cx = 70; var cy = 70;
-  var rad = (angle - 90) * (Math.PI / 180);
-  var x = cx + r * Math.cos(rad);
-  var y = cy + r * Math.sin(rad);
-  var largeArc = angle > 180 ? 1 : 0;
-  var d = 'M ' + cx + ' ' + (cy - r) + ' A ' + r + ' ' + r + ' 0 ' + largeArc + ' 1 ' + x.toFixed(1) + ' ' + y.toFixed(1);
-  return '<div class="score-gauge">' +
-    '<svg viewBox="0 0 140 140"><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#e9ecef" stroke-width="10"/>' +
-    '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="10" stroke-linecap="round"/></svg>' +
-    '<div class="score-gauge-label"><div class="score-gauge-value" style="color:' + color + ';">' + score + '</div>' +
-    '<div class="score-gauge-text">/ 100</div></div></div>';
-}
-
-function buildScoreBadge(score) {
-  var color = score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
-  var bg = score >= 80 ? '#dcfce7' : score >= 60 ? '#fef3c7' : '#fee2e2';
-  return '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;background:' + bg + ';color:' + color + ';">' + score + '</span>';
-}
-
-function buildMiniProgress(pct, label) {
-  pct = Math.min(100, Math.max(0, pct || 0));
-  var color = pct >= 80 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444';
-  return '<div class="progress-bar-labeled" title="' + pct + '%">' +
-    '<div class="progress-bar-fill" style="width:' + Math.max(pct, 8) + '%;background:' + color + ';"><span>' + pct + '%</span></div></div>';
-}
-
-function buildAgingBucket(colClass, label, count, color, sublabel) {
-  return '<div class="' + colClass + '"><div class="aging-bucket" style="background:' + color + '10;">' +
-    '<div class="bucket-count" style="color:' + color + ';">' + count + '</div>' +
-    '<div class="bucket-label" style="color:' + color + ';">' + label + '</div>' +
-    '<div style="font-size:0.65rem;color:var(--text-muted);">' + sublabel + '</div></div></div>';
-}
-
-function riskScoreLabel(score) {
-  if (score >= 75) return 'High risk posture';
-  if (score >= 50) return 'Moderate risk';
-  if (score >= 25) return 'Acceptable risk';
-  return 'Low risk';
-}
-
-function renderImplementationProgressChart(canvasId, implemented, active, notDue) {
-  var canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-  var total = implemented + active + notDue;
-
-  if (total === 0) {
-    canvas.parentElement.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-bar-chart" style="font-size:2rem;"></i><p class="mt-2 mb-0">No action plan data available</p></div>';
-    return;
+  // Quarter filter (only when specific year is selected)
+  if (filters.year && filters.quarter && filters.quarter !== 'all') {
+    var qFilter = getQuarterFilterFn(filters.quarter, parseInt(filters.year, 10));
+    filteredObs = filteredObs.filter(function(o) {
+      var d = o.created_at ? new Date(o.created_at) : null;
+      return d ? qFilter(d) : false;
+    });
+    filteredAPs = filteredAPs.filter(function(ap) {
+      var d = ap.created_at ? new Date(ap.created_at) : null;
+      return d ? qFilter(d) : false;
+    });
   }
 
-  var pctImpl = Math.round((implemented / total) * 100);
-  var pctActive = Math.round((active / total) * 100);
-  var pctNotDue = 100 - pctImpl - pctActive;
+  // Affiliate filter
+  if (filters.affiliate) {
+    filteredObs = filteredObs.filter(function(o) { return o.affiliate_code === filters.affiliate; });
+    filteredAPs = filteredAPs.filter(function(ap) { return ap.affiliate_code === filters.affiliate; });
+  }
 
-  var hasOverdue = active > 0 && (reportData.apStatusDistribution || {})['Overdue'] > 0;
+  // Audit Area filter
+  if (filters.auditArea) {
+    filteredObs = filteredObs.filter(function(o) {
+      return (o.audit_area_name || o.audit_area_id || '') === filters.auditArea;
+    });
+    // APs were enriched with audit_area_name in the backend
+    filteredAPs = filteredAPs.filter(function(ap) {
+      return (ap.audit_area_name || ap.audit_area_id || '') === filters.auditArea;
+    });
+  }
 
-  if (window._implProgressChart) { try { window._implProgressChart.destroy(); } catch(e) {} }
-  window._implProgressChart = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: ['Action Plans'],
-      datasets: [
-        {
-          label: 'Implemented / Closed (' + implemented + ')',
-          data: [implemented],
-          backgroundColor: '#10b981',
-          borderRadius: 4
-        },
-        {
-          label: 'Active / In Progress (' + active + ')',
-          data: [active],
-          backgroundColor: hasOverdue ? '#ef4444' : '#f59e0b',
-          borderRadius: 4
-        },
-        {
-          label: 'Not Due (' + notDue + ')',
-          data: [notDue],
-          backgroundColor: '#9ca3af',
-          borderRadius: 4
-        }
-      ]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15 } },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              var pct = total > 0 ? Math.round((ctx.raw / total) * 100) : 0;
-              return ctx.dataset.label + ' — ' + pct + '%';
-            }
-          }
-        }
-      },
-      scales: {
-        x: { stacked: true, display: false, max: total },
-        y: { stacked: true, display: false }
-      }
+  return { observations: filteredObs, actionPlans: filteredAPs };
+}
+
+function getQuarterFilterFn(quarter, year) {
+  switch (quarter) {
+    case 'q1': return function(d) { return d.getMonth() >= 0 && d.getMonth() <= 2; };
+    case 'q2': return function(d) { return d.getMonth() >= 3 && d.getMonth() <= 5; };
+    case 'q3': return function(d) { return d.getMonth() >= 6 && d.getMonth() <= 8; };
+    case 'q4': return function(d) { return d.getMonth() >= 9 && d.getMonth() <= 11; };
+    case 'ytd':
+      var today = new Date();
+      var ytdStart = new Date(year, 0, 1);
+      return function(d) { return d >= ytdStart && d <= today; };
+    default: return function() { return true; };
+  }
+}
+
+// ============================================================
+// COMPARISON PERIOD DATA (for delta calculations)
+// ============================================================
+
+function getComparisonPeriodData() {
+  if (!_dashboardCache || !_currentDashFilters.year) return null;
+
+  var yr = parseInt(_currentDashFilters.year, 10);
+  var q = _currentDashFilters.quarter;
+  var compFilters = JSON.parse(JSON.stringify(_currentDashFilters));
+
+  if (q !== 'all' && q !== 'ytd') {
+    // Compare to previous quarter
+    var qNum = parseInt(q.replace('q', ''), 10);
+    if (qNum === 1) {
+      compFilters.year = String(yr - 1);
+      compFilters.quarter = 'q4';
+    } else {
+      compFilters.quarter = 'q' + (qNum - 1);
+    }
+  } else if (q === 'all') {
+    // Compare to previous full year
+    compFilters.year = String(yr - 1);
+  } else {
+    // YTD — no standard comparison
+    return null;
+  }
+
+  return applyDashboardFilters(
+    { observations: _dashboardCache.observations, actionPlans: _dashboardCache.actionPlans },
+    compFilters
+  );
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+
+function onDashTabChange(event, tabId) {
+  if (event) event.preventDefault();
+  _currentDashTab = tabId;
+  currentReportTab = tabId;
+
+  // Update tab active state
+  document.querySelectorAll('#reportTabs .nav-link').forEach(function(l) {
+    l.classList.toggle('active', l.dataset.tab === tabId);
+  });
+
+  // Show/hide panes
+  var panes = ['pane-overview', 'pane-risk', 'pane-detail'];
+  panes.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.classList.toggle('d-none', id !== 'pane-' + tabId);
+    }
+  });
+
+  if (_dashboardFiltered) {
+    renderCurrentTab();
+  }
+}
+
+// ============================================================
+// RENDER DISPATCH
+// ============================================================
+
+function renderCurrentTab() {
+  destroyAllCharts();
+
+  switch (_currentDashTab) {
+    case 'overview':
+      renderOverviewTab(_dashboardFiltered);
+      break;
+    case 'risk':
+      renderRiskTab(_dashboardFiltered);
+      break;
+    case 'detail':
+      renderDetailTab(_dashboardFiltered);
+      break;
+    default:
+      renderOverviewTab(_dashboardFiltered);
+  }
+}
+
+// ── Stub renderers (Parts 2 & 3 will implement these) ──
+
+function renderOverviewTab(data) {
+  var pane = document.getElementById('pane-overview');
+  if (!pane) return;
+
+  var obsCount = data ? data.observations.length : 0;
+  var apCount = data ? data.actionPlans.length : 0;
+  var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+  var closedAPs = data ? data.actionPlans.filter(function(ap) { return closedStatuses.indexOf(ap.status) !== -1; }).length : 0;
+  var overdueAPs = data ? data.actionPlans.filter(function(ap) { return ap.days_overdue > 0 && closedStatuses.indexOf(ap.status) === -1; }).length : 0;
+
+  pane.innerHTML =
+    '<div class="row g-3 mb-4">' +
+      '<div class="col-6 col-md-3"><div class="kpi-card h-100"><div class="kpi-value">' + obsCount + '</div><div class="kpi-label">Observations</div></div></div>' +
+      '<div class="col-6 col-md-3"><div class="kpi-card h-100"><div class="kpi-value">' + apCount + '</div><div class="kpi-label">Action Plans</div></div></div>' +
+      '<div class="col-6 col-md-3"><div class="kpi-card h-100"><div class="kpi-value" style="color:#10b981;">' + closedAPs + '</div><div class="kpi-label">Closed / Verified</div></div></div>' +
+      '<div class="col-6 col-md-3"><div class="kpi-card h-100"><div class="kpi-value" style="color:' + (overdueAPs > 0 ? '#ef4444' : '#10b981') + ';">' + overdueAPs + '</div><div class="kpi-label">Overdue</div></div></div>' +
+    '</div>' +
+    '<div class="text-center text-muted py-4"><i class="bi bi-speedometer2" style="font-size:2rem;"></i>' +
+    '<p class="mt-2">Overview tab — charts and detail cards will be built in Part 2</p></div>';
+
+  console.log('TODO: renderOverviewTab full implementation in Part 2');
+}
+
+function renderRiskTab(data) {
+  var pane = document.getElementById('pane-risk');
+  if (!pane) return;
+  pane.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-shield-exclamation" style="font-size:2rem;"></i><p class="mt-2">Risk &amp; Performance tab content — will be built in Part 3</p></div>';
+  console.log('TODO: renderRiskTab implementation in Part 3');
+}
+
+function renderDetailTab(data) {
+  var pane = document.getElementById('pane-detail');
+  if (!pane) return;
+  pane.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-table" style="font-size:2rem;"></i><p class="mt-2">Detail tab content — will be built in Part 3</p></div>';
+  console.log('TODO: renderDetailTab implementation in Part 3');
+}
+
+// ============================================================
+// CHART MANAGEMENT
+// ============================================================
+
+function destroyAllCharts() {
+  Object.keys(_chartInstances).forEach(function(id) {
+    if (_chartInstances[id]) {
+      try { _chartInstances[id].destroy(); } catch (e) {}
+      delete _chartInstances[id];
+    }
+  });
+  // Also clean legacy reportCharts
+  Object.keys(reportCharts).forEach(function(k) {
+    if (reportCharts[k]) {
+      try { reportCharts[k].destroy(); } catch (e) {}
+      delete reportCharts[k];
     }
   });
 }
 
-function buildMethodologyBox() {
-  return '<div class="mt-4">' +
-    '<a class="text-muted small text-decoration-none" data-bs-toggle="collapse" href="#methodologyCollapse" role="button" aria-expanded="false" aria-controls="methodologyCollapse">' +
-    '<i class="bi bi-info-circle me-1"></i>How is this score calculated?</a>' +
-    '<div class="collapse" id="methodologyCollapse"><div class="methodology-box mt-2">' +
-    '<h6><i class="bi bi-info-circle me-1"></i>Scoring Methodology</h6>' +
-    '<p>Audit area scores are calculated using a weighted composite of three factors aligned with IIA standards:</p>' +
-    '<ul>' +
-    '<li><strong>Implementation Rate (40%):</strong> Percentage of action plans that have been closed (Implemented or Verified status).</li>' +
-    '<li><strong>Timeliness (35%):</strong> Inverse of the overdue rate. Fewer overdue action plans result in a higher timeliness score.</li>' +
-    '<li><strong>Risk Profile (25%):</strong> Penalty applied proportional to the volume of observations. Areas with fewer observations score higher.</li>' +
-    '</ul>' +
-    '<p><strong>Ratings:</strong> Effective (&ge;80) | Needs Improvement (60&ndash;79) | Ineffective (&lt;60)</p>' +
-    '</div></div></div>';
+// ============================================================
+// REFRESH
+// ============================================================
+
+function refreshDashboard() {
+  _dashboardCache = null;
+  _dashboardFiltered = null;
+  destroyAllCharts();
+  loadDashboardV2();
 }
 
 // ============================================================
-// EXPORT FUNCTIONS
+// LEGACY EXPORT FUNCTIONS (preserved for backward compat)
 // ============================================================
+
 function exportReportPDF() {
-  if (!reportData) { showToast('No report data to export', 'warning'); return; }
-  // Show print header, trigger print, then hide
+  if (!_dashboardFiltered) { showToast('No report data to export', 'warning'); return; }
   var header = document.getElementById('printReportHeader');
   var title = document.getElementById('printReportTitle');
   var dateEl = document.getElementById('printReportDate');
-  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Observations', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
-  if (title) title.textContent = tabNames[currentReportTab] || 'Audit Report';
+  var tabNames = { overview: 'Dashboard Overview', risk: 'Risk & Performance', detail: 'Detail Report' };
+  if (title) title.textContent = tabNames[_currentDashTab] || 'Audit Report';
   if (dateEl) dateEl.textContent = 'Generated: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' });
   if (header) header.classList.remove('d-none');
   setTimeout(function() {
@@ -1025,64 +681,37 @@ function exportReportPDF() {
 }
 
 function exportReportWord() {
-  if (!reportData) { showToast('No report data to export', 'warning'); return; }
+  if (!_dashboardFiltered) { showToast('No report data to export', 'warning'); return; }
 
-  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Observations', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
-  var reportTitle = tabNames[currentReportTab] || 'Audit Report';
+  var tabNames = { overview: 'Dashboard Overview', risk: 'Risk & Performance', detail: 'Detail Report' };
+  var reportTitle = tabNames[_currentDashTab] || 'Audit Report';
+  var obs = _dashboardFiltered.observations || [];
+  var aps = _dashboardFiltered.actionPlans || [];
+  var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+  var closedAPs = aps.filter(function(ap) { return closedStatuses.indexOf(ap.status) !== -1; });
+  var overdueAPs = aps.filter(function(ap) { return ap.days_overdue > 0 && closedStatuses.indexOf(ap.status) === -1; });
 
-  // Build Word-compatible HTML
   var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
     '<head><meta charset="utf-8"><title>' + reportTitle + '</title>' +
     '<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#333;margin:40px;}' +
     'h1{color:#1a365d;font-size:18pt;border-bottom:3px solid #1a365d;padding-bottom:8px;}' +
     'h2{color:#1a365d;font-size:14pt;margin-top:20px;}' +
-    'h3{color:#2d4a7c;font-size:12pt;}' +
     'table{border-collapse:collapse;width:100%;margin:12px 0;}' +
     'th{background:#1a365d;color:#fff;padding:8px 12px;text-align:left;font-size:10pt;}' +
     'td{border:1px solid #ddd;padding:6px 12px;font-size:10pt;}' +
     'tr:nth-child(even){background:#f9fafb;}' +
-    '.badge{padding:3px 8px;border-radius:4px;font-size:9pt;font-weight:bold;color:#fff;}' +
-    '.extreme{background:#dc3545;}.high{background:#fd7e14;}.medium{background:#ffc107;color:#333;}.low{background:#28a745;}' +
-    '.score{font-size:16pt;font-weight:bold;}.effective{color:#10b981;}.needs-improvement{color:#f59e0b;}.ineffective{color:#ef4444;}' +
     '</style></head><body>';
 
   html += '<h1>Hass Petroleum - ' + reportTitle + '</h1>';
   html += '<p style="color:#666;">Generated: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) + '</p>';
 
-  var e = reportData.executive;
-  html += '<h2>Executive Summary</h2>';
+  html += '<h2>Summary</h2>';
   html += '<table><tr><th>Metric</th><th>Value</th></tr>' +
-    '<tr><td>Overall Audit Health Score</td><td class="score ' + (e.overallScore >= 80 ? 'effective' : e.overallScore >= 60 ? 'needs-improvement' : 'ineffective') + '">' + e.overallScore + ' / 100</td></tr>' +
-    '<tr><td>Total Observations</td><td>' + e.totalFindings + '</td></tr>' +
-    '<tr><td>Total Action Plans</td><td>' + e.totalActionPlans + '</td></tr>' +
-    '<tr><td>Closed Action Plans</td><td>' + e.closedActionPlans + '</td></tr>' +
-    '<tr><td>Overdue Action Plans</td><td>' + e.overdueActionPlans + '</td></tr>' +
-    '<tr><td>Implementation Rate</td><td>' + e.implementationRate + '%</td></tr>' +
-    '<tr><td>On-Time Closure Rate</td><td>' + e.onTimeClosureRate + '%</td></tr>' +
+    '<tr><td>Total Observations</td><td>' + obs.length + '</td></tr>' +
+    '<tr><td>Total Action Plans</td><td>' + aps.length + '</td></tr>' +
+    '<tr><td>Closed Action Plans</td><td>' + closedAPs.length + '</td></tr>' +
+    '<tr><td>Overdue Action Plans</td><td>' + overdueAPs.length + '</td></tr>' +
     '</table>';
-
-  html += '<h2>Risk Distribution</h2>';
-  html += '<table><tr><th>Risk Level</th><th>Count</th></tr>' +
-    '<tr><td><span class="badge extreme">Extreme</span></td><td>' + (e.riskDistribution.Extreme||0) + '</td></tr>' +
-    '<tr><td><span class="badge high">High</span></td><td>' + (e.riskDistribution.High||0) + '</td></tr>' +
-    '<tr><td><span class="badge medium">Medium</span></td><td>' + (e.riskDistribution.Medium||0) + '</td></tr>' +
-    '<tr><td><span class="badge low">Low</span></td><td>' + (e.riskDistribution.Low||0) + '</td></tr></table>';
-
-  html += '<h2>Performance by Affiliate</h2>';
-  html += '<table><tr><th>Affiliate</th><th>Observations</th><th>Action Plans</th><th>Closed</th><th>Overdue</th><th>Impl. Rate</th><th>Score</th></tr>';
-  (reportData.byAffiliate||[]).forEach(function(a) {
-    html += '<tr><td>' + (a.name||a.code) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td></tr>';
-  });
-  html += '</table>';
-
-  if (currentReportTab === 'scorecard' || currentReportTab === 'executive') {
-    html += '<h2>Audit Area Scorecard</h2>';
-    html += '<table><tr><th>Audit Area</th><th>Observations</th><th>Action Plans</th><th>Impl. Rate</th><th>Score</th><th>Rating</th></tr>';
-    (reportData.byAuditArea||[]).forEach(function(a) {
-      html += '<tr><td>' + a.name + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + a.rating + '</td></tr>';
-    });
-    html += '</table>';
-  }
 
   html += '</body></html>';
 
@@ -1096,33 +725,33 @@ function exportReportWord() {
 }
 
 function exportReportExcel() {
-  if (!reportData) { showToast('No report data to export', 'warning'); return; }
+  if (!_dashboardFiltered) { showToast('No report data to export', 'warning'); return; }
 
-  var tabNames = { executive: 'Executive Summary', findings: 'Detailed Observations', actionplans: 'Action Plan Tracker', risk: 'Risk Assessment', scorecard: 'Performance Scorecard', aging: 'Aging Analysis' };
-  var reportTitle = tabNames[currentReportTab] || 'Audit Report';
+  var obs = _dashboardFiltered.observations || [];
+  var aps = _dashboardFiltered.actionPlans || [];
 
-  // Build Excel-compatible HTML table
   var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
-    '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>';
+    '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>' +
+    '<x:ExcelWorksheet><x:Name>Observations</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>' +
+    '<x:ExcelWorksheet><x:Name>Action Plans</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>' +
+    '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>';
 
-  var sheets = [];
-
-  // Sheet 1: Executive Summary
-  sheets.push({ name: 'Executive Summary', content: buildExcelSummarySheet() });
-  // Sheet 2: Findings
-  sheets.push({ name: 'Findings', content: buildExcelFindingsSheet() });
-  // Sheet 3: Affiliate Performance
-  sheets.push({ name: 'By Affiliate', content: buildExcelAffiliateSheet() });
-  // Sheet 4: Audit Area Scores
-  sheets.push({ name: 'Scorecard', content: buildExcelScorecardSheet() });
-  // Sheet 5: Aging
-  sheets.push({ name: 'Aging', content: buildExcelAgingSheet() });
-
-  sheets.forEach(function(s) {
-    html += '<x:ExcelWorksheet><x:Name>' + s.name + '</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>';
+  // Observations sheet
+  html += '<div id="Observations"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
+    '<th>ID</th><th>Title</th><th>Affiliate</th><th>Audit Area</th><th>Risk Rating</th><th>Status</th><th>Date</th><th>Action Plans</th><th>Overdue APs</th></tr>';
+  obs.forEach(function(o) {
+    html += '<tr><td>' + (o.work_paper_id || '') + '</td><td>' + escapeHtml(o.observation_title || '') + '</td><td>' + escapeHtml(o.affiliate_code || '') + '</td><td>' + escapeHtml(o.audit_area_name || o.audit_area_id || '') + '</td><td>' + escapeHtml(o.risk_rating || '') + '</td><td>' + escapeHtml(o.status || '') + '</td><td>' + (o.created_at ? formatDate(o.created_at) : '') + '</td><td>' + (o.action_plan_count || 0) + '</td><td>' + (o.overdue_ap_count || 0) + '</td></tr>';
   });
-  html += '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>';
-  sheets.forEach(function(s) { html += s.content; });
+  html += '</table></div>';
+
+  // Action Plans sheet
+  html += '<div id="Action Plans"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
+    '<th>ID</th><th>Description</th><th>Owner</th><th>Affiliate</th><th>Due Date</th><th>Status</th><th>Days Overdue</th></tr>';
+  aps.forEach(function(ap) {
+    html += '<tr><td>' + (ap.action_plan_id || '') + '</td><td>' + escapeHtml(ap.action_description || '') + '</td><td>' + escapeHtml(ap.owner_names || '') + '</td><td>' + escapeHtml(ap.affiliate_code || '') + '</td><td>' + (ap.due_date ? formatDate(ap.due_date) : '') + '</td><td>' + escapeHtml(ap.status || '') + '</td><td>' + (ap.days_overdue || 0) + '</td></tr>';
+  });
+  html += '</table></div>';
+
   html += '</body></html>';
 
   var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
@@ -1134,62 +763,9 @@ function exportReportExcel() {
   showToast('Excel file downloaded', 'success');
 }
 
-function buildExcelSummarySheet() {
-  var e = reportData.executive;
-  return '<div id="Executive Summary"><table border="1">' +
-    '<tr><th colspan="2" style="background:#1a365d;color:#fff;font-size:14pt;">Executive Summary</th></tr>' +
-    '<tr><td>Generated</td><td>' + new Date().toLocaleDateString() + '</td></tr>' +
-    '<tr><td>Overall Score</td><td>' + e.overallScore + ' / 100</td></tr>' +
-    '<tr><td>Total Observations</td><td>' + e.totalFindings + '</td></tr>' +
-    '<tr><td>Total Action Plans</td><td>' + e.totalActionPlans + '</td></tr>' +
-    '<tr><td>Closed Action Plans</td><td>' + e.closedActionPlans + '</td></tr>' +
-    '<tr><td>Overdue Action Plans</td><td>' + e.overdueActionPlans + '</td></tr>' +
-    '<tr><td>Implementation Rate</td><td>' + e.implementationRate + '%</td></tr>' +
-    '<tr><td>On-Time Closure Rate</td><td>' + e.onTimeClosureRate + '%</td></tr>' +
-    '<tr><td>Extreme Risk Observations</td><td>' + (e.riskDistribution.Extreme||0) + '</td></tr>' +
-    '<tr><td>High Risk Observations</td><td>' + (e.riskDistribution.High||0) + '</td></tr>' +
-    '<tr><td>Medium Risk Observations</td><td>' + (e.riskDistribution.Medium||0) + '</td></tr>' +
-    '<tr><td>Low Risk Observations</td><td>' + (e.riskDistribution.Low||0) + '</td></tr>' +
-    '</table></div>';
-}
+// LEGACY: keep these functions as no-ops to prevent errors if other code calls them
+function loadReportData() { loadDashboardV2(); }
+function switchReportTab(event, tab) { onDashTabChange(event, tab === 'executive' ? 'overview' : tab); }
+function initReportFilters() { /* handled by populateDashFilters */ }
 
-function buildExcelFindingsSheet() {
-  var html = '<div id="Findings"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
-    '<th>ID</th><th>Title</th><th>Affiliate</th><th>Audit Area</th><th>Risk Rating</th><th>Status</th><th>Date</th><th>Prepared By</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th></tr>';
-  (reportData.findings||[]).forEach(function(f) {
-    html += '<tr><td>' + f.id + '</td><td>' + escapeHtml(f.title) + '</td><td>' + escapeHtml(f.affiliate) + '</td><td>' + escapeHtml(f.auditArea) + '</td><td>' + escapeHtml(f.riskRating) + '</td><td>' + escapeHtml(f.status) + '</td><td>' + (f.date ? formatDate(f.date) : '') + '</td><td>' + escapeHtml(f.preparedBy) + '</td><td>' + f.actionPlansTotal + '</td><td>' + f.actionPlansClosed + '</td><td>' + f.actionPlansOverdue + '</td></tr>';
-  });
-  return html + '</table></div>';
-}
-
-function buildExcelAffiliateSheet() {
-  var html = '<div id="By Affiliate"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
-    '<th>Affiliate</th><th>Observations</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th><th>Implementation Rate</th><th>Score</th><th>Extreme</th><th>High</th><th>Medium</th><th>Low</th></tr>';
-  (reportData.byAffiliate||[]).forEach(function(a) {
-    var r = a.riskDistribution||{};
-    html += '<tr><td>' + escapeHtml(a.name||a.code) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + (r.Extreme||0) + '</td><td>' + (r.High||0) + '</td><td>' + (r.Medium||0) + '</td><td>' + (r.Low||0) + '</td></tr>';
-  });
-  return html + '</table></div>';
-}
-
-function buildExcelScorecardSheet() {
-  var html = '<div id="Scorecard"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
-    '<th>Audit Area</th><th>Observations</th><th>Action Plans</th><th>Closed APs</th><th>Overdue APs</th><th>Implementation Rate</th><th>Score</th><th>Rating</th></tr>';
-  (reportData.byAuditArea||[]).forEach(function(a) {
-    html += '<tr><td>' + escapeHtml(a.name) + '</td><td>' + a.findings + '</td><td>' + a.actionPlans + '</td><td>' + a.closedAPs + '</td><td>' + a.overdueAPs + '</td><td>' + a.implementationRate + '%</td><td>' + a.score + '</td><td>' + a.rating + '</td></tr>';
-  });
-  return html + '</table></div>';
-}
-
-function buildExcelAgingSheet() {
-  var ag = reportData.aging;
-  var allItems = [].concat(ag.current.items, ag.overdue1to30.items, ag.overdue31to60.items, ag.overdue61to90.items, ag.overdue90plus.items);
-  var html = '<div id="Aging"><table border="1"><tr style="background:#1a365d;color:#fff;">' +
-    '<th>ID</th><th>Description</th><th>Owner</th><th>Affiliate</th><th>Risk Rating</th><th>Due Date</th><th>Days Overdue</th><th>Status</th><th>Aging Bucket</th></tr>';
-  allItems.forEach(function(item) {
-    var bucket = item.daysOverdue <= 0 ? 'Current' : item.daysOverdue <= 30 ? '1-30 Days' : item.daysOverdue <= 60 ? '31-60 Days' : item.daysOverdue <= 90 ? '61-90 Days' : '90+ Days';
-    html += '<tr><td>' + item.id + '</td><td>' + escapeHtml(item.description) + '</td><td>' + escapeHtml(item.owner) + '</td><td>' + escapeHtml(item.affiliate) + '</td><td>' + escapeHtml(item.riskRating) + '</td><td>' + (item.dueDate ? formatDate(item.dueDate) : '') + '</td><td>' + item.daysOverdue + '</td><td>' + escapeHtml(item.status) + '</td><td>' + bucket + '</td></tr>';
-  });
-  return html + '</table></div>';
-}
 </script>
