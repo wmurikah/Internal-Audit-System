@@ -591,29 +591,477 @@ function renderCurrentTab() {
   }
 }
 
-// ── Stub renderers (Parts 2 & 3 will implement these) ──
+// ── Tab renderers ──
+
+// ── Overview Tab Helpers ──
+
+function _shortAreaLabel(area) {
+  var map = {
+    'Human Resources': 'HR',
+    'Inventory Management': 'Inv. Mgmt',
+    'Accounts Receivable': 'Accts Rec.',
+    'Accounts Payable': 'Accts Pay.',
+    'Tax Management': 'Tax Mgmt',
+    'Fixed Assets': 'Fixed Assets',
+    'Legal & Compliance': 'Legal',
+    'Customer Service': 'Cust. Svc',
+    'Order Management': 'Order Mgmt',
+    'Purchase to Pay (Opex)': 'P2P',
+    'Information & Communications Technology': 'ICT',
+    'Information Technology': 'IT',
+    'Supply Chain': 'Supply Chain',
+    'Cash Management': 'Cash Mgmt',
+    'Revenue Assurance': 'Rev. Assurance',
+    'Health Safety & Environment': 'HSE'
+  };
+  if (!area) return 'N/A';
+  return map[area] || (area.length > 15 ? area.substring(0, 12) + '...' : area);
+}
+
+function _computeImplRate(actionPlans) {
+  var implementedStatuses = ['Implemented', 'Verified', 'Closed'];
+  var totalDue = actionPlans.filter(function(ap) { return ap.status !== 'Not Due'; });
+  if (totalDue.length === 0) return 0;
+  var impl = totalDue.filter(function(ap) { return implementedStatuses.indexOf(ap.status) !== -1; }).length;
+  return Math.round(impl / totalDue.length * 100);
+}
+
+function _computeRiskScore(observations) {
+  if (!observations || observations.length === 0) return 0;
+  var scoreMap = { 'Extreme': 100, 'High': 75, 'Medium': 50, 'Low': 25 };
+  var total = 0;
+  var counted = 0;
+  observations.forEach(function(o) {
+    var s = scoreMap[(o.risk_rating || '').trim()];
+    if (s !== undefined) { total += s; counted++; }
+  });
+  return counted > 0 ? Math.round(total / counted) : 0;
+}
+
+function _riskLabel(score) {
+  if (score >= 76) return { text: 'Extreme', color: '#dc3545' };
+  if (score >= 51) return { text: 'High', color: '#fd7e14' };
+  if (score >= 26) return { text: 'Moderate', color: '#ffc107' };
+  return { text: 'Low', color: '#28a745' };
+}
+
+function _implRateColor(pct) {
+  if (pct >= 70) return '#198754';
+  if (pct >= 40) return '#ffc107';
+  return '#dc3545';
+}
+
+function _buildDelta(current, comparison, upIsGood) {
+  if (comparison === null || comparison === undefined) return '';
+  var diff = current - comparison;
+  if (diff === 0) return '<span style="color:#6b7280;font-size:0.75rem">— no change</span>';
+  var isUp = diff > 0;
+  var arrow = isUp ? '▲' : '▼';
+  var color;
+  if (upIsGood) {
+    color = isUp ? '#198754' : '#dc3545';
+  } else {
+    color = isUp ? '#dc3545' : '#198754';
+  }
+  var displayVal = Math.abs(diff);
+  return '<span style="color:' + color + ';font-size:0.75rem">' + arrow + ' ' + displayVal + '</span>';
+}
+
+function _buildDeltaPP(current, comparison, upIsGood) {
+  if (comparison === null || comparison === undefined) return '';
+  var diff = current - comparison;
+  if (diff === 0) return '<span style="color:#6b7280;font-size:0.75rem">— no change</span>';
+  var isUp = diff > 0;
+  var arrow = isUp ? '▲' : '▼';
+  var color;
+  if (upIsGood) {
+    color = isUp ? '#198754' : '#dc3545';
+  } else {
+    color = isUp ? '#dc3545' : '#198754';
+  }
+  return '<span style="color:' + color + ';font-size:0.75rem">' + arrow + ' ' + (isUp ? '+' : '') + diff + 'pp</span>';
+}
 
 function renderOverviewTab(data) {
   var pane = document.getElementById('pane-overview');
   if (!pane) return;
 
-  var obsCount = data ? data.observations.length : 0;
-  var apCount = data ? data.actionPlans.length : 0;
-  var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
-  var closedAPs = data ? data.actionPlans.filter(function(ap) { return closedStatuses.indexOf(ap.status) !== -1; }).length : 0;
-  var overdueAPs = data ? data.actionPlans.filter(function(ap) { return ap.days_overdue > 0 && closedStatuses.indexOf(ap.status) === -1; }).length : 0;
+  destroyAllCharts();
 
-  pane.innerHTML =
-    '<div class="row g-3 mb-4">' +
-      '<div class="col-6 col-md-3"><div class="kpi-card h-100"><div class="kpi-value">' + obsCount + '</div><div class="kpi-label">Observations</div></div></div>' +
-      '<div class="col-6 col-md-3"><div class="kpi-card h-100"><div class="kpi-value">' + apCount + '</div><div class="kpi-label">Action Plans</div></div></div>' +
-      '<div class="col-6 col-md-3"><div class="kpi-card h-100"><div class="kpi-value" style="color:#10b981;">' + closedAPs + '</div><div class="kpi-label">Closed / Verified</div></div></div>' +
-      '<div class="col-6 col-md-3"><div class="kpi-card h-100"><div class="kpi-value" style="color:' + (overdueAPs > 0 ? '#ef4444' : '#10b981') + ';">' + overdueAPs + '</div><div class="kpi-label">Overdue</div></div></div>' +
+  var obs = data ? data.observations : [];
+  var aps = data ? data.actionPlans : [];
+
+  // ── Status category helpers ──
+  var implementedStatuses = ['Implemented', 'Verified', 'Closed'];
+  var openObsStatuses = ['Sent to Auditee', 'Revision Required'];
+
+  // ── Metric calculations ──
+  var openObs = obs.filter(function(o) { return openObsStatuses.indexOf(o.status) !== -1; }).length;
+  var implRate = _computeImplRate(aps);
+  var overdueAPs = aps.filter(function(ap) { return ap.days_overdue > 0 && implementedStatuses.indexOf(ap.status) === -1; });
+  var overdueCount = overdueAPs.length;
+  var avgDaysOverdue = overdueCount > 0 ? Math.round(overdueAPs.reduce(function(s, ap) { return s + (ap.days_overdue || 0); }, 0) / overdueCount) : 0;
+  var riskScore = _computeRiskScore(obs);
+  var rl = _riskLabel(riskScore);
+
+  // ── Delta calculations (comparison period) ──
+  var comp = getComparisonPeriodData();
+  var deltaOpenObs = '';
+  var deltaImplRate = '';
+  var deltaOverdue = '';
+  var deltaRisk = '';
+  if (comp) {
+    var compOpenObs = comp.observations.filter(function(o) { return openObsStatuses.indexOf(o.status) !== -1; }).length;
+    var compImplRate = _computeImplRate(comp.actionPlans);
+    var compOverdueAPs = comp.actionPlans.filter(function(ap) { return ap.days_overdue > 0 && implementedStatuses.indexOf(ap.status) === -1; });
+    var compRiskScore = _computeRiskScore(comp.observations);
+
+    deltaOpenObs = _buildDelta(openObs, compOpenObs, false);
+    deltaImplRate = _buildDeltaPP(implRate, compImplRate, true);
+    deltaOverdue = _buildDelta(overdueCount, compOverdueAPs.length, false);
+    deltaRisk = _buildDelta(riskScore, compRiskScore, false);
+  }
+
+  // ── Implementation Rate circular ring SVG ──
+  var implColor = _implRateColor(implRate);
+  var circumference = 2 * Math.PI * 54; // r=54
+  var offset = circumference - (implRate / 100) * circumference;
+  var implRing =
+    '<svg width="80" height="80" viewBox="0 0 120 120">' +
+      '<circle cx="60" cy="60" r="54" fill="none" stroke="#e9ecef" stroke-width="10"/>' +
+      '<circle cx="60" cy="60" r="54" fill="none" stroke="' + implColor + '" stroke-width="10" ' +
+        'stroke-dasharray="' + circumference.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" ' +
+        'stroke-linecap="round" transform="rotate(-90 60 60)"/>' +
+      '<text x="60" y="56" text-anchor="middle" font-size="28" font-weight="700" fill="' + implColor + '">' + implRate + '%</text>' +
+      '<text x="60" y="74" text-anchor="middle" font-size="10" fill="#6b7280">of due APs</text>' +
+    '</svg>';
+
+  // ══════════════════════════════════════════
+  // ROW 1: Stat Cards
+  // ══════════════════════════════════════════
+  var html = '<div class="row g-3 mb-4">';
+
+  // Card 1: Open Observations
+  html += '<div class="col-md-3 col-6"><div class="card h-100 border-0 shadow-sm"><div class="card-body text-center p-3">' +
+    '<div class="text-muted mb-2" style="font-size:1.2rem"><i class="bi bi-search"></i></div>' +
+    '<div style="font-size:2rem;font-weight:700;color:#1a365d">' + openObs + '</div>' +
+    '<div class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:1px">Open Observations</div>' +
+    (deltaOpenObs ? '<div class="mt-2">' + deltaOpenObs + '</div>' : '') +
+    '</div></div></div>';
+
+  // Card 2: Implementation Rate
+  html += '<div class="col-md-3 col-6"><div class="card h-100 border-0 shadow-sm"><div class="card-body text-center p-3">' +
+    '<div class="text-muted mb-2" style="font-size:1.2rem"><i class="bi bi-check-circle"></i></div>' +
+    implRing +
+    '<div class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:1px">Implementation Rate</div>' +
+    (deltaImplRate ? '<div class="mt-2">' + deltaImplRate + '</div>' : '') +
+    '</div></div></div>';
+
+  // Card 3: Overdue
+  html += '<div class="col-md-3 col-6"><div class="card h-100 border-0 shadow-sm"><div class="card-body text-center p-3">' +
+    '<div class="text-muted mb-2" style="font-size:1.2rem"><i class="bi bi-exclamation-triangle"></i></div>' +
+    '<div style="font-size:2rem;font-weight:700;color:#dc3545">' + overdueCount + '</div>' +
+    '<div class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:1px">Overdue</div>' +
+    (overdueCount > 0 ? '<div class="text-muted" style="font-size:0.75rem">Avg ' + avgDaysOverdue + ' days</div>' : '') +
+    (deltaOverdue ? '<div class="mt-2">' + deltaOverdue + '</div>' : '') +
+    '</div></div></div>';
+
+  // Card 4: Risk Score
+  html += '<div class="col-md-3 col-6"><div class="card h-100 border-0 shadow-sm"><div class="card-body text-center p-3">' +
+    '<div class="text-muted mb-2" style="font-size:1.2rem"><i class="bi bi-shield"></i></div>' +
+    '<div style="font-size:2rem;font-weight:700;color:' + rl.color + '">' + riskScore + '<span style="font-size:1rem;font-weight:400">/100</span></div>' +
+    '<div class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:1px">Avg Risk Score</div>' +
+    '<div style="font-size:0.75rem;color:' + rl.color + '">' + rl.text + '</div>' +
+    (deltaRisk ? '<div class="mt-2">' + deltaRisk + '</div>' : '') +
+    '</div></div></div>';
+
+  html += '</div>'; // end row 1
+
+  // ══════════════════════════════════════════
+  // ROW 2: Implementation by Audit Area chart
+  // ══════════════════════════════════════════
+  html += '<div class="card shadow-sm mb-4"><div class="card-body">' +
+    '<h6 class="card-title">Implementation Status by Audit Area</h6>' +
+    '<div style="min-height:350px;position:relative"><canvas id="chartImplByArea"></canvas></div>' +
+    '</div></div>';
+
+  // ══════════════════════════════════════════
+  // ROW 3: Progress bar + Top Overdue (two columns)
+  // ══════════════════════════════════════════
+
+  // Left: Implementation Progress bar
+  var implCount = aps.filter(function(ap) { return implementedStatuses.indexOf(ap.status) !== -1; }).length;
+  var notDueCount = aps.filter(function(ap) { return ap.status === 'Not Due'; }).length;
+  var activeCount = aps.length - implCount - notDueCount;
+  var totalAPs = aps.length || 1; // avoid division by zero
+  var implPct = Math.round(implCount / totalAPs * 100);
+  var activePct = Math.round(activeCount / totalAPs * 100);
+  var notDuePct = 100 - implPct - activePct;
+  // Ensure no segment shows count inside if too narrow (<15%)
+  var implInner = implPct >= 15 ? implCount : '';
+  var activeInner = activePct >= 15 ? activeCount : '';
+  var notDueInner = notDuePct >= 15 ? notDueCount : '';
+
+  html += '<div class="row g-3 mb-4"><div class="col-md-6">';
+  html += '<div class="card shadow-sm h-100"><div class="card-body">' +
+    '<h6 class="card-title">Implementation Progress</h6>' +
+    '<div class="d-flex" style="height:40px;border-radius:6px;overflow:hidden">';
+  if (implPct > 0) {
+    html += '<div style="width:' + implPct + '%;background:#198754" class="d-flex align-items-center justify-content-center text-white fw-bold" title="Implemented/Closed: ' + implCount + '">' + implInner + '</div>';
+  }
+  if (activePct > 0) {
+    html += '<div style="width:' + activePct + '%;background:#dc3545" class="d-flex align-items-center justify-content-center text-white fw-bold" title="Active/In Progress: ' + activeCount + '">' + activeInner + '</div>';
+  }
+  if (notDuePct > 0) {
+    html += '<div style="width:' + notDuePct + '%;background:#adb5bd" class="d-flex align-items-center justify-content-center text-dark fw-bold" title="Not Due: ' + notDueCount + '">' + notDueInner + '</div>';
+  }
+  html += '</div>' +
+    '<div class="d-flex justify-content-between mt-2" style="font-size:0.8rem">' +
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#198754;border-radius:2px"></span> Implemented/Closed (' + implCount + ')</span>' +
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#dc3545;border-radius:2px"></span> Active (' + activeCount + ')</span>' +
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#adb5bd;border-radius:2px"></span> Not Due (' + notDueCount + ')</span>' +
     '</div>' +
-    '<div class="text-center text-muted py-4"><i class="bi bi-speedometer2" style="font-size:2rem;"></i>' +
-    '<p class="mt-2">Overview tab — charts and detail cards will be built in Part 2</p></div>';
+    '</div></div>';
+  html += '</div>'; // end col-md-6 left
 
-  console.log('TODO: renderOverviewTab full implementation in Part 2');
+  // Right: Top 5 Overdue
+  html += '<div class="col-md-6">';
+  html += '<div class="card shadow-sm h-100"><div class="card-body">' +
+    '<h6 class="card-title">Most Overdue Action Plans</h6>';
+
+  var topOverdue = overdueAPs.sort(function(a, b) { return (b.days_overdue || 0) - (a.days_overdue || 0); }).slice(0, 5);
+  if (topOverdue.length > 0) {
+    html += '<table class="table table-sm table-hover mb-0"><thead><tr>' +
+      '<th>Description</th><th>Owner</th><th>Affiliate</th><th class="text-end">Days</th>' +
+      '</tr></thead><tbody>';
+    topOverdue.forEach(function(ap) {
+      var desc = ap.action_description || '';
+      var shortDesc = desc.length > 50 ? desc.substring(0, 50) + '...' : desc;
+      var owner = '';
+      if (ap.owner_names) {
+        owner = Array.isArray(ap.owner_names) ? (ap.owner_names[0] || '') : String(ap.owner_names).split(',')[0].trim();
+      } else if (ap.owner_ids) {
+        owner = Array.isArray(ap.owner_ids) ? (ap.owner_ids[0] || '') : String(ap.owner_ids);
+      }
+      html += '<tr>' +
+        '<td title="' + escapeHtml(desc) + '">' + escapeHtml(shortDesc) + '</td>' +
+        '<td>' + escapeHtml(owner) + '</td>' +
+        '<td>' + escapeHtml(ap.affiliate_code || '') + '</td>' +
+        '<td class="text-end" style="color:#dc3545;font-weight:700">' + (ap.days_overdue || 0) + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div class="mt-2"><a href="#" onclick="onDashTabChange(null, \'detail\'); return false;" class="text-decoration-none" style="font-size:0.85rem">View all overdue →</a></div>';
+  } else {
+    html += '<div class="text-center text-success py-4">' +
+      '<i class="bi bi-check-circle" style="font-size:2rem"></i>' +
+      '<div class="mt-2">No overdue action plans</div>' +
+      '</div>';
+  }
+
+  html += '</div></div>';
+  html += '</div></div>'; // end col-md-6 right + row
+
+  // ══════════════════════════════════════════
+  // ROW 4: 12-Month Trend line chart
+  // ══════════════════════════════════════════
+  html += '<div class="card shadow-sm mb-4"><div class="card-body">' +
+    '<h6 class="card-title">12-Month Trend</h6>' +
+    '<div style="min-height:300px;position:relative"><canvas id="chartTrend"></canvas></div>' +
+    '</div></div>';
+
+  // ── Set innerHTML ──
+  pane.innerHTML = html;
+
+  // ── Create Chart.js instances (canvas must be in DOM) ──
+  _createImplByAreaChart(aps, obs);
+  _createTrendChart(obs, aps);
+}
+
+// ── Implementation by Audit Area grouped bar chart ──
+function _createImplByAreaChart(aps, obs) {
+  var ctx = document.getElementById('chartImplByArea');
+  if (!ctx) return;
+
+  var implementedStatuses = ['Implemented', 'Verified', 'Closed'];
+
+  // Group APs by audit area
+  var areaMap = {};
+  aps.forEach(function(ap) {
+    var area = ap.audit_area_name || ap.audit_area_id || 'Unknown';
+    if (!areaMap[area]) areaMap[area] = { notImpl: 0, impl: 0, notDue: 0, total: 0 };
+    if (ap.status === 'Not Due') {
+      areaMap[area].notDue++;
+    } else if (implementedStatuses.indexOf(ap.status) !== -1) {
+      areaMap[area].impl++;
+    } else {
+      areaMap[area].notImpl++;
+    }
+    areaMap[area].total++;
+  });
+
+  // Sort by total descending
+  var areas = Object.keys(areaMap).sort(function(a, b) { return areaMap[b].total - areaMap[a].total; });
+
+  if (areas.length === 0) return;
+
+  var shortLabels = areas.map(_shortAreaLabel);
+  var notImplData = areas.map(function(a) { return areaMap[a].notImpl; });
+  var implData = areas.map(function(a) { return areaMap[a].impl; });
+  var notDueData = areas.map(function(a) { return areaMap[a].notDue; });
+
+  _chartInstances['chartImplByArea'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: shortLabels,
+      datasets: [
+        { label: 'Not Implemented', backgroundColor: '#dc3545', data: notImplData },
+        { label: 'Implemented', backgroundColor: '#198754', data: implData },
+        { label: 'Not Due', backgroundColor: '#adb5bd', data: notDueData }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            title: function(items) {
+              // Show full audit area name on hover
+              var idx = items[0] ? items[0].dataIndex : 0;
+              return areas[idx] || '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+      }
+    }
+  });
+}
+
+// ── 12-Month Trend line chart ──
+function _createTrendChart(obs, aps) {
+  var ctx = document.getElementById('chartTrend');
+  if (!ctx) return;
+
+  var implementedStatuses = ['Implemented', 'Verified', 'Closed'];
+
+  // Find earliest date across all data
+  var allDates = [];
+  obs.forEach(function(o) { if (o.created_at) allDates.push(new Date(o.created_at)); });
+  aps.forEach(function(ap) {
+    if (ap.created_at) allDates.push(new Date(ap.created_at));
+    if (ap.implemented_date) allDates.push(new Date(ap.implemented_date));
+  });
+
+  if (allDates.length === 0) return;
+
+  allDates.sort(function(a, b) { return a - b; });
+  var earliest = allDates[0];
+  var now = new Date();
+
+  // Build monthly buckets
+  var buckets = [];
+  var d = new Date(earliest.getFullYear(), earliest.getMonth(), 1);
+  while (d <= now) {
+    buckets.push({ year: d.getFullYear(), month: d.getMonth(), obsCreated: 0, apsCreated: 0, apsClosed: 0 });
+    d.setMonth(d.getMonth() + 1);
+  }
+
+  // Fill buckets
+  obs.forEach(function(o) {
+    if (!o.created_at) return;
+    var dt = new Date(o.created_at);
+    var idx = _findBucketIdx(buckets, dt.getFullYear(), dt.getMonth());
+    if (idx >= 0) buckets[idx].obsCreated++;
+  });
+
+  aps.forEach(function(ap) {
+    if (ap.created_at) {
+      var dt = new Date(ap.created_at);
+      var idx = _findBucketIdx(buckets, dt.getFullYear(), dt.getMonth());
+      if (idx >= 0) buckets[idx].apsCreated++;
+    }
+    // APs closed: check implemented_date or if status is implemented and has updated_at
+    var closeDate = ap.implemented_date || null;
+    if (closeDate && implementedStatuses.indexOf(ap.status) !== -1) {
+      var cdt = new Date(closeDate);
+      var cidx = _findBucketIdx(buckets, cdt.getFullYear(), cdt.getMonth());
+      if (cidx >= 0) buckets[cidx].apsClosed++;
+    }
+  });
+
+  // Skip leading zero months
+  var startIdx = 0;
+  for (var i = 0; i < buckets.length; i++) {
+    if (buckets[i].obsCreated > 0 || buckets[i].apsCreated > 0 || buckets[i].apsClosed > 0) {
+      startIdx = i;
+      break;
+    }
+  }
+  buckets = buckets.slice(startIdx);
+
+  if (buckets.length === 0) return;
+
+  var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var labels = buckets.map(function(b) { return monthNames[b.month] + ' ' + String(b.year).slice(2); });
+
+  _chartInstances['chartTrend'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Observations Created',
+          borderColor: '#1a365d',
+          backgroundColor: 'rgba(26,54,93,0.1)',
+          fill: true,
+          tension: 0.3,
+          data: buckets.map(function(b) { return b.obsCreated; })
+        },
+        {
+          label: 'APs Created',
+          borderColor: '#c9a227',
+          fill: false,
+          tension: 0.3,
+          data: buckets.map(function(b) { return b.apsCreated; })
+        },
+        {
+          label: 'APs Closed',
+          borderColor: '#198754',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          data: buckets.map(function(b) { return b.apsClosed; })
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+      }
+    }
+  });
+}
+
+function _findBucketIdx(buckets, year, month) {
+  for (var i = 0; i < buckets.length; i++) {
+    if (buckets[i].year === year && buckets[i].month === month) return i;
+  }
+  return -1;
 }
 
 function renderRiskTab(data) {
