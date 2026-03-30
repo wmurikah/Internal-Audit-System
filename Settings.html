@@ -83,27 +83,10 @@
       </div>
     </div>
 
-    <!-- Access Control Tab — Role Workflow Dashboard (Read-Only) -->
+    <!-- Access Control Tab — Static Governance Reference (Read-Only) -->
     <div class="tab-pane fade" id="accessControl">
-      <!-- Info Banner -->
-      <div class="alert d-flex align-items-center mb-4" style="background-color: #cfe2ff; border: 1px solid #b6d4fe; color: #084298;">
-        <i class="bi bi-lock-fill me-2 fs-5"></i>
-        <div>
-          <strong>Role Permissions Reference</strong> — These permissions are hardcoded in the system. Changes require a code update.
-          <span class="ms-2 text-muted small">System-managed</span>
-        </div>
-      </div>
-
-      <!-- Role Selector Pills -->
-      <div class="mb-4" id="roleSelectorContainer">
-        <div class="d-flex flex-wrap gap-2" id="rolePills">
-          <div class="text-center text-muted py-3 w-100"><div class="spinner-border spinner-border-sm"></div> Loading roles...</div>
-        </div>
-      </div>
-
-      <!-- Role Detail Card -->
-      <div id="roleDetailCard">
-        <!-- Rendered dynamically by selectRoleDashboard() -->
+      <div id="accessControlContent">
+        <div class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm"></div> Loading access control data...</div>
       </div>
     </div>
 
@@ -764,10 +747,9 @@ function deactivateUser(id) {
   }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
 }
 
-// ==================== Access Control — Role Workflow Dashboard ====================
+// ==================== Access Control — Static Governance Reference ====================
 
 var _acDashboardCache = null;
-var _acSelectedRole = null;
 
 var AC_ROLE_ORDER = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR', 'JUNIOR_STAFF', 'SENIOR_MGMT', 'UNIT_MANAGER', 'BOARD_MEMBER', 'EXTERNAL_AUDITOR'];
 var AC_ROLE_DISPLAY = {
@@ -775,278 +757,228 @@ var AC_ROLE_DISPLAY = {
   JUNIOR_STAFF: 'Audit Client', SENIOR_MGMT: 'Senior Management', UNIT_MANAGER: 'Head of Department',
   BOARD_MEMBER: 'Board Member', EXTERNAL_AUDITOR: 'External Auditor'
 };
-var AC_STAGE_NAMES = {
-  '1_planning': '1. Planning', '2_fieldwork': '2. Fieldwork', '3_review': '3. Review',
-  '4_approval': '4. Approval', '5_communication': '5. Communication', '6_auditee_response': '6. Auditee Response',
-  '7_follow_up': '7. Follow-Up', '8_verification': '8. Verification', '9_reporting': '9. Reporting', '10_closure': '10. Closure'
+var AC_COL_HEADERS = ['Stage', 'HOA', 'Sr. Auditor', 'Auditor', 'Audit Client', 'Sr. Mgmt', 'HoD', 'Board', 'External'];
+var AC_COL_ROLE_MAP = {
+  'HOA': 'SUPER_ADMIN', 'Sr. Auditor': 'SENIOR_AUDITOR', 'Auditor': 'AUDITOR',
+  'Audit Client': 'JUNIOR_STAFF', 'Sr. Mgmt': 'SENIOR_MGMT', 'HoD': 'UNIT_MANAGER',
+  'Board': 'BOARD_MEMBER', 'External': 'EXTERNAL_AUDITOR'
 };
-var AC_STAGE_DESCRIPTIONS = {
-  '1_planning': 'Work paper creation, risk assessment, scope definition',
-  '2_fieldwork': 'Evidence gathering, testing, documenting observations',
-  '3_review': 'Senior/peer review of work papers, quality assurance',
-  '4_approval': 'Head of Internal Audit approves final work paper',
-  '5_communication': 'Send observations to auditees, assign responsible parties',
-  '6_auditee_response': 'Management response, action plan creation, delegation, rounds',
-  '7_follow_up': 'Action plan tracking, evidence upload, due date monitoring',
-  '8_verification': 'Auditor verifies implementation, accepts/returns action plans',
-  '9_reporting': 'Board reports, analytics, dashboards, periodic summaries',
-  '10_closure': 'Final sign-off, archival'
+var AC_STAGE_ORDER = ['1_planning', '2_fieldwork', '3_review', '4_approval', '5_communication',
+  '6_auditee_response', '7_follow_up', '8_verification', '9_reporting', '10_closure'];
+var AC_STAGE_LABELS = {
+  '1_planning': {label: '1. Planning', subtitle: 'Work paper creation, risk assessment, scope definition'},
+  '2_fieldwork': {label: '2. Fieldwork', subtitle: 'Evidence gathering, testing, documenting observations'},
+  '3_review': {label: '3. Review', subtitle: 'Senior/peer review of work papers, quality assurance'},
+  '4_approval': {label: '4. Approval', subtitle: 'Head of Internal Audit approves final work paper'},
+  '5_communication': {label: '5. Communication', subtitle: 'Send observations to auditees, assign responsible parties'},
+  '6_auditee_response': {label: '6. Auditee Response', subtitle: 'Management response, action plan creation, delegation'},
+  '7_follow_up': {label: '7. Follow-Up', subtitle: 'Action plan tracking, evidence upload, due date monitoring'},
+  '8_verification': {label: '8. Verification', subtitle: 'Auditor verifies implementation, accepts/returns action plans'},
+  '9_reporting': {label: '9. Reporting', subtitle: 'Board reports, analytics, dashboards, periodic summaries'},
+  '10_closure': {label: '10. Closure', subtitle: 'Final sign-off, archival'}
 };
-var AC_ACCESS_COLORS = {
-  FULL: '#198754', REVIEW: '#0d6efd', READ: '#6c757d', SUBMIT: '#ffc107',
-  RECEIVE: '#0dcaf0', OWN: '#fd7e14', ALL: '#198754', NONE: '#dee2e6'
-};
-var AC_ACCESS_TEXT_COLORS = {
-  FULL: '#fff', REVIEW: '#fff', READ: '#fff', SUBMIT: '#000',
-  RECEIVE: '#000', OWN: '#000', ALL: '#fff', NONE: '#6c757d'
-};
-var AC_MODULE_NAMES = {
-  WORK_PAPER: 'Work Paper', AUDITEE_RESPONSE: 'Auditee Response', ACTION_PLAN: 'Action Plan',
-  USER: 'User Management', REPORT: 'Report', DASHBOARD: 'Dashboard',
-  AI_ASSIST: 'AI Assist', AUDIT_WORKBENCH: 'Audit Workbench', CONFIG: 'Config'
+var AC_ACCESS_BADGE = {
+  FULL: 'background:#198754;color:#fff', REVIEW: 'background:#0d6efd;color:#fff',
+  READ: 'background:#6c757d;color:#fff', SUBMIT: 'background:#ffc107;color:#000',
+  RECEIVE: 'background:#0dcaf0;color:#000', OWN: 'background:#fd7e14;color:#fff',
+  ALL: 'background:#198754;color:#fff', NONE: 'background:#f8f9fa;color:#6c757d;border:1px solid #dee2e6'
 };
 var AC_MODULES = ['WORK_PAPER', 'AUDITEE_RESPONSE', 'ACTION_PLAN', 'USER', 'REPORT', 'DASHBOARD', 'AI_ASSIST', 'AUDIT_WORKBENCH', 'CONFIG'];
-var AC_ACTIONS = ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'];
-var AC_ACTION_LABELS = { can_create: 'Create', can_read: 'Read', can_update: 'Update', can_delete: 'Delete', can_approve: 'Approve', can_export: 'Export' };
-
-// Auditee Response special actions
-var AC_AUDITEE_ACTIONS = ['can_read_observation', 'can_write_mgmt_response', 'can_create_action_plan', 'can_update_action_plan', 'can_delegate', 'can_view_rounds', 'can_export'];
-var AC_AUDITEE_LABELS = { can_read_observation: 'Read Obs.', can_write_mgmt_response: 'Write Response', can_create_action_plan: 'Create AP', can_update_action_plan: 'Update AP', can_delegate: 'Delegate', can_view_rounds: 'View Rounds', can_export: 'Export' };
+var AC_MODULE_NAMES = {
+  WORK_PAPER: 'Work Paper', AUDITEE_RESPONSE: 'Auditee Response *', ACTION_PLAN: 'Action Plan',
+  USER: 'User Management', REPORT: 'Reports', DASHBOARD: 'Dashboard',
+  AI_ASSIST: 'AI Assist', AUDIT_WORKBENCH: 'Audit Workbench', CONFIG: 'System Config'
+};
+var AC_CRUD_KEYS = ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'];
+var AC_CRUD_LABELS = ['C', 'R', 'U', 'D', 'A', 'E'];
+var AC_CRUD_TOOLTIPS = ['Create', 'Read', 'Update', 'Delete', 'Approve', 'Export'];
+var AC_AUDITEE_KEYS = ['can_read_observation', 'can_write_mgmt_response', 'can_create_action_plan', 'can_update_action_plan', 'can_delegate', 'can_view_rounds', 'can_export'];
+var AC_AUDITEE_LABELS = ['Read Obs.', 'Write Response', 'Create AP', 'Update AP', 'Delegate', 'View Rounds', 'Export'];
 
 function loadAccessControlDashboard() {
   if (_acDashboardCache) {
-    renderRolePills();
-    selectRoleDashboard(_acSelectedRole || 'SUPER_ADMIN');
+    renderFullAccessControlDashboard(_acDashboardCache);
     return;
   }
   apiCall('getAccessControlDashboardData', {}).then(function(r) {
     if (r.success && r.data) {
       _acDashboardCache = r.data;
-      renderRolePills();
-      selectRoleDashboard('SUPER_ADMIN');
+      renderFullAccessControlDashboard(r.data);
     } else {
-      document.getElementById('rolePills').innerHTML = '<div class="text-danger">Failed to load dashboard data.</div>';
+      var msg = (r && (r.error || r.message)) || 'Unknown error loading access control data.';
+      document.getElementById('accessControlContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(msg) + '</div>';
     }
-  }).catch(function() {
-    document.getElementById('rolePills').innerHTML = '<div class="text-danger">Error loading dashboard.</div>';
+  }).catch(function(err) {
+    document.getElementById('accessControlContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error loading access control dashboard: ' + escapeHtml(err.message || 'Network error') + '</div>';
   });
 }
 
-function renderRolePills() {
-  var html = AC_ROLE_ORDER.map(function(rc) {
-    var active = (_acSelectedRole === rc) ? ' btn-primary' : ' btn-outline-secondary';
-    return '<button class="btn btn-sm' + active + '" onclick="selectRoleDashboard(\'' + rc + '\')" id="rolePill_' + rc + '">' +
-      escapeHtml(AC_ROLE_DISPLAY[rc]) + '</button>';
-  }).join('');
-  document.getElementById('rolePills').innerHTML = html;
+function _acBadge(access) {
+  var style = AC_ACCESS_BADGE[access] || AC_ACCESS_BADGE.NONE;
+  return '<span class="badge" style="' + style + ';font-size:0.75em;padding:3px 8px;">' + escapeHtml(access || 'NONE') + '</span>';
 }
 
-function selectRoleDashboard(roleCode) {
-  _acSelectedRole = roleCode;
-  // Update pill styles
+function _acCheck(val) {
+  return val === true
+    ? '<span style="color:#198754;font-weight:bold;">&#10003;</span>'
+    : '<span style="color:#adb5bd;">&mdash;</span>';
+}
+
+function _acSectionHeader(num, title) {
+  return '<h5 class="mb-3" style="border-left:4px solid #1a365d;padding-left:12px;">' + num + '. ' + escapeHtml(title) + '</h5>';
+}
+
+function renderFullAccessControlDashboard(data) {
+  var html = '';
+
+  // ===== Section 1: Header Banner =====
+  html += '<div class="mb-5">';
+  html += '<div class="alert alert-info d-flex align-items-center mb-4"><i class="bi bi-lock me-2"></i><div><strong>Role Access Reference</strong> &mdash; This is a read-only governance reference. All permissions are hardcoded in the system codebase. Contact the system administrator for changes.</div></div>';
+  html += '</div>';
+
+  // ===== Section 2: Role Overview Table =====
+  html += '<div class="mb-5">';
+  html += _acSectionHeader(1, 'Role Overview');
+  html += '<div class="table-responsive"><table class="table table-bordered table-sm table-hover">';
+  html += '<thead class="table-light"><tr><th>Role Code</th><th>Display Name</th><th>Description</th><th>Access Path</th><th>Navigation Sections</th></tr></thead><tbody>';
   AC_ROLE_ORDER.forEach(function(rc) {
-    var pill = document.getElementById('rolePill_' + rc);
-    if (pill) {
-      pill.className = rc === roleCode ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-secondary';
-    }
+    var wf = data.workflow[rc] || {};
+    var displayName = AC_ROLE_DISPLAY[rc] || (data.displayNames && data.displayNames[rc]) || rc;
+    var navSections = (wf.nav_sections || []).map(function(s) {
+      return '<span class="badge bg-light text-dark border me-1 mb-1" style="font-size:0.78em;">' + escapeHtml(s) + '</span>';
+    }).join('');
+    html += '<tr>';
+    html += '<td><code>' + escapeHtml(rc) + '</code></td>';
+    html += '<td><strong>' + escapeHtml(displayName) + '</strong></td>';
+    html += '<td class="small">' + escapeHtml(wf.role_description || '') + '</td>';
+    html += '<td class="small">' + escapeHtml(wf.access_path || '') + '</td>';
+    html += '<td>' + navSections + '</td>';
+    html += '</tr>';
   });
+  html += '</tbody></table></div></div>';
 
-  var data = _acDashboardCache;
-  if (!data) return;
-
-  var wf = data.workflow[roleCode];
-  var perms = data.permissions[roleCode];
-  if (!wf) { document.getElementById('roleDetailCard').innerHTML = '<div class="alert alert-warning">No data for role.</div>'; return; }
-
-  var html = '<div class="card shadow-sm">';
-  html += '<div class="card-body">';
-
-  // Section 1: Role Summary
-  html += renderRoleSummary(roleCode, wf);
-  html += '<hr class="my-4">';
-
-  // Section 2: Audit Lifecycle Access
-  html += renderWorkflowTimeline(wf.stages);
-  html += '<hr class="my-4">';
-
-  // Section 3: Module Permissions Matrix
-  html += renderPermissionsMatrix(perms, roleCode);
-  html += '<hr class="my-4">';
-
-  // Section 4: Quick Comparison
-  html += renderQuickComparison(wf);
-
-  html += '</div></div>';
-  document.getElementById('roleDetailCard').innerHTML = html;
-}
-
-function renderRoleSummary(roleCode, wf) {
-  var html = '<h5 class="mb-3"><i class="bi bi-person-badge me-2"></i>Role Summary</h5>';
-  html += '<div class="d-flex flex-wrap align-items-center gap-2 mb-3">';
-  html += '<span class="badge bg-secondary">' + escapeHtml(roleCode) + '</span>';
-  html += '<h4 class="mb-0">' + escapeHtml(AC_ROLE_DISPLAY[roleCode]) + '</h4>';
-  html += '</div>';
-  html += '<p class="text-muted mb-3">' + escapeHtml(wf.role_description) + '</p>';
-
-  // Access path badge
-  var pathColor = wf.access_path.indexOf('Path 1') >= 0 && wf.access_path.indexOf('Path 2') >= 0 ? '#0d6efd' :
-                  wf.access_path.indexOf('Path 1') >= 0 ? '#198754' : '#fd7e14';
-  html += '<div class="mb-3"><span class="badge" style="background-color:' + pathColor + '; font-size: 0.85em; padding: 6px 12px;">' +
-    '<i class="bi bi-signpost-split me-1"></i>' + escapeHtml(wf.access_path) + '</span></div>';
-
-  // Nav sections as chips
-  html += '<div class="d-flex flex-wrap gap-1">';
-  wf.nav_sections.forEach(function(s) {
-    html += '<span class="badge bg-light text-dark border" style="font-size: 0.8em;">' + escapeHtml(s) + '</span>';
-  });
-  html += '</div>';
-  return html;
-}
-
-function renderWorkflowTimeline(stagesObj) {
-  var stageKeys = ['1_planning', '2_fieldwork', '3_review', '4_approval', '5_communication',
-    '6_auditee_response', '7_follow_up', '8_verification', '9_reporting', '10_closure'];
-
-  var html = '<h5 class="mb-3"><i class="bi bi-diagram-3 me-2"></i>Audit Lifecycle Access</h5>';
-  html += '<div class="position-relative">';
-
-  stageKeys.forEach(function(key, idx) {
-    var stage = stagesObj[key] || { access: 'NONE', actions: [] };
-    var isNone = stage.access === 'NONE';
-    var bgColor = AC_ACCESS_COLORS[stage.access] || '#dee2e6';
-    var textColor = AC_ACCESS_TEXT_COLORS[stage.access] || '#6c757d';
-    var opacity = isNone ? 'opacity: 0.5;' : '';
-
-    html += '<div class="d-flex mb-2" style="' + opacity + '">';
-    // Stage number circle
-    html += '<div class="flex-shrink-0 me-3 text-center" style="width: 40px;">';
-    html += '<div style="width: 32px; height: 32px; border-radius: 50%; background-color: ' + bgColor + '; color: ' + textColor +
-      '; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.8em; margin: 0 auto;">' + (idx + 1) + '</div>';
-    if (idx < 9) html += '<div style="width: 2px; height: 16px; background-color: #dee2e6; margin: 2px auto;"></div>';
-    html += '</div>';
-    // Stage content
-    html += '<div class="flex-grow-1 pb-2">';
-    html += '<div class="d-flex align-items-center gap-2 mb-1">';
-    html += '<strong style="' + (isNone ? 'color: #adb5bd;' : '') + '">' + escapeHtml(AC_STAGE_NAMES[key]) + '</strong>';
-    html += '<span class="badge" style="background-color: ' + bgColor + '; color: ' + textColor + '; font-size: 0.75em;">' + stage.access + '</span>';
-    html += '</div>';
-    html += '<div class="small text-muted mb-1" style="font-style: italic;">' + escapeHtml(AC_STAGE_DESCRIPTIONS[key]) + '</div>';
-    // Actions
-    if (stage.actions && stage.actions.length > 0) {
-      html += '<ul class="mb-0 ps-3" style="' + (isNone ? 'color: #adb5bd;' : 'color: #495057;') + ' font-size: 0.875em;">';
-      stage.actions.forEach(function(a) {
-        var icon = isNone ? 'bi-x-circle text-muted' : 'bi-check2 text-success';
-        html += '<li style="list-style: none; margin-left: -1em;"><i class="bi ' + icon + ' me-1"></i>' + escapeHtml(a) + '</li>';
-      });
-      html += '</ul>';
-    }
-    html += '</div></div>';
-  });
-
-  html += '</div>';
-  return html;
-}
-
-function renderPermissionsMatrix(perms, roleCode) {
-  var html = '<h5 class="mb-3"><i class="bi bi-table me-2"></i>Module Permissions Matrix</h5>';
-  html += '<div class="table-responsive">';
-  html += '<table class="table table-bordered table-sm mb-0">';
-  html += '<thead class="table-light"><tr><th>Module</th>';
-  AC_ACTIONS.forEach(function(a) { html += '<th class="text-center">' + AC_ACTION_LABELS[a] + '</th>'; });
+  // ===== Section 3: Audit Lifecycle Access Matrix =====
+  html += '<div class="mb-5">';
+  html += _acSectionHeader(2, 'Audit Lifecycle Access Matrix');
+  html += '<div class="table-responsive"><table class="table table-bordered table-sm table-hover">';
+  html += '<thead class="table-light"><tr>';
+  AC_COL_HEADERS.forEach(function(h) { html += '<th class="text-center">' + escapeHtml(h) + '</th>'; });
   html += '</tr></thead><tbody>';
 
-  AC_MODULES.forEach(function(mod) {
-    var mp = (perms && perms[mod]) || {};
-    html += '<tr><td><strong>' + escapeHtml(AC_MODULE_NAMES[mod]) + '</strong></td>';
-    AC_ACTIONS.forEach(function(a) {
-      if (mp[a] === true) {
-        html += '<td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>';
-      } else {
-        html += '<td class="text-center"><span class="text-muted">—</span></td>';
+  // Discover stage keys from the actual data
+  var stageKeys = AC_STAGE_ORDER.slice();
+  // Also check for any extra keys not in our predefined list
+  AC_ROLE_ORDER.forEach(function(rc) {
+    if (data.workflow[rc] && data.workflow[rc].stages) {
+      Object.keys(data.workflow[rc].stages).forEach(function(sk) {
+        if (stageKeys.indexOf(sk) === -1) stageKeys.push(sk);
+      });
+    }
+  });
+
+  stageKeys.forEach(function(sk) {
+    var info = AC_STAGE_LABELS[sk] || {label: sk, subtitle: ''};
+    html += '<tr>';
+    html += '<td style="position:sticky;left:0;background:#fff;z-index:1;min-width:180px;"><strong>' + escapeHtml(info.label) + '</strong>';
+    if (info.subtitle) html += '<br><span class="text-muted small">' + escapeHtml(info.subtitle) + '</span>';
+    html += '</td>';
+    AC_COL_HEADERS.slice(1).forEach(function(colName) {
+      var roleCode = AC_COL_ROLE_MAP[colName];
+      var access = 'NONE';
+      if (data.workflow[roleCode] && data.workflow[roleCode].stages && data.workflow[roleCode].stages[sk]) {
+        access = data.workflow[roleCode].stages[sk].access || 'NONE';
       }
+      html += '<td class="text-center">' + _acBadge(access) + '</td>';
     });
     html += '</tr>';
   });
+  html += '</tbody></table></div></div>';
 
-  html += '</tbody></table></div>';
-
-  // Auditee Response sub-table for roles that have it
-  if (perms && perms.AUDITEE_RESPONSE) {
-    var ar = perms.AUDITEE_RESPONSE;
-    var hasAuditeeAccess = AC_AUDITEE_ACTIONS.some(function(a) { return ar[a] === true; });
-    if (hasAuditeeAccess) {
-      html += renderAuditeeResponseMatrix(ar);
-    }
-  }
-
-  return html;
-}
-
-function renderAuditeeResponseMatrix(ar) {
-  var html = '<div class="mt-3">';
-  html += '<h6 class="text-muted mb-2"><i class="bi bi-reply me-1"></i>Auditee Response Detail</h6>';
-  html += '<div class="table-responsive">';
-  html += '<table class="table table-bordered table-sm mb-0">';
-  html += '<thead class="table-light"><tr>';
-  AC_AUDITEE_ACTIONS.forEach(function(a) { html += '<th class="text-center small">' + AC_AUDITEE_LABELS[a] + '</th>'; });
-  html += '</tr></thead><tbody><tr>';
-  AC_AUDITEE_ACTIONS.forEach(function(a) {
-    if (ar[a] === true) {
-      html += '<td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>';
-    } else {
-      html += '<td class="text-center"><span class="text-muted">—</span></td>';
-    }
+  // ===== Section 4: Stage Action Details =====
+  html += '<div class="mb-5">';
+  html += _acSectionHeader(3, 'Stage Action Details');
+  stageKeys.forEach(function(sk) {
+    var info = AC_STAGE_LABELS[sk] || {label: sk, subtitle: ''};
+    html += '<div class="card mb-3"><div class="card-header py-2"><strong>' + escapeHtml(info.label) + '</strong>';
+    if (info.subtitle) html += ' <span class="text-muted small">&mdash; ' + escapeHtml(info.subtitle) + '</span>';
+    html += '</div><div class="card-body p-0">';
+    html += '<table class="table table-bordered table-sm mb-0">';
+    html += '<thead class="table-light"><tr><th>Role</th><th>Access Level</th><th>Permitted Actions</th></tr></thead><tbody>';
+    AC_ROLE_ORDER.forEach(function(rc) {
+      var stage = (data.workflow[rc] && data.workflow[rc].stages && data.workflow[rc].stages[sk]) || {access: 'NONE', actions: []};
+      var actions = (stage.actions && stage.actions.length > 0) ? stage.actions.join(', ') : '<span class="text-muted">No access</span>';
+      html += '<tr>';
+      html += '<td><strong>' + escapeHtml(AC_ROLE_DISPLAY[rc]) + '</strong></td>';
+      html += '<td class="text-center">' + _acBadge(stage.access || 'NONE') + '</td>';
+      html += '<td class="small">' + actions + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
   });
-  html += '</tr></tbody></table></div></div>';
-  return html;
-}
-
-function renderQuickComparison(wf) {
-  var canDo = [];
-  var cannotDo = [];
-  var stageKeys = ['1_planning', '2_fieldwork', '3_review', '4_approval', '5_communication',
-    '6_auditee_response', '7_follow_up', '8_verification', '9_reporting', '10_closure'];
-
-  var importantCapabilities = {
-    '1_planning': 'Create work papers',
-    '2_fieldwork': 'Execute fieldwork',
-    '3_review': 'Review work papers',
-    '4_approval': 'Approve work papers',
-    '5_communication': 'Send to auditees',
-    '6_auditee_response': 'Respond to observations',
-    '7_follow_up': 'Track action plans',
-    '8_verification': 'Verify implementation',
-    '9_reporting': 'Generate reports',
-    '10_closure': 'Archive/close audits'
-  };
-
-  stageKeys.forEach(function(key) {
-    var stage = wf.stages[key] || { access: 'NONE' };
-    var label = importantCapabilities[key];
-    if (stage.access === 'NONE') {
-      cannotDo.push(label);
-    } else {
-      canDo.push(label + ' (' + stage.access + ')');
-    }
-  });
-
-  var html = '<h5 class="mb-3"><i class="bi bi-lightning me-2"></i>Quick Comparison</h5>';
-  html += '<div class="row">';
-
-  html += '<div class="col-md-6"><div class="mb-2"><strong class="text-success"><i class="bi bi-check-lg me-1"></i>Can do</strong></div>';
-  html += '<ul class="list-unstyled mb-0">';
-  canDo.forEach(function(item) { html += '<li class="small mb-1" style="color: #198754;"><i class="bi bi-check2 me-1"></i>' + escapeHtml(item) + '</li>'; });
-  if (canDo.length === 0) html += '<li class="small text-muted">None</li>';
-  html += '</ul></div>';
-
-  html += '<div class="col-md-6"><div class="mb-2"><strong class="text-muted"><i class="bi bi-x-lg me-1"></i>Cannot do</strong></div>';
-  html += '<ul class="list-unstyled mb-0">';
-  cannotDo.forEach(function(item) { html += '<li class="small mb-1" style="color: #6c757d;"><i class="bi bi-x me-1"></i>' + escapeHtml(item) + '</li>'; });
-  if (cannotDo.length === 0) html += '<li class="small text-muted">None — full access</li>';
-  html += '</ul></div>';
-
   html += '</div>';
-  return html;
+
+  // ===== Section 5: Module Permissions (CRUD) — 8 cards in 2-column grid =====
+  html += '<div class="mb-5">';
+  html += _acSectionHeader(4, 'Module Permissions (CRUD)');
+  html += '<div class="row">';
+  AC_ROLE_ORDER.forEach(function(rc) {
+    var perms = (data.permissions && data.permissions[rc]) || {};
+    html += '<div class="col-md-6 mb-3"><div class="card"><div class="card-header py-2"><strong>' + escapeHtml(AC_ROLE_DISPLAY[rc]) + '</strong> <code class="ms-1 small">' + escapeHtml(rc) + '</code></div>';
+    html += '<div class="card-body p-0"><div class="table-responsive"><table class="table table-bordered table-sm mb-0">';
+    html += '<thead class="table-light"><tr><th>Module</th>';
+    AC_CRUD_LABELS.forEach(function(lbl, i) {
+      html += '<th class="text-center" title="' + AC_CRUD_TOOLTIPS[i] + '">' + lbl + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    AC_MODULES.forEach(function(mod) {
+      var mp = perms[mod] || {};
+      html += '<tr><td class="small"><strong>' + escapeHtml(AC_MODULE_NAMES[mod]) + '</strong></td>';
+      if (mod === 'AUDITEE_RESPONSE') {
+        // Special mapping for AUDITEE_RESPONSE
+        html += '<td class="text-center">' + _acCheck(mp.can_create_action_plan) + '</td>'; // C
+        html += '<td class="text-center">' + _acCheck(mp.can_read_observation) + '</td>';    // R
+        html += '<td class="text-center">' + _acCheck(mp.can_update_action_plan || mp.can_write_mgmt_response) + '</td>'; // U
+        html += '<td class="text-center">' + _acCheck(false) + '</td>';                      // D
+        html += '<td class="text-center">' + _acCheck(false) + '</td>';                      // A
+        html += '<td class="text-center">' + _acCheck(mp.can_export) + '</td>';               // E
+      } else {
+        AC_CRUD_KEYS.forEach(function(key) {
+          html += '<td class="text-center">' + _acCheck(mp[key]) + '</td>';
+        });
+      }
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div></div></div>';
+  });
+  html += '</div>';
+  html += '<p class="text-muted small">* Auditee Response has granular permissions &mdash; see Section 5 below for full detail.</p>';
+  html += '</div>';
+
+  // ===== Section 6: Auditee Response Permissions Detail =====
+  html += '<div class="mb-5">';
+  html += _acSectionHeader(5, 'Auditee Response Permissions Detail');
+  html += '<div class="table-responsive"><table class="table table-bordered table-sm">';
+  html += '<thead class="table-light"><tr><th>Role</th>';
+  AC_AUDITEE_LABELS.forEach(function(lbl) { html += '<th class="text-center">' + escapeHtml(lbl) + '</th>'; });
+  html += '</tr></thead><tbody>';
+  AC_ROLE_ORDER.forEach(function(rc) {
+    var ar = (data.permissions && data.permissions[rc] && data.permissions[rc].AUDITEE_RESPONSE) || {};
+    html += '<tr><td><strong>' + escapeHtml(AC_ROLE_DISPLAY[rc]) + '</strong></td>';
+    AC_AUDITEE_KEYS.forEach(function(key) {
+      html += '<td class="text-center">' + _acCheck(ar[key]) + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  // ===== Part 2 Placeholder =====
+  html += '<!-- PART 2 SECTIONS START HERE -->';
+  html += '<div id="acPart2Placeholder">';
+  html += '<div class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-2"></i>Sections 6-9 (Notification Matrix, UI Visibility, Data Scope Rules, Legend) loading...</div>';
+  html += '</div>';
+  html += '<!-- PART 2 SECTIONS END HERE -->';
+
+  document.getElementById('accessControlContent').innerHTML = html;
 }
 
 // Legacy stubs (kept to prevent errors if called elsewhere)
@@ -1056,6 +988,8 @@ function selectRole() {}
 function loadPermissions() {}
 function renderPermissionsTable() {}
 function markPermissionChanged() {}
+function selectRoleDashboard() {}
+function renderRolePills() {}
 
 function rebuildIndexes() {
   if (!confirm('Rebuild all indexes? This may take a moment.')) return;
