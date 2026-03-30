@@ -1064,18 +1064,505 @@ function _findBucketIdx(buckets, year, month) {
   return -1;
 }
 
+// ══════════════════════════════════════════════════════════════
+// RISK & PERFORMANCE TAB
+// ══════════════════════════════════════════════════════════════
+
+function _apStatusColor(status) {
+  var map = {
+    'Not Due': '#adb5bd', 'Pending': '#ffc107', 'In Progress': '#0d6efd',
+    'Implemented': '#198754', 'Pending Verification': '#17a2b8', 'Verified': '#0d6efd',
+    'Rejected': '#6f42c1', 'Overdue': '#dc3545', 'Not Implemented': '#dc3545', 'Closed': '#198754'
+  };
+  return map[status] || '#6c757d';
+}
+
+function _obsStatusColor(status) {
+  var map = {
+    'Draft': '#adb5bd', 'Submitted': '#0d6efd', 'Under Review': '#17a2b8',
+    'Revision Required': '#ffc107', 'Approved': '#198754', 'Sent to Auditee': '#fd7e14'
+  };
+  return map[status] || '#6c757d';
+}
+
+function _riskBadgeColor(rating) {
+  var map = { 'Extreme': '#7f1d1d', 'High': '#dc3545', 'Medium': '#ffc107', 'Low': '#198754' };
+  return map[rating] || '#6c757d';
+}
+
+function _riskBadgeTextColor(rating) {
+  return rating === 'Medium' ? '#000' : '#fff';
+}
+
+function _scoreRating(score) {
+  if (score >= 80) return { label: 'Effective', color: '#198754' };
+  if (score >= 60) return { label: 'Satisfactory', color: '#0d6efd' };
+  if (score >= 40) return { label: 'Needs Improvement', color: '#ffc107' };
+  return { label: 'Ineffective', color: '#dc3545' };
+}
+
 function renderRiskTab(data) {
   var pane = document.getElementById('pane-risk');
   if (!pane) return;
-  pane.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-shield-exclamation" style="font-size:2rem;"></i><p class="mt-2">Risk &amp; Performance tab content — will be built in Part 3</p></div>';
-  console.log('TODO: renderRiskTab implementation in Part 3');
+
+  destroyAllCharts();
+
+  var obs = data ? data.observations : [];
+  var aps = data ? data.actionPlans : [];
+  var implementedStatuses = ['Implemented', 'Verified', 'Closed'];
+  var riskLevels = ['Extreme', 'High', 'Medium', 'Low'];
+  var riskColors = { 'Extreme': '#7f1d1d', 'High': '#dc3545', 'Medium': '#ffc107', 'Low': '#198754' };
+  var riskTextColors = { 'Extreme': '#fff', 'High': '#fff', 'Medium': '#000', 'Low': '#fff' };
+
+  // Count observations per risk level
+  var riskCounts = {};
+  riskLevels.forEach(function(r) { riskCounts[r] = 0; });
+  obs.forEach(function(o) {
+    var r = (o.risk_rating || '').trim();
+    if (riskCounts[r] !== undefined) riskCounts[r]++;
+  });
+
+  // Delta calculations
+  var comp = getComparisonPeriodData();
+  var compRiskCounts = null;
+  if (comp) {
+    compRiskCounts = {};
+    riskLevels.forEach(function(r) { compRiskCounts[r] = 0; });
+    comp.observations.forEach(function(o) {
+      var r = (o.risk_rating || '').trim();
+      if (compRiskCounts[r] !== undefined) compRiskCounts[r]++;
+    });
+  }
+
+  // ═══ ROW 1: Risk severity cards ═══
+  var html = '<div class="row g-3 mb-4">';
+  riskLevels.forEach(function(level) {
+    var delta = compRiskCounts ? _buildDelta(riskCounts[level], compRiskCounts[level], false) : '';
+    html += '<div class="col-md-3 col-6"><div class="card h-100 border-0 shadow-sm" style="border-top:4px solid ' + riskColors[level] + ' !important"><div class="card-body text-center p-3">' +
+      '<div style="font-size:2rem;font-weight:700;color:' + riskColors[level] + '">' + riskCounts[level] + '</div>' +
+      '<div class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:1px">' + level + ' Risk</div>' +
+      (delta ? '<div class="mt-2">' + delta + '</div>' : '') +
+      '</div></div></div>';
+  });
+  html += '</div>';
+
+  // ═══ ROW 2: Risk Distribution bar + Risk by Audit Area chart ═══
+  html += '<div class="row g-3 mb-4">';
+
+  // Left: Risk Distribution horizontal stacked bar
+  var totalObs = obs.length || 1;
+  html += '<div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">' +
+    '<h6 class="card-title">Risk Distribution</h6>' +
+    '<div class="d-flex" style="height:40px;border-radius:6px;overflow:hidden">';
+  riskLevels.forEach(function(level) {
+    var pct = Math.round(riskCounts[level] / totalObs * 100);
+    if (pct > 0) {
+      var inner = pct >= 15 ? riskCounts[level] : '';
+      html += '<div style="width:' + pct + '%;background:' + riskColors[level] + '" class="d-flex align-items-center justify-content-center fw-bold" style2="color:' + riskTextColors[level] + '" title="' + level + ': ' + riskCounts[level] + '"><span style="color:' + riskTextColors[level] + '">' + inner + '</span></div>';
+    }
+  });
+  html += '</div><div class="d-flex flex-wrap gap-3 mt-2" style="font-size:0.8rem">';
+  riskLevels.forEach(function(level) {
+    html += '<span><span style="display:inline-block;width:10px;height:10px;background:' + riskColors[level] + ';border-radius:2px"></span> ' + level + ' (' + riskCounts[level] + ')</span>';
+  });
+  html += '</div></div></div></div>';
+
+  // Right: Risk by Audit Area stacked bar chart
+  html += '<div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">' +
+    '<h6 class="card-title">Risk by Audit Area</h6>' +
+    '<div style="min-height:300px;position:relative"><canvas id="chartRiskByArea"></canvas></div>' +
+    '</div></div></div>';
+  html += '</div>'; // end row 2
+
+  // ═══ ROW 3: Risk Heat Map ═══
+  var affiliateRiskMap = {};
+  obs.forEach(function(o) {
+    var aff = o.affiliate_code || 'Unknown';
+    if (!affiliateRiskMap[aff]) affiliateRiskMap[aff] = { Extreme: 0, High: 0, Medium: 0, Low: 0, total: 0 };
+    var r = (o.risk_rating || '').trim();
+    if (affiliateRiskMap[aff][r] !== undefined) affiliateRiskMap[aff][r]++;
+    affiliateRiskMap[aff].total++;
+  });
+  var affiliates = Object.keys(affiliateRiskMap).sort(function(a, b) { return affiliateRiskMap[b].total - affiliateRiskMap[a].total; });
+
+  html += '<div class="card shadow-sm mb-4"><div class="card-body">' +
+    '<h6 class="card-title">Risk Heat Map (Affiliate × Severity)</h6>' +
+    '<div class="table-responsive"><table class="table table-bordered table-sm mb-0">' +
+    '<thead><tr><th>Affiliate</th>';
+  riskLevels.forEach(function(r) { html += '<th class="text-center">' + r + '</th>'; });
+  html += '<th class="text-center">Total</th></tr></thead><tbody>';
+
+  var colTotals = { Extreme: 0, High: 0, Medium: 0, Low: 0, total: 0 };
+  affiliates.forEach(function(aff) {
+    var row = affiliateRiskMap[aff];
+    html += '<tr><td class="fw-semibold">' + escapeHtml(aff) + '</td>';
+    riskLevels.forEach(function(r) {
+      var val = row[r];
+      colTotals[r] += val;
+      if (val > 0) {
+        html += '<td style="background:' + riskColors[r] + ';color:' + riskTextColors[r] + ';font-weight:700;text-align:center">' + val + '</td>';
+      } else {
+        html += '<td style="background:#f8f9fa;color:#adb5bd;text-align:center">0</td>';
+      }
+    });
+    colTotals.total += row.total;
+    html += '<td class="fw-bold text-center">' + row.total + '</td></tr>';
+  });
+
+  // Footer totals
+  html += '</tbody><tfoot><tr class="fw-bold"><td>Total</td>';
+  riskLevels.forEach(function(r) { html += '<td class="text-center">' + colTotals[r] + '</td>'; });
+  html += '<td class="text-center">' + colTotals.total + '</td></tr></tfoot></table></div></div></div>';
+
+  // ═══ ROW 4: Performance Scorecard ═══
+  var areaPerf = {};
+  obs.forEach(function(o) {
+    var area = o.audit_area_name || o.audit_area_id || 'Unknown';
+    if (!areaPerf[area]) areaPerf[area] = { obs: 0, aps: 0, impl: 0, overdue: 0, highRisk: 0, totalDue: 0 };
+    areaPerf[area].obs++;
+    if (o.risk_rating === 'Extreme' || o.risk_rating === 'High') areaPerf[area].highRisk++;
+  });
+  aps.forEach(function(ap) {
+    var area = ap.audit_area_name || ap.audit_area_id || 'Unknown';
+    if (!areaPerf[area]) areaPerf[area] = { obs: 0, aps: 0, impl: 0, overdue: 0, highRisk: 0, totalDue: 0 };
+    areaPerf[area].aps++;
+    if (ap.status !== 'Not Due') {
+      areaPerf[area].totalDue++;
+      if (implementedStatuses.indexOf(ap.status) !== -1) areaPerf[area].impl++;
+    }
+    if (ap.days_overdue > 0 && implementedStatuses.indexOf(ap.status) === -1) areaPerf[area].overdue++;
+  });
+
+  // Compute scores and sort worst-first
+  var areaPerfList = Object.keys(areaPerf).map(function(area) {
+    var p = areaPerf[area];
+    var implRate = p.totalDue > 0 ? p.impl / p.totalDue : 1;
+    var score = Math.round(Math.max(0, Math.min(100, 100 - (p.overdue * 10) - ((1 - implRate) * 40) - (p.highRisk * 5))));
+    return { area: area, obs: p.obs, aps: p.aps, implRate: Math.round(implRate * 100), overdue: p.overdue, score: score };
+  }).sort(function(a, b) { return a.score - b.score; });
+
+  html += '<div class="card shadow-sm mb-4"><div class="card-body">' +
+    '<h6 class="card-title">Control Effectiveness by Audit Area</h6>' +
+    '<div class="table-responsive"><table class="table table-bordered table-sm table-hover mb-0">' +
+    '<thead><tr><th>Audit Area</th><th class="text-center">Observations</th><th class="text-center">Action Plans</th><th class="text-center">Impl. Rate</th><th class="text-center">Overdue</th><th class="text-center">Score</th><th class="text-center">Rating</th></tr></thead><tbody>';
+
+  areaPerfList.forEach(function(p) {
+    var irc = _implRateColor(p.implRate);
+    var rating = _scoreRating(p.score);
+    html += '<tr><td class="fw-semibold">' + escapeHtml(p.area) + '</td>' +
+      '<td class="text-center">' + p.obs + '</td>' +
+      '<td class="text-center">' + p.aps + '</td>' +
+      '<td class="text-center"><span class="badge" style="background:' + irc + '">' + p.implRate + '%</span></td>' +
+      '<td class="text-center"' + (p.overdue > 0 ? ' style="color:#dc3545;font-weight:700"' : '') + '>' + (p.overdue || '<span class="text-muted">0</span>') + '</td>' +
+      '<td class="text-center" style="color:' + rating.color + ';font-weight:700">' + p.score + '</td>' +
+      '<td class="text-center"><span class="badge" style="background:' + rating.color + '">' + rating.label + '</span></td>' +
+      '</tr>';
+  });
+  html += '</tbody></table></div></div></div>';
+
+  pane.innerHTML = html;
+
+  // Create Risk by Audit Area chart
+  _createRiskByAreaChart(obs);
+}
+
+function _createRiskByAreaChart(obs) {
+  var ctx = document.getElementById('chartRiskByArea');
+  if (!ctx) return;
+
+  var riskLevels = ['Extreme', 'High', 'Medium', 'Low'];
+  var riskColors = { 'Extreme': '#7f1d1d', 'High': '#dc3545', 'Medium': '#ffc107', 'Low': '#198754' };
+
+  var areaMap = {};
+  obs.forEach(function(o) {
+    var area = o.audit_area_name || o.audit_area_id || 'Unknown';
+    if (!areaMap[area]) areaMap[area] = { Extreme: 0, High: 0, Medium: 0, Low: 0, total: 0 };
+    var r = (o.risk_rating || '').trim();
+    if (areaMap[area][r] !== undefined) areaMap[area][r]++;
+    areaMap[area].total++;
+  });
+
+  var areas = Object.keys(areaMap).sort(function(a, b) { return areaMap[b].total - areaMap[a].total; });
+  if (areas.length === 0) return;
+
+  var shortLabels = areas.map(_shortAreaLabel);
+  var datasets = riskLevels.map(function(level) {
+    return {
+      label: level,
+      backgroundColor: riskColors[level],
+      data: areas.map(function(a) { return areaMap[a][level]; })
+    };
+  });
+
+  _chartInstances['chartRiskByArea'] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: shortLabels, datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          mode: 'index', intersect: false,
+          callbacks: { title: function(items) { return areas[items[0] ? items[0].dataIndex : 0] || ''; } }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// DETAIL TAB
+// ══════════════════════════════════════════════════════════════
+
+function toggleDetailGroup(el) {
+  var next = el.nextElementSibling;
+  if (!next) return;
+  next.style.display = next.style.display === 'none' ? '' : 'none';
+  var icon = el.querySelector('i');
+  if (icon) { icon.classList.toggle('bi-chevron-up'); icon.classList.toggle('bi-chevron-down'); }
+}
+
+function switchToDashTab(tabId) {
+  var link = document.querySelector('[data-tab="' + tabId + '"]');
+  if (link) link.click();
 }
 
 function renderDetailTab(data) {
   var pane = document.getElementById('pane-detail');
   if (!pane) return;
-  pane.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-table" style="font-size:2rem;"></i><p class="mt-2">Detail tab content — will be built in Part 3</p></div>';
-  console.log('TODO: renderDetailTab implementation in Part 3');
+
+  destroyAllCharts();
+
+  var obs = data ? data.observations : [];
+  var aps = data ? data.actionPlans : [];
+  var implementedStatuses = ['Implemented', 'Verified', 'Closed'];
+
+  var html = '';
+
+  // ═══ SECTION 1: Observations grouped by risk level ═══
+  html += '<h5 class="mb-3">Detailed Observations (' + obs.length + ')</h5>';
+
+  var riskGroups = [
+    { level: 'Extreme', bg: '#f8d7da', expanded: true },
+    { level: 'High', bg: '#f8d7da', expanded: true },
+    { level: 'Medium', bg: '#fff3cd', expanded: true },
+    { level: 'Low', bg: '#d1e7dd', expanded: false }
+  ];
+
+  riskGroups.forEach(function(grp) {
+    var groupObs = obs.filter(function(o) { return (o.risk_rating || '').trim() === grp.level; })
+      .sort(function(a, b) { return new Date(b.created_at || 0) - new Date(a.created_at || 0); });
+
+    if (groupObs.length === 0) return;
+
+    var chevron = grp.expanded ? 'bi-chevron-up' : 'bi-chevron-down';
+    html += '<div class="d-flex justify-content-between align-items-center p-2 rounded mb-1" style="background:' + grp.bg + ';cursor:pointer" onclick="toggleDetailGroup(this)">' +
+      '<strong>' + grp.level + ' Risk (' + groupObs.length + ')</strong><i class="bi ' + chevron + '"></i></div>';
+
+    html += '<div class="mb-3"' + (grp.expanded ? '' : ' style="display:none"') + '>';
+    html += '<div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr>' +
+      '<th>Risk</th><th>Observation</th><th>Affiliate</th><th>Audit Area</th><th>Status</th><th class="text-center">APs</th><th class="text-center">Overdue</th>' +
+      '</tr></thead><tbody>';
+
+    groupObs.forEach(function(o) {
+      var title = o.observation_title || '';
+      var shortTitle = title.length > 80 ? title.substring(0, 80) + '...' : title;
+      var badgeColor = _riskBadgeColor(o.risk_rating);
+      var badgeText = _riskBadgeTextColor(o.risk_rating);
+      var statusColor = _obsStatusColor(o.status);
+      var apCount = o.action_plan_count || 0;
+      var overdueAps = o.overdue_ap_count || 0;
+
+      html += '<tr>' +
+        '<td><span class="badge" style="background:' + badgeColor + ';color:' + badgeText + '">' + escapeHtml(o.risk_rating || '') + '</span></td>' +
+        '<td title="' + escapeHtml(title) + '">' + escapeHtml(shortTitle) + '</td>' +
+        '<td>' + escapeHtml(o.affiliate_code || '') + '</td>' +
+        '<td>' + escapeHtml(o.audit_area_name || o.audit_area_id || '') + '</td>' +
+        '<td><span class="badge" style="background:' + statusColor + '">' + escapeHtml(o.status || '') + '</span></td>' +
+        '<td class="text-center">' + apCount + '</td>' +
+        '<td class="text-center"' + (overdueAps > 0 ? ' style="color:#dc3545;font-weight:700"' : '') + '>' + (overdueAps > 0 ? overdueAps : '<span class="text-muted">—</span>') + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  });
+
+  // ═══ SECTION 2: AP Status Breakdown ═══
+  html += '<div class="card shadow-sm mb-4"><div class="card-body">' +
+    '<h6 class="card-title">Action Plan Status Breakdown</h6>';
+
+  var statusCounts = {};
+  aps.forEach(function(ap) {
+    var s = ap.status || 'Unknown';
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+
+  var statusList = Object.keys(statusCounts).map(function(s) { return { status: s, count: statusCounts[s] }; })
+    .sort(function(a, b) { return b.count - a.count; });
+  var totalAPs = aps.length || 1;
+
+  html += '<table class="table table-sm mb-0"><thead><tr><th>Status</th><th class="text-center" style="width:80px">Count</th><th>Distribution</th></tr></thead><tbody>';
+  statusList.forEach(function(item) {
+    var pct = Math.round(item.count / totalAPs * 100);
+    var color = _apStatusColor(item.status);
+    html += '<tr>' +
+      '<td><span class="badge" style="background:' + color + '">' + escapeHtml(item.status) + '</span></td>' +
+      '<td class="text-center">' + item.count + '</td>' +
+      '<td><div class="progress" style="height:20px"><div class="progress-bar" style="width:' + pct + '%;background:' + color + '">' + pct + '%</div></div></td>' +
+      '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  // ═══ SECTION 3: Aging Analysis ═══
+  html += '<h5 class="mb-3">Aging Analysis</h5>';
+
+  // Classify APs into aging buckets (only non-closed APs)
+  var openAPs = aps.filter(function(ap) { return implementedStatuses.indexOf(ap.status) === -1; });
+  var buckets = [
+    { label: 'CURRENT', subtitle: 'Not yet due', color: '#198754', bg: 'rgba(25,135,84,0.1)', count: 0 },
+    { label: '1-30 DAYS', subtitle: 'Overdue', color: '#ffc107', bg: 'rgba(255,193,7,0.1)', count: 0 },
+    { label: '31-60 DAYS', subtitle: 'Overdue', color: '#fd7e14', bg: 'rgba(253,126,20,0.1)', count: 0 },
+    { label: '61-90 DAYS', subtitle: 'Overdue', color: '#dc3545', bg: 'rgba(220,53,69,0.1)', count: 0 },
+    { label: '90+ DAYS', subtitle: 'Critical', color: '#7f1d1d', bg: 'rgba(127,29,29,0.1)', count: 0 }
+  ];
+
+  openAPs.forEach(function(ap) {
+    var d = ap.days_overdue || 0;
+    if (d <= 0) buckets[0].count++;
+    else if (d <= 30) buckets[1].count++;
+    else if (d <= 60) buckets[2].count++;
+    else if (d <= 90) buckets[3].count++;
+    else buckets[4].count++;
+  });
+
+  // Aging bucket cards
+  html += '<div class="row g-3 mb-4">';
+  buckets.forEach(function(b) {
+    html += '<div class="col"><div class="card text-center h-100" style="border-top:3px solid ' + b.color + ';background:' + b.bg + '">' +
+      '<div class="card-body p-3"><div style="font-size:1.5rem;font-weight:700;color:' + b.color + '">' + b.count + '</div>' +
+      '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:' + b.color + '">' + b.label + '</div>' +
+      '<div class="text-muted" style="font-size:0.75rem">' + b.subtitle + '</div>' +
+      '</div></div></div>';
+  });
+  html += '</div>';
+
+  // Aging donut + summary side by side
+  var totalOpen = openAPs.length;
+  var totalOverdue = openAPs.filter(function(ap) { return (ap.days_overdue || 0) > 0; }).length;
+  var overdueRate = totalOpen > 0 ? Math.round(totalOverdue / totalOpen * 100) : 0;
+  var onTimeRate = 100 - overdueRate;
+
+  html += '<div class="row g-3 mb-4">';
+
+  // Left: Aging donut
+  html += '<div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">' +
+    '<h6 class="card-title">Aging Distribution</h6>' +
+    '<div style="min-height:250px;position:relative"><canvas id="chartAgingDonut"></canvas></div>' +
+    '</div></div></div>';
+
+  // Right: Summary stats
+  html += '<div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">' +
+    '<h6 class="card-title">Summary</h6>' +
+    '<div class="mb-3"><div class="d-flex justify-content-between mb-1"><span class="fw-bold">Total Open Action Plans</span><span class="fw-bold fs-5">' + totalOpen + '</span></div></div>' +
+    '<div class="mb-3"><div class="d-flex justify-content-between mb-1"><span>Total Overdue</span><span style="' + (totalOverdue > 0 ? 'color:#dc3545;font-weight:700' : '') + '">' + totalOverdue + '</span></div></div>' +
+    '<div class="mb-3"><div class="d-flex justify-content-between mb-1"><span>Overdue Rate</span><span style="' + (overdueRate > 30 ? 'color:#dc3545;font-weight:700' : '') + '">' + overdueRate + '%</span></div></div>' +
+    '<div class="mb-2"><small class="text-muted">On-Time vs Overdue</small></div>' +
+    '<div class="d-flex" style="height:24px;border-radius:6px;overflow:hidden">' +
+      '<div style="width:' + onTimeRate + '%;background:#198754" class="d-flex align-items-center justify-content-center text-white" title="On-Time">' + (onTimeRate >= 15 ? onTimeRate + '%' : '') + '</div>' +
+      '<div style="width:' + overdueRate + '%;background:#dc3545" class="d-flex align-items-center justify-content-center text-white" title="Overdue">' + (overdueRate >= 15 ? overdueRate + '%' : '') + '</div>' +
+    '</div>' +
+    '<div class="d-flex justify-content-between mt-1" style="font-size:0.75rem"><span><span style="display:inline-block;width:10px;height:10px;background:#198754;border-radius:2px"></span> On-Time</span><span><span style="display:inline-block;width:10px;height:10px;background:#dc3545;border-radius:2px"></span> Overdue</span></div>' +
+    '</div></div></div>';
+  html += '</div>'; // end row
+
+  // Overdue table
+  var allOverdue = aps.filter(function(ap) { return (ap.days_overdue || 0) > 0 && implementedStatuses.indexOf(ap.status) === -1; })
+    .sort(function(a, b) { return (b.days_overdue || 0) - (a.days_overdue || 0); });
+
+  html += '<div class="card shadow-sm mb-4"><div class="card-body">' +
+    '<h6 class="card-title">Overdue Action Plans (' + allOverdue.length + ')</h6>';
+
+  if (allOverdue.length > 0) {
+    var showCount = Math.min(allOverdue.length, 20);
+    var hasMore = allOverdue.length > 20;
+
+    html += '<div class="table-responsive"><table class="table table-bordered table-sm table-hover mb-0"><thead><tr>' +
+      '<th>Description</th><th>Owner</th><th>Affiliate</th><th>Risk</th><th class="text-end">Days Overdue</th><th>Status</th>' +
+      '</tr></thead><tbody id="overdueTableBody">';
+
+    allOverdue.forEach(function(ap, idx) {
+      var desc = ap.action_description || '';
+      var shortDesc = desc.length > 60 ? desc.substring(0, 60) + '...' : desc;
+      var owner = '';
+      if (ap.owner_names) {
+        owner = Array.isArray(ap.owner_names) ? (ap.owner_names[0] || '') : String(ap.owner_names).split(',')[0].trim();
+      } else if (ap.owner_ids) {
+        owner = Array.isArray(ap.owner_ids) ? (ap.owner_ids[0] || '') : String(ap.owner_ids);
+      }
+      var riskColor = _riskBadgeColor(ap.risk_rating);
+      var riskText = _riskBadgeTextColor(ap.risk_rating);
+      var statusColor = _apStatusColor(ap.status);
+      var hiddenClass = (hasMore && idx >= 20) ? ' class="d-none _overdue-extra"' : '';
+
+      html += '<tr' + hiddenClass + '>' +
+        '<td title="' + escapeHtml(desc) + '">' + escapeHtml(shortDesc) + '</td>' +
+        '<td>' + escapeHtml(owner) + '</td>' +
+        '<td>' + escapeHtml(ap.affiliate_code || '') + '</td>' +
+        '<td><span class="badge" style="background:' + riskColor + ';color:' + riskText + '">' + escapeHtml(ap.risk_rating || '') + '</span></td>' +
+        '<td class="text-end" style="color:#dc3545;font-weight:700">' + (ap.days_overdue || 0) + '</td>' +
+        '<td><span class="badge" style="background:' + statusColor + '">' + escapeHtml(ap.status || '') + '</span></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+
+    if (hasMore) {
+      html += '<div class="text-center mt-2"><button class="btn btn-sm btn-outline-secondary" id="btnShowAllOverdue" onclick="_toggleAllOverdue()">Show all (' + allOverdue.length + ')</button></div>';
+    }
+  } else {
+    html += '<div class="text-center text-success py-4"><i class="bi bi-check-circle" style="font-size:2rem"></i><div class="mt-2">No overdue action plans</div></div>';
+  }
+  html += '</div></div>';
+
+  pane.innerHTML = html;
+
+  // Create charts after DOM insertion
+  _createAgingDonutChart(buckets);
+}
+
+function _toggleAllOverdue() {
+  var extras = document.querySelectorAll('._overdue-extra');
+  var btn = document.getElementById('btnShowAllOverdue');
+  if (!extras.length) return;
+  var showing = !extras[0].classList.contains('d-none');
+  extras.forEach(function(el) { el.classList.toggle('d-none', showing); });
+  if (btn) btn.textContent = showing ? 'Show all (' + (extras.length + 20) + ')' : 'Show less';
+}
+
+function _createAgingDonutChart(buckets) {
+  var ctx = document.getElementById('chartAgingDonut');
+  if (!ctx) return;
+
+  _chartInstances['chartAgingDonut'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: buckets.map(function(b) { return b.label; }),
+      datasets: [{
+        data: buckets.map(function(b) { return b.count; }),
+        backgroundColor: ['#198754', '#ffc107', '#fd7e14', '#dc3545', '#7f1d1d']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+      }
+    }
+  });
 }
 
 // ============================================================
