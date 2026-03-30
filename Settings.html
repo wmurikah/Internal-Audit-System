@@ -971,11 +971,175 @@ function renderFullAccessControlDashboard(data) {
   });
   html += '</tbody></table></div></div>';
 
-  // <!-- PART 2 SECTIONS START HERE -->
-  html += '<div id="acPart2Placeholder">';
-  html += '<div class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-2"></i>Sections 6-9 (Notification Matrix, UI Visibility, Data Scope Rules, Legend) loading...</div>';
+  // ===== Section 7: Notification Matrix =====
+  html += '<div class="mb-5">';
+  html += _acSectionHeader(6, 'Notification Matrix');
+  html += '<p class="text-muted small mb-3">Shows which roles/users receive each system notification. Some notifications are role-based (all users of that role), others are assignment-based (specific user on a record).</p>';
+
+  var acNotifRoles = ['SUPER_ADMIN','SENIOR_AUDITOR','AUDITOR','JUNIOR_STAFF','SENIOR_MGMT','UNIT_MANAGER','BOARD_MEMBER','EXTERNAL_AUDITOR'];
+  var acNotifRoleLabels = ['HOA','Sr. Auditor','Auditor','Audit Client','Sr. Mgmt','HoD','Board','External'];
+  var acNotifData = [
+    {name:'WP Submitted for Review',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Role-based'},
+    {name:'WP Status Change (Approved/Returned)',r:{SUPER_ADMIN:'S',SENIOR_AUDITOR:'S',AUDITOR:'S',JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to preparer (prepared_by_id) regardless of role'},
+    {name:'Observation Sent to Auditee',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to responsible_ids + CC recipients'},
+    {name:'Auditee Response Submitted',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Role-based + CC recipients'},
+    {name:'Auditee Response Accepted',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to responsible_ids + CC'},
+    {name:'Auditee Response Rejected',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to responsible_ids + CC'},
+    {name:'Response Escalated (Max Rounds)',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to CC + responsible_ids'},
+    {name:'Action Plan Delegated',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to new owner_ids'},
+    {name:'Delegation Rejected',r:{SUPER_ADMIN:'S',SENIOR_AUDITOR:'S',AUDITOR:'S',JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to delegator (delegated_by_id)'},
+    {name:'AP Marked as Implemented',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Role-based'},
+    {name:'AP Verification Result',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to AP owner_ids'},
+    {name:'Weekly Overdue Reminders',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Owners get individual reminders; HOA+Sr get summary'},
+    {name:'Upcoming Due Reminders (14 days)',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to AP owner_ids only'},
+    {name:'Evidence Upload Reminders',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Day -7 and Day 0. Sent to owner_ids, no CC'},
+    {name:'Overdue Evidence Escalation',r:{SUPER_ADMIN:false,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Day +1 and +7. Sent to owner_ids + CC'},
+    {name:'Auditor Unsent WP Nudge (48h)',r:{SUPER_ADMIN:'S',SENIOR_AUDITOR:'S',AUDITOR:'S',JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Sent to prepared_by_id of approved but unsent WPs'},
+    {name:'Biweekly Summary Report',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:false,SENIOR_MGMT:true,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false},notes:'Configurable recipients (default shown)'},
+    {name:'Welcome Email (New User)',r:{SUPER_ADMIN:'S',SENIOR_AUDITOR:'S',AUDITOR:'S',JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:'S',EXTERNAL_AUDITOR:'S'},notes:'Sent to the newly created user'},
+    {name:'Password Reset Email',r:{SUPER_ADMIN:'S',SENIOR_AUDITOR:'S',AUDITOR:'S',JUNIOR_STAFF:'S',SENIOR_MGMT:'S',UNIT_MANAGER:'S',BOARD_MEMBER:'S',EXTERNAL_AUDITOR:'S'},notes:'Sent to target user'}
+  ];
+
+  html += '<div class="table-responsive"><table class="table table-bordered table-sm">';
+  html += '<thead class="table-light"><tr><th>Notification</th>';
+  acNotifRoleLabels.forEach(function(lbl) { html += '<th class="text-center">' + escapeHtml(lbl) + '</th>'; });
+  html += '<th>Notes</th></tr></thead><tbody>';
+  acNotifData.forEach(function(row) {
+    html += '<tr><td class="small"><strong>' + escapeHtml(row.name) + '</strong></td>';
+    acNotifRoles.forEach(function(rc) {
+      var v = row.r[rc];
+      if (v === true) {
+        html += '<td class="text-center"><span style="color:#198754;font-weight:bold;">&#10003;</span></td>';
+      } else if (v === 'S') {
+        html += '<td class="text-center"><span style="color:#d4a017;font-weight:bold;">&#9733;</span></td>';
+      } else {
+        html += '<td class="text-center"><span style="color:#adb5bd;">&mdash;</span></td>';
+      }
+    });
+    html += '<td class="small text-muted">' + escapeHtml(row.notes) + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  html += '<div class="small text-muted mt-2">';
+  html += '<span style="color:#198754;font-weight:bold;">&#10003;</span> = Role-based: ALL users with this role receive the notification automatically &nbsp;&nbsp;';
+  html += '<span style="color:#d4a017;font-weight:bold;">&#9733;</span> = Assignment-based: User receives this notification only if specifically assigned (e.g., as preparer, owner, or responsible party) &nbsp;&nbsp;';
+  html += '<span style="color:#adb5bd;">&mdash;</span> = This role never receives this notification<br>';
+  html += 'CC recipients are configured per work paper and may include any role.';
+  html += '</div></div>';
+
+  // ===== Section 8: UI Visibility Matrix =====
+  html += '<div class="mb-5">';
+  html += _acSectionHeader(7, 'UI Visibility Matrix');
+  html += '<p class="text-muted small mb-3">Shows which navigation items and UI sections are visible for each role.</p>';
+
+  var acNavData = [
+    {item:'Dashboard (Reports)',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:true,SENIOR_MGMT:true,UNIT_MANAGER:true,BOARD_MEMBER:true,EXTERNAL_AUDITOR:true}},
+    {item:'Audit Workbench',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Work Papers \u2014 All Work Papers',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:true,EXTERNAL_AUDITOR:true}},
+    {item:'Work Papers \u2014 My Work Papers',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Work Papers \u2014 Pending Review',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Work Papers \u2014 New Work Paper',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Work Papers \u2014 Send Queue',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Work Papers \u2014 Responses to Review',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Action Plans \u2014 All Action Plans',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:false,SENIOR_MGMT:true,UNIT_MANAGER:false,BOARD_MEMBER:true,EXTERNAL_AUDITOR:true}},
+    {item:'Action Plans \u2014 My Action Plans',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:true,SENIOR_MGMT:true,UNIT_MANAGER:true,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Action Plans \u2014 Overdue',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:true,SENIOR_MGMT:true,UNIT_MANAGER:true,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'My Observations \u2014 All Observations',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:true,SENIOR_MGMT:true,UNIT_MANAGER:true,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Audit Reports (Board Reports)',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:true,EXTERNAL_AUDITOR:false}},
+    {item:'AI Assist',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:false,SENIOR_MGMT:true,UNIT_MANAGER:true,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'User Management',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'System Settings',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:false,AUDITOR:false,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}},
+    {item:'Quick Stats Widget',r:{SUPER_ADMIN:true,SENIOR_AUDITOR:true,AUDITOR:true,JUNIOR_STAFF:false,SENIOR_MGMT:false,UNIT_MANAGER:false,BOARD_MEMBER:false,EXTERNAL_AUDITOR:false}}
+  ];
+
+  html += '<div class="table-responsive"><table class="table table-bordered table-sm">';
+  html += '<thead class="table-light"><tr><th style="position:sticky;left:0;background:#f8f9fa;z-index:1;">Navigation Item</th>';
+  acNotifRoleLabels.forEach(function(lbl) { html += '<th class="text-center">' + escapeHtml(lbl) + '</th>'; });
+  html += '</tr></thead><tbody>';
+  acNavData.forEach(function(row) {
+    html += '<tr><td class="small" style="position:sticky;left:0;background:#fff;z-index:1;"><strong>' + escapeHtml(row.item) + '</strong></td>';
+    acNotifRoles.forEach(function(rc) {
+      html += '<td class="text-center">' + _acCheck(row.r[rc]) + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  // ===== Section 9: Data Scope Rules =====
+  html += '<div class="mb-5">';
+  html += _acSectionHeader(8, 'Data Scope Rules');
+  html += '<p class="text-muted small mb-3">Defines which records each role can access, based on data filters applied in the backend service layer.</p>';
+
+  var acScopeData = [
+    {role:'HOA',display:'Head of Internal Audit',wp:'All work papers, all statuses',ap:'All action plans, all statuses',affiliate:'All affiliates',status:'No filter',auditee:false},
+    {role:'Sr. Auditor',display:'Senior Auditor',wp:'All work papers, all statuses',ap:'All action plans, all statuses',affiliate:'All affiliates',status:'No filter',auditee:false},
+    {role:'Auditor',display:'Auditor',wp:'All work papers, all statuses',ap:'All action plans, all statuses',affiliate:'Own affiliate (if configured)',status:'No filter',auditee:false},
+    {role:'Audit Client',display:'Audit Client',wp:'None (Path 2 only)',ap:'Only where user is in owner_ids',affiliate:'N/A',status:'Only assigned observations',auditee:true},
+    {role:'Sr. Mgmt',display:'Senior Management',wp:'None (Path 2 only)',ap:'ALL action plans (org-wide oversight)',affiliate:'N/A',status:'Only assigned observations',auditee:true},
+    {role:'HoD',display:'Head of Department',wp:'None (Path 2 only)',ap:'Only where user is in owner_ids',affiliate:'N/A',status:'Only assigned observations',auditee:true},
+    {role:'Board',display:'Board Member',wp:'Approved + Sent to Auditee only (read-only)',ap:'Implemented, Verified, Closed only (read-only)',affiliate:'All (read-only)',status:'Completed items only',auditee:false},
+    {role:'External',display:'External Auditor',wp:'Approved + Sent to Auditee only (read-only)',ap:'Completed APs only (read-only)',affiliate:'All (read-only)',status:'Completed items only',auditee:false}
+  ];
+
+  html += '<div class="table-responsive"><table class="table table-bordered table-sm">';
+  html += '<thead class="table-light"><tr><th>Role</th><th>Work Papers Visible</th><th>Action Plans Visible</th><th>Affiliate Scope</th><th>Status Filter</th></tr></thead><tbody>';
+  acScopeData.forEach(function(row) {
+    var bgStyle = row.auditee ? ' style="background-color:#e8f4fd;"' : '';
+    html += '<tr' + bgStyle + '>';
+    html += '<td><strong>' + escapeHtml(row.display) + '</strong><br><small class="text-muted">' + escapeHtml(row.role) + '</small></td>';
+    html += '<td class="small">' + escapeHtml(row.wp) + '</td>';
+    html += '<td class="small">' + escapeHtml(row.ap) + '</td>';
+    html += '<td class="small">' + escapeHtml(row.affiliate) + '</td>';
+    html += '<td class="small">' + escapeHtml(row.status) + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  html += '<div class="small text-muted mt-2"><span style="display:inline-block;width:14px;height:14px;background:#e8f4fd;border:1px solid #ccc;vertical-align:middle;margin-right:4px;"></span> Auditee roles (Path 2) &mdash; access observations and action plans via dedicated auditee interface</div>';
   html += '</div>';
-  // <!-- PART 2 SECTIONS END HERE -->
+
+  // ===== Section 10: Legend & Methodology =====
+  html += '<div class="mb-4">';
+  html += _acSectionHeader(9, 'Legend &amp; Methodology');
+  html += '<div class="card"><div class="card-body"><div class="row">';
+
+  // Left column: Access Level Legend
+  html += '<div class="col-md-6">';
+  html += '<h6 class="fw-bold mb-3">Access Level Legend</h6>';
+  var acLegendItems = [
+    {badge:'FULL',cls:'bg-success text-white',meaning:'Complete access to all actions at this stage'},
+    {badge:'REVIEW',cls:'bg-primary text-white',meaning:'Can review others\u2019 work'},
+    {badge:'READ',cls:'bg-secondary text-white',meaning:'View only, no modifications'},
+    {badge:'SUBMIT',cls:'bg-warning text-dark',meaning:'Can submit but not approve'},
+    {badge:'RECEIVE',cls:'bg-info text-dark',meaning:'Receives items from others'},
+    {badge:'OWN',cls:'',style:'background:#fd7e14;color:white',meaning:'Own items only'},
+    {badge:'ALL',cls:'bg-success text-white',meaning:'All records across organization'},
+    {badge:'NONE',cls:'bg-light text-muted border',meaning:'No access'}
+  ];
+  acLegendItems.forEach(function(item) {
+    var badgeAttr = item.style ? 'class="badge" style="' + item.style + ';font-size:0.8em;padding:3px 10px;"' : 'class="badge ' + item.cls + '" style="font-size:0.8em;padding:3px 10px;"';
+    html += '<div class="mb-2"><span ' + badgeAttr + '>' + escapeHtml(item.badge) + '</span> <span class="small">' + escapeHtml(item.meaning) + '</span></div>';
+  });
+  html += '</div>';
+
+  // Right column: Symbols & Sources
+  html += '<div class="col-md-6">';
+  html += '<h6 class="fw-bold mb-3">Symbols &amp; Sources</h6>';
+  html += '<div class="small">';
+  html += '<p class="mb-1"><span style="color:#198754;font-weight:bold;">&#10003;</span> = Permitted / Receives notification (role-based)</p>';
+  html += '<p class="mb-1"><span style="color:#d4a017;font-weight:bold;">&#9733;</span> = Assignment-based (only if user is specifically assigned)</p>';
+  html += '<p class="mb-1"><span style="color:#adb5bd;">&mdash;</span> = Not permitted / Does not receive</p>';
+  html += '<p class="mb-3"><strong>C</strong> = Create | <strong>R</strong> = Read | <strong>U</strong> = Update | <strong>D</strong> = Delete | <strong>A</strong> = Approve | <strong>E</strong> = Export</p>';
+  html += '<p class="mb-1 text-muted"><strong>Source:</strong> ROLE_PERMISSIONS and ROLE_WORKFLOW_ACCESS constants in 02_Config.gs</p>';
+  html += '<p class="mb-1 text-muted"><strong>Notification logic:</strong> 05_NotificationService.gs, 10_AuditeeService.gs, 04_ActionPlanService.gs</p>';
+  html += '<p class="mb-1 text-muted"><strong>Navigation logic:</strong> setupNavigation() in Scripts.html</p>';
+  html += '<p class="mb-1 text-muted"><strong>Data filters:</strong> getWorkPapersRaw(), getActionPlansRaw()</p>';
+  html += '</div>';
+  html += '</div>';
+
+  html += '</div></div></div>';
+  html += '<div class="text-center text-muted small mt-3">Last updated: ' + new Date().toLocaleDateString('en-GB', {day:'numeric', month:'long', year:'numeric'}) + '</div>';
+  html += '</div>';
 
   document.getElementById('accessControlContent').innerHTML = html;
 }
