@@ -467,24 +467,15 @@ document.getElementById('arManagementResponse').addEventListener('input', update
 function saveDraftResponseForm() {
   var mgmtResponse = document.getElementById('arManagementResponse').value;
   var btn = document.getElementById('btnSaveDraft');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
 
-  apiCall('saveDraftResponse', { workPaperId: _arWorkPaperId, management_response: mgmtResponse })
-    .then(function(result) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-save me-1"></i>Save Draft';
-      if (result && result.success) {
-        showToast('Draft saved successfully', 'success');
-      } else {
-        showToast(result ? result.error : 'Save failed', 'danger');
-      }
-    })
-    .catch(function(err) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-save me-1"></i>Save Draft';
-      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
-    });
+  safeAction(btn, async function() {
+    var result = await apiCall('saveDraftResponse', { workPaperId: _arWorkPaperId, management_response: mgmtResponse });
+    if (result && result.success) {
+      showToast('Draft saved successfully', 'success');
+    } else {
+      showToast(result ? result.error : 'Save failed', 'danger');
+    }
+  });
 }
 
 function submitResponseForm() {
@@ -500,33 +491,23 @@ function submitResponseForm() {
   if (!confirm('Are you sure you want to submit your response? This will notify the audit team for review.')) return;
 
   var btn = document.getElementById('btnSubmitResponse');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Submitting...';
-
-  apiCall('submitAuditeeResponse', {
-    workPaperId: _arWorkPaperId,
-    management_response: mgmtResponse,
-    action_plan_ids: apIds
-  })
-    .then(function(result) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-send me-1"></i>Submit Response';
-      if (result && result.success) {
-        if (result.aiRejected) {
-          showToast(result.message || 'Your response was automatically reviewed. Please revise.', 'warning');
-        } else {
-          showToast(result.message || 'Response submitted successfully', 'success');
-        }
-        loadAuditeeResponse({ id: _arWorkPaperId });
-      } else {
-        showToast(result ? result.error : 'Submit failed', 'danger');
-      }
-    })
-    .catch(function(err) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-send me-1"></i>Submit Response';
-      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
+  safeAction(btn, async function() {
+    var result = await apiCall('submitAuditeeResponse', {
+      workPaperId: _arWorkPaperId,
+      management_response: mgmtResponse,
+      action_plan_ids: apIds
     });
+    if (result && result.success) {
+      if (result.aiRejected) {
+        showToast(result.message || 'Your response was automatically reviewed. Please revise.', 'warning');
+      } else {
+        showToast(result.message || 'Response submitted successfully', 'success');
+      }
+      loadAuditeeResponse({ id: _arWorkPaperId });
+    } else {
+      showToast(result ? result.error : 'Submit failed', 'danger');
+    }
+  });
 }
 
 function reviewResponseAction(action, event) {
@@ -542,35 +523,27 @@ function reviewResponseAction(action, event) {
   if (action === 'accept' && !confirm('Accept this auditee response?')) return;
 
   var btn = (event && event.target) ? event.target.closest('button') : null;
-  var btnOriginal = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing...'; }
-
-  apiCall('reviewAuditeeResponse', {
-    workPaperId: _arWorkPaperId,
-    action: action,
-    comments: comments
-  })
-    .then(function(result) {
-      if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; }
-      if (result && result.success) {
-        var modal = bootstrap.Modal.getInstance(document.getElementById('rejectResponseModal'));
-        if (modal) modal.hide();
-        var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
-        var isAuditor = auditorRoles.indexOf(window.currentUser?.role_code) >= 0;
-        showToast('Response ' + (action === 'accept' ? 'accepted' : 'rejected') + ' successfully', 'success');
-        if (isAuditor && document.getElementById('page-responses-to-review')) {
-          setTimeout(function() { navigateTo('responses-to-review'); }, 500);
-        } else {
-          loadAuditeeResponse({ id: _arWorkPaperId });
-        }
-      } else {
-        showToast(result ? result.error : 'Review failed', 'danger');
-      }
-    })
-    .catch(function(err) {
-      if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; }
-      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
+  safeAction(btn, async function() {
+    var result = await apiCall('reviewAuditeeResponse', {
+      workPaperId: _arWorkPaperId,
+      action: action,
+      comments: comments
     });
+    if (result && result.success) {
+      var modal = bootstrap.Modal.getInstance(document.getElementById('rejectResponseModal'));
+      if (modal) modal.hide();
+      var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+      var isAuditor = auditorRoles.indexOf(window.currentUser?.role_code) >= 0;
+      showToast('Response ' + (action === 'accept' ? 'accepted' : 'rejected') + ' successfully', 'success');
+      if (isAuditor && document.getElementById('page-responses-to-review')) {
+        setTimeout(function() { navigateTo('responses-to-review'); }, 500);
+      } else {
+        loadAuditeeResponse({ id: _arWorkPaperId });
+      }
+    } else {
+      showToast(result ? result.error : 'Review failed', 'danger');
+    }
+  });
 }
 
 function showRejectResponseModal() {
@@ -623,40 +596,34 @@ function loadUsersForAPAssignment() {
 
 function addAuditeeActionPlan() {
   var desc = document.getElementById('newAPDescription').value;
-  if (!desc || desc.trim().length < 5) {
-    showToast('Action description is required (at least 5 characters)', 'warning');
-    return;
-  }
   var dueDate = document.getElementById('newAPDueDate').value;
-  if (!dueDate) {
-    showToast('Due date is required', 'warning');
-    return;
-  }
-
   var ownerSel = document.getElementById('newAPOwner');
   var ownerId = ownerSel.value || '';
   var ownerName = ownerId ? ownerSel.options[ownerSel.selectedIndex].textContent : '';
 
-  apiCall('createAuditeeActionPlan', {
-    work_paper_id: _arWorkPaperId,
-    action_description: desc,
-    owner_ids: ownerId,
-    owner_names: ownerName,
-    due_date: dueDate
-  })
-    .then(function(result) {
-      if (result && result.success) {
-        showToast('Action plan added', 'success');
-        var modal = bootstrap.Modal.getInstance(document.getElementById('addAuditeeAPModal'));
-        if (modal) modal.hide();
-        loadAuditeeResponse({ id: _arWorkPaperId });
-      } else {
-        showToast(result ? result.error : 'Failed to add action plan', 'danger');
-      }
-    })
-    .catch(function(err) {
-      showToast('Error: ' + (err.message || 'Connection failed'), 'danger');
+  // Validate mandatory fields
+  var apMissing = validateActionPlanFields({ action_description: desc, owner_ids: ownerId || 'self', due_date: dueDate });
+  if (apMissing.length > 0) { showValidationError(apMissing); return; }
+  if (desc.trim().length < 5) { showToast('Action description must be at least 5 characters', 'warning'); return; }
+
+  var btn = document.querySelector('#addAuditeeAPModal .btn-primary');
+  safeAction(btn, async function() {
+    var result = await apiCall('createAuditeeActionPlan', {
+      work_paper_id: _arWorkPaperId,
+      action_description: desc,
+      owner_ids: ownerId,
+      owner_names: ownerName,
+      due_date: dueDate
     });
+    if (result && result.success) {
+      showToast('Action plan added', 'success');
+      var modal = bootstrap.Modal.getInstance(document.getElementById('addAuditeeAPModal'));
+      if (modal) modal.hide();
+      loadAuditeeResponse({ id: _arWorkPaperId });
+    } else {
+      showToast(result ? result.error : 'Failed to add action plan', 'danger');
+    }
+  });
 }
 
 // ── Helper Functions ──

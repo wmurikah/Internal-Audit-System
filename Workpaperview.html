@@ -211,16 +211,21 @@ function renderWPFiles(files) {
 function submitWP(event) {
   if (!confirm('Submit this work paper for review?')) return;
   var btn = (event && event.target) ? event.target.closest('button') : document.querySelector('[onclick*="submitWP"]');
-  var btnOriginal = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Submitting...'; }
-  apiCall('submitWorkPaper', { workPaperId: currentWorkPaper.work_paper_id }).then(r => {
-    if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; }
+
+  // Validate mandatory fields before submission
+  var wpData = currentWorkPaper || {};
+  var missing = validateWorkPaperFields(wpData, 'Submitted');
+  if (missing.length > 0) { showValidationError(missing); return; }
+
+  safeAction(btn, async function() {
+    var r = await apiCall('submitWorkPaper', { workPaperId: currentWorkPaper.work_paper_id });
     if (r.success) {
       showToast('Submitted', 'success');
       loadWorkPaperView({ id: currentWorkPaper.work_paper_id });
+    } else {
+      showToast(r.error || 'Error', 'danger');
     }
-    else showToast(r.error || 'Error', 'danger');
-  }).catch(() => { if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; } showToast('Error', 'danger'); });
+  });
 }
 
 function showReviewModal(action) {
@@ -234,32 +239,37 @@ function submitReview() {
   const action = document.getElementById('reviewAction').value;
   const comments = document.getElementById('reviewComments').value;
   var btn = document.querySelector('#reviewModal .btn-primary');
-  var btnOriginal = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing...'; }
-  apiCall('reviewWorkPaper', { workPaperId: currentWorkPaper.work_paper_id, action, comments }).then(r => {
-    if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; }
+
+  safeAction(btn, async function() {
+    var r = await apiCall('reviewWorkPaper', { workPaperId: currentWorkPaper.work_paper_id, action, comments });
     bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
     if (r.success) {
       showToast(action === 'approve' ? 'Approved' : 'Returned', 'success');
       loadWorkPaperView({ id: currentWorkPaper.work_paper_id });
+    } else {
+      showToast(r.error || 'Error', 'danger');
     }
-    else showToast(r.error || 'Error', 'danger');
-  }).catch(() => { if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; } showToast('Error', 'danger'); });
+  });
 }
 
 function sendToAuditee(event) {
+  // Validate mandatory fields before sending
+  var wpData = currentWorkPaper || {};
+  var missing = validateWorkPaperFields(wpData, 'Sent to Auditee');
+  if (missing.length > 0) { showValidationError(missing); return; }
+
   if (!confirm('Send this work paper to the auditee?')) return;
   var btn = (event && event.target) ? event.target.closest('button') : document.querySelector('[onclick*="sendToAuditee"]');
-  var btnOriginal = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending...'; }
-  apiCall('sendToAuditee', { workPaperId: currentWorkPaper.work_paper_id }).then(r => {
-    if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; }
+
+  safeAction(btn, async function() {
+    var r = await apiCall('sendToAuditee', { workPaperId: currentWorkPaper.work_paper_id });
     if (r.success) {
       showToast('Sent to auditee', 'success');
       loadWorkPaperView({ id: currentWorkPaper.work_paper_id });
+    } else {
+      showToast(r.error || 'Error', 'danger');
     }
-    else showToast(r.error || 'Error', 'danger');
-  }).catch(() => { if (btn) { btn.disabled = false; btn.innerHTML = btnOriginal; } showToast('Error', 'danger'); });
+  });
 }
 
 function showAddActionPlan() {

@@ -2047,7 +2047,17 @@ async function saveAndSubmit() {
   }
 
   const data = getFormData();
+
+  // Validate mandatory fields before submission
+  var missing = validateWorkPaperFields(data, 'Submitted');
+  if (missing.length > 0) { showValidationError(missing); return; }
+
   const actionPlans = getActionPlansData();
+
+  // Prevent double-click: disable submit button
+  var submitBtn = document.querySelector('[onclick="saveAndSubmit()"]');
+  if (submitBtn && submitBtn.getAttribute('data-processing') === 'true') return;
+  if (submitBtn) submitBtn.setAttribute('data-processing', 'true');
 
   showLoading('Saving...');
 
@@ -2107,6 +2117,9 @@ async function saveAndSubmit() {
   } catch (err) {
     hideLoading();
     showToast(err.message || 'Error', 'danger');
+  } finally {
+    var submitBtn = document.querySelector('[onclick="saveAndSubmit()"]');
+    if (submitBtn) { submitBtn.removeAttribute('data-processing'); }
   }
 }
 

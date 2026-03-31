@@ -27,15 +27,31 @@ function getAuditeeFindings(filters, user) {
   var workPapers = getWorkPapersRaw({}, null);
   var results = [];
 
+  // Build a set of work paper IDs where the user owns a delegated action plan
+  // This ensures delegatees see the parent observation even if they're not in responsible_ids
+  var delegatedWPIds = {};
+  try {
+    var allActionPlans = getActionPlansRaw({}, null);
+    for (var j = 0; j < allActionPlans.length; j++) {
+      var ap = allActionPlans[j];
+      var apOwnerIds = parseIdList(ap.owner_ids);
+      if (apOwnerIds.includes(user.user_id) && ap.work_paper_id) {
+        delegatedWPIds[ap.work_paper_id] = true;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to check delegated action plans:', e.message);
+  }
+
   for (var i = 0; i < workPapers.length; i++) {
     var wp = workPapers[i];
 
     // Only show "Sent to Auditee" status work papers
     if (wp.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) continue;
 
-    // Check if user is assigned
+    // Check if user is assigned as responsible party OR owns a delegated action plan for this WP
     var responsibleIds = parseIdList(wp.responsible_ids);
-    if (!responsibleIds.includes(user.user_id)) continue;
+    if (!responsibleIds.includes(user.user_id) && !delegatedWPIds[wp.work_paper_id]) continue;
 
     // Apply optional filters
     if (filters.response_status && wp.response_status !== filters.response_status) continue;
@@ -101,13 +117,28 @@ function getAuditeeResponseData(workPaperId, user) {
   var wp = getWorkPaperById(workPaperId);
   if (!wp) throw new Error('Work paper not found: ' + workPaperId);
 
-  // Verify access: user must be a responsible party or SUPER_ADMIN
+  // Verify access: user must be a responsible party, delegated AP owner, or SUPER_ADMIN
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
   var isAuditor = [ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
   var responsibleIds = parseIdList(wp.responsible_ids);
   var isAssigned = responsibleIds.includes(user.user_id);
 
+  // Also check if user owns a delegated action plan for this work paper
+  var isDelegatedOwner = false;
   if (!isSuperAdmin && !isAuditor && !isAssigned) {
+    try {
+      var wpActionPlans = getActionPlansByWorkPaperRaw(workPaperId);
+      for (var di = 0; di < wpActionPlans.length; di++) {
+        var apOwners = parseIdList(wpActionPlans[di].owner_ids);
+        if (apOwners.includes(user.user_id)) {
+          isDelegatedOwner = true;
+          break;
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (!isSuperAdmin && !isAuditor && !isAssigned && !isDelegatedOwner) {
     throw new Error('Permission denied: You are not assigned to this observation');
   }
 

@@ -492,6 +492,23 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   // Log audit event
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
 
+  // ── AUTO-QUEUE: On approval, automatically send to auditee if ready ──
+  if (action === 'approve' && updated.responsible_ids) {
+    try {
+      // Call sendToAuditee to transition directly to "Sent to Auditee"
+      var autoSendResult = sendToAuditee(workPaperId, user);
+      if (autoSendResult && autoSendResult.success) {
+        console.log('Auto-queued: Work paper', workPaperId, 'sent to auditee on approval');
+        // Return the auto-sent result (status is now "Sent to Auditee")
+        return sanitizeForClient({ success: true, workPaper: autoSendResult.workPaper || updated, autoQueued: true });
+      }
+    } catch (autoSendErr) {
+      // Non-fatal: if auto-send fails (e.g. missing responsible parties),
+      // the WP stays as "Approved" in the send queue for manual sending
+      console.warn('Auto-queue on approval failed (non-fatal):', autoSendErr.message);
+    }
+  }
+
   // Notify the submitting auditor about the review outcome
   if (action !== 'start_review') {
     try {
@@ -544,9 +561,25 @@ function sendToAuditee(workPaperId, user) {
     throw new Error('Work paper must be approved before sending to auditee');
   }
 
-  // Must have responsible parties
-  if (!workPaper.responsible_ids) {
-    throw new Error('No responsible parties assigned');
+  // Validate mandatory fields before sending to auditee
+  var sendMissing = [];
+  if (!workPaper.responsible_ids || String(workPaper.responsible_ids).trim() === '') {
+    sendMissing.push('Responsible Parties');
+  }
+  if (!workPaper.cc_recipients || String(workPaper.cc_recipients).trim() === '') {
+    sendMissing.push('CC Recipients');
+  }
+  if (!workPaper.observation_title || String(workPaper.observation_title).trim() === '') {
+    sendMissing.push('Observation Title');
+  }
+  if (!workPaper.observation_description || String(workPaper.observation_description).trim() === '') {
+    sendMissing.push('Observation Description');
+  }
+  if (!workPaper.risk_rating || String(workPaper.risk_rating).trim() === '') {
+    sendMissing.push('Risk Rating');
+  }
+  if (sendMissing.length > 0) {
+    throw new Error('Cannot send to auditee. Missing required fields: ' + sendMissing.join(', '));
   }
 
   const now = new Date();
