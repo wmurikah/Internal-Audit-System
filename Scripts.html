@@ -72,6 +72,130 @@ async function loadParallel(requests) {
   return results;
 }
 
+// =============================================
+// GLOBAL SAFE ACTION — Debounce wrapper for all action buttons
+// Prevents duplicate submissions on rapid clicks
+// =============================================
+var _processingActions = {};
+
+/**
+ * Wrap any async action with debounce and button state management.
+ * Usage: safeAction(this, async () => { ...existing logic... }, 60000)
+ * @param {HTMLElement} buttonElement - The button that was clicked
+ * @param {Function} actionFn - Async function to execute
+ * @param {number} cooldownMs - Cooldown in ms before re-enabling (default 2000)
+ */
+async function safeAction(buttonElement, actionFn, cooldownMs) {
+  cooldownMs = cooldownMs || 2000;
+
+  // If button is already processing, ignore
+  if (buttonElement && buttonElement.getAttribute('data-processing') === 'true') {
+    return;
+  }
+
+  // Fallback: use a global map keyed by button id or text content
+  var actionKey = buttonElement ? (buttonElement.id || buttonElement.textContent.trim()) : 'unknown';
+  if (_processingActions[actionKey]) {
+    return;
+  }
+
+  _processingActions[actionKey] = true;
+  var originalHTML = '';
+
+  if (buttonElement) {
+    buttonElement.setAttribute('data-processing', 'true');
+    originalHTML = buttonElement.innerHTML;
+    buttonElement.disabled = true;
+    buttonElement.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+  }
+
+  try {
+    await actionFn();
+  } catch (err) {
+    console.error('safeAction error:', err);
+    showToast(err.message || 'An error occurred', 'danger');
+  } finally {
+    setTimeout(function() {
+      if (buttonElement) {
+        buttonElement.disabled = false;
+        buttonElement.innerHTML = originalHTML;
+        buttonElement.removeAttribute('data-processing');
+      }
+      delete _processingActions[actionKey];
+    }, cooldownMs);
+  }
+}
+
+// =============================================
+// FRONTEND VALIDATION — Work Paper & Action Plan mandatory fields
+// =============================================
+
+/**
+ * Validate work paper fields before submission/sending.
+ * @param {Object} data - Form data object
+ * @param {string} targetStatus - The target status ('Submitted', 'Sent to Auditee', etc.)
+ * @returns {string[]} Array of missing field labels (empty = valid)
+ */
+function validateWorkPaperFields(data, targetStatus) {
+  var missing = [];
+
+  // Always required for submission
+  if (!data.observation_title || String(data.observation_title).trim() === '') {
+    missing.push('Observation Title');
+  }
+  if (!data.observation_description || String(data.observation_description).trim() === '') {
+    missing.push('Observation Description');
+  }
+  if (!data.risk_rating || String(data.risk_rating).trim() === '') {
+    missing.push('Risk Rating');
+  }
+  if (!data.affiliate_code || String(data.affiliate_code).trim() === '') {
+    missing.push('Affiliate');
+  }
+  if (!data.audit_area_id || String(data.audit_area_id).trim() === '') {
+    missing.push('Audit Area');
+  }
+
+  // Additional fields required before sending to auditee
+  if (targetStatus === 'Sent to Auditee' || targetStatus === 'Approved') {
+    if (!data.responsible_ids || String(data.responsible_ids).trim() === '') {
+      missing.push('Responsible Parties');
+    }
+    if (!data.cc_recipients || String(data.cc_recipients).trim() === '') {
+      missing.push('CC Recipients');
+    }
+  }
+
+  return missing;
+}
+
+/**
+ * Validate action plan fields before submission.
+ * @param {Object} data - Action plan form data
+ * @returns {string[]} Array of missing field labels (empty = valid)
+ */
+function validateActionPlanFields(data) {
+  var missing = [];
+  if (!data.action_description || String(data.action_description).trim() === '') {
+    missing.push('Action Description');
+  }
+  if (!data.owner_ids || String(data.owner_ids).trim() === '') {
+    missing.push('Owner');
+  }
+  if (!data.due_date || String(data.due_date).trim() === '') {
+    missing.push('Due Date');
+  }
+  return missing;
+}
+
+/**
+ * Show validation error toast listing missing fields.
+ * @param {string[]} missingFields - Array of missing field names
+ */
+function showValidationError(missingFields) {
+  showToast('Please fill in the following required fields: ' + missingFields.join(', '), 'danger', 8000);
+}
+
 // Debounce & throttle utilities
 function debounce(func, wait) {
   let timeout;
@@ -354,6 +478,22 @@ function loadSidebarCountsBackground() {
         var respBadge = document.getElementById('responsesReviewCount');
         if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
         updateNewBadges(result);
+
+        // Post-login redirect for auditee roles: if overdue count > 0, redirect to overdue page
+        if (!window._postLoginRedirectDone) {
+          window._postLoginRedirectDone = true;
+          var role = window.currentUser?.role_code || '';
+          if (['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'].includes(role)) {
+            var myOverdue = result.myOverdue || 0;
+            var currentHash = window.location.hash.slice(1).split('?')[0];
+            // Only redirect if user is on default page (not deep-linked)
+            if (myOverdue > 0 && (!currentHash || currentHash === 'auditee-findings' || currentHash === 'reports')) {
+              navigateTo('action-plans-overdue');
+            } else if (!currentHash || currentHash === 'reports') {
+              navigateTo('auditee-findings');
+            }
+          }
+        }
       }
     })
     .catch(err => console.error('Sidebar counts error:', err));
@@ -679,7 +819,15 @@ function loadAuditeeFindingCounts() {
 // Navigation
 function getDefaultPage() {
   var role = window.currentUser?.role_code || '';
-  if (['JUNIOR_STAFF', 'UNIT_MANAGER'].includes(role)) {
+
+  // Auditee roles: redirect to overdue APs if they have any, otherwise My Action Plans / My Observations
+  if (['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'].includes(role)) {
+    // Check if there are overdue items from sidebar badge data
+    var odBadge = document.getElementById('overdueCount');
+    var overdueCount = odBadge ? parseInt(odBadge.textContent || '0', 10) : 0;
+    if (overdueCount > 0) {
+      return 'action-plans-overdue';
+    }
     return 'auditee-findings';
   }
   return 'reports';

@@ -484,15 +484,11 @@ function markAPImplemented() {
   if (!confirm('Mark this action plan as implemented?')) return;
 
   var btn = document.querySelector('[onclick="markAPImplemented()"]');
-  var s = _apvSpinBtn(btn);
-
-  apiCall('markAsImplemented', { actionPlanId: ap.action_plan_id, implementationNotes: notes })
-    .then(function(r) {
-      s.restore();
-      if (r && r.success) { showToast('Marked as implemented', 'success'); _apvReload(); }
-      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
-    })
-    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+  safeAction(btn, async function() {
+    var r = await apiCall('markAsImplemented', { actionPlanId: ap.action_plan_id, implementationNotes: notes });
+    if (r && r.success) { showToast('Marked as implemented', 'success'); _apvReload(); }
+    else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+  });
 }
 
 function showVerifyModal(action) {
@@ -529,16 +525,12 @@ function submitAPVerification() {
   var comments = document.getElementById('verifyAPComments').value;
 
   var btn = document.getElementById('verifyAPSubmitBtn');
-  var s = _apvSpinBtn(btn);
-
-  apiCall('verifyImplementation', { actionPlanId: apId, action: action, comments: comments })
-    .then(function(r) {
-      s.restore();
-      bootstrap.Modal.getInstance(document.getElementById('verifyAPModal'))?.hide();
-      if (r && r.success) { showToast('Verification submitted', 'success'); _apvReload(); }
-      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
-    })
-    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+  safeAction(btn, async function() {
+    var r = await apiCall('verifyImplementation', { actionPlanId: apId, action: action, comments: comments });
+    bootstrap.Modal.getInstance(document.getElementById('verifyAPModal'))?.hide();
+    if (r && r.success) { showToast('Verification submitted', 'success'); _apvReload(); }
+    else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+  });
 }
 
 function showHOAReviewModal(action) {
@@ -571,16 +563,12 @@ function submitHOAReview() {
   var comments = document.getElementById('hoaReviewAPComments').value;
 
   var btn = document.getElementById('hoaReviewAPSubmitBtn');
-  var s = _apvSpinBtn(btn);
-
-  apiCall('hoaReview', { actionPlanId: apId, action: action, comments: comments })
-    .then(function(r) {
-      s.restore();
-      bootstrap.Modal.getInstance(document.getElementById('hoaReviewAPModal'))?.hide();
-      if (r && r.success) { showToast('HOA review submitted', 'success'); _apvReload(); }
-      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
-    })
-    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+  safeAction(btn, async function() {
+    var r = await apiCall('hoaReview', { actionPlanId: apId, action: action, comments: comments });
+    bootstrap.Modal.getInstance(document.getElementById('hoaReviewAPModal'))?.hide();
+    if (r && r.success) { showToast('HOA review submitted', 'success'); _apvReload(); }
+    else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+  });
 }
 
 function showDelegateModal() {
@@ -603,16 +591,12 @@ function submitDelegation() {
   if (!newOwnerIds) { showToast('Please select a new owner', 'warning'); return; }
 
   var btn = document.querySelector('#delegateAPModal .btn-primary');
-  var s = _apvSpinBtn(btn);
-
-  apiCall('delegateActionPlan', { actionPlanId: apId, newOwnerIds: newOwnerIds, newOwnerNames: newOwnerNames, notes: notes })
-    .then(function(r) {
-      s.restore();
-      bootstrap.Modal.getInstance(document.getElementById('delegateAPModal'))?.hide();
-      if (r && r.success) { showToast('Action plan delegated', 'success'); _apvReload(); }
-      else showToast(r ? r.error || 'Delegation failed' : 'Failed', 'danger');
-    })
-    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+  safeAction(btn, async function() {
+    var r = await apiCall('delegateActionPlan', { actionPlanId: apId, newOwnerIds: newOwnerIds, newOwnerNames: newOwnerNames, notes: notes });
+    bootstrap.Modal.getInstance(document.getElementById('delegateAPModal'))?.hide();
+    if (r && r.success) { showToast('Action plan delegated', 'success'); _apvReload(); }
+    else showToast(r ? r.error || 'Delegation failed' : 'Failed', 'danger');
+  });
 }
 
 function respondDelegation(action) {
@@ -621,12 +605,12 @@ function respondDelegation(action) {
 
   if (action === 'accept') {
     if (!confirm('Accept this delegated action plan?')) return;
-    apiCall('respondToDelegation', { actionPlanId: ap.action_plan_id, action: 'accept', reason: '' })
-      .then(function(r) {
-        if (r && r.success) { showToast('Delegation accepted', 'success'); _apvReload(); }
-        else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
-      })
-      .catch(function(e) { showToast('Error: ' + (e.message || e), 'danger'); });
+    var btn = document.querySelector('[onclick*="respondDelegation(\'accept\')"]');
+    safeAction(btn, async function() {
+      var r = await apiCall('respondToDelegation', { actionPlanId: ap.action_plan_id, action: 'accept', reason: '' });
+      if (r && r.success) { showToast('Delegation accepted', 'success'); _apvReload(); }
+      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+    });
   } else {
     document.getElementById('rejectDelegationAPId').value = ap.action_plan_id;
     document.getElementById('rejectDelegationReason').value = '';
@@ -640,16 +624,12 @@ function submitRejectDelegation() {
   if (!reason || reason.trim().length < 5) { showToast('Please provide a reason (at least 5 characters)', 'warning'); return; }
 
   var btn = document.querySelector('#rejectDelegationModal .btn-danger');
-  var s = _apvSpinBtn(btn);
-
-  apiCall('respondToDelegation', { actionPlanId: apId, action: 'reject', reason: reason })
-    .then(function(r) {
-      s.restore();
-      bootstrap.Modal.getInstance(document.getElementById('rejectDelegationModal'))?.hide();
-      if (r && r.success) { showToast('Delegation rejected', 'success'); _apvReload(); }
-      else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
-    })
-    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+  safeAction(btn, async function() {
+    var r = await apiCall('respondToDelegation', { actionPlanId: apId, action: 'reject', reason: reason });
+    bootstrap.Modal.getInstance(document.getElementById('rejectDelegationModal'))?.hide();
+    if (r && r.success) { showToast('Delegation rejected', 'success'); _apvReload(); }
+    else showToast(r ? r.error || 'Failed' : 'Failed', 'danger');
+  });
 }
 
 function showEditAPModal() {
@@ -682,19 +662,17 @@ function submitEditAP() {
   var ownerIds = Array.from(ownerSelect.selectedOptions).map(function(o) { return o.value; }).join(',');
   var ownerNames = Array.from(ownerSelect.selectedOptions).map(function(o) { return o.text; }).join(', ');
 
-  if (!desc) { showToast('Description is required', 'warning'); return; }
+  // Validate mandatory action plan fields
+  var apMissing = validateActionPlanFields({ action_description: desc, owner_ids: ownerIds, due_date: dueDate });
+  if (apMissing.length > 0) { showValidationError(apMissing); return; }
 
   var btn = document.querySelector('#editAPModal .btn-primary');
-  var s = _apvSpinBtn(btn);
-
-  apiCall('updateActionPlan', { actionPlanId: apId, action_description: desc, owner_ids: ownerIds, owner_names: ownerNames, due_date: dueDate })
-    .then(function(r) {
-      s.restore();
-      bootstrap.Modal.getInstance(document.getElementById('editAPModal'))?.hide();
-      if (r && r.success) { showToast('Action plan updated', 'success'); _apvReload(); }
-      else showToast(r ? r.error || 'Update failed' : 'Failed', 'danger');
-    })
-    .catch(function(e) { s.restore(); showToast('Error: ' + (e.message || e), 'danger'); });
+  safeAction(btn, async function() {
+    var r = await apiCall('updateActionPlan', { actionPlanId: apId, action_description: desc, owner_ids: ownerIds, owner_names: ownerNames, due_date: dueDate });
+    bootstrap.Modal.getInstance(document.getElementById('editAPModal'))?.hide();
+    if (r && r.success) { showToast('Action plan updated', 'success'); _apvReload(); }
+    else showToast(r ? r.error || 'Update failed' : 'Failed', 'danger');
+  });
 }
 
 function deleteAP() {
@@ -702,12 +680,12 @@ function deleteAP() {
   if (!ap) return;
   if (!confirm('Delete action plan ' + ap.action_plan_id + '? This cannot be undone.')) return;
 
-  apiCall('deleteActionPlan', { actionPlanId: ap.action_plan_id })
-    .then(function(r) {
-      if (r && r.success) { showToast('Action plan deleted', 'success'); navigateTo('action-plans'); }
-      else showToast(r ? r.error || 'Delete failed' : 'Failed', 'danger');
-    })
-    .catch(function(e) { showToast('Error: ' + (e.message || e), 'danger'); });
+  var btn = document.querySelector('[onclick="deleteAP()"]');
+  safeAction(btn, async function() {
+    var r = await apiCall('deleteActionPlan', { actionPlanId: ap.action_plan_id });
+    if (r && r.success) { showToast('Action plan deleted', 'success'); navigateTo('action-plans'); }
+    else showToast(r ? r.error || 'Delete failed' : 'Failed', 'danger');
+  });
 }
 
 function deleteAPEvidence(evidenceId) {

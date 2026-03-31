@@ -257,8 +257,10 @@ function sendAllQueue() {
 
   if (!confirm(msg)) return;
 
-  showLoading('Sending to auditees...');
-  apiCall('batchSendToAuditees', { workPaperIds: selectedIds }).then(function(r) {
+  var btn = document.getElementById('btnSendAllQueue');
+  safeAction(btn, async function() {
+    showLoading('Sending to auditees...');
+    var r = await apiCall('batchSendToAuditees', { workPaperIds: selectedIds });
     hideLoading();
     if (r.success) {
       showToast(r.message || (r.sent + ' work papers sent'), 'success');
@@ -270,9 +272,6 @@ function sendAllQueue() {
     } else {
       showToast(r.error || 'Error sending', 'danger');
     }
-  }).catch(function(err) {
-    hideLoading();
-    showToast('Error: ' + err.message, 'danger');
   });
 }
 </script>

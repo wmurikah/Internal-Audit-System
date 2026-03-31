@@ -10,6 +10,21 @@ function createActionPlan(data, user) {
     throw new Error('Work paper ID is required');
   }
 
+  // Validate mandatory fields
+  var apMissing = [];
+  if (!data.action_description || String(data.action_description).trim() === '') {
+    apMissing.push('Action Description');
+  }
+  if (!data.owner_ids || String(data.owner_ids).trim() === '') {
+    apMissing.push('Owner');
+  }
+  if (!data.due_date) {
+    apMissing.push('Due Date');
+  }
+  if (apMissing.length > 0) {
+    throw new Error('Missing required fields: ' + apMissing.join(', '));
+  }
+
   // Validate due date: must not be more than 6 months from today
   if (data.due_date) {
     var dueDateCheck = new Date(data.due_date);
