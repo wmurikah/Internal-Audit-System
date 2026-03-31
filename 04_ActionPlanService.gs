@@ -909,42 +909,29 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
 }
 
 /**
- * Send delegation notification to the new owner(s)
+ * Queue delegation notification for batched delivery at 8 AM EAT.
+ * Instead of sending individual emails immediately, queues them for consolidated delivery.
  */
 function queueDelegationNotification(actionPlanId, actionPlan, previousVersion, delegator) {
   var ownerIds = parseIdList(actionPlan.owner_ids);
   var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
   var observationTitle = parentWp ? parentWp.observation_title : '';
-  var loginUrl = ScriptApp.getService().getUrl();
+  var riskRating = actionPlan.risk_rating || (parentWp ? parentWp.risk_rating : '');
 
   ownerIds.forEach(function(ownerId) {
     var owner = getUserById(ownerId);
     if (!owner || !owner.email || !isActive(owner.is_active)) return;
 
-    var subject = 'Action Plan Assignment — ' + (observationTitle || actionPlanId);
-    var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
-    var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
-      '<strong>' + (delegator.full_name || 'A colleague') + '</strong> has delegated the following action plan to you:';
-
-    var headers = ['Field', 'Details'];
-    var rows = [
-      ['Observation', String(observationTitle || '-')],
-      ['Action Plan', truncateWords(actionPlan.action_description || '-', 15)],
-      ['Due Date', actionPlan.due_date ? new Date(actionPlan.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'],
-      ['Status', actionPlan.status || '-'],
-      ['Delegated By', String(delegator.full_name || '-')],
-      ['Previous Owner(s)', String(previousVersion.owner_names || '-')]
-    ];
-
-    if (actionPlan.delegation_notes) {
-      rows.push(['Delegation Notes', String(actionPlan.delegation_notes)]);
-    }
-
-    var outro = loginUrl
-      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to review and take action on this plan.'
-      : 'Please log in to review and take action on this plan.';
-    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    queueBatchedDelegationNotification(owner.email, ownerId, {
+      action_plan_id: actionPlanId,
+      action_description: actionPlan.action_description || '',
+      observation_title: observationTitle,
+      due_date: actionPlan.due_date || '',
+      risk_rating: riskRating,
+      delegated_by_name: delegator.full_name || '',
+      delegation_notes: actionPlan.delegation_notes || '',
+      previous_owner_names: previousVersion.owner_names || ''
+    });
   });
 }
 
@@ -1052,16 +1039,45 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
 }
 
 function queueImplementationNotification(actionPlanId, actionPlan, implementer) {
-  const auditors = getUsersDropdown().filter(u => 
-    [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].includes(u.roleCode)
-  );
-  
-  auditors.forEach(auditor => {
-    queueTemplatedEmail('AP_IMPLEMENTED', auditor.email, auditor.id, {
-      action_plan_id: actionPlanId,
-      implementer_name: implementer.full_name || '',
-      action_description: actionPlan.action_description || ''
-    }, 'ACTION_PLAN', actionPlanId);
+  var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
+  var observationTitle = parentWp ? parentWp.observation_title : '';
+  var riskRating = actionPlan.risk_rating || (parentWp ? parentWp.risk_rating : '');
+  var apDescTruncated = truncateWords(actionPlan.action_description || '', 8);
+
+  var evidence = [];
+  try { evidence = getActionPlanEvidence(actionPlanId); } catch (e) { /* non-fatal */ }
+
+  var auditors = getUsersDropdown().filter(function(u) {
+    return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(u.roleCode) >= 0;
+  });
+
+  var loginUrl = getSystemUrl();
+  var subject = 'Action Plan Marked as Implemented: ' + (apDescTruncated || actionPlanId);
+
+  auditors.forEach(function(auditor) {
+    var firstName = auditor.name ? auditor.name.split(' ')[0] : 'Auditor';
+    var intro = 'Dear ' + firstName + ',<br><br>' +
+      '<strong>' + (implementer.full_name || 'An auditee') + '</strong> has marked the following action plan as implemented and is awaiting your verification:';
+
+    var headers = ['Field', 'Details'];
+    var rows = [
+      ['Observation', String(observationTitle || '-')],
+      ['Action Plan', truncateWords(actionPlan.action_description || '-', 15)],
+      ['Risk Rating', ratingBadge(riskRating)],
+      ['Implemented By', String(implementer.full_name || '-')],
+      ['Implementation Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
+      ['Implementation Notes', String(actionPlan.implementation_notes || '-')],
+      ['Evidence Files', String(evidence.length) + ' file(s) attached']
+    ];
+
+    var outro = loginUrl
+      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to verify this implementation.'
+      : 'Please log in to verify this implementation.';
+    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+
+    // CC audit team (deduplicated against primary recipient)
+    var ccString = buildAuditTeamCc(auditor.email);
+    sendEmail(auditor.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 
@@ -1084,8 +1100,9 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
     var owner = getUserById(ownerId);
     if (!owner || !owner.email || !isActive(owner.is_active)) return;
 
-    var actionTextMap = { 'approve': 'Verified', 'reject': 'Returned with Feedback', 'return': 'Returned for Additional Work' };
-    var subject = 'Action Plan ' + (actionTextMap[action] || actionText) + ' — Auditor Review';
+    var actionTextMap = { 'approve': 'Verified', 'reject': 'Rejected', 'return': 'Returned for Additional Work' };
+    var apDescShort = truncateWords(actionPlan.action_description || '', 8);
+    var subject = 'Action Plan ' + (actionTextMap[action] || actionText) + ': ' + (apDescShort || actionPlanId);
     var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
     var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
       'The following action plan has been <strong>' + actionText.toLowerCase() + '</strong> by ' +
@@ -1115,7 +1132,9 @@ function queueVerificationNotification(actionPlanId, actionPlan, action, verifie
     }
 
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    // CC audit team (deduplicated against primary recipient)
+    var ccString = buildAuditTeamCc(owner.email);
+    sendEmail(owner.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 

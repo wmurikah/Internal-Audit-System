@@ -188,12 +188,44 @@ function queueTemplatedEmail(templateCode, recipientEmail, recipientUserId, vari
   
   if (!template) {
     console.warn('Template not found:', templateCode);
-    // Fall back to basic notification
+    // Fall back to contextual notification based on template code and variables
+    var fallbackSubject = 'Audit System Notification';
+    var fallbackBody = 'You have a new notification in the Internal Audit System.';
+
+    if (variables) {
+      var obsTitle = variables.observation_title || '';
+      if (templateCode === 'WP_SUBMITTED' && obsTitle) {
+        fallbackSubject = 'Work Paper Submitted for Review: ' + obsTitle;
+        fallbackBody = 'Dear Colleague,\n\n' +
+          (variables.submitter_name || 'A preparer') + ' has submitted a work paper for your review.\n\n' +
+          'Observation: ' + obsTitle + '\n' +
+          'Risk Rating: ' + (variables.risk_rating || '-') + '\n' +
+          'Affiliate: ' + (variables.affiliate_name || variables.affiliate_code || '-') + '\n\n' +
+          'Please log in to review.';
+      } else if (templateCode === 'WP_STATUS_CHANGE' && obsTitle) {
+        fallbackSubject = 'Work Paper ' + (variables.new_status || 'Updated') + ': ' + obsTitle;
+        fallbackBody = 'Dear Colleague,\n\n' +
+          'The status of work paper "' + obsTitle + '" has been changed from ' +
+          (variables.previous_status || '-') + ' to ' + (variables.new_status || '-') +
+          ' by ' + (variables.reviewer_name || 'a reviewer') + '.\n\n' +
+          'Please log in to review.';
+      } else if (templateCode === 'AP_IMPLEMENTED') {
+        fallbackSubject = 'Action Plan Marked as Implemented: ' + (variables.action_description || '').substring(0, 50);
+        fallbackBody = 'Dear Colleague,\n\n' +
+          (variables.implementer_name || 'An auditee') + ' has marked an action plan as implemented and it is awaiting your verification.\n\n' +
+          'Action Plan: ' + (variables.action_description || '-') + '\n\n' +
+          'Please log in to verify.';
+      } else if (obsTitle) {
+        fallbackSubject = 'Audit Notification: ' + obsTitle;
+      }
+    }
+
     return queueEmail({
+      template_code: templateCode,
       recipient_email: recipientEmail,
       recipient_user_id: recipientUserId,
-      subject: 'Notification',
-      body: 'You have a new notification.',
+      subject: fallbackSubject,
+      body: fallbackBody,
       module: module,
       record_id: recordId
     });
@@ -314,16 +346,24 @@ function processEmailQueue() {
     const recipientEmail = row[colMap['recipient_email']];
     const subject = row[colMap['subject']];
     const body = row[colMap['body']];
+    const templateCode = row[colMap['template_code']] || '';
 
     if (!recipientEmail || !subject) continue;
 
     const rowIndex = i + 1;
     const replyTo = 'hassaudit@outlook.com';
 
+    // Determine CC: audit team CC on all notifications except welcome/password emails
+    var privateTemplates = ['WELCOME', 'PASSWORD_RESET', 'RESET_PASSWORD', 'NEW_USER'];
+    var ccString = '';
+    if (privateTemplates.indexOf(templateCode) === -1) {
+      ccString = buildAuditTeamCc(recipientEmail) || '';
+    }
+
     try {
       // Send email via unified sender (Outlook Graph API with MailApp fallback)
       const htmlBody = formatEmailHtml(subject, body);
-      const result = sendEmail(recipientEmail, subject, body, htmlBody, '', fromName, replyTo);
+      const result = sendEmail(recipientEmail, subject, body, htmlBody, ccString, fromName, replyTo);
       if (!result.success) {
         throw new Error(result.error || 'Email send failed');
       }
@@ -960,7 +1000,9 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
 '</body>' +
 '</html>';
 
-  sendEmail(auditeeEmail, subject, subject, htmlBody, ccEmails || null, 'Hass Audit', 'hassaudit@outlook.com');
+  // CC audit team + existing CC recipients (deduplicated)
+  var auditTeamCc = buildAuditTeamCc(auditeeEmail, ccEmails);
+  sendEmail(auditeeEmail, subject, subject, htmlBody, auditTeamCc, 'Hass Audit', 'hassaudit@outlook.com');
 }
 
 function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
@@ -989,7 +1031,8 @@ function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
   var outro = '<p style="color:#86868b; font-size:13px; text-align:center; font-family:system-ui,-apple-system,sans-serif;">Please ' + loginLink + ' to review and accept or reject each response.</p>';
 
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-  sendEmail(auditorEmail, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+  var ccString = buildAuditTeamCc(auditorEmail);
+  sendEmail(auditorEmail, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
 }
 
 /**
@@ -1060,7 +1103,9 @@ function sendOverdueReminders() {
       : 'Please log in and review these items and provide an update.';
     const outro = loginLink;
     const htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
-    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    // CC audit team on overdue reminders
+    var overdueCc = buildAuditTeamCc(owner.email);
+    sendEmail(owner.email, subject, subject, htmlBody, overdueCc, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
   });
 
@@ -1187,7 +1232,8 @@ function sendUpcomingDueReminders() {
       : 'Please ensure these items are completed before their due dates.';
     var outro = loginLink;
     var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
-    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    var upcomingCc = buildAuditTeamCc(owner.email);
+    sendEmail(owner.email, subject, subject, htmlBody, upcomingCc, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
   });
 
@@ -1348,8 +1394,9 @@ function sendEvidenceReminders() {
 
     var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
 
-    // NO CC on pre-due reminders (owner only)
-    sendEmail(owner.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    // CC audit team on evidence reminders
+    var evidenceCc = buildAuditTeamCc(owner.email);
+    sendEmail(owner.email, subject, subject, htmlBody, evidenceCc, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
   });
 
@@ -1514,8 +1561,9 @@ function sendOverdueEvidenceEscalation() {
 
     var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
 
-    // CC recipients from work paper brought back in for overdue escalation
-    sendEmail(owner.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
+    // CC audit team + work paper CC recipients (merged and deduplicated)
+    var escalationCc = buildAuditTeamCc(owner.email, ccString);
+    sendEmail(owner.email, subject, subject, htmlBody, escalationCc, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
   });
 
@@ -1602,7 +1650,8 @@ function sendAuditorUnsentWorkPaperNudge() {
     var outro = loginLink;
 
     var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
-    sendEmail(auditor.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    var nudgeCc = buildAuditTeamCc(auditor.email);
+    sendEmail(auditor.email, subject, subject, htmlBody, nudgeCc, 'Hass Audit', 'hassaudit@outlook.com');
     notificationCount++;
   });
 
@@ -1741,6 +1790,267 @@ function getSummaryRecipients() {
   return { success: true, recipients: props.getProperty('SUMMARY_RECIPIENTS') || '' };
 }
 
+// ─────────────────────────────────────────────────────────────
+// Audit Team CC Helper
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Get email addresses of all active audit team members (SUPER_ADMIN, SENIOR_AUDITOR, AUDITOR).
+ * Results are cached for 1 hour since the team rarely changes.
+ * @param {string} [excludeEmail] - Optional email to exclude (e.g. primary recipient to avoid duplicate)
+ * @returns {string[]} Array of email addresses
+ */
+function getAuditTeamEmails(excludeEmail) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'audit_team_emails';
+  var cached = cache.get(cacheKey);
+  var emails;
+
+  if (cached) {
+    try { emails = JSON.parse(cached); } catch (e) { emails = null; }
+  }
+
+  if (!emails) {
+    var users = getUsersDropdown();
+    var auditRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+    emails = users
+      .filter(function(u) { return auditRoles.indexOf(u.roleCode) >= 0 && u.email; })
+      .map(function(u) { return u.email.toLowerCase().trim(); });
+    // Deduplicate
+    var seen = {};
+    emails = emails.filter(function(e) {
+      if (seen[e]) return false;
+      seen[e] = true;
+      return true;
+    });
+    cache.put(cacheKey, JSON.stringify(emails), 3600);
+  }
+
+  if (excludeEmail) {
+    var excludeLower = excludeEmail.toLowerCase().trim();
+    return emails.filter(function(e) { return e !== excludeLower; });
+  }
+  return emails;
+}
+
+/**
+ * Build a CC string for audit team, excluding the primary recipient and any already-present CC emails.
+ * @param {string} primaryRecipientEmail - The To: address (excluded from CC)
+ * @param {string} [existingCc] - Existing CC string to merge with
+ * @returns {string|null} Comma-separated CC string, or null if empty
+ */
+function buildAuditTeamCc(primaryRecipientEmail, existingCc) {
+  var teamEmails = getAuditTeamEmails(primaryRecipientEmail);
+
+  // Merge with existing CC, deduplicating
+  var ccSet = {};
+  teamEmails.forEach(function(e) { ccSet[e.toLowerCase()] = e; });
+
+  if (existingCc) {
+    String(existingCc).split(',').map(function(e) { return e.trim(); }).filter(Boolean).forEach(function(e) {
+      var lower = e.toLowerCase();
+      if (lower !== (primaryRecipientEmail || '').toLowerCase()) {
+        ccSet[lower] = e;
+      }
+    });
+  }
+
+  var result = Object.values(ccSet);
+  return result.length > 0 ? result.join(',') : null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Delegation Notification Batching
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Calculate the next 8:00 AM EAT (East Africa Time, UTC+3) for batch scheduling.
+ * If current EAT time is before 8 AM, returns 8 AM today.
+ * If current EAT time is at or after 8 AM, returns 8 AM tomorrow.
+ * @returns {Date} The scheduled send time in UTC
+ */
+function getNextBatchSendTime() {
+  var now = new Date();
+  // EAT is UTC+3. 8:00 AM EAT = 5:00 AM UTC
+  var utcHour = now.getUTCHours();
+  var utcMinutes = now.getUTCMinutes();
+
+  // Current EAT hour = UTC hour + 3
+  var eatHour = utcHour + 3;
+  var isAfter8AM_EAT = (eatHour > 8) || (eatHour === 8 && utcMinutes > 0);
+
+  var sendTime = new Date(now);
+  sendTime.setUTCHours(5, 0, 0, 0); // 5:00 AM UTC = 8:00 AM EAT
+
+  if (isAfter8AM_EAT || eatHour >= 24) {
+    // Schedule for tomorrow 8 AM EAT
+    sendTime.setUTCDate(sendTime.getUTCDate() + 1);
+  }
+
+  return sendTime;
+}
+
+/**
+ * Queue a delegation notification for batched delivery at 8 AM EAT.
+ * Instead of sending immediately, stores the notification with batch metadata.
+ * @param {string} recipientEmail - Delegatee email
+ * @param {string} recipientUserId - Delegatee user ID
+ * @param {Object} batchData - AP details to include in the batched email
+ */
+function queueBatchedDelegationNotification(recipientEmail, recipientUserId, batchData) {
+  try {
+    var notificationId = generateId('NOTIFICATION');
+    var now = new Date();
+    var scheduledFor = getNextBatchSendTime();
+
+    var notification = {
+      notification_id: notificationId,
+      template_code: 'DELEGATION_BATCH',
+      recipient_user_id: recipientUserId,
+      recipient_email: recipientEmail,
+      subject: 'Action Plans Delegated to You',
+      body: '',
+      module: 'ACTION_PLAN',
+      record_id: batchData.action_plan_id || '',
+      status: STATUS.NOTIFICATION.BATCHED,
+      scheduled_for: scheduledFor,
+      sent_at: '',
+      error_message: '',
+      created_at: now,
+      batch_type: 'delegation',
+      batch_data: JSON.stringify(batchData)
+    };
+
+    syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
+    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
+  } catch (e) {
+    console.error('Failed to queue batched delegation notification:', e.message);
+  }
+}
+
+/**
+ * Process batched delegation notifications.
+ * Groups all pending delegation notifications by recipient and sends ONE consolidated email per person.
+ * Called by daily trigger at 5:00 AM UTC (8:00 AM EAT).
+ */
+function processBatchedDelegationNotifications() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    console.log('Batch delegation processor already running');
+    return { sent: 0 };
+  }
+
+  try {
+    var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+    if (!data || data.length < 2) { lock.releaseLock(); return { sent: 0 }; }
+    var headers = data[0];
+
+    var colMap = {};
+    headers.forEach(function(h, i) { colMap[h] = i; });
+
+    var now = new Date();
+    var byRecipient = {};
+    var notificationIds = {};
+
+    // Collect all batched delegation notifications that are due
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var status = row[colMap['status']];
+      var batchType = row[colMap['batch_type']];
+      var scheduledFor = row[colMap['scheduled_for']];
+
+      if (status !== STATUS.NOTIFICATION.BATCHED) continue;
+      if (batchType !== 'delegation') continue;
+      if (scheduledFor && new Date(scheduledFor) > now) continue;
+
+      var recipientEmail = row[colMap['recipient_email']];
+      var recipientUserId = row[colMap['recipient_user_id']];
+      var batchDataStr = row[colMap['batch_data']];
+      var notifId = row[colMap['notification_id']];
+
+      if (!recipientEmail) continue;
+
+      var emailKey = recipientEmail.toLowerCase();
+      if (!byRecipient[emailKey]) {
+        byRecipient[emailKey] = { email: recipientEmail, userId: recipientUserId, items: [] };
+        notificationIds[emailKey] = [];
+      }
+
+      try {
+        var batchItem = JSON.parse(batchDataStr);
+        byRecipient[emailKey].items.push(batchItem);
+      } catch (e) {
+        console.warn('Invalid batch_data for notification', notifId);
+      }
+
+      notificationIds[emailKey].push({ notifId: notifId, rowData: rowToObject(headers, data[i]) });
+    }
+
+    var sentCount = 0;
+    var systemUrl = getSystemUrl();
+
+    Object.keys(byRecipient).forEach(function(emailKey) {
+      var recipient = byRecipient[emailKey];
+      var items = recipient.items;
+      if (items.length === 0) return;
+
+      // Resolve recipient name
+      var recipientUser = getUserById(recipient.userId);
+      var recipientName = recipientUser ? (recipientUser.first_name || (recipientUser.full_name || '').split(' ')[0]) : 'Colleague';
+
+      // Build consolidated email
+      var subject = 'Action Plans Delegated to You (' + items.length + ' item' + (items.length > 1 ? 's' : '') + ')';
+      var intro = 'Dear ' + recipientName + ',<br><br>' +
+        'The following <strong>' + items.length + '</strong> action plan(s) have been delegated to you:';
+
+      var tableHeaders = ['#', 'Action Plan', 'Parent Observation', 'Delegated By', 'Due Date', 'Risk'];
+      var rows = items.map(function(item, idx) {
+        var dueStr = item.due_date
+          ? new Date(item.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '-';
+        return [
+          String(idx + 1),
+          truncateWords(item.action_description || '-', 12),
+          String(item.observation_title || '-').substring(0, 40),
+          String(item.delegated_by_name || '-'),
+          dueStr,
+          ratingBadge(item.risk_rating || '')
+        ];
+      });
+
+      var loginLink = systemUrl
+        ? 'Please <a href="' + systemUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to review and take action on these items.'
+        : 'Please log in to review and take action on these items.';
+      var outro = loginLink;
+
+      var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
+
+      // CC audit team on delegation batch emails
+      var ccString = buildAuditTeamCc(recipient.email);
+
+      sendEmail(recipient.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
+
+      // Mark all processed notifications as Sent
+      notificationIds[emailKey].forEach(function(entry) {
+        var updated = entry.rowData;
+        updated.status = STATUS.NOTIFICATION.SENT;
+        updated.sent_at = now;
+        syncToFirestore(SHEETS.NOTIFICATION_QUEUE, entry.notifId, updated);
+      });
+
+      sentCount++;
+    });
+
+    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
+    console.log('Processed batched delegation notifications. Recipients:', sentCount);
+    return { sent: sentCount };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /**
  * Setup all notification triggers (run once to configure).
  *
@@ -1776,7 +2086,8 @@ function setupNotificationTriggers() {
     'sendWeeklySummary',
     'sendBiweeklySummary',
     'weeklyReminderRunner',
-    'dailyMaintenance'
+    'dailyMaintenance',
+    'processBatchedDelegationNotifications'
   ];
 
   const triggers = ScriptApp.getProjectTriggers();
@@ -1796,6 +2107,13 @@ function setupNotificationTriggers() {
   ScriptApp.newTrigger('dailyMaintenance')
     .timeBased()
     .atHour(6)
+    .everyDays(1)
+    .create();
+
+  // Process batched delegation notifications at 5 AM UTC (8 AM EAT) daily
+  ScriptApp.newTrigger('processBatchedDelegationNotifications')
+    .timeBased()
+    .atHour(5)
     .everyDays(1)
     .create();
 

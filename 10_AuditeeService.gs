@@ -756,14 +756,12 @@ function queueResponseSubmittedNotification(workPaperId, workPaper, response, su
     return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(u.roleCode) >= 0;
   });
 
-  var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Auditee Response Received (Round ' + (response.round_number || 1) + ') \u2014 ' + (workPaper.observation_title || workPaperId);
+  var loginUrl = getSystemUrl();
+  var subject = 'Auditee Response Received: ' + (workPaper.observation_title || workPaperId);
 
-  // Collect CC emails from the work paper, removing auditor duplicates
-  var ccEmails = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean);
-  var auditorEmails = auditors.map(function(a) { return a.email; });
-  var uniqueCc = ccEmails.filter(function(e) { return auditorEmails.indexOf(e) === -1; });
-  var ccString = uniqueCc.join(',') || null;
+  // Count action plans for context
+  var apCount = 0;
+  try { apCount = getActionPlansByWorkPaperRaw(workPaperId).length; } catch (e) { /* non-fatal */ }
 
   auditors.forEach(function(auditor) {
     var firstName = auditor.name ? auditor.name.split(' ')[0] : 'Auditor';
@@ -773,28 +771,28 @@ function queueResponseSubmittedNotification(workPaperId, workPaper, response, su
     var headers = ['Field', 'Details'];
     var rows = [
       ['Observation', String(workPaper.observation_title || '-')],
-      ['Round', String(response.round_number || 1) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
-      ['Risk Rating', String(workPaper.risk_rating || '-')],
+      ['Response Round', String(response.round_number || 1) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
+      ['Risk Rating', ratingBadge(workPaper.risk_rating || '')],
       ['Submitted By', String(submitter.full_name || '-')],
-      ['Submitted Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })]
+      ['Submitted Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
+      ['Management Response', truncateWords(response.management_response || workPaper.management_response || '', 20)],
+      ['Action Plans Created', String(apCount)]
     ];
 
-    var outro = 'Please <a href="' + loginUrl + '">log in</a> to review the response and accept or reject it.';
+    var outro = loginUrl
+      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to review the response and accept or reject it.'
+      : 'Please log in to review the response and accept or reject it.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+    // CC audit team (deduplicated against primary recipient) + existing WP CC recipients
+    var ccString = buildAuditTeamCc(auditor.email, workPaper.cc_recipients);
     sendEmail(auditor.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 
 function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
   var responsibleIds = parseIdList(workPaper.responsible_ids);
-  var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Audit Response Accepted - ' + (workPaper.observation_title || workPaperId);
-
-  // Collect CC emails, removing duplicates with responsible party emails
-  var responsibleEmails = [];
-  responsibleIds.forEach(function(uid) { var u = getUserById(uid); if (u && u.email) responsibleEmails.push(u.email); });
-  var ccList = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(function(e) { return e && responsibleEmails.indexOf(e) === -1; });
-  var ccString = ccList.join(',') || null;
+  var loginUrl = getSystemUrl();
+  var subject = 'Response Accepted: ' + (workPaper.observation_title || workPaperId);
 
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
@@ -802,32 +800,33 @@ function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
 
     var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Colleague';
     var intro = 'Dear ' + firstName + ',<br><br>' +
-      'Your response to the following audit observation has been <strong>accepted</strong> by ' + (reviewer.full_name || 'the audit team') + ':';
+      'Your response to the following audit observation has been <strong>accepted</strong> by ' + (reviewer.full_name || 'the audit team') + '. ' +
+      'Action plans are now active and you may proceed with implementation.';
 
     var headers = ['Field', 'Details'];
     var rows = [
       ['Observation', String(workPaper.observation_title || '-')],
-      ['Risk Rating', String(workPaper.risk_rating || '-')],
+      ['Risk Rating', ratingBadge(workPaper.risk_rating || '')],
       ['Status', '<strong style="color:#28a745;">Response Accepted</strong>'],
-      ['Reviewed By', String(reviewer.full_name || '-')]
+      ['Reviewed By', String(reviewer.full_name || '-')],
+      ['Review Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
+      ['Next Step', 'Implement agreed action plans and upload evidence']
     ];
 
-    var outro = 'Please continue to implement the agreed action plans. You can track progress by <a href="' + loginUrl + '">logging in</a>.';
+    var outro = loginUrl
+      ? 'Please continue to implement the agreed action plans. You can track progress by <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">logging in</a>.'
+      : 'Please continue to implement the agreed action plans.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+    // CC audit team + existing WP CC recipients (deduplicated)
+    var ccString = buildAuditTeamCc(auditee.email, workPaper.cc_recipients);
     sendEmail(auditee.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 
 function queueResponseRejectedNotification(workPaperId, workPaper, comments, reviewer) {
   var responsibleIds = parseIdList(workPaper.responsible_ids);
-  var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Audit Response \u2014 Additional Information Requested (Round ' + (workPaper.response_round || 1) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS + ') \u2014 ' + (workPaper.observation_title || workPaperId);
-
-  // Collect CC emails, removing duplicates with responsible party emails
-  var responsibleEmails = [];
-  responsibleIds.forEach(function(uid) { var u = getUserById(uid); if (u && u.email) responsibleEmails.push(u.email); });
-  var ccList = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(function(e) { return e && responsibleEmails.indexOf(e) === -1; });
-  var ccString = ccList.join(',') || null;
+  var loginUrl = getSystemUrl();
+  var subject = 'Response Rejected: ' + (workPaper.observation_title || workPaperId);
 
   responsibleIds.forEach(function(userId) {
     var auditee = getUserById(userId);
@@ -835,20 +834,29 @@ function queueResponseRejectedNotification(workPaperId, workPaper, comments, rev
 
     var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Colleague';
     var remainingRounds = RESPONSE_DEFAULTS.MAX_ROUNDS - (workPaper.response_round || 0);
+    var reviewerName = (reviewer && reviewer.full_name) ? reviewer.full_name : 'the audit team';
     var intro = 'Dear ' + firstName + ',<br><br>' +
-      'The audit team has reviewed your response to the following observation and has requested additional information or clarification. Please review the feedback below and submit a revised response.' +
-      ' You have <strong>' + remainingRounds + ' round(s)</strong> remaining to submit a revised response.';
+      '<strong>' + reviewerName + '</strong> has reviewed your response and requested additional information or clarification. ' +
+      'Please review the feedback below and submit a revised response.' +
+      ' You have <strong>' + remainingRounds + ' round(s)</strong> remaining.';
 
     var headers = ['Field', 'Details'];
     var rows = [
       ['Observation', String(workPaper.observation_title || '-')],
-      ['Risk Rating', String(workPaper.risk_rating || '-')],
-      ['Status', '<strong style="color:#2563eb;">Additional Information Requested</strong>'],
-      ['Reviewer Comments', String(comments || 'No comments provided')]
+      ['Risk Rating', ratingBadge(workPaper.risk_rating || '')],
+      ['Reviewed By', String(reviewerName)],
+      ['Status', '<strong style="color:#dc2626;">Revision Required</strong>'],
+      ['Review Comments', String(comments || 'No comments provided')],
+      ['Rounds Remaining', String(remainingRounds) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
+      ['Next Step', 'Revise your response and action plans']
     ];
 
-    var outro = 'Please <a href="' + loginUrl + '">log in</a> to revise your response and action plans.';
+    var outro = loginUrl
+      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to revise your response and action plans.'
+      : 'Please log in to revise your response and action plans.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
+    // CC audit team + existing WP CC recipients
+    var ccString = buildAuditTeamCc(auditee.email, workPaper.cc_recipients);
     sendEmail(auditee.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
@@ -858,7 +866,7 @@ function queueResponseEscalatedNotification(workPaperId, workPaper, reviewer) {
   var ccEmails = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean);
   var responsibleIds = parseIdList(workPaper.responsible_ids);
 
-  var allEmails = ccEmails.slice(); // start with CC
+  var allEmails = ccEmails.slice();
   responsibleIds.forEach(function(userId) {
     var u = getUserById(userId);
     if (u && u.email && isActive(u.is_active) && allEmails.indexOf(u.email) === -1) {
@@ -866,8 +874,8 @@ function queueResponseEscalatedNotification(workPaperId, workPaper, reviewer) {
     }
   });
 
-  var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Management Attention Requested \u2014 Audit Observation: ' + (workPaper.observation_title || workPaperId);
+  var loginUrl = getSystemUrl();
+  var subject = 'Management Attention Requested: ' + (workPaper.observation_title || workPaperId);
 
   allEmails.forEach(function(email) {
     var intro = 'Dear Colleague,<br><br>' +
@@ -877,15 +885,19 @@ function queueResponseEscalatedNotification(workPaperId, workPaper, reviewer) {
     var headers = ['Field', 'Details'];
     var rows = [
       ['Observation', String(workPaper.observation_title || '-')],
-      ['Risk Rating', String(workPaper.risk_rating || '-')],
+      ['Risk Rating', ratingBadge(workPaper.risk_rating || '')],
       ['Response Rounds Used', String(workPaper.response_round || 0) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
       ['Status', '<strong style="color:#1a365d;">Referred to Management</strong>'],
       ['Escalated By', String(reviewer.full_name || '-')]
     ];
 
-    var outro = 'This observation requires management intervention. Please <a href="' + loginUrl + '">log in</a> to review the full observation and response history.';
+    var outro = loginUrl
+      ? 'This observation requires management intervention. Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to review the full observation and response history.'
+      : 'This observation requires management intervention. Please log in to review.';
     var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    sendEmail(email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    // CC audit team (deduplicated against primary recipient)
+    var ccString = buildAuditTeamCc(email, workPaper.cc_recipients);
+    sendEmail(email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
   });
 }
 
@@ -897,24 +909,30 @@ function queueDelegationRejectedNotification(actionPlanId, actionPlan, reason, r
   if (!delegator || !delegator.email || !isActive(delegator.is_active)) return;
 
   var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
-  var loginUrl = ScriptApp.getService().getUrl();
-  var subject = 'Action Plan Delegation \u2014 Reassignment Needed (' + actionPlanId + ')';
+  var loginUrl = getSystemUrl();
+  var apDescShort = truncateWords(actionPlan.action_description || '', 8);
+  var subject = 'Delegation Rejected: ' + (apDescShort || actionPlanId);
 
   var firstName = delegator.first_name || (delegator.full_name || '').split(' ')[0] || 'Colleague';
   var intro = 'Dear ' + firstName + ',<br><br>' +
-    '<strong>' + (rejector.full_name || 'The delegatee') + '</strong> has rejected the delegation of the following action plan:';
+    '<strong>' + (rejector.full_name || 'The delegatee') + '</strong> has rejected the delegation of the following action plan. Ownership has been reverted to you.';
 
   var headers = ['Field', 'Details'];
   var rows = [
     ['Observation', String((parentWp && parentWp.observation_title) || '-')],
     ['Action Plan', truncateWords(actionPlan.action_description || '-', 15)],
     ['Rejected By', String(rejector.full_name || '-')],
-    ['Reason', String(reason || '-')]
+    ['Rejection Reason', String(reason || '-')],
+    ['Next Step', 'Reassign the action plan or take action yourself']
   ];
 
-  var outro = 'Ownership has been reverted to you. Please <a href="' + loginUrl + '">log in</a> to reassign or take action.';
+  var outro = loginUrl
+    ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to reassign or take action.'
+    : 'Please log in to reassign or take action.';
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-  sendEmail(delegator.email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+  // CC audit team (deduplicated against primary recipient)
+  var ccString = buildAuditTeamCc(delegator.email);
+  sendEmail(delegator.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
 }
 
 // ─────────────────────────────────────────────────────────────

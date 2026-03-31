@@ -95,7 +95,7 @@ const SCHEMAS = {
   NOTIFICATION_QUEUE: [
     'notification_id', 'template_code', 'recipient_user_id', 'recipient_email',
     'subject', 'body', 'module', 'record_id', 'status', 'scheduled_for',
-    'sent_at', 'error_message', 'created_at'
+    'sent_at', 'error_message', 'created_at', 'batch_type', 'batch_data'
   ],
   EMAIL_TEMPLATES: ['template_code', 'template_name', 'subject_template', 'body_template', 'is_active'],
   AUDITEE_RESPONSES: [
@@ -145,7 +145,8 @@ const STATUS = {
   NOTIFICATION: {
     PENDING: 'Pending',
     SENT: 'Sent',
-    FAILED: 'Failed'
+    FAILED: 'Failed',
+    BATCHED: 'Batched'
   }
 };
 
