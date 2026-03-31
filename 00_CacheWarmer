@@ -149,7 +149,7 @@ function getDropdownDataFresh() {
  */
 function getPermissionsFresh(roleCode) {
   if (!roleCode) return {};
-  return ROLE_PERMISSIONS[roleCode] || {};
+  return ROLE_PERMISSIONS[normalizeRoleCode(roleCode)] || {};
 }
 
 function getRoleNameFresh(roleCode) {

@@ -43,7 +43,7 @@ function doGet(e) {
               role_name: roleName,
               affiliate_code: user.affiliate_code || '',
               department: user.department || '',
-              must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+              must_change_password: toBool(user.must_change_password)
             },
             permissions: JSON.parse(cachedPerm),
             dropdowns: cachedDropdowns ? JSON.parse(cachedDropdowns) : {},
@@ -1109,7 +1109,7 @@ function getInitDataOptimized(user) {
       role_name: '',
       affiliate_code: user.affiliate_code || '',
       department: user.department || '',
-      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+      must_change_password: toBool(user.must_change_password)
     },
     dropdowns: {},
     config: {
@@ -1210,7 +1210,7 @@ function getInitDataLight(user) {
       role_name: '',
       affiliate_code: user.affiliate_code || '',
       department: user.department || '',
-      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+      must_change_password: toBool(user.must_change_password)
     },
     dropdowns: {}, // Empty - will be loaded in background
     config: {

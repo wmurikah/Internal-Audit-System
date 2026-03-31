@@ -488,20 +488,31 @@ function checkPermission(roleCode, module, action) {
   };
   
   const permKey = actionMap[action];
-  return permKey ? modulePerm[permKey] === true : false;
+  return permKey ? toBool(modulePerm[permKey]) : false;
+}
+
+/**
+ * Map legacy/DB role codes to canonical ROLES constants.
+ * Handles the BOARD→BOARD_MEMBER mismatch between Firestore roles collection
+ * (role_code='BOARD') and the code constant (ROLES.BOARD_MEMBER='BOARD_MEMBER').
+ */
+function normalizeRoleCode(roleCode) {
+  if (!roleCode) return roleCode;
+  var aliases = { 'BOARD': 'BOARD_MEMBER' };
+  return aliases[roleCode] || roleCode;
 }
 
 function getPermissions(roleCode) {
   if (!roleCode) return {};
-  return ROLE_PERMISSIONS[roleCode] || {};
+  return ROLE_PERMISSIONS[normalizeRoleCode(roleCode)] || {};
 }
 
 function getRoleName(roleCode) {
   if (!roleCode) return '';
-  
+
   const cacheKey = 'role_names';
   let roleMap = Cache.get(cacheKey);
-  
+
   if (!roleMap) {
     const roles = DB.getAll('01_Roles');
     roleMap = {};
@@ -510,8 +521,9 @@ function getRoleName(roleCode) {
     });
     Cache.set(cacheKey, roleMap, CONFIG.CACHE_TTL.DROPDOWNS);
   }
-  
-  return roleMap[roleCode] || roleCode;
+
+  // Try exact match first, then normalized alias (BOARD→BOARD_MEMBER)
+  return roleMap[roleCode] || roleMap[normalizeRoleCode(roleCode)] || roleCode;
 }
 
 /**

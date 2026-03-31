@@ -745,9 +745,9 @@ function getAuditSummaryReport(filters) {
   });
   
   actionPlans.forEach(ap => {
-    // Find the work paper to get affiliate
+    // Use AP's own affiliate_code (new APs), fall back to affiliate_id, then parent WP
     const wp = workPapers.find(w => w.work_paper_id === ap.work_paper_id);
-    const code = wp ? wp.affiliate_code : 'Unknown';
+    const code = ap.affiliate_code || ap.affiliate_id || (wp ? wp.affiliate_code : '') || 'Unknown';
     
     if (!byAffiliate[code]) {
       byAffiliate[code] = {
@@ -1008,52 +1008,53 @@ function getUserPermissions(roleCode) {
   const dbPermissions = getPermissionsFresh(roleCode);
 
   // Map database permissions to UI feature flags
+  // Use toBool() to handle Firestore string booleans ('true'/'false')
   // WORK_PAPER module
   if (dbPermissions.WORK_PAPER) {
-    permissions.canCreateWorkPaper = dbPermissions.WORK_PAPER.can_create === true;
-    permissions.canViewWorkPapers = dbPermissions.WORK_PAPER.can_read === true;
-    permissions.canEditWorkPaper = dbPermissions.WORK_PAPER.can_update === true;
-    permissions.canDeleteWorkPaper = dbPermissions.WORK_PAPER.can_delete === true;
-    permissions.canApproveWorkPaper = dbPermissions.WORK_PAPER.can_approve === true;
+    permissions.canCreateWorkPaper = toBool(dbPermissions.WORK_PAPER.can_create);
+    permissions.canViewWorkPapers = toBool(dbPermissions.WORK_PAPER.can_read);
+    permissions.canEditWorkPaper = toBool(dbPermissions.WORK_PAPER.can_update);
+    permissions.canDeleteWorkPaper = toBool(dbPermissions.WORK_PAPER.can_delete);
+    permissions.canApproveWorkPaper = toBool(dbPermissions.WORK_PAPER.can_approve);
     // Review permission = approve permission for work papers
-    permissions.canReviewWorkPaper = dbPermissions.WORK_PAPER.can_approve === true;
+    permissions.canReviewWorkPaper = toBool(dbPermissions.WORK_PAPER.can_approve);
   }
 
   // ACTION_PLAN module
   if (dbPermissions.ACTION_PLAN) {
-    permissions.canCreateActionPlan = dbPermissions.ACTION_PLAN.can_create === true;
-    permissions.canViewActionPlans = dbPermissions.ACTION_PLAN.can_read === true;
-    permissions.canEditActionPlan = dbPermissions.ACTION_PLAN.can_update === true;
-    permissions.canDeleteActionPlan = dbPermissions.ACTION_PLAN.can_delete === true;
-    permissions.canVerifyActionPlan = dbPermissions.ACTION_PLAN.can_approve === true;
+    permissions.canCreateActionPlan = toBool(dbPermissions.ACTION_PLAN.can_create);
+    permissions.canViewActionPlans = toBool(dbPermissions.ACTION_PLAN.can_read);
+    permissions.canEditActionPlan = toBool(dbPermissions.ACTION_PLAN.can_update);
+    permissions.canDeleteActionPlan = toBool(dbPermissions.ACTION_PLAN.can_delete);
+    permissions.canVerifyActionPlan = toBool(dbPermissions.ACTION_PLAN.can_approve);
   }
 
   // USER module
   if (dbPermissions.USER) {
-    permissions.canManageUsers = dbPermissions.USER.can_read === true;
-    permissions.canCreateUser = dbPermissions.USER.can_create === true;
-    permissions.canEditUser = dbPermissions.USER.can_update === true;
-    permissions.canDeleteUser = dbPermissions.USER.can_delete === true;
+    permissions.canManageUsers = toBool(dbPermissions.USER.can_read);
+    permissions.canCreateUser = toBool(dbPermissions.USER.can_create);
+    permissions.canEditUser = toBool(dbPermissions.USER.can_update);
+    permissions.canDeleteUser = toBool(dbPermissions.USER.can_delete);
   }
 
   // REPORT module (legacy - maps to canViewReports for backward compat)
   if (dbPermissions.REPORT) {
-    permissions.canViewReports = dbPermissions.REPORT.can_read === true;
-    permissions.canExportData = dbPermissions.REPORT.can_export === true;
+    permissions.canViewReports = toBool(dbPermissions.REPORT.can_read);
+    permissions.canExportData = toBool(dbPermissions.REPORT.can_export);
   }
 
   // DASHBOARD module - visible to ALL users; export controlled by DB permissions
   permissions.canViewDashboard = true;
   if (dbPermissions.DASHBOARD) {
-    permissions.canExportDashboard = dbPermissions.DASHBOARD.can_export === true;
+    permissions.canExportDashboard = toBool(dbPermissions.DASHBOARD.can_export);
   } else if (dbPermissions.REPORT) {
-    permissions.canExportDashboard = dbPermissions.REPORT.can_export === true;
+    permissions.canExportDashboard = toBool(dbPermissions.REPORT.can_export);
   }
 
   // AI_ASSIST module is visible to all users by request; create controls generation
   permissions.canViewAIAssist = true;
   if (dbPermissions.AI_ASSIST) {
-    permissions.canGenerateAIInsights = dbPermissions.AI_ASSIST.can_create === true;
+    permissions.canGenerateAIInsights = toBool(dbPermissions.AI_ASSIST.can_create);
   }
 
   // AUDIT_WORKBENCH visibility is granted to all users by request
@@ -1061,8 +1062,8 @@ function getUserPermissions(roleCode) {
 
   // CONFIG module
   if (dbPermissions.CONFIG) {
-    permissions.canManageSettings = dbPermissions.CONFIG.can_update === true;
-    permissions.canManageRoles = dbPermissions.CONFIG.can_update === true;
+    permissions.canManageSettings = toBool(dbPermissions.CONFIG.can_update);
+    permissions.canManageRoles = toBool(dbPermissions.CONFIG.can_update);
   }
 
   console.log('getUserPermissions for role', roleCode, '- loaded from database');
@@ -1203,7 +1204,8 @@ function getComprehensiveReportData(filters) {
 
   actionPlans.forEach(function(ap) {
     var wp = wpLookup[ap.work_paper_id];
-    var code = wp ? (wp.affiliate_code || 'Unknown') : 'Unknown';
+    // Use AP's own affiliate_code, fall back to affiliate_id, then parent WP
+    var code = ap.affiliate_code || ap.affiliate_id || (wp ? (wp.affiliate_code || 'Unknown') : 'Unknown');
     if (!byAffiliate[code]) {
       byAffiliate[code] = {
         code: code, name: code, findings: 0, actionPlans: 0,
@@ -1254,9 +1256,10 @@ function getComprehensiveReportData(filters) {
 
   actionPlans.forEach(function(ap) {
     var wp = wpLookup[ap.work_paper_id];
-    var areaId = wp ? (wp.audit_area_id || 'Unknown') : 'Unknown';
+    // Resolve audit area from AP's own field or parent WP
+    var areaId = ap.audit_area_id || (wp ? (wp.audit_area_id || 'Unknown') : 'Unknown');
     if (!byAuditArea[areaId]) {
-      var areaName = wp ? (wp.audit_area_name || areaId) : areaId;
+      var areaName = ap.audit_area_name || (wp ? (wp.audit_area_name || areaId) : areaId);
       byAuditArea[areaId] = {
         id: areaId, name: areaName, findings: 0, actionPlans: 0,
         closedAPs: 0, overdueAPs: 0, implementationRate: 0,
@@ -1351,8 +1354,10 @@ function getComprehensiveReportData(filters) {
   });
 
   actionPlans.forEach(function(ap) {
-    var created = ap.created_at ? new Date(ap.created_at) : null;
-    if (created) {
+    // Fall back to updated_at or due_date for seed data APs with empty created_at
+    var createdStr = ap.created_at || ap.updated_at || ap.due_date;
+    var created = createdStr ? new Date(createdStr) : null;
+    if (created && !isNaN(created.getTime())) {
       months.forEach(function(m, idx) {
         if (created.getFullYear() === m.year && created.getMonth() === m.month) {
           trends.actionPlansCreated[idx]++;
@@ -1554,7 +1559,9 @@ function getDashboardDataV2(params) {
     enrichedAPs.forEach(function(ap) {
       if (ap.affiliate_code) affiliateSet[ap.affiliate_code] = true;
 
-      var d = ap.created_at ? new Date(ap.created_at) : null;
+      // Fall back to updated_at for seed data APs with empty created_at
+      var dateStr = ap.created_at || ap.updated_at || ap.due_date;
+      var d = dateStr ? new Date(dateStr) : null;
       if (d && !isNaN(d.getTime())) {
         yearSet[d.getFullYear()] = true;
         if (!earliestDate || d < earliestDate) earliestDate = d;

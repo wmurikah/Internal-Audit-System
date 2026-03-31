@@ -38,7 +38,7 @@ const SCHEMAS = {
     'risk_description', 'test_objective', 'testing_steps', 'is_active', 'display_order'
   ],
   WORK_PAPERS: [
-    'work_paper_id', 'year', 'affiliate_code', 'audit_area_id', 'sub_area_id',
+    'work_paper_id', 'year', 'affiliate_code', 'affiliate_name', 'audit_area_id', 'sub_area_id',
     'work_paper_date', 'audit_period_from', 'audit_period_to',
     'control_objectives', 'control_classification', 'control_type', 'control_frequency', 'control_standards',
     'risk_description', 'test_objective', 'testing_steps',
@@ -46,6 +46,7 @@ const SCHEMAS = {
     'management_response', 'responsible_ids', 'cc_recipients',
     'status', 'final_status', 'revision_count',
     'prepared_by_id', 'prepared_by_name', 'prepared_date',
+    'assigned_auditor_name',
     'submitted_date', 'reviewed_by_id', 'reviewed_by_name', 'review_date', 'review_comments',
     'approved_by_id', 'approved_by_name', 'approved_date', 'sent_to_auditee_date',
     'created_at', 'updated_at', 'work_paper_ref',
@@ -68,11 +69,13 @@ const SCHEMAS = {
   ACTION_PLANS: [
     'action_plan_id', 'work_paper_id', 'action_number', 'action_description',
     'owner_ids', 'owner_names', 'due_date', 'status', 'final_status',
-    'implementation_notes', 'implemented_date',
+    'implementation_notes', 'implemented_date', 'implemented_by',
     'auditor_review_status', 'auditor_review_by', 'auditor_review_date', 'auditor_review_comments',
     'hoa_review_status', 'hoa_review_by', 'hoa_review_date', 'hoa_review_comments',
     'days_overdue',
+    'affiliate_id', 'affiliate_code', 'affiliate_name', 'year',
     'delegated_by_id', 'delegated_by_name', 'delegated_date', 'delegation_notes', 'original_owner_ids',
+    'delegation_rejected', 'delegation_accepted', 'delegation_rejected_by', 'delegation_reject_reason', 'delegation_rejected_date',
     'created_at', 'created_by', 'updated_at', 'updated_by',
     'created_by_role', 'auditee_proposed', 'response_id'
   ],
@@ -626,6 +629,19 @@ function clearAllCaches() {
   return { success: true, message: 'All caches cleared' };
 }
 
+/**
+ * Coerce a value to boolean. Handles Firestore string booleans ('true'/'false'),
+ * actual booleans, and numeric 1/0.
+ */
+function toBool(value) {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    var lower = value.toLowerCase();
+    return lower === 'true' || lower === '1';
+  }
+  return false;
+}
+
 function isActive(value) {
   if (value === true || value === 1) return true;
   if (typeof value === 'string') {
@@ -1091,7 +1107,9 @@ function getColumnIndex(schemaKey, columnName) {
 function canUserPerform(user, action, entityType, entity) {
   if (!user) return false;
 
-  const roleCode = user.role_code || user.roleCode;
+  const roleCode = typeof normalizeRoleCode === 'function'
+    ? normalizeRoleCode(user.role_code || user.roleCode)
+    : (user.role_code || user.roleCode);
 
   if (roleCode === 'SUPER_ADMIN') {
     return true;
