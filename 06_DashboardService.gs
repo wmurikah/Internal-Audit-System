@@ -745,9 +745,9 @@ function getAuditSummaryReport(filters) {
   });
   
   actionPlans.forEach(ap => {
-    // Find the work paper to get affiliate
+    // Find the work paper to get affiliate (FIX-4: normalize affiliate_id vs affiliate_code)
     const wp = workPapers.find(w => w.work_paper_id === ap.work_paper_id);
-    const code = wp ? wp.affiliate_code : 'Unknown';
+    const code = ap.affiliate_code || ap.affiliate_id || (wp ? wp.affiliate_code : '') || 'Unknown';
     
     if (!byAffiliate[code]) {
       byAffiliate[code] = {
@@ -1203,7 +1203,8 @@ function getComprehensiveReportData(filters) {
 
   actionPlans.forEach(function(ap) {
     var wp = wpLookup[ap.work_paper_id];
-    var code = wp ? (wp.affiliate_code || 'Unknown') : 'Unknown';
+    // FIX-4: Normalize affiliate — AP may have affiliate_id instead of affiliate_code
+    var code = ap.affiliate_code || ap.affiliate_id || (wp ? (wp.affiliate_code || 'Unknown') : 'Unknown');
     if (!byAffiliate[code]) {
       byAffiliate[code] = {
         code: code, name: code, findings: 0, actionPlans: 0,
@@ -1254,9 +1255,10 @@ function getComprehensiveReportData(filters) {
 
   actionPlans.forEach(function(ap) {
     var wp = wpLookup[ap.work_paper_id];
-    var areaId = wp ? (wp.audit_area_id || 'Unknown') : 'Unknown';
+    // FIX-2: Use AP's own audit_area_id (denormalized) or fall back to parent WP
+    var areaId = ap.audit_area_id || (wp ? (wp.audit_area_id || 'Unknown') : 'Unknown');
     if (!byAuditArea[areaId]) {
-      var areaName = wp ? (wp.audit_area_name || areaId) : areaId;
+      var areaName = ap.audit_area_name || (wp ? (wp.audit_area_name || areaId) : areaId);
       byAuditArea[areaId] = {
         id: areaId, name: areaName, findings: 0, actionPlans: 0,
         closedAPs: 0, overdueAPs: 0, implementationRate: 0,
@@ -1524,10 +1526,16 @@ function getDashboardDataV2(params) {
       // Enrich with parent WP's affiliate_code and audit_area for client filtering
       var parentWP = wpLookup[ap.work_paper_id];
       if (parentWP) {
-        ap.affiliate_code = parentWP.affiliate_code || '';
-        ap.audit_area_id = parentWP.audit_area_id || '';
-        ap.audit_area_name = parentWP.audit_area_name || '';
-        ap.risk_rating = parentWP.risk_rating || '';
+        // FIX-4: Normalize affiliate — APs may have affiliate_id instead of affiliate_code
+        ap.affiliate_code = ap.affiliate_code || ap.affiliate_id || parentWP.affiliate_code || '';
+        ap.audit_area_id = ap.audit_area_id || parentWP.audit_area_id || '';
+        ap.audit_area_name = ap.audit_area_name || parentWP.audit_area_name || '';
+        ap.risk_rating = ap.risk_rating || parentWP.risk_rating || '';
+      } else {
+        // No parent WP found — normalize from AP's own fields
+        ap.affiliate_code = ap.affiliate_code || ap.affiliate_id || '';
+        ap.audit_area_id = ap.audit_area_id || '';
+        ap.audit_area_name = ap.audit_area_name || '';
       }
 
       return ap;
@@ -1554,7 +1562,9 @@ function getDashboardDataV2(params) {
     enrichedAPs.forEach(function(ap) {
       if (ap.affiliate_code) affiliateSet[ap.affiliate_code] = true;
 
-      var d = ap.created_at ? new Date(ap.created_at) : null;
+      // FIX-3: Fallback chain for APs with empty created_at (61% of seed data)
+      var dateStr = ap.created_at || ap.updated_at || ap.due_date;
+      var d = dateStr ? new Date(dateStr) : null;
       if (d && !isNaN(d.getTime())) {
         yearSet[d.getFullYear()] = true;
         if (!earliestDate || d < earliestDate) earliestDate = d;
