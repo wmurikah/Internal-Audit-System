@@ -167,7 +167,8 @@ const ROLES = {
 const ROLE_DISPLAY_NAMES = {
   JUNIOR_STAFF: 'Audit Client',
   UNIT_MANAGER: 'Head of Department',
-  BOARD_MEMBER: 'Board Member'
+  BOARD_MEMBER: 'Board Member',
+  BOARD: 'Board Member'
 };
 
 /**
@@ -262,6 +263,18 @@ const ROLE_PERMISSIONS = {
     CONFIG:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false}
   },
   EXTERNAL_AUDITOR: {
+    WORK_PAPER:        {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDITEE_RESPONSE:  {can_read_observation: false, can_write_mgmt_response: false, can_create_action_plan: false, can_update_action_plan: false, can_delegate: false, can_view_rounds: false, can_export: false},
+    ACTION_PLAN:       {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    USER:              {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    REPORT:            {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    DASHBOARD:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: true},
+    AI_ASSIST:         {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    AUDIT_WORKBENCH:   {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false},
+    CONFIG:            {can_create: false, can_read: false, can_update: false, can_delete: false, can_approve: false, can_export: false}
+  },
+  // Alias: Firestore stores role_code='BOARD' but code uses 'BOARD_MEMBER'. Support both.
+  BOARD: {
     WORK_PAPER:        {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
     AUDITEE_RESPONSE:  {can_read_observation: false, can_write_mgmt_response: false, can_create_action_plan: false, can_update_action_plan: false, can_delegate: false, can_view_rounds: false, can_export: false},
     ACTION_PLAN:       {can_create: false, can_read: true, can_update: false, can_delete: false, can_approve: false, can_export: false},
@@ -412,6 +425,24 @@ var ROLE_WORKFLOW_ACCESS = {
       "7_follow_up":       {access: "READ", actions: ["View completed action plans (read only)"]},
       "8_verification":    {access: "NONE", actions: ["Cannot verify"]},
       "9_reporting":       {access: "READ", actions: ["View dashboard", "Export reports"]},
+      "10_closure":        {access: "NONE", actions: ["No access"]}
+    }
+  },
+  // Alias: Firestore stores role_code='BOARD' — mirrors BOARD_MEMBER
+  BOARD: {
+    role_description: "Board member with read-only oversight access. Can view approved work papers, completed action plans, and generate board-level summary reports. Cannot modify any data.",
+    access_path: "Path 1 (Work Papers, read only)",
+    nav_sections: ["Work Papers (read only)", "Action Plans (read only)", "Board Reports", "Dashboard"],
+    stages: {
+      "1_planning":        {access: "NONE", actions: ["No access (cannot see drafts)"]},
+      "2_fieldwork":       {access: "NONE", actions: ["No access"]},
+      "3_review":          {access: "NONE", actions: ["No access"]},
+      "4_approval":        {access: "NONE", actions: ["No access"]},
+      "5_communication":   {access: "READ", actions: ["Can see work papers after they are approved or sent to auditee (read only)"]},
+      "6_auditee_response":{access: "NONE", actions: ["No access to response workflow"]},
+      "7_follow_up":       {access: "READ", actions: ["View action plans (Implemented, Verified, Closed only)", "Read only"]},
+      "8_verification":    {access: "NONE", actions: ["Cannot verify"]},
+      "9_reporting":       {access: "FULL", actions: ["Generate board reports (Word document)", "View dashboard", "Export summaries"]},
       "10_closure":        {access: "NONE", actions: ["No access"]}
     }
   }

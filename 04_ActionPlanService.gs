@@ -90,13 +90,15 @@ function createActionPlan(data, user) {
     delegated_date: '',
     delegation_notes: '',
     original_owner_ids: '',
-    created_at: now,
+    created_at: new Date().toISOString(),
     created_by: user.user_id,
     updated_at: now,
     updated_by: user.user_id,
     created_by_role: user.role_code || '',
     auditee_proposed: false,
-    response_id: data.response_id || ''
+    response_id: data.response_id || '',
+    audit_area_id: workPaper ? (workPaper.audit_area_id || '') : '',
+    affiliate_code: workPaper ? (workPaper.affiliate_code || '') : ''
   };
 
   // Write to Firestore
@@ -187,13 +189,15 @@ function createActionPlansBatch(workPaperId, plansData, user) {
       delegated_date: '',
       delegation_notes: '',
       original_owner_ids: '',
-      created_at: now,
+      created_at: new Date().toISOString(),
       created_by: user.user_id,
       updated_at: now,
       updated_by: user.user_id,
       created_by_role: user.role_code || '',
       auditee_proposed: data.auditee_proposed || false,
-      response_id: data.response_id || ''
+      response_id: data.response_id || '',
+      audit_area_id: workPaper ? (workPaper.audit_area_id || '') : '',
+      affiliate_code: workPaper ? (workPaper.affiliate_code || '') : ''
     };
 
     results.push({ actionPlanId: ids[idx], actionPlan: actionPlan });

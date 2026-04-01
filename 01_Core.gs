@@ -457,6 +457,8 @@ function logAudit(action, entityType, entityId, oldData, newData, userId) {
 }
 
 function checkPermission(roleCode, module, action) {
+  // Normalize BOARD → BOARD_MEMBER alias (Firestore stores 'BOARD')
+  if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
   const permissions = getPermissions(roleCode);
   let modulePerm = permissions[module];
 
@@ -493,12 +495,16 @@ function checkPermission(roleCode, module, action) {
 
 function getPermissions(roleCode) {
   if (!roleCode) return {};
+  // Normalize BOARD → BOARD_MEMBER alias (Firestore stores 'BOARD')
+  if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
   return ROLE_PERMISSIONS[roleCode] || {};
 }
 
 function getRoleName(roleCode) {
   if (!roleCode) return '';
-  
+  // Normalize BOARD → BOARD_MEMBER alias (Firestore stores 'BOARD')
+  if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
+
   const cacheKey = 'role_names';
   let roleMap = Cache.get(cacheKey);
   
