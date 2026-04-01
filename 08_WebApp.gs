@@ -586,7 +586,7 @@ function routeAction(action, data, user) {
 
     // ========== BOARD REPORTS ==========
     case 'generateBoardReport':
-      if (user.role_code !== ROLES.BOARD_MEMBER && user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.BOARD_MEMBER && user.role_code !== 'BOARD' && user.role_code !== ROLES.SUPER_ADMIN) {
         return { success: false, error: 'Access restricted to Board Members and Head of Internal Audit only' };
       }
       return generateBoardReport(data.filters, data.reportType, user);
