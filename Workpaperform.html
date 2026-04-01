@@ -146,6 +146,48 @@
             </div>
           </div>
 
+          <!-- Control Details Section -->
+          <h6 class="mt-4 mb-3"><i class="bi bi-shield-check text-primary me-2"></i>Control Details</h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Control Classification</label>
+              <select id="wpControlClass" class="form-select">
+                <option value="">Select...</option>
+                <option>Preventive</option>
+                <option>Detective</option>
+                <option>Corrective</option>
+                <option>Directive</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Control Type</label>
+              <select id="wpControlType" class="form-select">
+                <option value="">Select...</option>
+                <option>Manual</option>
+                <option>Automated</option>
+                <option>IT-Dependent Manual</option>
+                <option>Hybrid</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Control Frequency</label>
+              <select id="wpControlFreq" class="form-select">
+                <option value="">Select...</option>
+                <option>Ad-hoc</option>
+                <option>Daily</option>
+                <option>Weekly</option>
+                <option>Monthly</option>
+                <option>Quarterly</option>
+                <option>Semi-Annual</option>
+                <option>Annual</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Control Standards</label>
+              <textarea id="wpControlStandards" class="form-control" rows="2" placeholder="e.g., IIA Standard 2300"></textarea>
+            </div>
+          </div>
+
           <!-- Tab Navigation Buttons -->
           <div class="d-flex justify-content-between mt-4 pt-3 border-top">
             <button type="button" class="btn btn-outline-secondary" onclick="goToTab('tab-basic')">
@@ -1541,6 +1583,10 @@ function populateFormFromDraft(data) {
   if (data.test_objective) document.getElementById('wpTestObj').value = data.test_objective;
   if (data.testing_steps) document.getElementById('wpTestSteps').value = data.testing_steps;
   if (data.work_paper_ref) document.getElementById('wpWorkPaperRef').value = data.work_paper_ref;
+  if (data.control_classification) document.getElementById('wpControlClass').value = data.control_classification;
+  if (data.control_type) document.getElementById('wpControlType').value = data.control_type;
+  if (data.control_frequency) document.getElementById('wpControlFreq').value = data.control_frequency;
+  if (data.control_standards) document.getElementById('wpControlStandards').value = data.control_standards;
 
   // Update char counters
   ['wpObsDesc', 'wpRecommendation', 'wpManagementResponse'].forEach(id => {
@@ -1677,6 +1723,10 @@ function populateFormFromDraft(data) {
   if (data.test_objective) document.getElementById('wpTestObj').value = data.test_objective;
   if (data.testing_steps) document.getElementById('wpTestSteps').value = data.testing_steps;
   if (data.work_paper_ref) document.getElementById('wpWorkPaperRef').value = data.work_paper_ref;
+  if (data.control_classification) document.getElementById('wpControlClass').value = data.control_classification;
+  if (data.control_type) document.getElementById('wpControlType').value = data.control_type;
+  if (data.control_frequency) document.getElementById('wpControlFreq').value = data.control_frequency;
+  if (data.control_standards) document.getElementById('wpControlStandards').value = data.control_standards;
   updateFormProgress();
   // Update char counters
   ['wpObsDesc', 'wpRecommendation', 'wpManagementResponse'].forEach(function(id) {
@@ -1707,6 +1757,10 @@ function populateForm(wp) {
   document.getElementById('wpRecommendation').value = wp.recommendation || '';
   document.getElementById('wpManagementResponse').value = wp.management_response || '';
   document.getElementById('wpWorkPaperRef').value = wp.work_paper_ref || '';
+  document.getElementById('wpControlClass').value = wp.control_classification || '';
+  document.getElementById('wpControlType').value = wp.control_type || '';
+  document.getElementById('wpControlFreq').value = wp.control_frequency || '';
+  document.getElementById('wpControlStandards').value = wp.control_standards || '';
 
   // Populate responsible parties
   const responsibleIds = (wp.responsible_ids || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -1906,7 +1960,11 @@ function getFormData() {
     recommendation: document.getElementById('wpRecommendation').value,
     management_response: document.getElementById('wpManagementResponse').value,
     responsible_ids: document.getElementById('wpResponsibleIds').value,
-    cc_recipients: document.getElementById('wpCCRecipients').value
+    cc_recipients: document.getElementById('wpCCRecipients').value,
+    control_classification: document.getElementById('wpControlClass').value,
+    control_type: document.getElementById('wpControlType').value,
+    control_frequency: document.getElementById('wpControlFreq').value,
+    control_standards: document.getElementById('wpControlStandards').value
   };
 }
 

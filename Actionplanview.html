@@ -171,7 +171,10 @@ function renderActionPlanView() {
   el = document.getElementById('apvDueDate');
   if (el) el.textContent = ap.due_date ? formatDate(ap.due_date) : '-';
   el = document.getElementById('apvCreatedBy');
-  if (el) el.textContent = ap.created_by || '-';
+  if (el) {
+    var creator = (window.appDropdowns?.users || []).find(function(u) { return u.id === ap.created_by; });
+    el.textContent = creator ? creator.name : (ap.created_by || 'System');
+  }
   el = document.getElementById('apvCreatedDate');
   if (el) el.textContent = ap.created_at ? formatDate(ap.created_at) : '-';
   el = document.getElementById('apvAffiliate');

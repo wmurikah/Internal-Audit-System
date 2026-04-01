@@ -997,7 +997,7 @@ function sendBatchedAuditeeNotifications(workPapers) {
       byAuditee[userId].push(wp);
     });
     // Collect CC emails from each work paper
-    String(wp.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean).forEach(function(email) {
+    String(wp.cc_recipients || '').split(/[,\n\r]+/).map(function(e) { return e.trim(); }).filter(Boolean).forEach(function(email) {
       allCcEmails[email] = true;
     });
   });

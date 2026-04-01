@@ -158,7 +158,7 @@ function getAuditeeResponseData(workPaperId, user) {
 
   if (isSuperAdmin) {
     canEditResponse = true; // SUPER_ADMIN can always edit
-  } else if (isAssigned && editableStatuses.includes(currentResponseStatus)) {
+  } else if ((isAssigned || isDelegatedOwner) && editableStatuses.includes(currentResponseStatus)) {
     canEditResponse = true;
   }
 
