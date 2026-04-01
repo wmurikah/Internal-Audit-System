@@ -48,6 +48,7 @@ const SCHEMAS = {
     'prepared_by_id', 'prepared_by_name', 'prepared_date',
     'submitted_date', 'reviewed_by_id', 'reviewed_by_name', 'review_date', 'review_comments',
     'approved_by_id', 'approved_by_name', 'approved_date', 'sent_to_auditee_date',
+    'assigned_auditor_name', 'affiliate_name',
     'created_at', 'updated_at', 'work_paper_ref',
     'response_status', 'response_deadline', 'response_round',
     'response_submitted_by', 'response_submitted_date',
@@ -68,12 +69,14 @@ const SCHEMAS = {
   ACTION_PLANS: [
     'action_plan_id', 'work_paper_id', 'action_number', 'action_description',
     'owner_ids', 'owner_names', 'due_date', 'status', 'final_status',
-    'implementation_notes', 'implemented_date',
+    'implementation_notes', 'implemented_date', 'implemented_by',
     'auditor_review_status', 'auditor_review_by', 'auditor_review_date', 'auditor_review_comments',
     'hoa_review_status', 'hoa_review_by', 'hoa_review_date', 'hoa_review_comments',
     'days_overdue',
     'delegated_by_id', 'delegated_by_name', 'delegated_date', 'delegation_notes', 'original_owner_ids',
+    'delegation_rejected', 'delegation_accepted', 'delegation_rejected_by', 'delegation_reject_reason', 'delegation_rejected_date',
     'created_at', 'created_by', 'updated_at', 'updated_by',
+    'affiliate_id', 'affiliate_name', 'year', 'audit_area_id',
     'created_by_role', 'auditee_proposed', 'response_id'
   ],
   AP_EVIDENCE: [

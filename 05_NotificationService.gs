@@ -83,7 +83,7 @@ function sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails) {
   };
 
   if (ccEmails) {
-    var ccList = String(ccEmails).split(',').map(function(e) {
+    var ccList = String(ccEmails).split(/[,\n\r]+/).map(function(e) {
       return { emailAddress: { address: e.trim() } };
     }).filter(function(e) { return e.emailAddress.address; });
     if (ccList.length > 0) {

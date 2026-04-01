@@ -653,7 +653,7 @@ function renderUsers() {
     <tr>
       <td>${escapeHtml(u.full_name || '-')}</td>
       <td>${escapeHtml(u.email || '-')}</td>
-      <td><span class="badge bg-secondary">${escapeHtml(u.role_code || '-')}</span></td>
+      <td><span class="badge bg-secondary">${escapeHtml((window.appDropdowns?.roles || []).find(r => r.code === u.role_code)?.name || u.role_code || '-')}</span></td>
       <td>${u.affiliate_code || '-'}</td>
       <td><span class="badge ${(u.is_active === true || String(u.is_active) === 'true') ? 'bg-success' : 'bg-secondary'}">${(u.is_active === true || String(u.is_active) === 'true') ? 'Active' : 'Inactive'}</span></td>
       <td class="small text-muted">${u.last_login ? formatDate(u.last_login) : 'Never'}</td>
