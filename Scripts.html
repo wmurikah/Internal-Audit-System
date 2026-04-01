@@ -473,6 +473,7 @@ function loadSidebarCountsBackground() {
   apiCall('getSidebarCounts', {})
     .then(result => {
       if (result && result.success) {
+        window._sidebarCounts = result;
         updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
         window.loadingState.sidebarCounts = true;
         var respBadge = document.getElementById('responsesReviewCount');
@@ -493,6 +494,10 @@ function loadSidebarCountsBackground() {
               navigateTo('auditee-findings');
             }
           }
+        }
+        // Trigger dashboard alert if on reports page
+        if (typeof showDashboardActionAlert === 'function') {
+          showDashboardActionAlert();
         }
       }
     })
@@ -824,6 +829,11 @@ function setupNavigation(p) {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
     document.getElementById('navQuickStats')?.classList.add('d-none');
   }
+  // SENIOR_MGMT: always hide Audit Workbench regardless of permissions
+  if (role === 'SENIOR_MGMT') {
+    document.getElementById('navAuditWorkbench')?.classList.add('d-none');
+    document.getElementById('navQuickStats')?.classList.add('d-none');
+  }
 
   // Auditee section: show My Observations for auditee-type roles
   var auditeeRoles = ['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'];
@@ -849,7 +859,7 @@ function setupNavigation(p) {
   }
 
   // Board Reports: visible only for BOARD_MEMBER/BOARD and SUPER_ADMIN
-  var boardReportRoles = ['BOARD_MEMBER', 'BOARD', 'SUPER_ADMIN'];
+  var boardReportRoles = ['BOARD_MEMBER', 'BOARD', 'SUPER_ADMIN', 'SENIOR_MGMT'];
   if (boardReportRoles.indexOf(role) === -1) {
     document.getElementById('navBoardReports')?.classList.add('d-none');
   }
@@ -939,8 +949,8 @@ function navigateTo(page, params, updateHash = true) {
     navigateTo('work-papers', {}, false);
     return;
   }
-  // Board Reports: only OBSERVER/BOARD and SUPER_ADMIN
-  if (page === 'board-reports' && userRole !== 'BOARD_MEMBER' && userRole !== 'BOARD' && userRole !== 'SUPER_ADMIN') {
+  // Board Reports: OBSERVER/BOARD, SUPER_ADMIN, and SENIOR_MGMT
+  if (page === 'board-reports' && userRole !== 'BOARD_MEMBER' && userRole !== 'BOARD' && userRole !== 'SUPER_ADMIN' && userRole !== 'SENIOR_MGMT') {
     showToast('You do not have access to this page', 'danger');
     navigateTo(getDefaultPage(), {}, false);
     return;

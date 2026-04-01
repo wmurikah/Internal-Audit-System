@@ -1,5 +1,25 @@
 <!-- Dashboard Page - Redesigned Internal Audit Reporting Module (V2) -->
+<style>
+  @keyframes pulseAlert { 0% { opacity: 1; } 50% { opacity: 0.85; } 100% { opacity: 1; } }
+  #actionRequiredAlert { animation: pulseAlert 2s ease-in-out infinite; }
+  #actionRequiredAlert .alert-line { margin-bottom: 2px; }
+  #actionRequiredAlert .alert-link { font-weight: 500; text-decoration: none; }
+  #actionRequiredAlert .alert-link:hover { text-decoration: underline; }
+</style>
 <div class="reports-page">
+
+  <!-- Action Required Alert (populated dynamically) -->
+  <div id="actionRequiredAlert" class="alert alert-warning border-start border-4 border-warning shadow-sm mb-3" style="display:none;">
+    <div class="d-flex align-items-start">
+      <i class="bi bi-exclamation-triangle-fill text-warning me-3" style="font-size:1.5rem"></i>
+      <div class="flex-grow-1">
+        <strong class="d-block mb-1">Action Required</strong>
+        <div id="alertLines"></div>
+        <div class="mt-2" id="alertLinks"></div>
+      </div>
+      <button type="button" class="btn-close ms-auto" onclick="this.closest('#actionRequiredAlert').style.display='none'"></button>
+    </div>
+  </div>
 
   <!-- Filter Bar -->
   <div class="card mb-3">
@@ -260,6 +280,79 @@ var currentReportTab = 'overview';
 
 function loadReports() {
   loadDashboardV2();
+  showDashboardActionAlert();
+}
+
+/**
+ * Show Action Required alert on Dashboard for users with pending items.
+ * Uses sidebar counts (myOverdue, pendingReview) and cached initData (pendingFindings).
+ * Roles: JUNIOR_STAFF, UNIT_MANAGER, SENIOR_MGMT see observations/overdue.
+ * Auditor roles (SUPER_ADMIN, SENIOR_AUDITOR) see pending WP reviews.
+ * BOARD_MEMBER, BOARD, EXTERNAL_AUDITOR: no alert.
+ */
+function showDashboardActionAlert() {
+  var alertEl = document.getElementById('actionRequiredAlert');
+  if (!alertEl) return;
+
+  var role = window.currentUser?.role_code || '';
+  var noAlertRoles = ['BOARD_MEMBER', 'BOARD', 'EXTERNAL_AUDITOR'];
+  if (noAlertRoles.includes(role)) {
+    alertEl.style.display = 'none';
+    return;
+  }
+
+  var counts = window._sidebarCounts || {};
+  var cached = typeof LocalStore !== 'undefined' ? LocalStore.get('initData') : null;
+  var findings = (cached && cached.pendingFindings) ? cached.pendingFindings : {};
+
+  var pendingObs = findings.pendingResponse || 0;
+  var rejectedObs = findings.rejected || 0;
+  var myOverdue = counts.myOverdue || 0;
+  var pendingReview = counts.pendingReview || 0;
+
+  var lines = [];
+  var links = [];
+
+  var auditeeRoles = ['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'];
+  var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR'];
+
+  if (auditeeRoles.includes(role)) {
+    if (pendingObs > 0) {
+      lines.push('You have <strong>' + pendingObs + '</strong> new audit observation(s) requiring your response.');
+      links.push('<a href="#" class="alert-link text-warning" onclick="navigateTo(\'auditee-findings\'); return false;">View Observations &rarr;</a>');
+    }
+    if (rejectedObs > 0) {
+      lines.push('You have <strong>' + rejectedObs + '</strong> rejected response(s) requiring revision.');
+      links.push('<a href="#" class="alert-link text-warning" onclick="navigateTo(\'auditee-findings\'); return false;">View Rejected &rarr;</a>');
+    }
+    if (myOverdue > 0) {
+      lines.push('You have <strong>' + myOverdue + '</strong> overdue action plan(s) past their due date.');
+      links.push('<a href="#" class="alert-link text-warning" onclick="navigateTo(\'action-plans-overdue\'); return false;">View Overdue &rarr;</a>');
+    }
+  }
+
+  if (auditorRoles.includes(role)) {
+    if (pendingReview > 0) {
+      lines.push('You have <strong>' + pendingReview + '</strong> work paper(s) awaiting your review.');
+      links.push('<a href="#" class="alert-link text-warning" onclick="navigateTo(\'pending-review\'); return false;">View Pending Review &rarr;</a>');
+    }
+    // Auditors may also have overdue APs
+    if (myOverdue > 0) {
+      lines.push('You have <strong>' + myOverdue + '</strong> overdue action plan(s) past their due date.');
+      links.push('<a href="#" class="alert-link text-warning" onclick="navigateTo(\'action-plans-overdue\'); return false;">View Overdue &rarr;</a>');
+    }
+  }
+
+  if (lines.length === 0) {
+    alertEl.style.display = 'none';
+    return;
+  }
+
+  var linesEl = document.getElementById('alertLines');
+  var linksEl = document.getElementById('alertLinks');
+  if (linesEl) linesEl.innerHTML = lines.map(function(l) { return '<div class="alert-line">' + l + '</div>'; }).join('');
+  if (linksEl) linksEl.innerHTML = links.filter(function(v, i, a) { return a.indexOf(v) === i; }).join(' &nbsp;|&nbsp; ');
+  alertEl.style.display = '';
 }
 
 function loadDashboardV2() {
