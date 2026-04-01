@@ -162,7 +162,12 @@
     <div class="col-lg-8">
       <div class="card shadow-sm">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-          <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Report Preview</h5>
+          <div>
+            <h5 class="mb-0 d-inline"><i class="bi bi-file-earmark-text me-2"></i>Report Preview</h5>
+            <button class="btn btn-outline-secondary btn-sm ms-2 d-none" id="btnPrintPreview" onclick="printPreview()">
+              <i class="bi bi-printer me-1"></i>Print
+            </button>
+          </div>
           <span class="text-muted small" id="reportPreviewStatus">Select filters and click Preview</span>
         </div>
         <div class="card-body" id="reportPreviewBody" style="min-height: 400px;">
@@ -344,6 +349,7 @@ function previewBoardReport() {
       var html = renderBoardReportPreview(workPapers, actionPlans, config.reportType);
       previewBody.innerHTML = html;
       previewStatus.textContent = workPapers.length + ' observations, ' + actionPlans.length + ' action plans';
+      document.getElementById('btnPrintPreview').classList.remove('d-none');
     })
     .catch(function(err) {
       previewBody.innerHTML = '<div class="alert alert-danger">Error: ' + (err.message || err) + '</div>';
@@ -355,10 +361,14 @@ function renderBoardReportPreview(workPapers, actionPlans, reportType) {
   var today = new Date();
   today.setHours(0, 0, 0, 0);
   var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+  var riskOrder = { Extreme: 0, High: 1, Medium: 2, Low: 3 };
 
-  // Stats
-  var stats = { total: workPapers.length, aps: actionPlans.length, risk: { Extreme: 0, High: 0, Medium: 0, Low: 0 }, overdue: 0, implemented: 0 };
-  workPapers.forEach(function(wp) { if (stats.risk[wp.risk_rating] !== undefined) stats.risk[wp.risk_rating]++; });
+  // Compute stats
+  var stats = { total: workPapers.length, aps: actionPlans.length, risk: { Extreme: 0, High: 0, Medium: 0, Low: 0 }, statusDist: {}, overdue: 0, implemented: 0 };
+  workPapers.forEach(function(wp) {
+    if (stats.risk[wp.risk_rating] !== undefined) stats.risk[wp.risk_rating]++;
+    stats.statusDist[wp.status] = (stats.statusDist[wp.status] || 0) + 1;
+  });
   actionPlans.forEach(function(ap) {
     if (ap.status === 'Implemented' || ap.status === 'Verified') stats.implemented++;
     if (ap.due_date && closedStatuses.indexOf(ap.status) === -1) {
@@ -368,88 +378,216 @@ function renderBoardReportPreview(workPapers, actionPlans, reportType) {
   });
   var implRate = stats.aps > 0 ? Math.round((stats.implemented / stats.aps) * 100) : 0;
 
+  // Helper: risk badge
   var riskBadge = function(r) {
-    var colors = { Extreme: 'danger', High: 'warning text-dark', Medium: 'info', Low: 'secondary' };
-    return '<span class="badge bg-' + (colors[r] || 'secondary') + '">' + r + '</span>';
+    var colors = { Extreme: '#8b0000', High: '#dc3545', Medium: '#ffc107', Low: '#28a745' };
+    var textColor = (r === 'Medium') ? '#000' : '#fff';
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;background:' + (colors[r] || '#6c757d') + ';color:' + textColor + ';">' + (r || 'N/A') + '</span>';
   };
 
-  var html = '';
+  // Helper: status badge
+  var statusBadge = function(s) {
+    var colors = { 'Implemented': '#28a745', 'Verified': '#155724', 'In Progress': '#007bff', 'Pending': '#ffc107', 'Not Due': '#6c757d', 'Overdue': '#dc3545', 'Closed': '#343a40', 'Rejected': '#6c757d', 'Not Implemented': '#dc3545', 'Draft': '#adb5bd', 'Approved': '#28a745', 'Sent to Auditee': '#17a2b8', 'Submitted': '#007bff' };
+    var bg = colors[s] || '#6c757d';
+    var textColor = (s === 'Pending') ? '#000' : '#fff';
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;background:' + bg + ';color:' + textColor + ';">' + (s || 'N/A') + '</span>';
+  };
 
-  // Executive Summary (shown for all types)
-  html += '<div class="mb-4">';
-  html += '<h5 style="color:#1A365D;border-bottom:2px solid #C9A83E;padding-bottom:8px;">Executive Summary</h5>';
-  html += '<div class="row g-3 mb-3">';
-  html += '<div class="col-md-3"><div class="card border-0 bg-light text-center p-3"><h3 class="mb-0">' + stats.total + '</h3><small class="text-muted">Observations</small></div></div>';
-  html += '<div class="col-md-3"><div class="card border-0 bg-light text-center p-3"><h3 class="mb-0">' + stats.aps + '</h3><small class="text-muted">Action Plans</small></div></div>';
-  html += '<div class="col-md-3"><div class="card border-0 bg-light text-center p-3"><h3 class="mb-0 text-danger">' + stats.overdue + '</h3><small class="text-muted">Overdue</small></div></div>';
-  html += '<div class="col-md-3"><div class="card border-0 bg-light text-center p-3"><h3 class="mb-0">' + implRate + '%</h3><small class="text-muted">Implementation</small></div></div>';
+  // Helper: impl rate color
+  var implRateColor = function(rate) {
+    if (rate >= 70) return '#28a745';
+    if (rate >= 40) return '#ffc107';
+    return '#dc3545';
+  };
+
+  // Helper: section heading
+  var sectionHeading = function(title) {
+    return '<h5 style="color:#1a365d;border-bottom:2px solid #C9A83E;padding-bottom:8px;margin-top:24px;margin-bottom:16px;">' + title + '</h5>';
+  };
+
+  // Helper: styled table
+  var tableStart = function(headers) {
+    var h = '<div class="table-responsive"><table class="table table-sm table-bordered" style="font-size:0.82rem;"><thead><tr style="background:#1a365d;color:#fff;">';
+    headers.forEach(function(col) { h += '<th style="padding:6px 8px;white-space:nowrap;">' + col + '</th>'; });
+    h += '</tr></thead><tbody>';
+    return h;
+  };
+  var tableEnd = '</tbody></table></div>';
+
+  // Build filter summary line
+  var config = getBoardReportFilters();
+  var filterParts = [];
+  if (config.filters.dateFrom && config.filters.dateTo) filterParts.push('Period: ' + config.filters.dateFrom + ' — ' + config.filters.dateTo);
+  else if (config.filters.dateFrom) filterParts.push('From: ' + config.filters.dateFrom);
+  else if (config.filters.dateTo) filterParts.push('To: ' + config.filters.dateTo);
+  filterParts.push('Affiliate: ' + (config.filters.affiliate === 'All' ? 'All' : config.filters.affiliate));
+  if (config.filters.riskRatings && config.filters.riskRatings.length < 4) filterParts.push('Risk: ' + config.filters.riskRatings.join(', '));
+
+  var reportLabels = { executive: 'Executive Summary', detailed: 'Detailed Observations', 'action-tracker': 'Action Plan Tracker', overdue: 'Overdue & At-Risk' };
+
+  var html = '<div id="reportPreviewContent">';
+  // Report header
+  html += '<div style="text-align:center;margin-bottom:20px;">';
+  html += '<h4 style="color:#1a365d;margin-bottom:4px;">Hass Petroleum Group — Internal Audit Report</h4>';
+  html += '<h5 style="color:#C9A83E;margin-bottom:4px;">' + (reportLabels[reportType] || 'Report') + '</h5>';
+  html += '<p class="text-muted small mb-0">Generated: ' + today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' | ' + filterParts.join(' | ') + '</p>';
   html += '</div>';
-  html += '<div class="d-flex gap-3 flex-wrap">';
-  html += '<span>' + riskBadge('Extreme') + ' ' + stats.risk.Extreme + '</span>';
-  html += '<span>' + riskBadge('High') + ' ' + stats.risk.High + '</span>';
-  html += '<span>' + riskBadge('Medium') + ' ' + stats.risk.Medium + '</span>';
-  html += '<span>' + riskBadge('Low') + ' ' + stats.risk.Low + '</span>';
-  html += '</div></div>';
 
-  if (reportType === 'executive') return html;
+  // ─── EXECUTIVE SUMMARY ───
+  if (reportType === 'executive') {
+    // Section 1: Summary Cards
+    html += sectionHeading('Summary');
+    html += '<div class="row g-3 mb-4">';
+    var cards = [
+      { label: 'Total Observations', value: stats.total, color: '#1a365d' },
+      { label: 'Total Action Plans', value: stats.aps, color: '#C9A83E' },
+      { label: 'Implementation Rate', value: implRate + '%', color: implRateColor(implRate) },
+      { label: 'Overdue Items', value: stats.overdue, color: stats.overdue > 0 ? '#dc3545' : '#28a745' }
+    ];
+    cards.forEach(function(c) {
+      html += '<div class="col-md-3 col-6"><div class="card border-0 text-center p-3" style="background:#f8f9fa;">';
+      html += '<h3 class="mb-0" style="color:' + c.color + ';">' + c.value + '</h3>';
+      html += '<small class="text-muted">' + c.label + '</small></div></div>';
+    });
+    html += '</div>';
 
-  // Detailed Observations
+    // Section 2: Risk Distribution Table
+    html += sectionHeading('Risk Distribution');
+    var totalRisk = stats.risk.Extreme + stats.risk.High + stats.risk.Medium + stats.risk.Low;
+    html += tableStart(['Risk Rating', 'Count', '% of Total']);
+    ['Extreme', 'High', 'Medium', 'Low'].forEach(function(r) {
+      var pct = totalRisk > 0 ? Math.round((stats.risk[r] / totalRisk) * 100) : 0;
+      html += '<tr><td>' + riskBadge(r) + '</td><td>' + stats.risk[r] + '</td><td>' + pct + '%</td></tr>';
+    });
+    html += tableEnd;
+
+    // Section 3: Implementation Status Table
+    html += sectionHeading('Implementation Status');
+    var apStatusDist = {};
+    actionPlans.forEach(function(ap) { apStatusDist[ap.status || 'Unknown'] = (apStatusDist[ap.status || 'Unknown'] || 0) + 1; });
+    html += tableStart(['Status', 'Count', '% of Total']);
+    Object.keys(apStatusDist).sort().forEach(function(s) {
+      var pct = stats.aps > 0 ? Math.round((apStatusDist[s] / stats.aps) * 100) : 0;
+      html += '<tr><td>' + statusBadge(s) + '</td><td>' + apStatusDist[s] + '</td><td>' + pct + '%</td></tr>';
+    });
+    html += tableEnd;
+
+    // Section 4: By Affiliate Table
+    html += sectionHeading('By Affiliate');
+    var affMap = {};
+    workPapers.forEach(function(wp) {
+      var aff = wp.affiliate_name || wp.affiliate_code || 'Unknown';
+      if (!affMap[aff]) affMap[aff] = { obs: 0, aps: 0, impl: 0, overdue: 0 };
+      affMap[aff].obs++;
+    });
+    actionPlans.forEach(function(ap) {
+      var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === ap.work_paper_id; });
+      var aff = parentWp ? (parentWp.affiliate_name || parentWp.affiliate_code || 'Unknown') : 'Unknown';
+      if (!affMap[aff]) affMap[aff] = { obs: 0, aps: 0, impl: 0, overdue: 0 };
+      affMap[aff].aps++;
+      if (ap.status === 'Implemented' || ap.status === 'Verified') affMap[aff].impl++;
+      if (ap.due_date && closedStatuses.indexOf(ap.status) === -1) {
+        var due = new Date(ap.due_date); due.setHours(0,0,0,0);
+        if (due < today) affMap[aff].overdue++;
+      }
+    });
+    var affKeys = Object.keys(affMap).sort(function(a, b) { return affMap[b].obs - affMap[a].obs; });
+    html += tableStart(['Affiliate', 'Observations', 'Action Plans', 'Implemented', 'Overdue', 'Impl. Rate']);
+    affKeys.forEach(function(aff) {
+      var d = affMap[aff];
+      var rate = d.aps > 0 ? Math.round((d.impl / d.aps) * 100) : 0;
+      html += '<tr><td class="fw-semibold">' + aff + '</td><td>' + d.obs + '</td><td>' + d.aps + '</td><td>' + d.impl + '</td><td>' + (d.overdue > 0 ? '<span class="text-danger fw-bold">' + d.overdue + '</span>' : '0') + '</td>';
+      html += '<td style="color:' + implRateColor(rate) + ';font-weight:600;">' + rate + '%</td></tr>';
+    });
+    html += tableEnd;
+
+    // Section 5: By Audit Area Table
+    html += sectionHeading('By Audit Area');
+    var areaMap = {};
+    workPapers.forEach(function(wp) {
+      var area = wp.audit_area_name || wp.audit_area_id || 'Unknown';
+      if (!areaMap[area]) areaMap[area] = { obs: 0, aps: 0, impl: 0 };
+      areaMap[area].obs++;
+    });
+    actionPlans.forEach(function(ap) {
+      var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === ap.work_paper_id; });
+      var area = parentWp ? (parentWp.audit_area_name || parentWp.audit_area_id || 'Unknown') : 'Unknown';
+      if (!areaMap[area]) areaMap[area] = { obs: 0, aps: 0, impl: 0 };
+      areaMap[area].aps++;
+      if (ap.status === 'Implemented' || ap.status === 'Verified') areaMap[area].impl++;
+    });
+    var areaKeys = Object.keys(areaMap).sort(function(a, b) { return areaMap[b].obs - areaMap[a].obs; });
+    html += tableStart(['Audit Area', 'Observations', 'Action Plans', 'Impl. Rate']);
+    areaKeys.forEach(function(area) {
+      var d = areaMap[area];
+      var rate = d.aps > 0 ? Math.round((d.impl / d.aps) * 100) : 0;
+      html += '<tr><td class="fw-semibold">' + area + '</td><td>' + d.obs + '</td><td>' + d.aps + '</td>';
+      html += '<td style="color:' + implRateColor(rate) + ';font-weight:600;">' + rate + '%</td></tr>';
+    });
+    html += tableEnd;
+
+    html += '</div>';
+    return html;
+  }
+
+  // ─── DETAILED OBSERVATIONS ───
   if (reportType === 'detailed') {
-    // Sort by risk severity: Extreme first, then High, Medium, Low
-    var riskOrder = { Extreme: 0, High: 1, Medium: 2, Low: 3 };
     var sortedWPs = workPapers.slice().sort(function(a, b) {
       var ra = riskOrder[a.risk_rating] !== undefined ? riskOrder[a.risk_rating] : 99;
       var rb = riskOrder[b.risk_rating] !== undefined ? riskOrder[b.risk_rating] : 99;
       if (ra !== rb) return ra - rb;
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
-    html += '<h5 style="color:#1A365D;border-bottom:2px solid #C9A83E;padding-bottom:8px;">Observations</h5>';
+
+    html += sectionHeading('Detailed Observations (' + sortedWPs.length + ')');
     if (sortedWPs.length === 0) {
       html += '<p class="text-muted">No observations match the selected filters.</p>';
+    } else {
+      html += tableStart(['#', 'Risk', 'Observation Title', 'Affiliate', 'Audit Area', 'Status', 'Response Status', 'APs', 'Overdue APs', 'Recommendation']);
+      sortedWPs.forEach(function(wp, i) {
+        var wpAps = actionPlans.filter(function(ap) { return ap.work_paper_id === wp.work_paper_id; });
+        var overdueApCount = wpAps.filter(function(ap) {
+          if (!ap.due_date || closedStatuses.indexOf(ap.status) >= 0) return false;
+          var due = new Date(ap.due_date); due.setHours(0,0,0,0);
+          return due < today;
+        }).length;
+        var desc = (wp.observation_description || '').substring(0, 150);
+        var rec = (wp.recommendation || 'N/A').substring(0, 200);
+        if ((wp.recommendation || '').length > 200) rec += '...';
+        var responseStatus = wp.response_status || wp.auditee_response_status || 'N/A';
+        html += '<tr>';
+        html += '<td>' + (i + 1) + '</td>';
+        html += '<td>' + riskBadge(wp.risk_rating) + '</td>';
+        html += '<td><strong>' + (wp.observation_title || 'Untitled') + '</strong>';
+        if (desc) html += '<br><small class="text-muted">' + desc + '</small>';
+        html += '</td>';
+        html += '<td>' + (wp.affiliate_name || wp.affiliate_code || 'N/A') + '</td>';
+        html += '<td>' + (wp.audit_area_name || wp.audit_area_id || 'N/A') + '</td>';
+        html += '<td>' + statusBadge(wp.status) + '</td>';
+        html += '<td>' + statusBadge(responseStatus) + '</td>';
+        html += '<td>' + wpAps.length + '</td>';
+        html += '<td>' + (overdueApCount > 0 ? '<span class="text-danger fw-bold">' + overdueApCount + '</span>' : '0') + '</td>';
+        html += '<td style="max-width:200px;"><small>' + rec + '</small></td>';
+        html += '</tr>';
+      });
+      html += tableEnd;
     }
-    sortedWPs.forEach(function(wp, i) {
-      var wpAps = actionPlans.filter(function(ap) { return ap.work_paper_id === wp.work_paper_id; });
-      var overdueApCount = wpAps.filter(function(ap) {
-        if (!ap.due_date || closedStatuses.indexOf(ap.status) >= 0) return false;
-        var due = new Date(ap.due_date); due.setHours(0,0,0,0);
-        return due < today;
-      }).length;
-      html += '<div class="card mb-3 border-start border-3" style="border-color:#1A365D !important;">';
-      html += '<div class="card-body">';
-      html += '<h6>' + (i + 1) + '. ' + (wp.observation_title || 'Untitled') + ' ' + riskBadge(wp.risk_rating) + ' <span class="badge bg-secondary">' + (wp.status || '') + '</span>';
-      if (overdueApCount > 0) html += ' <span class="badge bg-danger">' + overdueApCount + ' overdue AP' + (overdueApCount > 1 ? 's' : '') + '</span>';
-      html += '</h6>';
-      html += '<p class="small text-muted mb-1"><strong>Affiliate:</strong> ' + (wp.affiliate_name || wp.affiliate_code || 'N/A') + ' | <strong>Audit Area:</strong> ' + (wp.audit_area_name || wp.audit_area_id || 'N/A') + '</p>';
-      html += '<p class="small mb-1">' + (wp.observation_description || 'No description').substring(0, 300) + '</p>';
-      html += '<p class="small mb-0"><strong>Recommendation:</strong> ' + (wp.recommendation || 'N/A').substring(0, 200) + '</p>';
 
-      if (wpAps.length > 0) {
-        html += '<div class="mt-2"><small class="fw-bold" style="color:#C9A83E;">Action Plans (' + wpAps.length + '):</small>';
-        html += '<table class="table table-sm table-bordered mt-1" style="font-size:0.8rem;"><thead class="table-dark"><tr><th>#</th><th>Description</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>';
-        wpAps.forEach(function(ap, j) {
-          html += '<tr><td>' + (j + 1) + '</td><td>' + (ap.action_description || '').substring(0, 100) + '</td><td>' + (ap.owner_names || 'N/A') + '</td><td>' + (ap.due_date || 'N/A') + '</td><td>' + (ap.status || 'N/A') + '</td></tr>';
-        });
-        html += '</tbody></table></div>';
-      }
-      html += '</div></div>';
-    });
+    html += '</div>';
     return html;
   }
 
-  // Action Plan Tracker — grouped by parent observation, sorted by risk severity
+  // ─── ACTION PLAN TRACKER ───
   if (reportType === 'action-tracker') {
-    html += '<h5 style="color:#1A365D;border-bottom:2px solid #C9A83E;padding-bottom:8px;">Action Plan Tracker</h5>';
+    html += sectionHeading('Action Plan Tracker');
     if (actionPlans.length === 0) {
       html += '<p class="text-muted">No action plans match the selected filters.</p>';
     } else {
-      // Group APs by work_paper_id
       var apGroups = {};
       actionPlans.forEach(function(ap) {
         if (!apGroups[ap.work_paper_id]) apGroups[ap.work_paper_id] = [];
         apGroups[ap.work_paper_id].push(ap);
       });
-      // Sort groups by risk severity of parent WP
-      var riskOrder = { Extreme: 0, High: 1, Medium: 2, Low: 3 };
       var groupKeys = Object.keys(apGroups).sort(function(a, b) {
         var wpA = workPapers.find(function(wp) { return wp.work_paper_id === a; });
         var wpB = workPapers.find(function(wp) { return wp.work_paper_id === b; });
@@ -457,92 +595,213 @@ function renderBoardReportPreview(workPapers, actionPlans, reportType) {
         var rb = wpB ? (riskOrder[wpB.risk_rating] !== undefined ? riskOrder[wpB.risk_rating] : 99) : 99;
         return ra - rb;
       });
-      groupKeys.forEach(function(wpId) {
+      groupKeys.forEach(function(wpId, gi) {
         var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === wpId; });
         var groupAps = apGroups[wpId].sort(function(a, b) {
           return new Date(a.due_date || '9999') - new Date(b.due_date || '9999');
         });
-        html += '<div class="mb-3"><h6 class="mt-3" style="color:#1A365D;">' + (parentWp ? (parentWp.observation_title || 'N/A') : 'N/A') + ' ' + (parentWp ? riskBadge(parentWp.risk_rating) : '') + '</h6>';
-        html += '<table class="table table-sm table-bordered table-hover" style="font-size:0.85rem;"><thead class="table-dark"><tr><th>Action Plan</th><th>Owner</th><th>Due Date</th><th>Days Overdue</th><th>Status</th><th>Notes</th></tr></thead><tbody>';
-        groupAps.forEach(function(ap) {
-          var daysOverdue = ap.days_overdue || 0;
-          var overdueCell = daysOverdue > 0 ? '<span class="text-danger fw-bold">' + daysOverdue + '</span>' : (daysOverdue === 0 ? '-' : '<span class="text-success">' + Math.abs(daysOverdue) + ' days left</span>');
-          html += '<tr><td>' + (ap.action_description || 'N/A').substring(0, 80) + '</td>';
+        // Group header
+        html += '<div class="card mb-3"><div class="card-header py-2" style="background:#f0f4f8;border-left:4px solid #1a365d;">';
+        html += '<strong>' + (parentWp ? (parentWp.observation_title || 'N/A') : 'N/A') + '</strong> ';
+        html += (parentWp ? riskBadge(parentWp.risk_rating) : '') + ' ';
+        html += '<small class="text-muted ms-2">' + (parentWp ? (parentWp.affiliate_name || parentWp.affiliate_code || '') : '') + '</small> ';
+        html += (parentWp ? statusBadge(parentWp.status) : '');
+        html += '</div><div class="card-body p-0">';
+        html += tableStart(['#', 'Action Description', 'Owner', 'Due Date', 'Status', 'Days Overdue', 'Impl. Notes']);
+        groupAps.forEach(function(ap, j) {
+          var daysOverdue = 0;
+          var overdueCell = '-';
+          if (ap.due_date && closedStatuses.indexOf(ap.status) === -1) {
+            var due = new Date(ap.due_date); due.setHours(0,0,0,0);
+            daysOverdue = Math.floor((today - due) / (1000 * 60 * 60 * 24));
+            if (daysOverdue > 0) overdueCell = '<span class="text-danger fw-bold">' + daysOverdue + '</span>';
+            else if (daysOverdue < 0) overdueCell = '<span class="text-success">' + Math.abs(daysOverdue) + ' days left</span>';
+            else overdueCell = '<span class="text-warning">Due today</span>';
+          } else if (closedStatuses.indexOf(ap.status) >= 0) {
+            overdueCell = '-';
+          }
+          var notes = (ap.implementation_notes || '').substring(0, 100);
+          if ((ap.implementation_notes || '').length > 100) notes += '...';
+          html += '<tr>';
+          html += '<td>' + (j + 1) + '</td>';
+          html += '<td>' + (ap.action_description || 'N/A').substring(0, 120) + '</td>';
           html += '<td>' + (ap.owner_names || 'N/A') + '</td>';
-          html += '<td>' + (ap.due_date || 'N/A') + '</td>';
+          html += '<td style="white-space:nowrap;">' + (ap.due_date || 'N/A') + '</td>';
+          html += '<td>' + statusBadge(ap.status) + '</td>';
           html += '<td>' + overdueCell + '</td>';
-          html += '<td>' + (ap.status || 'N/A') + '</td>';
-          html += '<td>' + (ap.implementation_notes ? 'Yes' : 'No') + '</td></tr>';
+          html += '<td><small>' + (notes || '-') + '</small></td>';
+          html += '</tr>';
         });
-        html += '</tbody></table></div>';
+        html += tableEnd;
+        html += '</div></div>';
       });
     }
+
+    html += '</div>';
     return html;
   }
 
-  // Overdue & At-Risk
+  // ─── OVERDUE & AT-RISK ───
   if (reportType === 'overdue') {
-    html += '<h5 style="color:#1A365D;border-bottom:2px solid #C9A83E;padding-bottom:8px;">Overdue & At-Risk Items</h5>';
     var fourteenDays = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
-    var overdueAndAtRisk = actionPlans.filter(function(ap) {
-      if (!ap.due_date || closedStatuses.indexOf(ap.status) >= 0) return false;
+
+    // Separate overdue vs at-risk
+    var overdueItems = [];
+    var atRiskItems = [];
+    var totalDaysOverdue = 0;
+    actionPlans.forEach(function(ap) {
+      if (!ap.due_date || closedStatuses.indexOf(ap.status) >= 0) return;
       var due = new Date(ap.due_date); due.setHours(0,0,0,0);
-      return due < fourteenDays; // includes overdue (past today) and at-risk (within 14 days)
+      var daysOver = Math.floor((today - due) / (1000 * 60 * 60 * 24));
+      if (daysOver > 0) {
+        overdueItems.push({ ap: ap, daysOverdue: daysOver });
+        totalDaysOverdue += daysOver;
+      } else if (due < fourteenDays) {
+        atRiskItems.push({ ap: ap, daysUntilDue: Math.abs(daysOver) });
+      }
     });
-    // Sort by days overdue descending (most overdue first)
-    overdueAndAtRisk.sort(function(a, b) {
-      var dueA = new Date(a.due_date);
-      var dueB = new Date(b.due_date);
-      return dueA - dueB; // earliest due date first = most overdue first
-    });
-    if (overdueAndAtRisk.length === 0) {
-      html += '<p class="text-muted">No overdue or at-risk action plans found.</p>';
+    // Sort overdue by days descending, at-risk by due date ascending
+    overdueItems.sort(function(a, b) { return b.daysOverdue - a.daysOverdue; });
+    atRiskItems.sort(function(a, b) { return a.daysUntilDue - b.daysUntilDue; });
+
+    var avgDaysOverdue = overdueItems.length > 0 ? Math.round(totalDaysOverdue / overdueItems.length) : 0;
+
+    // Section 1: Summary Cards
+    html += sectionHeading('Summary');
+    html += '<div class="row g-3 mb-4">';
+    html += '<div class="col-md-4"><div class="card border-0 text-center p-3" style="background:#f8d7da;">';
+    html += '<h3 class="mb-0 text-danger">' + overdueItems.length + '</h3><small class="text-muted">Total Overdue</small></div></div>';
+    html += '<div class="col-md-4"><div class="card border-0 text-center p-3" style="background:#fff3cd;">';
+    html += '<h3 class="mb-0" style="color:#856404;">' + atRiskItems.length + '</h3><small class="text-muted">At-Risk (due within 14 days)</small></div></div>';
+    html += '<div class="col-md-4"><div class="card border-0 text-center p-3" style="background:#f8f9fa;">';
+    html += '<h3 class="mb-0" style="color:#1a365d;">' + avgDaysOverdue + '</h3><small class="text-muted">Avg Days Overdue</small></div></div>';
+    html += '</div>';
+
+    // Section 2: Overdue Items Table
+    html += sectionHeading('Overdue Items (' + overdueItems.length + ')');
+    if (overdueItems.length === 0) {
+      html += '<p class="text-muted">No overdue action plans found.</p>';
     } else {
-      html += '<table class="table table-sm table-bordered" style="font-size:0.85rem;"><thead style="background:#DC3545;color:#fff;"><tr><th>Observation</th><th>Risk</th><th>Affiliate</th><th>Action Plan</th><th>Owner</th><th>Due Date</th><th>Days Overdue</th><th>Status</th><th>Type</th></tr></thead><tbody>';
-      overdueAndAtRisk.forEach(function(ap) {
+      html += '<div class="table-responsive"><table class="table table-sm table-bordered" style="font-size:0.82rem;"><thead><tr style="background:#dc3545;color:#fff;">';
+      html += '<th style="padding:6px 8px;">Type</th><th style="padding:6px 8px;">Description</th><th style="padding:6px 8px;">Owner</th><th style="padding:6px 8px;">Affiliate</th><th style="padding:6px 8px;">Risk</th><th style="padding:6px 8px;">Due Date</th><th style="padding:6px 8px;">Days Overdue</th><th style="padding:6px 8px;">Status</th>';
+      html += '</tr></thead><tbody>';
+      overdueItems.forEach(function(item) {
+        var ap = item.ap;
         var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === ap.work_paper_id; });
-        var due = new Date(ap.due_date); due.setHours(0,0,0,0);
-        var daysOverdue = Math.floor((today - due) / (1000 * 60 * 60 * 24));
-        var itemType = daysOverdue > 0 ? 'Overdue' : 'At Risk';
-        var rowClass = daysOverdue > 0 ? ' class="table-danger"' : ' class="table-warning"';
-        html += '<tr' + rowClass + '><td>' + (parentWp ? (parentWp.observation_title || 'N/A').substring(0, 50) : 'N/A') + '</td>';
-        html += '<td>' + (parentWp ? riskBadge(parentWp.risk_rating) : 'N/A') + '</td>';
-        html += '<td>' + (ap.affiliate_code || (parentWp ? parentWp.affiliate_code : '') || 'N/A') + '</td>';
-        html += '<td>' + (ap.action_description || 'N/A').substring(0, 60) + '</td>';
+        html += '<tr class="table-danger">';
+        html += '<td><span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:0.7rem;background:#6c757d;color:#fff;">Action Plan</span></td>';
+        html += '<td>' + (ap.action_description || 'N/A').substring(0, 80) + '</td>';
         html += '<td>' + (ap.owner_names || 'N/A') + '</td>';
-        html += '<td>' + (ap.due_date || 'N/A') + '</td>';
-        html += '<td class="fw-bold">' + (daysOverdue > 0 ? '<span class="text-danger">' + daysOverdue + '</span>' : '<span class="text-warning">' + daysOverdue + '</span>') + '</td>';
-        html += '<td>' + (ap.status || 'N/A') + '</td>';
-        html += '<td><span class="badge bg-' + (daysOverdue > 0 ? 'danger' : 'warning text-dark') + '">' + itemType + '</span></td></tr>';
+        html += '<td>' + (parentWp ? (parentWp.affiliate_name || parentWp.affiliate_code || 'N/A') : 'N/A') + '</td>';
+        html += '<td>' + (parentWp ? riskBadge(parentWp.risk_rating) : 'N/A') + '</td>';
+        html += '<td style="white-space:nowrap;">' + (ap.due_date || 'N/A') + '</td>';
+        html += '<td class="text-danger fw-bold">' + item.daysOverdue + '</td>';
+        html += '<td>' + statusBadge(ap.status) + '</td>';
+        html += '</tr>';
       });
-      html += '</tbody></table>';
+      html += '</tbody></table></div>';
     }
+
+    // Section 3: At-Risk Items Table
+    html += sectionHeading('At-Risk Items — Due Within 14 Days (' + atRiskItems.length + ')');
+    if (atRiskItems.length === 0) {
+      html += '<p class="text-muted">No at-risk action plans found.</p>';
+    } else {
+      html += '<div class="table-responsive"><table class="table table-sm table-bordered" style="font-size:0.82rem;"><thead><tr style="background:#ffc107;color:#000;">';
+      html += '<th style="padding:6px 8px;">Type</th><th style="padding:6px 8px;">Description</th><th style="padding:6px 8px;">Owner</th><th style="padding:6px 8px;">Affiliate</th><th style="padding:6px 8px;">Risk</th><th style="padding:6px 8px;">Due Date</th><th style="padding:6px 8px;">Days Until Due</th><th style="padding:6px 8px;">Status</th>';
+      html += '</tr></thead><tbody>';
+      atRiskItems.forEach(function(item) {
+        var ap = item.ap;
+        var parentWp = workPapers.find(function(wp) { return wp.work_paper_id === ap.work_paper_id; });
+        html += '<tr class="table-warning">';
+        html += '<td><span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:0.7rem;background:#6c757d;color:#fff;">Action Plan</span></td>';
+        html += '<td>' + (ap.action_description || 'N/A').substring(0, 80) + '</td>';
+        html += '<td>' + (ap.owner_names || 'N/A') + '</td>';
+        html += '<td>' + (parentWp ? (parentWp.affiliate_name || parentWp.affiliate_code || 'N/A') : 'N/A') + '</td>';
+        html += '<td>' + (parentWp ? riskBadge(parentWp.risk_rating) : 'N/A') + '</td>';
+        html += '<td style="white-space:nowrap;">' + (ap.due_date || 'N/A') + '</td>';
+        html += '<td class="fw-bold" style="color:#856404;">' + item.daysUntilDue + '</td>';
+        html += '<td>' + statusBadge(ap.status) + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    html += '</div>';
     return html;
   }
 
+  html += '</div>';
   return html;
 }
 
 function downloadBoardReport() {
   var config = getBoardReportFilters();
-
-  showLoading('Generating Word document...');
+  var btn = document.querySelector('button[onclick="downloadBoardReport()"]');
+  var origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating report...';
 
   apiCall('generateBoardReport', { filters: config.filters, reportType: config.reportType })
     .then(function(result) {
-      hideLoading();
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
       if (result && result.success) {
-        showToast('Report generated successfully! Starting download...', 'success');
-        if (result.downloadUrl) {
+        if (typeof showToast === 'function') showToast('Report generated! Starting download...', 'success');
+        if (result.base64) {
+          // Download from base64 data
+          var blob = b64toBlob(result.base64, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = result.fileName || 'Audit_Report.docx';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } else if (result.downloadUrl) {
           window.open(result.downloadUrl, '_blank');
         }
       } else {
-        showToast('Failed to generate report: ' + (result ? result.error : 'Unknown error'), 'danger');
+        if (typeof showToast === 'function') showToast('Failed to generate report: ' + (result ? result.error : 'Unknown error'), 'danger');
       }
     })
     .catch(function(err) {
-      hideLoading();
-      showToast('Error generating report: ' + (err.message || err), 'danger');
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+      if (typeof showToast === 'function') showToast('Error generating report: ' + (err.message || err), 'danger');
     });
+}
+
+function b64toBlob(b64Data, contentType) {
+  contentType = contentType || '';
+  var byteCharacters = atob(b64Data);
+  var byteArrays = [];
+  for (var offset = 0; offset < byteCharacters.length; offset += 512) {
+    var slice = byteCharacters.slice(offset, offset + 512);
+    var byteNumbers = new Array(slice.length);
+    for (var i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    byteArrays.push(new Uint8Array(byteNumbers));
+  }
+  return new Blob(byteArrays, { type: contentType });
+}
+
+function printPreview() {
+  var content = document.getElementById('reportPreviewContent');
+  if (!content) {
+    if (typeof showToast === 'function') showToast('Please preview a report first', 'warning');
+    return;
+  }
+  var printWin = window.open('', '_blank');
+  printWin.document.write('<html><head><title>Print Report</title>');
+  printWin.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">');
+  printWin.document.write('<style>body{padding:20px;font-family:Calibri,Arial,sans-serif;} @media print{.no-print{display:none;}}</style>');
+  printWin.document.write('</head><body>');
+  printWin.document.write(content.innerHTML);
+  printWin.document.write('</body></html>');
+  printWin.document.close();
+  printWin.onload = function() { printWin.print(); };
 }
 </script>
