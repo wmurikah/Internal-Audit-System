@@ -1410,6 +1410,8 @@ function getComprehensiveReportData(filters) {
   return sanitizeForClient({
     generatedAt: new Date(),
     filters: filters,
+    workPapers: workPapers,
+    actionPlans: actionPlans,
     executive: {
       totalFindings: totalFindings,
       totalActionPlans: totalAPs,

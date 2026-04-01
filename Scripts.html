@@ -705,7 +705,85 @@ function setupNavigation(p) {
     return;
   }
 
-  // All visibility is now driven by DB permissions (no hardcoded role arrays)
+  // ── BOARD_MEMBER / BOARD: restricted sidebar ──
+  // Shows: Dashboard, All Action Plans, Overdue, Audit Reports, AI Assist
+  // Hides: Audit Workbench, Work Papers, My APs, My Observations, Admin
+  if (role === 'BOARD_MEMBER' || role === 'BOARD') {
+    // Show allowed items
+    document.getElementById('navReports')?.classList.remove('d-none');
+    document.getElementById('navBoardReports')?.classList.remove('d-none');
+    document.getElementById('navInsightsSection')?.classList.remove('d-none');
+    document.getElementById('navAnalytics')?.classList.remove('d-none');
+
+    // Hide Audit Workbench & Quick Stats
+    document.getElementById('navAuditWorkbench')?.classList.add('d-none');
+    document.getElementById('navQuickStats')?.classList.add('d-none');
+    document.getElementById('navAuditMgmtSection')?.classList.add('d-none');
+
+    // Hide entire Work Papers section
+    document.getElementById('navWorkPapersMenu')?.classList.add('d-none');
+    document.getElementById('navMyWorkPapers')?.classList.add('d-none');
+    document.getElementById('navNewWorkPaper')?.classList.add('d-none');
+    document.getElementById('navPendingReview')?.classList.add('d-none');
+    document.getElementById('navSendQueue')?.classList.add('d-none');
+    document.getElementById('navResponsesReview')?.classList.add('d-none');
+
+    // Hide My Action Plans (keep All APs and Overdue visible)
+    document.getElementById('navMyActionPlans')?.classList.add('d-none');
+
+    // Hide My Observations / Auditee section
+    document.getElementById('navAuditeeSection')?.classList.add('d-none');
+    document.getElementById('navAuditeeMenu')?.classList.add('d-none');
+
+    // Hide Administration
+    document.getElementById('navAdminSection')?.classList.add('d-none');
+    document.getElementById('navUsers')?.classList.add('d-none');
+    document.getElementById('navSettings')?.classList.add('d-none');
+    return;
+  }
+
+  // ── EXTERNAL_AUDITOR: restricted sidebar ──
+  // Shows: Dashboard, All Work Papers (read-only), All Action Plans (read-only), AI Assist
+  // Hides: Audit Workbench, My WPs, New WP, Pending Review, Send Queue, Responses,
+  //        My APs, Overdue, My Observations, Audit Reports, Admin
+  if (role === 'EXTERNAL_AUDITOR') {
+    // Show allowed items
+    document.getElementById('navReports')?.classList.remove('d-none');
+    document.getElementById('navInsightsSection')?.classList.remove('d-none');
+    document.getElementById('navAnalytics')?.classList.remove('d-none');
+    document.getElementById('navWorkPapersMenu')?.classList.remove('d-none');
+
+    // Hide Audit Workbench & Quick Stats
+    document.getElementById('navAuditWorkbench')?.classList.add('d-none');
+    document.getElementById('navQuickStats')?.classList.add('d-none');
+    document.getElementById('navAuditMgmtSection')?.classList.add('d-none');
+
+    // Work Papers: show All WPs only, hide the rest
+    document.getElementById('navMyWorkPapers')?.classList.add('d-none');
+    document.getElementById('navNewWorkPaper')?.classList.add('d-none');
+    document.getElementById('navPendingReview')?.classList.add('d-none');
+    document.getElementById('navSendQueue')?.classList.add('d-none');
+    document.getElementById('navResponsesReview')?.classList.add('d-none');
+
+    // Action Plans: show All APs only, hide My APs and Overdue
+    document.getElementById('navMyActionPlans')?.classList.add('d-none');
+    document.getElementById('navOverdueItem')?.classList.add('d-none');
+
+    // Hide My Observations / Auditee section
+    document.getElementById('navAuditeeSection')?.classList.add('d-none');
+    document.getElementById('navAuditeeMenu')?.classList.add('d-none');
+
+    // Hide Audit Reports (board-only)
+    document.getElementById('navBoardReports')?.classList.add('d-none');
+
+    // Hide Administration
+    document.getElementById('navAdminSection')?.classList.add('d-none');
+    document.getElementById('navUsers')?.classList.add('d-none');
+    document.getElementById('navSettings')?.classList.add('d-none');
+    return;
+  }
+
+  // ── All other roles: permission-driven visibility ──
 
   // Work Paper creation
   if (!p || !p.canCreateWorkPaper) {
@@ -734,8 +812,6 @@ function setupNavigation(p) {
     document.getElementById('navAnalytics')?.classList.add('d-none');
   }
 
-  // Insights section header is always visible since Dashboard is always visible
-
   // User Management & Settings: SUPER_ADMIN only
   if (role !== 'SUPER_ADMIN') {
     document.getElementById('navUsers')?.classList.add('d-none');
@@ -754,22 +830,17 @@ function setupNavigation(p) {
   if (auditeeRoles.includes(role)) {
     document.getElementById('navAuditeeSection')?.classList.remove('d-none');
     document.getElementById('navAuditeeMenu')?.classList.remove('d-none');
-    // Load auditee finding counts for badge
     loadAuditeeFindingCounts();
   } else {
     document.getElementById('navAuditeeSection')?.classList.add('d-none');
     document.getElementById('navAuditeeMenu')?.classList.add('d-none');
   }
 
-  // ── PROB-06: Role-based sidebar visibility ──
-
-  // A) Work Papers sidebar: only auditor roles + Board Member (view-only)
+  // Work Papers sidebar: only auditor roles
   var wpFullRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
-  var wpViewOnlyRoles = ['BOARD_MEMBER', 'BOARD']; // Board Member — WP list only (Firestore may store either code)
-
-  if (wpFullRoles.indexOf(role) === -1 && wpViewOnlyRoles.indexOf(role) === -1) {
-    // Non-auditor, non-Board Member: hide entire WP section
+  if (wpFullRoles.indexOf(role) === -1) {
     document.getElementById('navAuditMgmtSection')?.classList.add('d-none');
+    document.getElementById('navWorkPapersMenu')?.classList.add('d-none');
     document.getElementById('navMyWorkPapers')?.classList.add('d-none');
     document.getElementById('navNewWorkPaper')?.classList.add('d-none');
     document.getElementById('navPendingReview')?.classList.add('d-none');
@@ -777,23 +848,7 @@ function setupNavigation(p) {
     document.getElementById('navResponsesReview')?.classList.add('d-none');
   }
 
-  if (wpViewOnlyRoles.indexOf(role) >= 0) {
-    // Board Member: show WP list only, hide Create/Review/Send/Responses
-    document.getElementById('navNewWorkPaper')?.classList.add('d-none');
-    document.getElementById('navPendingReview')?.classList.add('d-none');
-    document.getElementById('navSendQueue')?.classList.add('d-none');
-    document.getElementById('navResponsesReview')?.classList.add('d-none');
-  }
-
-  // B) My Observations: visible only for auditee roles + SUPER_ADMIN (HOA oversight)
-  var myObsRoles = ['SUPER_ADMIN', 'SENIOR_MGMT', 'UNIT_MANAGER', 'JUNIOR_STAFF'];
-  if (myObsRoles.indexOf(role) === -1) {
-    // Hide My Observations for: AUDITOR, SENIOR_AUDITOR, OBSERVER (Board), EXTERNAL_AUDITOR
-    document.getElementById('navAuditeeSection')?.classList.add('d-none');
-    document.getElementById('navAuditeeMenu')?.classList.add('d-none');
-  }
-
-  // C) Board Reports: visible only for OBSERVER (Board Member) and SUPER_ADMIN
+  // Board Reports: visible only for BOARD_MEMBER/BOARD and SUPER_ADMIN
   var boardReportRoles = ['BOARD_MEMBER', 'BOARD', 'SUPER_ADMIN'];
   if (boardReportRoles.indexOf(role) === -1) {
     document.getElementById('navBoardReports')?.classList.add('d-none');
