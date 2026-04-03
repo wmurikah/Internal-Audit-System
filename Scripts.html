@@ -724,7 +724,7 @@ function setupNavigation(p) {
     document.getElementById('navAdminSection')?.classList.remove('d-none');
     document.getElementById('navUsers')?.classList.remove('d-none');
     document.getElementById('navSettings')?.classList.remove('d-none');
-    document.getElementById('navQuickStats')?.classList.remove('d-none');
+
     document.getElementById('navNewWorkPaper')?.classList.remove('d-none');
     document.getElementById('navMyWorkPapers')?.classList.remove('d-none');
     document.getElementById('navPendingReview')?.classList.remove('d-none');
@@ -745,9 +745,8 @@ function setupNavigation(p) {
     document.getElementById('navInsightsSection')?.classList.remove('d-none');
     document.getElementById('navAnalytics')?.classList.remove('d-none');
 
-    // Hide Audit Workbench & Quick Stats
+    // Hide Audit Workbench
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
-    document.getElementById('navQuickStats')?.classList.add('d-none');
     document.getElementById('navAuditMgmtSection')?.classList.add('d-none');
 
     // Hide entire Work Papers section
@@ -783,9 +782,8 @@ function setupNavigation(p) {
     document.getElementById('navAnalytics')?.classList.remove('d-none');
     document.getElementById('navWorkPapersMenu')?.classList.remove('d-none');
 
-    // Hide Audit Workbench & Quick Stats
+    // Hide Audit Workbench
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
-    document.getElementById('navQuickStats')?.classList.add('d-none');
     document.getElementById('navAuditMgmtSection')?.classList.add('d-none');
 
     // Work Papers: show All WPs only, hide the rest
@@ -849,15 +847,13 @@ function setupNavigation(p) {
     document.getElementById('navAdminSection')?.classList.add('d-none');
   }
 
-  // Audit Workbench & Quick Stats - driven by AUDIT_WORKBENCH module permission
+  // Audit Workbench - driven by AUDIT_WORKBENCH module permission
   if (!p || !p.canViewAuditWorkbench) {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
-    document.getElementById('navQuickStats')?.classList.add('d-none');
   }
   // SENIOR_MGMT & UNIT_MANAGER: always hide Audit Workbench regardless of permissions
   if (role === 'SENIOR_MGMT' || role === 'UNIT_MANAGER') {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
-    document.getElementById('navQuickStats')?.classList.add('d-none');
   }
 
   // Auditee section: show My Observations for auditee-type roles
@@ -1749,16 +1745,12 @@ function exportToCSV(data, filename) {
   link.click();
 }
 
-// Update sidebar quick stats badges
+// Update sidebar badge counts
 function updateQuickStats(pending, overdue, approvedQueue) {
-  const pendingEl = document.getElementById('quickStatPending');
-  const overdueEl = document.getElementById('quickStatOverdue');
   const pendingReviewCount = document.getElementById('pendingReviewCount');
   const overdueCount = document.getElementById('overdueCount');
   const sendQueueCount = document.getElementById('sendQueueCount');
 
-  if (pendingEl) pendingEl.textContent = pending || 0;
-  if (overdueEl) overdueEl.textContent = overdue || 0;
   if (pendingReviewCount) pendingReviewCount.textContent = pending || 0;
   if (overdueCount) overdueCount.textContent = overdue || 0;
   if (sendQueueCount) {
