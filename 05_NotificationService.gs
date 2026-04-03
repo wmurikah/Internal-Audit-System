@@ -1,5 +1,124 @@
 // 05_NotificationService.gs - Email Queue, Templates, Reminders, Alerts
 
+// ─────────────────────────────────────────────────────────────
+// Notification Type Constants
+// ─────────────────────────────────────────────────────────────
+
+var NOTIFICATION_TYPES = {
+  WP_ASSIGNMENT: 'WP_ASSIGNMENT',           // HOA assigns auditor to WP
+  WP_CHANGE: 'WP_CHANGE',                   // HOA edits an assigned WP
+  WP_SUBMITTED: 'WP_SUBMITTED',             // Auditor submits WP for review
+  WP_REVIEWED: 'WP_REVIEWED',               // HOA approves or returns WP
+  WP_SENT_TO_AUDITEE: 'WP_SENT_TO_AUDITEE', // WP sent to auditee (URGENT)
+  WP_CHANGE_REQUEST: 'WP_CHANGE_REQUEST',   // Auditor requests field change from HOA
+  RESPONSE_SUBMITTED: 'RESPONSE_SUBMITTED', // Auditee submits response
+  RESPONSE_REVIEWED: 'RESPONSE_REVIEWED',   // Auditor/HOA reviews response
+  AP_DELEGATED: 'AP_DELEGATED',             // AP owner delegates to someone
+  AP_DELEGATION_RESPONSE: 'AP_DELEGATION_RESPONSE', // Delegatee accepts/rejects
+  AP_IMPLEMENTED: 'AP_IMPLEMENTED',         // Owner marks AP implemented
+  AP_VERIFIED: 'AP_VERIFIED',               // Auditor verifies AP
+  AP_HOA_REVIEWED: 'AP_HOA_REVIEWED',       // HOA final review of AP
+  STALE_REMINDER: 'STALE_REMINDER',         // 3-day stale assignment reminder
+  OVERDUE_REMINDER: 'OVERDUE_REMINDER'      // Escalating overdue AP reminder
+};
+
+// ─────────────────────────────────────────────────────────────
+// Universal Queue Notification Function
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Session-level cache for user email lookups to avoid repeated Firestore reads.
+ * @type {Object.<string, string>}
+ */
+var _userEmailCache = {};
+
+/**
+ * Universal notification queue function. ALL notifications go through this.
+ * Writes a record to notification_queue; actual sending is done by the digest builder (Part 2).
+ *
+ * @param {Object} params
+ * @param {string} params.type - Notification type constant (from NOTIFICATION_TYPES)
+ * @param {string} params.recipient_user_id - Target user ID (single recipient per call)
+ * @param {Object} params.data - All context needed to render this notification
+ * @param {string} [params.priority='normal'] - 'normal' (batched) or 'urgent' (sent within 5 minutes)
+ * @param {boolean} [params.cc=false] - If true, this is a CC copy (grouped separately in digest)
+ * @returns {string|null} notification_id or null on failure
+ */
+function queueNotification(params) {
+  if (!params || !params.type || !params.recipient_user_id) {
+    console.warn('queueNotification: missing required params (type, recipient_user_id)');
+    return null;
+  }
+
+  try {
+    // Look up recipient email (with session cache)
+    var recipientEmail = _userEmailCache[params.recipient_user_id];
+    if (!recipientEmail) {
+      var recipientUser = getUserById(params.recipient_user_id);
+      if (!recipientUser || !recipientUser.email) {
+        console.warn('queueNotification: user not found or no email for ID:', params.recipient_user_id);
+        return null;
+      }
+      if (!isActive(recipientUser.is_active)) {
+        console.warn('queueNotification: user is inactive:', params.recipient_user_id);
+        return null;
+      }
+      recipientEmail = recipientUser.email;
+      _userEmailCache[params.recipient_user_id] = recipientEmail;
+    }
+
+    var notificationId = generateId('NOTIFICATION');
+    var now = new Date();
+
+    var notification = {
+      notification_id: notificationId,
+      batch_type: params.type,
+      priority: params.priority || 'normal',
+      recipient_user_id: params.recipient_user_id,
+      recipient_email: recipientEmail,
+      cc: params.cc || false,
+      data: JSON.stringify(params.data || {}),
+      status: 'pending',
+      created_at: now.toISOString(),
+      sent_at: null
+    };
+
+    syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
+    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
+
+    return notificationId;
+  } catch (e) {
+    console.error('queueNotification failed:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Queue CC copies of a notification to all HOA (SUPER_ADMIN) users except the triggering user.
+ * @param {Object} params - Same params as queueNotification (type, data, priority)
+ * @param {string} triggerUserId - The user who triggered the action (excluded from CC)
+ */
+function queueHoaCcNotifications(params, triggerUserId) {
+  try {
+    var users = getUsersDropdown();
+    var hoaUsers = users.filter(function(u) {
+      return u.roleCode === ROLES.SUPER_ADMIN && u.id !== triggerUserId;
+    });
+
+    hoaUsers.forEach(function(hoa) {
+      queueNotification({
+        type: params.type,
+        recipient_user_id: hoa.id,
+        data: params.data,
+        priority: params.priority || 'normal',
+        cc: true
+      });
+    });
+  } catch (e) {
+    console.warn('queueHoaCcNotifications failed:', e.message);
+  }
+}
+
 /**
  * Get a fresh access token from Microsoft using the stored refresh token.
  * Uses OAuth2 client credentials + refresh token flow.
@@ -261,139 +380,8 @@ function queueTemplatedEmail(templateCode, recipientEmail, recipientUserId, vari
   });
 }
 
-/**
- * Queue assignment notification when HOA assigns an auditor to a work paper.
- * Called from createWorkPaper() and updateWorkPaper() when assigned_auditor_id changes.
- */
-function queueAssignmentNotification(workPaper, assignedAuditorId, assignedByUser) {
-  if (!assignedAuditorId) return;
-
-  var auditor = getUserById(assignedAuditorId);
-  if (!auditor || !auditor.email) {
-    console.warn('queueAssignmentNotification: auditor not found or no email for ID:', assignedAuditorId);
-    return;
-  }
-
-  var obsTitle = workPaper.observation_title || workPaper.work_paper_id || 'Untitled';
-  var wpRef = workPaper.work_paper_ref || workPaper.work_paper_id || '';
-  var riskRating = workPaper.risk_rating || 'Not Rated';
-  var affiliateCode = workPaper.affiliate_code || '-';
-  var auditArea = workPaper.audit_area_id || '-';
-  var assignedByName = (assignedByUser && assignedByUser.full_name) ? assignedByUser.full_name : 'Head of Internal Audit';
-
-  var subject = 'Work Paper Assigned: ' + obsTitle;
-  var body = 'Dear ' + (auditor.full_name || 'Colleague') + ',\n\n' +
-    'You have been assigned to complete the following work paper:\n\n' +
-    'Work Paper: ' + wpRef + '\n' +
-    'Observation: ' + obsTitle + '\n' +
-    'Risk Rating: ' + riskRating + '\n' +
-    'Affiliate: ' + affiliateCode + '\n' +
-    'Audit Area: ' + auditArea + '\n' +
-    'Assigned By: ' + assignedByName + ' (Head of Internal Audit)\n\n' +
-    'Please log in to review the pre-filled testing information and complete the work paper.\n\n' +
-    'Note: Basic Information and Observation details have been set and cannot be modified. ' +
-    'Please complete the Testing Information, upload evidence, and submit for review.';
-
-  return queueEmail({
-    template_code: 'WP_ASSIGNED',
-    recipient_email: auditor.email,
-    recipient_user_id: assignedAuditorId,
-    subject: subject,
-    body: body,
-    module: 'WORK_PAPER',
-    record_id: workPaper.work_paper_id || ''
-  });
-}
-
-/**
- * Queue a change notification to an assigned auditor when someone else edits their WP.
- * @param {Object} workPaper - The updated work paper object
- * @param {Object} updaterUser - The user who made the change
- * @param {string[]} changes - Array of human-readable change descriptions (e.g. 'Affiliate: HPC → HPK')
- */
-function queueWPChangeNotification(workPaper, updaterUser, changes) {
-  if (!workPaper || !workPaper.assigned_auditor_id || !changes || changes.length === 0) return;
-
-  var auditor = getUserById(workPaper.assigned_auditor_id);
-  if (!auditor || !auditor.email || !isActive(auditor.is_active)) {
-    console.warn('queueWPChangeNotification: auditor not found or inactive:', workPaper.assigned_auditor_id);
-    return;
-  }
-
-  var wpRef = workPaper.work_paper_ref || workPaper.work_paper_id || '';
-  var obsTitle = workPaper.observation_title || wpRef || 'Untitled';
-  var updaterName = (updaterUser && updaterUser.full_name) ? updaterUser.full_name : 'A team member';
-
-  var subject = 'Work Paper Updated: ' + wpRef + ' — ' + obsTitle;
-  var changesList = changes.map(function(c) { return '• ' + c; }).join('\n');
-
-  var body = 'Dear ' + (auditor.full_name || 'Colleague') + ',\n\n' +
-    updaterName + ' has updated work paper ' + wpRef + ' (' + obsTitle + ') which is assigned to you.\n\n' +
-    'Changes:\n' + changesList + '\n\n' +
-    'Please review the updated information and continue your work.';
-
-  // CC HOA (SUPER_ADMIN users)
-  var ccEmails = buildAuditTeamCc(auditor.email);
-
-  queueEmail({
-    template_code: 'WP_CHANGE',
-    recipient_email: auditor.email,
-    recipient_user_id: workPaper.assigned_auditor_id,
-    subject: subject,
-    body: body,
-    module: 'WORK_PAPER',
-    record_id: workPaper.work_paper_id || ''
-  });
-
-  // Send immediate email with CC to audit team
-  try {
-    sendImmediateEmail(auditor.email, subject, body, ccEmails);
-  } catch (e) {
-    console.warn('queueWPChangeNotification: immediate email failed:', e.message);
-  }
-}
-
-/**
- * Queue a status change notification to an assigned auditor (approve/return/sent to auditee).
- * @param {Object} workPaper - The work paper after status change
- * @param {string} statusAction - Human-readable action (e.g. 'Approved', 'Returned for Revision', 'Sent to Auditee')
- * @param {Object} actionUser - The user who performed the action
- */
-function queueWPStatusChangeNotification(workPaper, statusAction, actionUser) {
-  if (!workPaper || !workPaper.assigned_auditor_id) return;
-  // Don't notify if the assigned auditor performed the action themselves
-  if (actionUser && actionUser.user_id === workPaper.assigned_auditor_id) return;
-
-  var auditor = getUserById(workPaper.assigned_auditor_id);
-  if (!auditor || !auditor.email || !isActive(auditor.is_active)) return;
-
-  var wpRef = workPaper.work_paper_ref || workPaper.work_paper_id || '';
-  var obsTitle = workPaper.observation_title || wpRef || 'Untitled';
-  var actionUserName = (actionUser && actionUser.full_name) ? actionUser.full_name : 'A reviewer';
-
-  var subject = 'Work Paper ' + statusAction + ': ' + wpRef + ' — ' + obsTitle;
-  var body = 'Dear ' + (auditor.full_name || 'Colleague') + ',\n\n' +
-    'Work paper ' + wpRef + ' (' + obsTitle + ') which is assigned to you has been ' + statusAction.toLowerCase() + ' by ' + actionUserName + '.\n\n' +
-    'Please log in to the Audit System to view the details.';
-
-  var ccEmails = buildAuditTeamCc(auditor.email);
-
-  queueEmail({
-    template_code: 'WP_STATUS_CHANGE',
-    recipient_email: auditor.email,
-    recipient_user_id: workPaper.assigned_auditor_id,
-    subject: subject,
-    body: body,
-    module: 'WORK_PAPER',
-    record_id: workPaper.work_paper_id || ''
-  });
-
-  try {
-    sendImmediateEmail(auditor.email, subject, body, ccEmails);
-  } catch (e) {
-    console.warn('queueWPStatusChangeNotification: immediate email failed:', e.message);
-  }
-}
+// queueAssignmentNotification, queueWPChangeNotification, queueWPStatusChangeNotification
+// removed — all replaced by universal queueNotification() with NOTIFICATION_TYPES constants
 
 /**
  * Send stale assignment reminders. Called daily.
@@ -451,10 +439,11 @@ function sendStaleAssignmentReminders() {
   var recentReminders = {};
   if (nqData && nqData.length > 1) {
     for (var ni = 1; ni < nqData.length; ni++) {
+      // Check both old template_code and new batch_type fields
       var tplCode = nqColMap.template_code >= 0 ? String(nqData[ni][nqColMap.template_code] || '') : '';
-      if (tplCode !== 'WP_STALE_REMINDER') continue;
+      var batchType = nqColMap.batch_type >= 0 ? String(nqData[ni][nqColMap.batch_type] || '') : '';
+      if (tplCode !== 'WP_STALE_REMINDER' && batchType !== NOTIFICATION_TYPES.STALE_REMINDER) continue;
 
-      var recId = nqColMap.record_id >= 0 ? String(nqData[ni][nqColMap.record_id] || '') : '';
       var recipientId = nqColMap.recipient_user_id >= 0 ? String(nqData[ni][nqColMap.recipient_user_id] || '') : '';
       var nqCreated = nqColMap.created_at >= 0 ? nqData[ni][nqColMap.created_at] : '';
 
@@ -462,8 +451,17 @@ function sendStaleAssignmentReminders() {
       var nqDate = new Date(nqCreated);
       if (isNaN(nqDate.getTime()) || nqDate < threeDaysAgo) continue;
 
-      // Key: WP_ID + auditor_id
-      var key = recId + '|' + recipientId;
+      // Extract work_paper_id from data JSON or use record_id
+      var wpIdForKey = '';
+      var nqDataStr = nqColMap.data >= 0 ? String(nqData[ni][nqColMap.data] || '') : '';
+      if (nqDataStr) {
+        try { var parsed = JSON.parse(nqDataStr); wpIdForKey = parsed.work_paper_id || ''; } catch (e) {}
+      }
+      if (!wpIdForKey) {
+        wpIdForKey = nqColMap.record_id >= 0 ? String(nqData[ni][nqColMap.record_id] || '') : '';
+      }
+
+      var key = wpIdForKey + '|' + recipientId;
       recentReminders[key] = true;
     }
   }
@@ -479,44 +477,27 @@ function sendStaleAssignmentReminders() {
       return;
     }
 
-    var auditor = getUserById(wp.assigned_auditor_id);
-    if (!auditor || !auditor.email || !isActive(auditor.is_active)) return;
+    var staleData = {
+      work_paper_id: wp.work_paper_id,
+      work_paper_ref: wp.work_paper_ref || wp.work_paper_id,
+      observation_title: wp.observation_title || 'Untitled',
+      assigned_date: wp.created_at ? wp.created_at.toISOString() : '',
+      days_stale: wp.days_ago
+    };
 
-    var wpRef = wp.work_paper_ref || wp.work_paper_id;
-    var obsTitle = wp.observation_title || 'Untitled';
-
-    var subject = 'Reminder: Work Paper Awaiting Completion — ' + wpRef;
-    var body = 'Dear ' + (auditor.full_name || 'Colleague') + ',\n\n' +
-      '"' + obsTitle + '" was assigned to you ' + wp.days_ago + ' days ago and has not been started. ' +
-      'Please log in and complete the testing information.\n\n' +
-      (loginUrl ? 'Log in: ' + loginUrl + '\n\n' : '') +
-      'Work Paper: ' + wpRef + '\n' +
-      'Observation: ' + obsTitle;
-
-    // CC HOA (SUPER_ADMIN users)
-    var ccEmails = buildAuditTeamCc(auditor.email);
-
-    queueEmail({
-      template_code: 'WP_STALE_REMINDER',
-      recipient_email: auditor.email,
+    queueNotification({
+      type: NOTIFICATION_TYPES.STALE_REMINDER,
       recipient_user_id: wp.assigned_auditor_id,
-      subject: subject,
-      body: body,
-      module: 'WORK_PAPER',
-      record_id: wp.work_paper_id
+      data: staleData
     });
 
-    // Also send immediate email
-    try {
-      sendImmediateEmail(auditor.email, subject, body, ccEmails);
-    } catch (e) {
-      console.warn('sendStaleAssignmentReminders: email failed for', wp.work_paper_id, e.message);
-    }
+    // CC HOA
+    queueHoaCcNotifications({ type: NOTIFICATION_TYPES.STALE_REMINDER, data: staleData }, wp.assigned_auditor_id);
 
     notificationCount++;
   });
 
-  console.log('sendStaleAssignmentReminders: Sent', notificationCount, 'reminders for', staleWPs.length, 'stale WPs');
+  console.log('sendStaleAssignmentReminders: Queued', notificationCount, 'reminders for', staleWPs.length, 'stale WPs');
   return notificationCount;
 }
 
@@ -1327,19 +1308,31 @@ function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
 }
 
 /**
- * Send overdue reminders with professional table (called by weekly Monday trigger).
- * Groups overdue action plans by owner and sends ONE table email per person.
- * Also sends auditor summary.
+ * Send overdue reminders (called daily by dailyMaintenance).
+ * Uses escalating frequency: day 1, day 5, then weekly, then biweekly after 30 days.
+ * Checks notification_queue for last sent OVERDUE_REMINDER per AP+owner to determine schedule.
+ * Queues via universal queueNotification() with priority='urgent'.
  */
 function sendOverdueReminders() {
-  const actionPlans = getActionPlansRaw({ overdue_only: true }, null);
+  var actionPlans = getActionPlansRaw({ overdue_only: true }, null);
 
   if (actionPlans.length === 0) {
     console.log('No overdue action plans');
     return 0;
   }
 
-  var loginUrl = ScriptApp.getService().getUrl();
+  // Load escalation schedule from config (or use defaults)
+  var schedule = { first: 1, second: 5, weekly_after: 7, biweekly_after: 30 };
+  try {
+    var configSchedule = getConfigValue('OVERDUE_REMINDER_SCHEDULE');
+    if (configSchedule) {
+      var parsed = typeof configSchedule === 'string' ? JSON.parse(configSchedule) : configSchedule;
+      if (parsed.first) schedule.first = parsed.first;
+      if (parsed.second) schedule.second = parsed.second;
+      if (parsed.weekly_after) schedule.weekly_after = parsed.weekly_after;
+      if (parsed.biweekly_after) schedule.biweekly_after = parsed.biweekly_after;
+    }
+  } catch (e) { /* use defaults */ }
 
   // Enrich with parent work paper observation title
   var wpCache = {};
@@ -1353,8 +1346,51 @@ function sendOverdueReminders() {
     ap._risk_rating = ap.risk_rating || parentWp.risk_rating || '';
   });
 
+  // Build a map of last sent OVERDUE_REMINDER per AP+owner from notification_queue
+  var nqData = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  var lastSentMap = {}; // key: "action_plan_id|owner_id" -> Date
+  if (nqData && nqData.length > 1) {
+    var nqHeaders = nqData[0];
+    var nqColMap = {};
+    nqHeaders.forEach(function(h, i) { nqColMap[h] = i; });
+
+    for (var ni = 1; ni < nqData.length; ni++) {
+      var nqRow = nqData[ni];
+      var nqBatchType = nqColMap.batch_type >= 0 ? String(nqRow[nqColMap.batch_type] || '') : '';
+      if (nqBatchType !== NOTIFICATION_TYPES.OVERDUE_REMINDER) continue;
+
+      var nqStatus = nqColMap.status >= 0 ? String(nqRow[nqColMap.status] || '') : '';
+      // Count both 'sent' and 'pending' to avoid duplicate queuing
+      if (nqStatus !== 'sent' && nqStatus !== 'pending') continue;
+
+      var nqRecipient = nqColMap.recipient_user_id >= 0 ? String(nqRow[nqColMap.recipient_user_id] || '') : '';
+      var nqDataStr = nqColMap.data >= 0 ? String(nqRow[nqColMap.data] || '') : '';
+      var nqCreated = nqColMap.created_at >= 0 ? nqRow[nqColMap.created_at] : '';
+
+      if (!nqCreated || !nqRecipient) continue;
+
+      // Extract action_plan_id from data JSON
+      var nqApId = '';
+      try {
+        var nqParsed = JSON.parse(nqDataStr);
+        nqApId = nqParsed.action_plan_id || '';
+      } catch (e) { continue; }
+
+      var nqDate = new Date(nqCreated);
+      if (isNaN(nqDate.getTime())) continue;
+
+      var mapKey = nqApId + '|' + nqRecipient;
+      if (!lastSentMap[mapKey] || nqDate > lastSentMap[mapKey]) {
+        lastSentMap[mapKey] = nqDate;
+      }
+    }
+  }
+
+  var now = new Date();
+  var notificationCount = 0;
+
   // Group by owner
-  const byOwner = {};
+  var byOwner = {};
   actionPlans.forEach(function(ap) {
     var ownerIds = String(ap.owner_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
     ownerIds.forEach(function(ownerId) {
@@ -1363,72 +1399,72 @@ function sendOverdueReminders() {
     });
   });
 
-  let notificationCount = 0;
-  const tableHeaders = ['Observation', 'Summary', 'Rating', 'Due', 'Days Overdue'];
-
-  // Send one table-formatted email per owner
   Object.keys(byOwner).forEach(function(ownerId) {
-    const owner = getUserById(ownerId);
-    if (!owner || !owner.email || !isActive(owner.is_active)) return;
+    var plans = byOwner[ownerId];
 
-    const plans = byOwner[ownerId];
-    const subject = 'Status Update: ' + plans.length + ' Action Plan(s) Past Target Date';
-    const ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
-    const intro = 'Dear ' + ownerFirstName + ',<br><br>' +
-      'You have <strong>' + plans.length + '</strong> overdue action plan(s) that have passed their target completion date. Please review and provide an updated status or revised timeline:';
+    plans.forEach(function(ap) {
+      var daysOverdue = ap.days_overdue || 0;
+      if (daysOverdue <= 0) return;
 
-    const rows = plans.map(function(ap) {
-      var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-      var daysOver = ap.days_overdue ? '<span style="color:#92400e; font-weight:500;">' + ap.days_overdue + '</span>' : '-';
-      return [
-        String(ap._observation_title || ap.action_plan_id || '-').substring(0, 50),
-        truncateWords(ap.action_description || '', 8),
-        ratingBadge(ap._risk_rating),
-        dueStr,
-        daysOver
-      ];
-    });
+      var mapKey = (ap.action_plan_id || '') + '|' + ownerId;
+      var lastSent = lastSentMap[mapKey];
 
-    const loginLink = loginUrl
-      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> and review these items and provide an update.'
-      : 'Please log in and review these items and provide an update.';
-    const outro = loginLink;
-    const htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
-    // CC audit team on overdue reminders
-    var overdueCc = buildAuditTeamCc(owner.email);
-    sendEmail(owner.email, subject, subject, htmlBody, overdueCc, 'Hass Audit', 'hassaudit@outlook.com');
-    notificationCount++;
-  });
+      // Determine if we should send a reminder based on escalating schedule
+      var shouldSend = false;
+      if (!lastSent) {
+        // Never sent before — send immediately (first notice)
+        shouldSend = true;
+      } else {
+        var daysSinceLastReminder = Math.floor((now - lastSent) / (1000 * 60 * 60 * 24));
+        if (daysOverdue <= 7) {
+          // Early stage: second reminder at day 5 (5+ days since first)
+          shouldSend = daysSinceLastReminder >= schedule.second;
+        } else if (daysOverdue <= schedule.biweekly_after) {
+          // Days 8-30: weekly reminders
+          shouldSend = daysSinceLastReminder >= schedule.weekly_after;
+        } else {
+          // 31+ days: biweekly reminders (every 14 days)
+          shouldSend = daysSinceLastReminder >= 14;
+        }
+      }
 
-  // Auditor summary with full table
-  const auditors = getUsersDropdown().filter(function(u) {
-    return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].includes(u.roleCode);
-  });
+      if (!shouldSend) return;
 
-  if (actionPlans.length > 0 && auditors.length > 0) {
-    const summarySubject = 'Weekly Status Summary: ' + actionPlans.length + ' Action Plan(s) Past Target Date';
-    const summaryIntro = 'The following action plans are currently overdue across all owners:';
-    const summaryRows = actionPlans.slice(0, 50).map(function(ap) {
-      var dueStr = ap.due_date ? new Date(ap.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-      var daysOver = ap.days_overdue ? '<span style="color:#92400e; font-weight:500;">' + ap.days_overdue + '</span>' : '-';
-      return [
-        String(ap._observation_title || ap.action_plan_id || '-').substring(0, 50),
-        truncateWords(ap.action_description || '', 8),
-        ratingBadge(ap._risk_rating),
-        dueStr,
-        daysOver
-      ];
-    });
-    var summaryOutro = actionPlans.length > 50 ? '... and ' + (actionPlans.length - 50) + ' more overdue items.' : '';
-    var summaryHtml = formatTableEmailHtml(summarySubject, summaryIntro, tableHeaders, summaryRows, summaryOutro);
+      var overdueData = {
+        action_plan_id: ap.action_plan_id || '',
+        action_description: ap.action_description || '',
+        due_date: ap.due_date || '',
+        days_overdue: daysOverdue,
+        observation_title: ap._observation_title || '',
+        risk_rating: ap._risk_rating || '',
+        owner_names: ap.owner_names || ''
+      };
 
-    auditors.forEach(function(auditor) {
-      sendEmail(auditor.email, summarySubject, summarySubject, summaryHtml, null, 'Hass Audit', 'hassaudit@outlook.com');
+      queueNotification({
+        type: NOTIFICATION_TYPES.OVERDUE_REMINDER,
+        recipient_user_id: ownerId,
+        data: overdueData,
+        priority: 'urgent'
+      });
+
       notificationCount++;
     });
+  });
+
+  // CC HOA with a summary if any reminders were queued
+  if (notificationCount > 0) {
+    queueHoaCcNotifications({
+      type: NOTIFICATION_TYPES.OVERDUE_REMINDER,
+      data: {
+        summary: true,
+        total_overdue: actionPlans.length,
+        reminders_queued: notificationCount
+      },
+      priority: 'urgent'
+    }, 'SYSTEM');
   }
 
-  console.log('Queued overdue reminders:', notificationCount);
+  console.log('Queued overdue reminders:', notificationCount, 'of', actionPlans.length, 'overdue APs');
   return notificationCount;
 }
 

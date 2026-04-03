@@ -374,8 +374,23 @@ function submitAuditeeResponse(workPaperId, data, user) {
         responseRecord.review_date = now;
         syncToFirestore(SHEETS.AUDITEE_RESPONSES, responseId, responseRecord);
         syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updatedWp);
-        // Queue rejection notification to auditee instead of auditor notification
-        queueResponseRejectedNotification(workPaperId, updatedWp, aiEval.feedback, { user_id: 'AI_SYSTEM', full_name: 'AI Auto-Review' });
+        // Queue RESPONSE_REVIEWED rejection notification to auditee
+        var aiRejResponsibleIds = parseIdList(updatedWp.responsible_ids);
+        aiRejResponsibleIds.forEach(function(uid) {
+          queueNotification({
+            type: NOTIFICATION_TYPES.RESPONSE_REVIEWED,
+            recipient_user_id: uid,
+            data: {
+              work_paper_id: workPaperId,
+              work_paper_ref: updatedWp.work_paper_ref || workPaperId,
+              observation_title: updatedWp.observation_title || '',
+              action: 'Rejected',
+              reviewer_name: 'AI Auto-Review',
+              comments: aiEval.feedback || '',
+              round_number: currentRound
+            }
+          });
+        });
         logAuditEvent('AI_AUTO_REJECT', 'AUDITEE_RESPONSE', responseId, null, responseRecord, 'AI_SYSTEM', 'ai@system');
         return sanitizeForClient({
           success: true, responseId: responseId,
@@ -388,8 +403,28 @@ function submitAuditeeResponse(workPaperId, data, user) {
     }
   }
 
-  // Queue notification to auditors
-  queueResponseSubmittedNotification(workPaperId, updatedWp, responseRecord, user);
+  // Queue RESPONSE_SUBMITTED notification to HOA/Senior Auditor
+  try {
+    var respSubmitData = {
+      work_paper_id: workPaperId,
+      work_paper_ref: updatedWp.work_paper_ref || workPaperId,
+      observation_title: updatedWp.observation_title || '',
+      responder_name: user.full_name || '',
+      round_number: currentRound,
+      risk_rating: updatedWp.risk_rating || '',
+      management_response_preview: mgmtResponse.substring(0, 200)
+    };
+    var respAuditors = getUsersDropdown().filter(function(u) {
+      return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(u.roleCode) >= 0;
+    });
+    respAuditors.forEach(function(auditor) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.RESPONSE_SUBMITTED,
+        recipient_user_id: auditor.id,
+        data: respSubmitData
+      });
+    });
+  } catch (e) { console.warn('RESPONSE_SUBMITTED notification failed:', e.message); }
 
   logAuditEvent('SUBMIT_RESPONSE', 'AUDITEE_RESPONSE', responseId, null, responseRecord, user.user_id, user.email);
 
@@ -483,14 +518,36 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
   var revisionAction = action === 'accept' ? 'Response Accepted' : 'Response Rejected';
   addWorkPaperRevision(workPaperId, revisionAction, comments || '', user);
 
-  // Queue notifications
-  if (action === 'accept') {
-    queueResponseAcceptedNotification(workPaperId, updatedWp, user);
-  } else if (newResponseStatus === STATUS.RESPONSE.ESCALATED) {
-    queueResponseEscalatedNotification(workPaperId, updatedWp, user);
-  } else {
-    queueResponseRejectedNotification(workPaperId, updatedWp, comments, user);
-  }
+  // Queue RESPONSE_REVIEWED notification to auditees
+  try {
+    var reviewActionLabel = action === 'accept' ? 'Accepted' : (newResponseStatus === STATUS.RESPONSE.ESCALATED ? 'Escalated' : 'Rejected');
+    var respReviewData = {
+      work_paper_id: workPaperId,
+      work_paper_ref: updatedWp.work_paper_ref || workPaperId,
+      observation_title: updatedWp.observation_title || '',
+      action: reviewActionLabel,
+      reviewer_name: user.full_name || '',
+      comments: comments || '',
+      risk_rating: updatedWp.risk_rating || '',
+      round_number: updatedWp.response_round || 0,
+      max_rounds: RESPONSE_DEFAULTS.MAX_ROUNDS
+    };
+    var respResponsibleIds = parseIdList(updatedWp.responsible_ids);
+    respResponsibleIds.forEach(function(uid) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.RESPONSE_REVIEWED,
+        recipient_user_id: uid,
+        data: respReviewData,
+        priority: newResponseStatus === STATUS.RESPONSE.ESCALATED ? 'urgent' : 'normal'
+      });
+    });
+    // CC HOA
+    queueHoaCcNotifications({
+      type: NOTIFICATION_TYPES.RESPONSE_REVIEWED,
+      data: respReviewData,
+      priority: newResponseStatus === STATUS.RESPONSE.ESCALATED ? 'urgent' : 'normal'
+    }, user.user_id);
+  } catch (e) { console.warn('RESPONSE_REVIEWED notification failed:', e.message); }
 
   logAuditEvent('REVIEW_RESPONSE', 'WORK_PAPER', workPaperId, wp, updatedWp, user.user_id, user.email);
 
@@ -651,6 +708,24 @@ function respondToDelegation(actionPlanId, action, reason, user) {
     for (var k2 in acceptUpdates) { acceptedAp[k2] = acceptUpdates[k2]; }
     syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, acceptedAp);
 
+    // Queue AP_DELEGATION_RESPONSE accepted notification to the delegator
+    if (ap.delegated_by_id) {
+      try {
+        var acceptParentWp = ap.work_paper_id ? getWorkPaperById(ap.work_paper_id) : null;
+        queueNotification({
+          type: NOTIFICATION_TYPES.AP_DELEGATION_RESPONSE,
+          recipient_user_id: ap.delegated_by_id,
+          data: {
+            action_plan_id: actionPlanId,
+            action_description: ap.action_description || '',
+            response: 'accepted',
+            responder_name: user.full_name || '',
+            parent_observation: acceptParentWp ? acceptParentWp.observation_title : ''
+          }
+        });
+      } catch (e) { console.warn('AP_DELEGATION_RESPONSE accept notification failed:', e.message); }
+    }
+
     logAuditEvent('ACCEPT_DELEGATION', 'ACTION_PLAN', actionPlanId, ap, acceptedAp, user.user_id, user.email);
 
     return sanitizeForClient({ success: true, message: 'Delegation accepted.' });
@@ -690,8 +765,34 @@ function respondToDelegation(actionPlanId, action, reason, user) {
     addActionPlanHistory(actionPlanId, ap.status, ap.status,
       'Delegation rejected by ' + (user.full_name || user.user_id) + '. Reason: ' + reason, user);
 
-    // Notify the delegator
-    queueDelegationRejectedNotification(actionPlanId, revertedAp, reason, user);
+    // Queue AP_DELEGATION_RESPONSE notification to the delegator
+    if (revertedAp.delegated_by_id) {
+      try {
+        var delegRespParentWp = revertedAp.work_paper_id ? getWorkPaperById(revertedAp.work_paper_id) : null;
+        queueNotification({
+          type: NOTIFICATION_TYPES.AP_DELEGATION_RESPONSE,
+          recipient_user_id: revertedAp.delegated_by_id,
+          data: {
+            action_plan_id: actionPlanId,
+            action_description: revertedAp.action_description || '',
+            response: 'rejected',
+            responder_name: user.full_name || '',
+            reason: reason || '',
+            parent_observation: delegRespParentWp ? delegRespParentWp.observation_title : ''
+          }
+        });
+        queueHoaCcNotifications({
+          type: NOTIFICATION_TYPES.AP_DELEGATION_RESPONSE,
+          data: {
+            action_plan_id: actionPlanId,
+            action_description: revertedAp.action_description || '',
+            response: 'rejected',
+            responder_name: user.full_name || '',
+            reason: reason || ''
+          }
+        }, user.user_id);
+      } catch (e) { console.warn('AP_DELEGATION_RESPONSE notification failed:', e.message); }
+    }
 
     logAuditEvent('REJECT_DELEGATION', 'ACTION_PLAN', actionPlanId, ap, revertedAp, user.user_id, user.email);
 
@@ -757,189 +858,9 @@ function getPendingAuditeeResponsesForAuditor(user) {
   return sanitizeForClient(results);
 }
 
-function queueResponseSubmittedNotification(workPaperId, workPaper, response, submitter) {
-  var auditors = getUsersDropdown().filter(function(u) {
-    return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(u.roleCode) >= 0;
-  });
-
-  var loginUrl = getSystemUrl();
-  var subject = 'Auditee Response Received: ' + (workPaper.observation_title || workPaperId);
-
-  // Count action plans for context
-  var apCount = 0;
-  try { apCount = getActionPlansByWorkPaperRaw(workPaperId).length; } catch (e) { /* non-fatal */ }
-
-  auditors.forEach(function(auditor) {
-    var firstName = auditor.name ? auditor.name.split(' ')[0] : 'Auditor';
-    var intro = 'Dear ' + firstName + ',<br><br>' +
-      '<strong>' + (submitter.full_name || 'An auditee') + '</strong> has submitted a response to the following audit observation:';
-
-    var headers = ['Field', 'Details'];
-    var rows = [
-      ['Observation', String(workPaper.observation_title || '-')],
-      ['Response Round', String(response.round_number || 1) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
-      ['Risk Rating', ratingBadge(workPaper.risk_rating || '')],
-      ['Submitted By', String(submitter.full_name || '-')],
-      ['Submitted Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
-      ['Management Response', truncateWords(response.management_response || workPaper.management_response || '', 20)],
-      ['Action Plans Created', String(apCount)]
-    ];
-
-    var outro = loginUrl
-      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to review the response and accept or reject it.'
-      : 'Please log in to review the response and accept or reject it.';
-    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    // CC audit team (deduplicated against primary recipient) + existing WP CC recipients
-    var ccString = buildAuditTeamCc(auditor.email, workPaper.cc_recipients);
-    sendEmail(auditor.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
-  });
-}
-
-function queueResponseAcceptedNotification(workPaperId, workPaper, reviewer) {
-  var responsibleIds = parseIdList(workPaper.responsible_ids);
-  var loginUrl = getSystemUrl();
-  var subject = 'Response Accepted: ' + (workPaper.observation_title || workPaperId);
-
-  responsibleIds.forEach(function(userId) {
-    var auditee = getUserById(userId);
-    if (!auditee || !auditee.email || !isActive(auditee.is_active)) return;
-
-    var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Colleague';
-    var intro = 'Dear ' + firstName + ',<br><br>' +
-      'Your response to the following audit observation has been <strong>accepted</strong> by ' + (reviewer.full_name || 'the audit team') + '. ' +
-      'Action plans are now active and you may proceed with implementation.';
-
-    var headers = ['Field', 'Details'];
-    var rows = [
-      ['Observation', String(workPaper.observation_title || '-')],
-      ['Risk Rating', ratingBadge(workPaper.risk_rating || '')],
-      ['Status', '<strong style="color:#28a745;">Response Accepted</strong>'],
-      ['Reviewed By', String(reviewer.full_name || '-')],
-      ['Review Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
-      ['Next Step', 'Implement agreed action plans and upload evidence']
-    ];
-
-    var outro = loginUrl
-      ? 'Please continue to implement the agreed action plans. You can track progress by <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">logging in</a>.'
-      : 'Please continue to implement the agreed action plans.';
-    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    // CC audit team + existing WP CC recipients (deduplicated)
-    var ccString = buildAuditTeamCc(auditee.email, workPaper.cc_recipients);
-    sendEmail(auditee.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
-  });
-}
-
-function queueResponseRejectedNotification(workPaperId, workPaper, comments, reviewer) {
-  var responsibleIds = parseIdList(workPaper.responsible_ids);
-  var loginUrl = getSystemUrl();
-  var subject = 'Response Rejected: ' + (workPaper.observation_title || workPaperId);
-
-  responsibleIds.forEach(function(userId) {
-    var auditee = getUserById(userId);
-    if (!auditee || !auditee.email || !isActive(auditee.is_active)) return;
-
-    var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Colleague';
-    var remainingRounds = RESPONSE_DEFAULTS.MAX_ROUNDS - (workPaper.response_round || 0);
-    var reviewerName = (reviewer && reviewer.full_name) ? reviewer.full_name : 'the audit team';
-    var intro = 'Dear ' + firstName + ',<br><br>' +
-      '<strong>' + reviewerName + '</strong> has reviewed your response and requested additional information or clarification. ' +
-      'Please review the feedback below and submit a revised response.' +
-      ' You have <strong>' + remainingRounds + ' round(s)</strong> remaining.';
-
-    var headers = ['Field', 'Details'];
-    var rows = [
-      ['Observation', String(workPaper.observation_title || '-')],
-      ['Risk Rating', ratingBadge(workPaper.risk_rating || '')],
-      ['Reviewed By', String(reviewerName)],
-      ['Status', '<strong style="color:#dc2626;">Revision Required</strong>'],
-      ['Review Comments', String(comments || 'No comments provided')],
-      ['Rounds Remaining', String(remainingRounds) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
-      ['Next Step', 'Revise your response and action plans']
-    ];
-
-    var outro = loginUrl
-      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to revise your response and action plans.'
-      : 'Please log in to revise your response and action plans.';
-    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    // CC audit team + existing WP CC recipients
-    var ccString = buildAuditTeamCc(auditee.email, workPaper.cc_recipients);
-    sendEmail(auditee.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
-  });
-}
-
-function queueResponseEscalatedNotification(workPaperId, workPaper, reviewer) {
-  // Notify CC recipients and responsible parties about escalation
-  var ccEmails = String(workPaper.cc_recipients || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean);
-  var responsibleIds = parseIdList(workPaper.responsible_ids);
-
-  var allEmails = ccEmails.slice();
-  responsibleIds.forEach(function(userId) {
-    var u = getUserById(userId);
-    if (u && u.email && isActive(u.is_active) && allEmails.indexOf(u.email) === -1) {
-      allEmails.push(u.email);
-    }
-  });
-
-  var loginUrl = getSystemUrl();
-  var subject = 'Management Attention Requested: ' + (workPaper.observation_title || workPaperId);
-
-  allEmails.forEach(function(email) {
-    var intro = 'Dear Colleague,<br><br>' +
-      'The following audit observation has reached the maximum number of response rounds (' +
-      RESPONSE_DEFAULTS.MAX_ROUNDS + ') without resolution. Management review is requested to determine the appropriate path forward.';
-
-    var headers = ['Field', 'Details'];
-    var rows = [
-      ['Observation', String(workPaper.observation_title || '-')],
-      ['Risk Rating', ratingBadge(workPaper.risk_rating || '')],
-      ['Response Rounds Used', String(workPaper.response_round || 0) + ' of ' + RESPONSE_DEFAULTS.MAX_ROUNDS],
-      ['Status', '<strong style="color:#1a365d;">Referred to Management</strong>'],
-      ['Escalated By', String(reviewer.full_name || '-')]
-    ];
-
-    var outro = loginUrl
-      ? 'This observation requires management intervention. Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to review the full observation and response history.'
-      : 'This observation requires management intervention. Please log in to review.';
-    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    // CC audit team (deduplicated against primary recipient)
-    var ccString = buildAuditTeamCc(email, workPaper.cc_recipients);
-    sendEmail(email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
-  });
-}
-
-function queueDelegationRejectedNotification(actionPlanId, actionPlan, reason, rejector) {
-  var delegatorId = actionPlan.delegated_by_id;
-  if (!delegatorId) return;
-
-  var delegator = getUserById(delegatorId);
-  if (!delegator || !delegator.email || !isActive(delegator.is_active)) return;
-
-  var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
-  var loginUrl = getSystemUrl();
-  var apDescShort = truncateWords(actionPlan.action_description || '', 8);
-  var subject = 'Delegation Rejected: ' + (apDescShort || actionPlanId);
-
-  var firstName = delegator.first_name || (delegator.full_name || '').split(' ')[0] || 'Colleague';
-  var intro = 'Dear ' + firstName + ',<br><br>' +
-    '<strong>' + (rejector.full_name || 'The delegatee') + '</strong> has rejected the delegation of the following action plan. Ownership has been reverted to you.';
-
-  var headers = ['Field', 'Details'];
-  var rows = [
-    ['Observation', String((parentWp && parentWp.observation_title) || '-')],
-    ['Action Plan', truncateWords(actionPlan.action_description || '-', 15)],
-    ['Rejected By', String(rejector.full_name || '-')],
-    ['Rejection Reason', String(reason || '-')],
-    ['Next Step', 'Reassign the action plan or take action yourself']
-  ];
-
-  var outro = loginUrl
-    ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to reassign or take action.'
-    : 'Please log in to reassign or take action.';
-  var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-  // CC audit team (deduplicated against primary recipient)
-  var ccString = buildAuditTeamCc(delegator.email);
-  sendEmail(delegator.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
-}
+// Old notification helper functions (queueResponseSubmittedNotification, queueResponseAcceptedNotification,
+// queueResponseRejectedNotification, queueResponseEscalatedNotification, queueDelegationRejectedNotification)
+// removed — replaced by universal queueNotification() in 05_NotificationService.gs
 
 // ─────────────────────────────────────────────────────────────
 // Auditee Finding Counts (for sidebar/dashboard)
