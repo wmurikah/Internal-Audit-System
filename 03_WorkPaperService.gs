@@ -49,6 +49,8 @@ function createWorkPaper(data, user) {
     approved_by_name: '',
     approved_date: '',
     sent_to_auditee_date: '',
+    assigned_auditor_id: data.assigned_auditor_id || '',
+    assigned_auditor_name: data.assigned_auditor_name || '',
     response_status: '',
     response_deadline: '',
     response_round: 0,
@@ -134,7 +136,8 @@ function updateWorkPaper(workPaperId, data, user) {
     'control_objectives', 'control_classification', 'control_type', 'control_frequency', 'control_standards',
     'risk_description', 'test_objective', 'testing_steps',
     'observation_title', 'observation_description', 'risk_rating', 'risk_summary', 'recommendation',
-    'management_response', 'responsible_ids', 'cc_recipients'
+    'management_response', 'responsible_ids', 'cc_recipients',
+    'assigned_auditor_id', 'assigned_auditor_name'
   ];
   
   editableFields.forEach(field => {
@@ -339,11 +342,27 @@ function submitWorkPaper(workPaperId, user) {
     throw new Error('Work paper cannot be submitted from status: ' + workPaper.status);
   }
   
-  // Validate required fields
-  const requiredFields = ['observation_title', 'observation_description', 'risk_rating', 'recommendation'];
-  const missing = requiredFields.filter(f => !workPaper[f]);
+  // Role-based required field validation
+  var basicRequired = ['observation_title', 'risk_rating', 'affiliate_code', 'audit_area_id', 'year'];
+  var auditorRequired = basicRequired.concat([
+    'sub_area_id', 'work_paper_date', 'audit_period_from', 'audit_period_to',
+    'observation_description', 'risk_summary', 'recommendation',
+    'control_objectives', 'risk_description', 'test_objective', 'testing_steps',
+    'control_classification', 'control_type', 'control_frequency'
+  ]);
+
+  var requiredFields = (user.role_code === ROLES.SUPER_ADMIN) ? basicRequired : auditorRequired;
+  const missing = requiredFields.filter(f => !workPaper[f] || String(workPaper[f]).trim() === '');
   if (missing.length > 0) {
     throw new Error('Missing required fields: ' + missing.join(', '));
+  }
+
+  // Evidence check for non-SUPER_ADMIN
+  if (user.role_code !== ROLES.SUPER_ADMIN) {
+    var wpFiles = getWorkPaperFiles(workPaperId);
+    if (!wpFiles || wpFiles.length === 0) {
+      throw new Error('At least one evidence document is required before submitting for review.');
+    }
   }
   
   const now = new Date();
@@ -404,6 +423,91 @@ function submitWorkPaper(workPaperId, user) {
   try { queueReviewNotification(workPaperId, updated, user); } catch(e) { console.warn('Notification failed:', e.message); }
 
   return sanitizeForClient({ success: true, workPaper: updated });
+}
+
+/**
+ * Get auto-populate data for testing fields based on matching work papers or sub-area templates.
+ * Priority: 1) Existing completed WP with same audit_area + sub_area + affiliate, 2) Sub-area template data.
+ */
+function getAutoPopulateData(auditAreaId, subAreaId, affiliateCode) {
+  if (!auditAreaId || !subAreaId) return null;
+
+  // Try to find a completed work paper with matching criteria
+  try {
+    var allWps = getSheetData(SHEETS.WORK_PAPERS);
+    if (allWps && allWps.length > 1) {
+      var headers = allWps[0];
+      var areaIdx = headers.indexOf('audit_area_id');
+      var subIdx = headers.indexOf('sub_area_id');
+      var affIdx = headers.indexOf('affiliate_code');
+      var statusIdx = headers.indexOf('status');
+      var createdIdx = headers.indexOf('created_at');
+      var wpIdIdx = headers.indexOf('work_paper_id');
+
+      var completedStatuses = ['Approved', 'Sent to Auditee'];
+      var matches = [];
+
+      for (var i = 1; i < allWps.length; i++) {
+        var row = allWps[i];
+        if (row[areaIdx] === auditAreaId && row[subIdx] === subAreaId &&
+            (!affiliateCode || row[affIdx] === affiliateCode) &&
+            completedStatuses.indexOf(row[statusIdx]) !== -1) {
+          var obj = {};
+          headers.forEach(function(h, idx) { obj[h] = row[idx]; });
+          matches.push(obj);
+        }
+      }
+
+      if (matches.length > 0) {
+        // Sort by created_at descending
+        matches.sort(function(a, b) {
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
+        var wp = matches[0];
+        return sanitizeForClient({
+          source: 'existing_wp',
+          wp_id: wp.work_paper_id || '',
+          control_objectives: wp.control_objectives || '',
+          risk_description: wp.risk_description || '',
+          test_objective: wp.test_objective || '',
+          testing_steps: wp.testing_steps || '',
+          control_classification: wp.control_classification || '',
+          control_type: wp.control_type || '',
+          control_frequency: wp.control_frequency || '',
+          control_standards: wp.control_standards || ''
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('getAutoPopulateData WP lookup failed:', e.message);
+  }
+
+  // Fallback: try sub-area template data
+  try {
+    var subAreas = getSheetData(SHEETS.SUB_AREAS);
+    if (subAreas && subAreas.length > 1) {
+      var saHeaders = subAreas[0];
+      var saIdIdx = saHeaders.indexOf('sub_area_id');
+
+      for (var j = 1; j < subAreas.length; j++) {
+        if (subAreas[j][saIdIdx] === subAreaId) {
+          var sa = {};
+          saHeaders.forEach(function(h, idx) { sa[h] = subAreas[j][idx]; });
+          return sanitizeForClient({
+            source: 'sub_area',
+            control_objectives: sa.control_objectives || '',
+            risk_description: sa.risk_description || '',
+            test_objective: sa.test_objective || '',
+            testing_steps: sa.testing_steps || ''
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('getAutoPopulateData sub-area lookup failed:', e.message);
+  }
+
+  return null;
 }
 
 /**

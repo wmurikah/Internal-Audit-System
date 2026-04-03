@@ -48,7 +48,7 @@ const SCHEMAS = {
     'prepared_by_id', 'prepared_by_name', 'prepared_date',
     'submitted_date', 'reviewed_by_id', 'reviewed_by_name', 'review_date', 'review_comments',
     'approved_by_id', 'approved_by_name', 'approved_date', 'sent_to_auditee_date',
-    'assigned_auditor_name', 'affiliate_name',
+    'assigned_auditor_id', 'assigned_auditor_name', 'affiliate_name',
     'created_at', 'updated_at', 'work_paper_ref',
     'response_status', 'response_deadline', 'response_round',
     'response_submitted_by', 'response_submitted_date',
