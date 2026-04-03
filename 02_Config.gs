@@ -52,7 +52,8 @@ const SCHEMAS = {
     'created_at', 'updated_at', 'work_paper_ref',
     'response_status', 'response_deadline', 'response_round',
     'response_submitted_by', 'response_submitted_date',
-    'response_reviewed_by', 'response_review_date', 'response_review_comments'
+    'response_reviewed_by', 'response_review_date', 'response_review_comments',
+    'evidence_override'
   ],
   WP_REQUIREMENTS: [
     'requirement_id', 'work_paper_id', 'requirement_number', 'requirement_description',
