@@ -8,6 +8,10 @@
           <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Report Filters</h5>
         </div>
         <div class="card-body">
+          <!-- Scoping info banner for UNIT_MANAGER -->
+          <div id="reportScopeBanner" class="alert alert-info alert-sm py-2 mb-3 d-none">
+            <i class="bi bi-info-circle me-2"></i>Reports are filtered to observations and action plans assigned to you.
+          </div>
           <!-- Year -->
           <div class="mb-3">
             <label class="form-label fw-semibold">Year</label>
@@ -90,11 +94,11 @@
                 <input class="form-check-input" type="checkbox" value="Sent to Auditee" id="statusSent" checked>
                 <label class="form-check-label small" for="statusSent">Sent to Auditee</label>
               </div>
-              <div class="form-check">
+              <div class="form-check" id="statusSubmittedGroup">
                 <input class="form-check-input" type="checkbox" value="Submitted" id="statusSubmitted" checked>
                 <label class="form-check-label small" for="statusSubmitted">Submitted</label>
               </div>
-              <div class="form-check">
+              <div class="form-check" id="statusDraftGroup">
                 <input class="form-check-input" type="checkbox" value="Draft" id="statusDraft">
                 <label class="form-check-label small" for="statusDraft">Draft</label>
               </div>
@@ -221,6 +225,29 @@ function loadBoardReports() {
     opt.value = y;
     opt.textContent = y;
     yearSelect.appendChild(opt);
+  }
+
+  // UNIT_MANAGER-specific UI adjustments
+  var userRole = window.currentUser ? window.currentUser.role_code : '';
+  if (userRole === 'UNIT_MANAGER') {
+    // Show scoping info banner
+    var scopeBanner = document.getElementById('reportScopeBanner');
+    if (scopeBanner) scopeBanner.classList.remove('d-none');
+
+    // Auto-select the user's affiliate
+    if (window.currentUser.affiliate_code) {
+      affiliateSelect.value = window.currentUser.affiliate_code;
+    }
+
+    // Hide Draft and Submitted status checkboxes
+    var draftGroup = document.getElementById('statusDraftGroup');
+    var submittedGroup = document.getElementById('statusSubmittedGroup');
+    if (draftGroup) draftGroup.classList.add('d-none');
+    if (submittedGroup) submittedGroup.classList.add('d-none');
+
+    // Uncheck them so they don't affect filter results
+    document.getElementById('statusDraft').checked = false;
+    document.getElementById('statusSubmitted').checked = false;
   }
 }
 
