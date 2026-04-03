@@ -190,10 +190,13 @@ function updateWorkPaper(workPaperId, data, user) {
   }
 
   updates.updated_at = now;
-  
+
+  // Snapshot before applying updates (for change notification)
+  var oldWP = { ...existing };
+
   // Apply updates to existing
   const updated = { ...existing, ...updates };
-  
+
   // Write to Firestore
   syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
   invalidateSheetData(SHEETS.WORK_PAPERS);
@@ -204,6 +207,18 @@ function updateWorkPaper(workPaperId, data, user) {
   // Queue assignment notification if assigned_auditor_id changed
   if (updated.assigned_auditor_id && updated.assigned_auditor_id !== existing.assigned_auditor_id) {
     try { queueAssignmentNotification(updated, updated.assigned_auditor_id, user); } catch(e) { console.warn('Assignment notification failed:', e.message); }
+  }
+
+  // Queue change notification to assigned auditor if someone else edited their WP
+  if (updated.assigned_auditor_id && updated.assigned_auditor_id !== user.user_id) {
+    try {
+      var wpChanges = computeWPChangeSummary(oldWP, updates);
+      if (wpChanges.length > 0) {
+        queueWPChangeNotification(updated, user, wpChanges);
+      }
+    } catch (e) {
+      console.warn('WP change notification failed:', e.message);
+    }
   }
 
   return sanitizeForClient({ success: true, workPaper: updated });
@@ -700,6 +715,16 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
     }
   }
 
+  // Notify assigned auditor of status change (if different from the reviewer)
+  if (action !== 'start_review' && updated.assigned_auditor_id && updated.assigned_auditor_id !== user.user_id) {
+    try {
+      var statusLabel = action === 'approve' ? 'Approved' : 'Returned for Revision';
+      queueWPStatusChangeNotification(updated, statusLabel, user);
+    } catch (e) {
+      console.warn('WP status change notification to assigned auditor failed:', e.message);
+    }
+  }
+
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 
@@ -835,6 +860,15 @@ function sendToAuditee(workPaperId, user) {
 
   // Log audit event
   logAuditEvent('SEND_TO_AUDITEE', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
+
+  // Notify assigned auditor that WP was sent to auditee (if different from sender)
+  if (updated.assigned_auditor_id && updated.assigned_auditor_id !== user.user_id) {
+    try {
+      queueWPStatusChangeNotification(updated, 'Sent to Auditee', user);
+    } catch (e) {
+      console.warn('WP sent-to-auditee notification to assigned auditor failed:', e.message);
+    }
+  }
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }

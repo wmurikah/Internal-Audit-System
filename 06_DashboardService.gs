@@ -187,18 +187,27 @@ function getSidebarCounts(user) {
       var wpResponsibleIdx = wpHeaders.indexOf ? wpHeaders.indexOf('responsible_ids') : -1;
       var wpResponseStatusIdx = wpHeaders.indexOf ? wpHeaders.indexOf('response_status') : -1;
       var wpPreparedByIdx = wpHeaders.indexOf ? wpHeaders.indexOf('prepared_by_id') : -1;
+      var wpAssignedAuditorIdx = wpHeaders.indexOf ? wpHeaders.indexOf('assigned_auditor_id') : -1;
 
       // Per-user WP tracking
       var wpByCreator = {};
       // Per-user observations tracking (WPs sent to auditee needing attention)
       var obsByResponsible = {};
       var totalPendingObservations = 0;
+      // Pending assignments: assigned but still Draft (auditor hasn't started)
+      var pendingAssignmentsAll = 0;
 
       for (var wi = 1; wi < (wpData ? wpData.length : 0); wi++) {
         var wpStatus = wpStatusIdx >= 0 ? wpData[wi][wpStatusIdx] : '';
         if (wpStatus === 'Submitted') pendingReviewAll++;
         if (wpStatus === 'Approved' && wpResponsibleIdx >= 0 && wpData[wi][wpResponsibleIdx]) approvedQueueAll++;
         if (wpResponseStatusIdx >= 0 && wpData[wi][wpResponseStatusIdx] === 'Response Submitted') pendingResponsesAll++;
+
+        // Count pending assignments: assigned_auditor_id is set AND status is Draft
+        if (wpStatus === 'Draft' && wpAssignedAuditorIdx >= 0) {
+          var assignedAuditor = String(wpData[wi][wpAssignedAuditorIdx] || '').trim();
+          if (assignedAuditor) pendingAssignmentsAll++;
+        }
 
         // Count WPs per creator
         if (wpPreparedByIdx >= 0 && wpData[wi][wpPreparedByIdx]) {
@@ -277,7 +286,8 @@ function getSidebarCounts(user) {
         activeApByOwner: activeApByOwner,
         totalActiveAps: totalActiveAps,
         obsByResponsible: obsByResponsible,
-        totalPendingObservations: totalPendingObservations
+        totalPendingObservations: totalPendingObservations,
+        pendingAssignments: pendingAssignmentsAll
       };
       cache.put(cacheKey, JSON.stringify(allCounts), 20);
     }
@@ -337,6 +347,12 @@ function getSidebarCounts(user) {
       myObservations = allCounts.obsByResponsible[userId] || 0;
     }
 
+    // Pending assignments (SUPER_ADMIN only)
+    var pendingAssignments = 0;
+    if (roleCode === ROLES.SUPER_ADMIN) {
+      pendingAssignments = allCounts.pendingAssignments || 0;
+    }
+
     return {
       success: true,
       pendingReview: pendingReview,
@@ -346,7 +362,8 @@ function getSidebarCounts(user) {
       myWorkPapers: myWorkPapers,
       myActionPlans: myActionPlans,
       myOverdue: myOverdue,
-      myObservations: myObservations
+      myObservations: myObservations,
+      pendingAssignments: pendingAssignments
     };
   } catch (e) {
     console.error('Error getting sidebar counts:', e);

@@ -306,6 +306,253 @@ function queueAssignmentNotification(workPaper, assignedAuditorId, assignedByUse
 }
 
 /**
+ * Queue a change notification to an assigned auditor when someone else edits their WP.
+ * @param {Object} workPaper - The updated work paper object
+ * @param {Object} updaterUser - The user who made the change
+ * @param {string[]} changes - Array of human-readable change descriptions (e.g. 'Affiliate: HPC → HPK')
+ */
+function queueWPChangeNotification(workPaper, updaterUser, changes) {
+  if (!workPaper || !workPaper.assigned_auditor_id || !changes || changes.length === 0) return;
+
+  var auditor = getUserById(workPaper.assigned_auditor_id);
+  if (!auditor || !auditor.email || !isActive(auditor.is_active)) {
+    console.warn('queueWPChangeNotification: auditor not found or inactive:', workPaper.assigned_auditor_id);
+    return;
+  }
+
+  var wpRef = workPaper.work_paper_ref || workPaper.work_paper_id || '';
+  var obsTitle = workPaper.observation_title || wpRef || 'Untitled';
+  var updaterName = (updaterUser && updaterUser.full_name) ? updaterUser.full_name : 'A team member';
+
+  var subject = 'Work Paper Updated: ' + wpRef + ' — ' + obsTitle;
+  var changesList = changes.map(function(c) { return '• ' + c; }).join('\n');
+
+  var body = 'Dear ' + (auditor.full_name || 'Colleague') + ',\n\n' +
+    updaterName + ' has updated work paper ' + wpRef + ' (' + obsTitle + ') which is assigned to you.\n\n' +
+    'Changes:\n' + changesList + '\n\n' +
+    'Please review the updated information and continue your work.';
+
+  // CC HOA (SUPER_ADMIN users)
+  var ccEmails = buildAuditTeamCc(auditor.email);
+
+  queueEmail({
+    template_code: 'WP_CHANGE',
+    recipient_email: auditor.email,
+    recipient_user_id: workPaper.assigned_auditor_id,
+    subject: subject,
+    body: body,
+    module: 'WORK_PAPER',
+    record_id: workPaper.work_paper_id || ''
+  });
+
+  // Send immediate email with CC to audit team
+  try {
+    sendImmediateEmail(auditor.email, subject, body, ccEmails);
+  } catch (e) {
+    console.warn('queueWPChangeNotification: immediate email failed:', e.message);
+  }
+}
+
+/**
+ * Queue a status change notification to an assigned auditor (approve/return/sent to auditee).
+ * @param {Object} workPaper - The work paper after status change
+ * @param {string} statusAction - Human-readable action (e.g. 'Approved', 'Returned for Revision', 'Sent to Auditee')
+ * @param {Object} actionUser - The user who performed the action
+ */
+function queueWPStatusChangeNotification(workPaper, statusAction, actionUser) {
+  if (!workPaper || !workPaper.assigned_auditor_id) return;
+  // Don't notify if the assigned auditor performed the action themselves
+  if (actionUser && actionUser.user_id === workPaper.assigned_auditor_id) return;
+
+  var auditor = getUserById(workPaper.assigned_auditor_id);
+  if (!auditor || !auditor.email || !isActive(auditor.is_active)) return;
+
+  var wpRef = workPaper.work_paper_ref || workPaper.work_paper_id || '';
+  var obsTitle = workPaper.observation_title || wpRef || 'Untitled';
+  var actionUserName = (actionUser && actionUser.full_name) ? actionUser.full_name : 'A reviewer';
+
+  var subject = 'Work Paper ' + statusAction + ': ' + wpRef + ' — ' + obsTitle;
+  var body = 'Dear ' + (auditor.full_name || 'Colleague') + ',\n\n' +
+    'Work paper ' + wpRef + ' (' + obsTitle + ') which is assigned to you has been ' + statusAction.toLowerCase() + ' by ' + actionUserName + '.\n\n' +
+    'Please log in to the Audit System to view the details.';
+
+  var ccEmails = buildAuditTeamCc(auditor.email);
+
+  queueEmail({
+    template_code: 'WP_STATUS_CHANGE',
+    recipient_email: auditor.email,
+    recipient_user_id: workPaper.assigned_auditor_id,
+    subject: subject,
+    body: body,
+    module: 'WORK_PAPER',
+    record_id: workPaper.work_paper_id || ''
+  });
+
+  try {
+    sendImmediateEmail(auditor.email, subject, body, ccEmails);
+  } catch (e) {
+    console.warn('queueWPStatusChangeNotification: immediate email failed:', e.message);
+  }
+}
+
+/**
+ * Send stale assignment reminders. Called daily.
+ * Finds work papers where assigned_auditor_id is set, status is still Draft,
+ * and created_at is older than 3 days. Sends reminder to assigned auditor.
+ * Max one reminder per WP per 3 days (checks notification_queue).
+ */
+function sendStaleAssignmentReminders() {
+  var wpData = getSheetData(SHEETS.WORK_PAPERS);
+  if (!wpData || wpData.length < 2) { console.log('sendStaleAssignmentReminders: No WP data'); return 0; }
+
+  var headers = wpData[0];
+  var colMap = {};
+  headers.forEach(function(h, i) { colMap[h] = i; });
+
+  var now = new Date();
+  var threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+  // Collect stale assignments
+  var staleWPs = [];
+  for (var i = 1; i < wpData.length; i++) {
+    var row = wpData[i];
+    var status = colMap.status >= 0 ? String(row[colMap.status] || '') : '';
+    var assignedAuditorId = colMap.assigned_auditor_id >= 0 ? String(row[colMap.assigned_auditor_id] || '').trim() : '';
+    var createdAt = colMap.created_at >= 0 ? row[colMap.created_at] : '';
+
+    if (status !== 'Draft' || !assignedAuditorId) continue;
+
+    // Check if created more than 3 days ago
+    if (!createdAt) continue;
+    var createdDate = new Date(createdAt);
+    if (isNaN(createdDate.getTime()) || createdDate >= threeDaysAgo) continue;
+
+    staleWPs.push({
+      work_paper_id: colMap.work_paper_id >= 0 ? String(row[colMap.work_paper_id] || '') : '',
+      work_paper_ref: colMap.work_paper_ref >= 0 ? String(row[colMap.work_paper_ref] || '') : '',
+      observation_title: colMap.observation_title >= 0 ? String(row[colMap.observation_title] || '') : '',
+      assigned_auditor_id: assignedAuditorId,
+      created_at: createdDate,
+      days_ago: Math.floor((now - createdDate) / (1000 * 60 * 60 * 24))
+    });
+  }
+
+  if (staleWPs.length === 0) {
+    console.log('sendStaleAssignmentReminders: No stale assignments found');
+    return 0;
+  }
+
+  // Check notification_queue for recent stale reminders (within last 3 days)
+  var nqData = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  var nqHeaders = (nqData && nqData.length > 0) ? nqData[0] : [];
+  var nqColMap = {};
+  nqHeaders.forEach(function(h, i) { nqColMap[h] = i; });
+
+  var recentReminders = {};
+  if (nqData && nqData.length > 1) {
+    for (var ni = 1; ni < nqData.length; ni++) {
+      var tplCode = nqColMap.template_code >= 0 ? String(nqData[ni][nqColMap.template_code] || '') : '';
+      if (tplCode !== 'WP_STALE_REMINDER') continue;
+
+      var recId = nqColMap.record_id >= 0 ? String(nqData[ni][nqColMap.record_id] || '') : '';
+      var recipientId = nqColMap.recipient_user_id >= 0 ? String(nqData[ni][nqColMap.recipient_user_id] || '') : '';
+      var nqCreated = nqColMap.created_at >= 0 ? nqData[ni][nqColMap.created_at] : '';
+
+      if (!nqCreated) continue;
+      var nqDate = new Date(nqCreated);
+      if (isNaN(nqDate.getTime()) || nqDate < threeDaysAgo) continue;
+
+      // Key: WP_ID + auditor_id
+      var key = recId + '|' + recipientId;
+      recentReminders[key] = true;
+    }
+  }
+
+  var loginUrl = '';
+  try { loginUrl = ScriptApp.getService().getUrl(); } catch (e) {}
+
+  var notificationCount = 0;
+  staleWPs.forEach(function(wp) {
+    var key = wp.work_paper_id + '|' + wp.assigned_auditor_id;
+    if (recentReminders[key]) {
+      console.log('sendStaleAssignmentReminders: Skipping (recent reminder exists):', wp.work_paper_id);
+      return;
+    }
+
+    var auditor = getUserById(wp.assigned_auditor_id);
+    if (!auditor || !auditor.email || !isActive(auditor.is_active)) return;
+
+    var wpRef = wp.work_paper_ref || wp.work_paper_id;
+    var obsTitle = wp.observation_title || 'Untitled';
+
+    var subject = 'Reminder: Work Paper Awaiting Completion — ' + wpRef;
+    var body = 'Dear ' + (auditor.full_name || 'Colleague') + ',\n\n' +
+      '"' + obsTitle + '" was assigned to you ' + wp.days_ago + ' days ago and has not been started. ' +
+      'Please log in and complete the testing information.\n\n' +
+      (loginUrl ? 'Log in: ' + loginUrl + '\n\n' : '') +
+      'Work Paper: ' + wpRef + '\n' +
+      'Observation: ' + obsTitle;
+
+    // CC HOA (SUPER_ADMIN users)
+    var ccEmails = buildAuditTeamCc(auditor.email);
+
+    queueEmail({
+      template_code: 'WP_STALE_REMINDER',
+      recipient_email: auditor.email,
+      recipient_user_id: wp.assigned_auditor_id,
+      subject: subject,
+      body: body,
+      module: 'WORK_PAPER',
+      record_id: wp.work_paper_id
+    });
+
+    // Also send immediate email
+    try {
+      sendImmediateEmail(auditor.email, subject, body, ccEmails);
+    } catch (e) {
+      console.warn('sendStaleAssignmentReminders: email failed for', wp.work_paper_id, e.message);
+    }
+
+    notificationCount++;
+  });
+
+  console.log('sendStaleAssignmentReminders: Sent', notificationCount, 'reminders for', staleWPs.length, 'stale WPs');
+  return notificationCount;
+}
+
+/**
+ * Compute a human-readable summary of changes between old and new work paper data.
+ * @param {Object} oldWP - The work paper before changes
+ * @param {Object} newData - The updated fields
+ * @returns {string[]} Array of change descriptions (e.g. 'Affiliate: HPC → HPK')
+ */
+function computeWPChangeSummary(oldWP, newData) {
+  var fieldLabels = {
+    affiliate_code: 'Affiliate',
+    audit_area_id: 'Audit Area',
+    sub_area_id: 'Sub Area',
+    risk_rating: 'Risk Rating',
+    observation_title: 'Observation Title',
+    responsible_ids: 'Responsible Parties',
+    cc_recipients: 'CC Recipients',
+    audit_period_from: 'Period From',
+    audit_period_to: 'Period To'
+  };
+
+  var changes = [];
+  Object.keys(fieldLabels).forEach(function(field) {
+    if (newData[field] === undefined) return; // field not being updated
+    var oldVal = String(oldWP[field] || '').trim();
+    var newVal = String(newData[field] || '').trim();
+    if (oldVal !== newVal) {
+      changes.push(fieldLabels[field] + ': ' + (oldVal || '(empty)') + ' → ' + (newVal || '(empty)'));
+    }
+  });
+
+  return changes;
+}
+
+/**
  * Get email template by code
  */
 function getEmailTemplate(templateCode) {
@@ -2233,15 +2480,25 @@ function dailyMaintenance() {
     console.error('dailyMaintenance: sendAuditorUnsentWorkPaperNudge failed:', e.message);
   }
 
+  // Send stale assignment reminders (assigned WPs not started after 3 days)
+  var staleReminders = 0;
+  try {
+    staleReminders = sendStaleAssignmentReminders();
+  } catch (e) {
+    console.error('dailyMaintenance: sendStaleAssignmentReminders failed:', e.message);
+  }
+
   console.log('Daily maintenance completed. Evidence reminders:', evidenceReminders,
-    'Overdue escalations:', overdueEscalations, 'Auditor nudges:', auditorNudges);
+    'Overdue escalations:', overdueEscalations, 'Auditor nudges:', auditorNudges,
+    'Stale reminders:', staleReminders);
 
   return {
     overdueUpdated,
     cleaned,
     evidenceReminders,
     overdueEscalations,
-    auditorNudges
+    auditorNudges,
+    staleReminders
   };
 }
 
