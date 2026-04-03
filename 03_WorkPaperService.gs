@@ -81,9 +81,37 @@ function createWorkPaper(data, user) {
   // Log audit event
   logAuditEvent('CREATE', 'WORK_PAPER', workPaperId, null, workPaper, user.user_id, user.email);
 
-  // Queue batched assignment notification if auditor was assigned on create
+  // Queue assignment notification if auditor was assigned on create
   if (workPaper.assigned_auditor_id) {
-    try { queueAssignmentBatch(workPaper, user); } catch(e) { console.warn('Assignment batch queue failed:', e.message); }
+    try {
+      queueNotification({
+        type: NOTIFICATION_TYPES.WP_ASSIGNMENT,
+        recipient_user_id: workPaper.assigned_auditor_id,
+        data: {
+          work_paper_id: workPaper.work_paper_id,
+          work_paper_ref: workPaper.work_paper_ref || workPaper.work_paper_id,
+          observation_title: workPaper.observation_title || 'Untitled',
+          risk_rating: workPaper.risk_rating || 'Not Rated',
+          affiliate_code: workPaper.affiliate_code || '-',
+          audit_area_id: workPaper.audit_area_id || '',
+          assigned_by: user.full_name || 'Head of Internal Audit',
+          assigned_at: new Date().toISOString()
+        }
+      });
+      queueHoaCcNotifications({
+        type: NOTIFICATION_TYPES.WP_ASSIGNMENT,
+        data: {
+          work_paper_id: workPaper.work_paper_id,
+          work_paper_ref: workPaper.work_paper_ref || workPaper.work_paper_id,
+          observation_title: workPaper.observation_title || 'Untitled',
+          risk_rating: workPaper.risk_rating || 'Not Rated',
+          affiliate_code: workPaper.affiliate_code || '-',
+          audit_area_id: workPaper.audit_area_id || '',
+          assigned_by: user.full_name || 'Head of Internal Audit',
+          assigned_at: new Date().toISOString()
+        }
+      }, user.user_id);
+    } catch(e) { console.warn('Assignment notification queue failed:', e.message); }
   }
 
   return sanitizeForClient({ success: true, workPaperId: workPaperId, workPaper: workPaper });
@@ -204,121 +232,57 @@ function updateWorkPaper(workPaperId, data, user) {
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
 
-  // Queue batched assignment notification if assigned_auditor_id changed
+  // Queue assignment notification if assigned_auditor_id changed
   if (updated.assigned_auditor_id && updated.assigned_auditor_id !== existing.assigned_auditor_id) {
-    try { queueAssignmentBatch(updated, user); } catch(e) { console.warn('Assignment batch queue failed:', e.message); }
+    try {
+      var assignData = {
+        work_paper_id: updated.work_paper_id,
+        work_paper_ref: updated.work_paper_ref || updated.work_paper_id,
+        observation_title: updated.observation_title || 'Untitled',
+        risk_rating: updated.risk_rating || 'Not Rated',
+        affiliate_code: updated.affiliate_code || '-',
+        audit_area_id: updated.audit_area_id || '',
+        assigned_by: user.full_name || 'Head of Internal Audit',
+        assigned_at: new Date().toISOString()
+      };
+      queueNotification({
+        type: NOTIFICATION_TYPES.WP_ASSIGNMENT,
+        recipient_user_id: updated.assigned_auditor_id,
+        data: assignData
+      });
+      queueHoaCcNotifications({ type: NOTIFICATION_TYPES.WP_ASSIGNMENT, data: assignData }, user.user_id);
+    } catch(e) { console.warn('Assignment notification queue failed:', e.message); }
   }
 
-  // Queue batched change notification to assigned auditor if someone else edited their WP
+  // Queue change notification to assigned auditor if someone else edited their WP
   if (updated.assigned_auditor_id && updated.assigned_auditor_id !== user.user_id) {
     try {
       var wpChanges = computeWPChangeSummary(oldWP, updates);
       if (wpChanges.length > 0) {
-        queueChangeBatch(updated, user, wpChanges);
+        var changeData = {
+          work_paper_id: updated.work_paper_id,
+          work_paper_ref: updated.work_paper_ref || updated.work_paper_id,
+          observation_title: updated.observation_title || 'Untitled',
+          changes: wpChanges,
+          changed_by: user.full_name || 'A team member',
+          changed_at: new Date().toISOString()
+        };
+        queueNotification({
+          type: NOTIFICATION_TYPES.WP_CHANGE,
+          recipient_user_id: updated.assigned_auditor_id,
+          data: changeData
+        });
+        queueHoaCcNotifications({ type: NOTIFICATION_TYPES.WP_CHANGE, data: changeData }, user.user_id);
       }
     } catch (e) {
-      console.warn('WP change batch queue failed:', e.message);
+      console.warn('WP change notification queue failed:', e.message);
     }
   }
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }
 
-/**
- * Queue a WP assignment into the notification batch queue (does NOT send email).
- * Batched notifications are sent later by sendBatchedAssignmentNotifications().
- */
-function queueAssignmentBatch(workPaper, user) {
-  if (!workPaper || !workPaper.assigned_auditor_id) return;
-
-  var auditor = getUserById(workPaper.assigned_auditor_id);
-  if (!auditor || !auditor.email) {
-    console.warn('queueAssignmentBatch: auditor not found or no email for ID:', workPaper.assigned_auditor_id);
-    return;
-  }
-
-  var batchData = {
-    work_paper_id: workPaper.work_paper_id || '',
-    work_paper_ref: workPaper.work_paper_ref || workPaper.work_paper_id || '',
-    observation_title: workPaper.observation_title || 'Untitled',
-    risk_rating: workPaper.risk_rating || 'Not Rated',
-    affiliate_code: workPaper.affiliate_code || '-',
-    audit_area_id: workPaper.audit_area_id || '',
-    assigned_by_name: (user && user.full_name) ? user.full_name : 'Head of Internal Audit',
-    assigned_at: new Date().toISOString()
-  };
-
-  var notificationId = generateId('NOTIFICATION');
-  var now = new Date();
-
-  var notification = {
-    notification_id: notificationId,
-    template_code: 'WP_ASSIGNMENT_BATCH',
-    recipient_user_id: workPaper.assigned_auditor_id,
-    recipient_email: auditor.email,
-    subject: '',
-    body: '',
-    module: 'WORK_PAPER',
-    record_id: workPaper.work_paper_id || '',
-    status: STATUS.NOTIFICATION.BATCHED,
-    scheduled_for: now,
-    sent_at: '',
-    error_message: '',
-    created_at: now,
-    batch_type: 'WP_ASSIGNMENT',
-    batch_data: JSON.stringify(batchData)
-  };
-
-  syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
-  invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
-}
-
-/**
- * Queue a WP change notification into the batch queue (does NOT send email).
- * Batched change notifications are sent later by sendBatchedAssignmentNotifications().
- */
-function queueChangeBatch(workPaper, user, changes) {
-  if (!workPaper || !workPaper.assigned_auditor_id || !changes || changes.length === 0) return;
-
-  var auditor = getUserById(workPaper.assigned_auditor_id);
-  if (!auditor || !auditor.email) {
-    console.warn('queueChangeBatch: auditor not found or no email for ID:', workPaper.assigned_auditor_id);
-    return;
-  }
-
-  var batchData = {
-    work_paper_id: workPaper.work_paper_id || '',
-    work_paper_ref: workPaper.work_paper_ref || workPaper.work_paper_id || '',
-    observation_title: workPaper.observation_title || 'Untitled',
-    changes: changes,
-    changed_by_name: (user && user.full_name) ? user.full_name : 'A team member',
-    changed_at: new Date().toISOString()
-  };
-
-  var notificationId = generateId('NOTIFICATION');
-  var now = new Date();
-
-  var notification = {
-    notification_id: notificationId,
-    template_code: 'WP_CHANGE_BATCH',
-    recipient_user_id: workPaper.assigned_auditor_id,
-    recipient_email: auditor.email,
-    subject: '',
-    body: '',
-    module: 'WORK_PAPER',
-    record_id: workPaper.work_paper_id || '',
-    status: STATUS.NOTIFICATION.BATCHED,
-    scheduled_for: now,
-    sent_at: '',
-    error_message: '',
-    created_at: now,
-    batch_type: 'WP_CHANGE',
-    batch_data: JSON.stringify(batchData)
-  };
-
-  syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
-  invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
-}
+// queueAssignmentBatch and queueChangeBatch removed — replaced by universal queueNotification()
 
 /**
  * Delete work paper (soft delete or archive)
@@ -581,8 +545,27 @@ function submitWorkPaper(workPaperId, user) {
     invalidateSheetData(SHEETS.WP_REVISIONS);
   } catch(e) { console.warn('Secondary writes failed (non-fatal):', e.message); }
 
-  // Notifications - fire and forget
-  try { queueReviewNotification(workPaperId, updated, user); } catch(e) { console.warn('Notification failed:', e.message); }
+  // Queue WP_SUBMITTED notifications to all HOA/Senior Auditor users
+  try {
+    var submitData = {
+      work_paper_id: workPaperId,
+      work_paper_ref: updated.work_paper_ref || workPaperId,
+      observation_title: updated.observation_title || '',
+      risk_rating: updated.risk_rating || '',
+      affiliate_code: updated.affiliate_code || '',
+      submitter_name: user.full_name || ''
+    };
+    var reviewers = getUsersDropdown().filter(function(u) {
+      return u.roleCode === ROLES.SENIOR_AUDITOR || u.roleCode === ROLES.SUPER_ADMIN;
+    });
+    reviewers.forEach(function(reviewer) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.WP_SUBMITTED,
+        recipient_user_id: reviewer.id,
+        data: submitData
+      });
+    });
+  } catch(e) { console.warn('WP_SUBMITTED notification failed:', e.message); }
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }
@@ -753,8 +736,45 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   // Add revision history
   addWorkPaperRevision(workPaperId, revisionAction, comments, user);
 
-  // Queue notification to preparer
-  queueStatusNotification(workPaperId, updated, workPaper.status, user);
+  // Queue WP_REVIEWED notification to preparer
+  try {
+    if (action !== 'start_review') {
+      var reviewAction = action === 'approve' ? 'Approved' : 'Returned for Revision';
+      var reviewData = {
+        work_paper_id: workPaperId,
+        work_paper_ref: updated.work_paper_ref || workPaperId,
+        observation_title: updated.observation_title || '',
+        action: reviewAction,
+        reviewer_name: user.full_name || '',
+        comments: comments || '',
+        previous_status: workPaper.status,
+        new_status: updated.status
+      };
+
+      // Notify preparer
+      if (updated.prepared_by_id && updated.prepared_by_id !== user.user_id) {
+        queueNotification({
+          type: NOTIFICATION_TYPES.WP_REVIEWED,
+          recipient_user_id: updated.prepared_by_id,
+          data: reviewData
+        });
+      }
+
+      // Notify assigned auditor (if different from preparer and reviewer)
+      if (updated.assigned_auditor_id && updated.assigned_auditor_id !== user.user_id && updated.assigned_auditor_id !== updated.prepared_by_id) {
+        queueNotification({
+          type: NOTIFICATION_TYPES.WP_REVIEWED,
+          recipient_user_id: updated.assigned_auditor_id,
+          data: reviewData
+        });
+      }
+
+      // CC HOA
+      queueHoaCcNotifications({ type: NOTIFICATION_TYPES.WP_REVIEWED, data: reviewData }, user.user_id);
+    }
+  } catch(e) {
+    console.warn('WP_REVIEWED notification failed:', e.message);
+  }
 
   // Log audit event
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
@@ -762,62 +782,13 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   // ── AUTO-QUEUE: On approval, automatically send to auditee if ready ──
   if (action === 'approve' && updated.responsible_ids) {
     try {
-      // Call sendToAuditee to transition directly to "Sent to Auditee"
       var autoSendResult = sendToAuditee(workPaperId, user);
       if (autoSendResult && autoSendResult.success) {
         console.log('Auto-queued: Work paper', workPaperId, 'sent to auditee on approval');
-        // Return the auto-sent result (status is now "Sent to Auditee")
         return sanitizeForClient({ success: true, workPaper: autoSendResult.workPaper || updated, autoQueued: true });
       }
     } catch (autoSendErr) {
-      // Non-fatal: if auto-send fails (e.g. missing responsible parties),
-      // the WP stays as "Approved" in the send queue for manual sending
       console.warn('Auto-queue on approval failed (non-fatal):', autoSendErr.message);
-    }
-  }
-
-  // Notify the submitting auditor about the review outcome
-  if (action !== 'start_review') {
-    try {
-      var submitter = getUserById(workPaper.created_by);
-      if (submitter && submitter.user_id !== user.user_id && isActive(submitter.is_active)) {
-        var actionLabel = action === 'approve' ? 'Approved' : 'Returned for Revision';
-        var notifSubject = 'Work Paper ' + actionLabel + ' - ' + (workPaper.observation_title || workPaperId);
-        var notifBody = 'Dear ' + (submitter.full_name || 'Colleague') + ',\n\n' +
-          'Your work paper "' + (workPaper.observation_title || workPaperId) + '" has been ' + actionLabel.toLowerCase() + ' by ' + (user.full_name || 'the reviewer') + '.\n\n';
-        if (comments) {
-          notifBody += 'Review Comments:\n' + comments + '\n\n';
-        }
-        notifBody += 'Please log in to the Audit System to view the details.';
-
-        var session = null;
-        try {
-          var sessions = firestoreQuery(SHEETS.SESSIONS, 'user_id', 'EQUAL', submitter.user_id);
-          session = sessions && sessions.length > 0 ? sessions[0] : null;
-        } catch(e) {}
-
-        var twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-        var lastActivity = session ? new Date(session.last_activity || session.created_at) : null;
-        var isOffline = !lastActivity || lastActivity < twoHoursAgo;
-
-        if (isOffline) {
-          sendImmediateEmail(submitter.email, notifSubject, notifBody);
-        } else {
-          queueEmail(submitter.email, notifSubject, notifBody);
-        }
-      }
-    } catch(e) {
-      console.warn('Failed to notify auditor of WP review:', e.message);
-    }
-  }
-
-  // Notify assigned auditor of status change (if different from the reviewer)
-  if (action !== 'start_review' && updated.assigned_auditor_id && updated.assigned_auditor_id !== user.user_id) {
-    try {
-      var statusLabel = action === 'approve' ? 'Approved' : 'Returned for Revision';
-      queueWPStatusChangeNotification(updated, statusLabel, user);
-    } catch (e) {
-      console.warn('WP status change notification to assigned auditor failed:', e.message);
     }
   }
 
@@ -951,8 +922,34 @@ function sendToAuditee(workPaperId, user) {
     CacheService.getScriptCache().remove('sidebar_counts_all');
   } catch (e) {}
 
-  // Queue notifications to responsible parties
-  queueAuditeeNotification(workPaperId, updated, user);
+  // Queue WP_SENT_TO_AUDITEE notifications to each responsible party (URGENT)
+  try {
+    var responsibleUserIds = parseIdList(updated.responsible_ids);
+    var auditeeData = {
+      work_paper_id: workPaperId,
+      work_paper_ref: updated.work_paper_ref || workPaperId,
+      observation_title: updated.observation_title || '',
+      observation_description: updated.observation_description || '',
+      risk_rating: updated.risk_rating || '',
+      recommendation: updated.recommendation || '',
+      affiliate_code: updated.affiliate_code || '',
+      audit_area_id: updated.audit_area_id || '',
+      response_deadline: updated.response_deadline ? new Date(updated.response_deadline).toISOString() : '',
+      sent_by: user.full_name || ''
+    };
+    responsibleUserIds.forEach(function(userId) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.WP_SENT_TO_AUDITEE,
+        recipient_user_id: userId,
+        data: auditeeData,
+        priority: 'urgent'
+      });
+    });
+    // CC HOA
+    queueHoaCcNotifications({ type: NOTIFICATION_TYPES.WP_SENT_TO_AUDITEE, data: auditeeData, priority: 'urgent' }, user.user_id);
+  } catch (e) {
+    console.warn('WP_SENT_TO_AUDITEE notification failed:', e.message);
+  }
 
   // Log audit event
   logAuditEvent('SEND_TO_AUDITEE', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
@@ -960,7 +957,19 @@ function sendToAuditee(workPaperId, user) {
   // Notify assigned auditor that WP was sent to auditee (if different from sender)
   if (updated.assigned_auditor_id && updated.assigned_auditor_id !== user.user_id) {
     try {
-      queueWPStatusChangeNotification(updated, 'Sent to Auditee', user);
+      queueNotification({
+        type: NOTIFICATION_TYPES.WP_SENT_TO_AUDITEE,
+        recipient_user_id: updated.assigned_auditor_id,
+        data: {
+          work_paper_id: workPaperId,
+          work_paper_ref: updated.work_paper_ref || workPaperId,
+          observation_title: updated.observation_title || '',
+          risk_rating: updated.risk_rating || '',
+          action: 'Sent to Auditee',
+          sent_by: user.full_name || ''
+        },
+        priority: 'urgent'
+      });
     } catch (e) {
       console.warn('WP sent-to-auditee notification to assigned auditor failed:', e.message);
     }
@@ -1158,187 +1167,10 @@ function addWorkPaperRevision(workPaperId, action, comments, user) {
   return revision;
 }
 
-function queueReviewNotification(workPaperId, workPaper, submitter) {
-  // Get reviewers (Senior Auditors and Head of Audit)
-  const users = getUsersDropdown();
-  const reviewers = users.filter(u =>
-    u.roleCode === ROLES.SENIOR_AUDITOR ||
-    u.roleCode === ROLES.SUPER_ADMIN
-  );
+// queueReviewNotification and queueStatusNotification removed — replaced by universal queueNotification()
 
-  // Resolve affiliate name from code for template variable
-  var affiliateName = workPaper.affiliate_code || '';
-  try {
-    var affiliates = getAffiliatesDropdown();
-    var match = affiliates.find(function(a) { return a.code === workPaper.affiliate_code; });
-    if (match) affiliateName = match.name || match.code;
-  } catch (e) { /* keep code as fallback */ }
-
-  reviewers.forEach(reviewer => {
-    queueTemplatedEmail('WP_SUBMITTED', reviewer.email, reviewer.id, {
-      work_paper_id: workPaperId,
-      observation_title: workPaper.observation_title || '',
-      submitter_name: submitter.full_name || '',
-      submitted_by: submitter.full_name || '',
-      status: workPaper.status || '',
-      risk_rating: workPaper.risk_rating || '',
-      affiliate_name: affiliateName,
-      affiliate_code: workPaper.affiliate_code || '',
-      recommendation: workPaper.recommendation || '',
-      observation_description: workPaper.observation_description || ''
-    }, 'WORK_PAPER', workPaperId);
-  });
-}
-
-/**
- * Queue notification for status change
- */
-function queueStatusNotification(workPaperId, workPaper, previousStatus, reviewer) {
-  const preparer = getUserById(workPaper.prepared_by_id);
-  if (!preparer) return;
-
-  // Resolve affiliate name from code for template variable
-  var affiliateName = workPaper.affiliate_code || '';
-  try {
-    var affiliates = getAffiliatesDropdown();
-    var match = affiliates.find(function(a) { return a.code === workPaper.affiliate_code; });
-    if (match) affiliateName = match.name || match.code;
-  } catch (e) { /* keep code as fallback */ }
-
-  queueTemplatedEmail('WP_STATUS_CHANGE', preparer.email, preparer.user_id, {
-    work_paper_id: workPaperId,
-    observation_title: workPaper.observation_title || '',
-    previous_status: previousStatus || '',
-    new_status: workPaper.status || '',
-    reviewer_name: reviewer.full_name || '',
-    submitted_by: workPaper.prepared_by_name || preparer.full_name || '',
-    risk_rating: workPaper.risk_rating || '',
-    affiliate_name: affiliateName,
-    affiliate_code: workPaper.affiliate_code || '',
-    recommendation: workPaper.recommendation || '',
-    observation_description: workPaper.observation_description || ''
-  }, 'WORK_PAPER', workPaperId);
-}
-
-/**
- * Queue notification for auditees — groups by auditee to avoid spam.
- * Collects work papers per auditee and sends ONE batched table email.
- * CC recipients from the work paper's cc_recipients field are included.
- */
-function queueAuditeeNotification(workPaperId, workPaper, sender) {
-  var responsibleIds = String(workPaper.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-
-  // Collect CC emails from work paper's cc_recipients field
-  var ccEmails = String(workPaper.cc_recipients || '').trim() || null;
-
-  // Fetch action plans for this work paper to include in the notification
-  var actionPlansByWp = {};
-  try {
-    actionPlansByWp[workPaperId] = getActionPlansByWorkPaperRaw(workPaperId);
-  } catch (e) {
-    console.error('queueAuditeeNotification: Failed to fetch APs for', workPaperId, ':', e.message);
-    actionPlansByWp[workPaperId] = [];
-  }
-
-  responsibleIds.forEach(function(userId) {
-    var auditee = getUserById(userId);
-    if (auditee && auditee.email && isActive(auditee.is_active)) {
-      var firstName = auditee.first_name || (auditee.full_name || '').split(' ')[0] || 'Auditee';
-      // Send immediately using the grouped observation + AP table format with CC
-      sendBatchedAuditeeNotification([workPaper], auditee.email, auditee.user_id, auditee.full_name, firstName, ccEmails, actionPlansByWp);
-    }
-  });
-}
-
-/**
- * Batch send auditee notifications for multiple work papers at once.
- * Call this when approving/sending multiple WPs to avoid spamming auditees.
- * Groups by auditee and sends ONE email per person with a table of all observations.
- * Collects all unique CC recipients across the batch.
- */
-function sendBatchedAuditeeNotifications(workPapers) {
-  if (!workPapers || workPapers.length === 0) return;
-
-  // Pre-fetch action plans for all work papers in the batch
-  var actionPlansByWp = {};
-  workPapers.forEach(function(wp) {
-    var wpId = wp.work_paper_id;
-    if (wpId && !actionPlansByWp[wpId]) {
-      try {
-        actionPlansByWp[wpId] = getActionPlansByWorkPaperRaw(wpId);
-      } catch (e) {
-        console.error('sendBatchedAuditeeNotifications: Failed to fetch APs for', wpId, ':', e.message);
-        actionPlansByWp[wpId] = [];
-      }
-    }
-  });
-
-  // Group by auditee user ID + collect all CC emails
-  var byAuditee = {};
-  var allCcEmails = {};
-  workPapers.forEach(function(wp) {
-    var ids = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    ids.forEach(function(userId) {
-      if (!byAuditee[userId]) byAuditee[userId] = [];
-      byAuditee[userId].push(wp);
-    });
-    // Collect CC emails from each work paper
-    String(wp.cc_recipients || '').split(/[,\n\r]+/).map(function(e) { return e.trim(); }).filter(Boolean).forEach(function(email) {
-      allCcEmails[email] = true;
-    });
-  });
-
-  var ccString = Object.keys(allCcEmails).join(',') || null;
-
-  Object.keys(byAuditee).forEach(function(userId) {
-    var auditee = getUserById(userId);
-    if (auditee && auditee.email && isActive(auditee.is_active)) {
-      // Deduplicate CC against the auditee's own email
-      var filteredCc = ccString;
-      if (ccString && auditee.email) {
-        var ccArr = ccString.split(',').map(function(e) { return e.trim(); }).filter(function(e) {
-          return e && e.toLowerCase() !== auditee.email.toLowerCase();
-        });
-        filteredCc = ccArr.length > 0 ? ccArr.join(',') : null;
-      }
-      sendBatchedAuditeeNotification(byAuditee[userId], auditee.email, auditee.user_id, auditee.full_name, auditee.first_name, filteredCc, actionPlansByWp);
-    }
-  });
-}
-
-/**
- * Add notification to queue
- */
-function queueNotification(data) {
-  try {
-    const notificationId = generateId('NOTIFICATION');
-    const now = new Date();
-    
-    const notification = {
-      notification_id: notificationId,
-      template_code: data.template_code || '',
-      recipient_user_id: data.recipient_user_id || '',
-      recipient_email: data.recipient_email || '',
-      subject: data.subject || '',
-      body: data.body || '',
-      module: data.module || '',
-      record_id: data.record_id || '',
-      status: STATUS.NOTIFICATION.PENDING,
-      scheduled_for: data.scheduled_for || now,
-      sent_at: '',
-      error_message: '',
-      created_at: now
-    };
-    
-    syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
-    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
-
-    return notificationId;
-  } catch (e) {
-    console.error('Failed to queue notification:', e);
-    return null;
-  }
-}
+// queueAuditeeNotification, sendBatchedAuditeeNotifications, and old queueNotification
+// removed — replaced by universal queueNotification() in 05_NotificationService.gs
 
 /**
  * Get approved work papers grouped by auditee for the Send Queue UI.

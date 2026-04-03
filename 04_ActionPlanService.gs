@@ -625,8 +625,28 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updates.status, implementationNotes, user);
 
-  // Queue notification to auditors for verification
-  queueImplementationNotification(actionPlanId, updated, user);
+  // Queue AP_IMPLEMENTED notification to auditors for verification
+  try {
+    var implParentWp = updated.work_paper_id ? getWorkPaperById(updated.work_paper_id) : null;
+    var implData = {
+      action_plan_id: actionPlanId,
+      action_description: updated.action_description || '',
+      implementer_name: user.full_name || '',
+      implementation_notes: updated.implementation_notes || '',
+      observation_title: implParentWp ? implParentWp.observation_title : '',
+      risk_rating: updated.risk_rating || (implParentWp ? implParentWp.risk_rating : '')
+    };
+    var implAuditors = getUsersDropdown().filter(function(u) {
+      return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(u.roleCode) >= 0;
+    });
+    implAuditors.forEach(function(auditor) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.AP_IMPLEMENTED,
+        recipient_user_id: auditor.id,
+        data: implData
+      });
+    });
+  } catch (e) { console.warn('AP_IMPLEMENTED notification failed:', e.message); }
 
   // Log audit event
   logAuditEvent('IMPLEMENT', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
@@ -700,8 +720,29 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updates.status, comments, user);
 
-  // Queue notification to owners
-  queueVerificationNotification(actionPlanId, updated, action, user);
+  // Queue AP_VERIFIED notification to owners
+  try {
+    var verifyParentWp = updated.work_paper_id ? getWorkPaperById(updated.work_paper_id) : null;
+    var verifyActionText = action === 'approve' ? 'Verified' : action === 'reject' ? 'Rejected' : 'Returned for Revision';
+    var verifyData = {
+      action_plan_id: actionPlanId,
+      action_description: updated.action_description || '',
+      verifier_name: user.full_name || '',
+      action: verifyActionText,
+      comments: updated.auditor_review_comments || '',
+      observation_title: verifyParentWp ? verifyParentWp.observation_title : '',
+      risk_rating: updated.risk_rating || (verifyParentWp ? verifyParentWp.risk_rating : '')
+    };
+    var verifyOwnerIds = parseIdList(updated.owner_ids);
+    verifyOwnerIds.forEach(function(ownerId) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.AP_VERIFIED,
+        recipient_user_id: ownerId,
+        data: verifyData
+      });
+    });
+    queueHoaCcNotifications({ type: NOTIFICATION_TYPES.AP_VERIFIED, data: verifyData }, user.user_id);
+  } catch (e) { console.warn('AP_VERIFIED notification failed:', e.message); }
 
   // Log audit event
   logAuditEvent('VERIFY', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
@@ -755,6 +796,40 @@ function hoaReview(actionPlanId, action, comments, user) {
 
   // Add history
   addActionPlanHistory(actionPlanId, previousStatus, updated.status, comments, user);
+
+  // Queue AP_HOA_REVIEWED notification to AP owners and assigned auditor
+  try {
+    var hoaParentWp = updated.work_paper_id ? getWorkPaperById(updated.work_paper_id) : null;
+    var hoaActionText = action === 'approve' ? 'Approved' : 'Rejected';
+    var hoaReviewData = {
+      action_plan_id: actionPlanId,
+      action_description: updated.action_description || '',
+      hoa_action: hoaActionText,
+      comments: comments || '',
+      reviewer_name: user.full_name || '',
+      observation_title: hoaParentWp ? hoaParentWp.observation_title : '',
+      risk_rating: updated.risk_rating || (hoaParentWp ? hoaParentWp.risk_rating : '')
+    };
+    // Notify AP owners
+    var hoaOwnerIds = parseIdList(updated.owner_ids);
+    hoaOwnerIds.forEach(function(ownerId) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.AP_HOA_REVIEWED,
+        recipient_user_id: ownerId,
+        data: hoaReviewData
+      });
+    });
+    // Notify auditor who verified (if recorded)
+    if (updated.auditor_review_by && updated.auditor_review_by !== user.user_id) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.AP_HOA_REVIEWED,
+        recipient_user_id: updated.auditor_review_by,
+        data: hoaReviewData
+      });
+    }
+    // CC other HOA users
+    queueHoaCcNotifications({ type: NOTIFICATION_TYPES.AP_HOA_REVIEWED, data: hoaReviewData }, user.user_id);
+  } catch (e) { console.warn('AP_HOA_REVIEWED notification failed:', e.message); }
 
   // Log audit event
   logAuditEvent('HOA_REVIEW', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
@@ -907,38 +982,33 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
   // Log audit event
   logAuditEvent('DELEGATE', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
 
-  // Notify new owners
-  queueDelegationNotification(actionPlanId, updated, actionPlan, user);
+  // Queue AP_DELEGATED notification to new owners
+  try {
+    var delegParentWp = updated.work_paper_id ? getWorkPaperById(updated.work_paper_id) : null;
+    var delegData = {
+      action_plan_id: actionPlanId,
+      action_description: updated.action_description || '',
+      delegator_name: user.full_name || '',
+      delegation_notes: updated.delegation_notes || '',
+      parent_observation: delegParentWp ? delegParentWp.observation_title : '',
+      due_date: updated.due_date || '',
+      risk_rating: updated.risk_rating || (delegParentWp ? delegParentWp.risk_rating : '')
+    };
+    var delegOwnerIds = parseIdList(updated.owner_ids);
+    delegOwnerIds.forEach(function(ownerId) {
+      queueNotification({
+        type: NOTIFICATION_TYPES.AP_DELEGATED,
+        recipient_user_id: ownerId,
+        data: delegData
+      });
+    });
+    queueHoaCcNotifications({ type: NOTIFICATION_TYPES.AP_DELEGATED, data: delegData }, user.user_id);
+  } catch (e) { console.warn('AP_DELEGATED notification failed:', e.message); }
 
   return sanitizeForClient({ success: true, actionPlan: updated, message: 'Action plan delegated successfully.' });
 }
 
-/**
- * Queue delegation notification for batched delivery at 8 AM EAT.
- * Instead of sending individual emails immediately, queues them for consolidated delivery.
- */
-function queueDelegationNotification(actionPlanId, actionPlan, previousVersion, delegator) {
-  var ownerIds = parseIdList(actionPlan.owner_ids);
-  var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
-  var observationTitle = parentWp ? parentWp.observation_title : '';
-  var riskRating = actionPlan.risk_rating || (parentWp ? parentWp.risk_rating : '');
-
-  ownerIds.forEach(function(ownerId) {
-    var owner = getUserById(ownerId);
-    if (!owner || !owner.email || !isActive(owner.is_active)) return;
-
-    queueBatchedDelegationNotification(owner.email, ownerId, {
-      action_plan_id: actionPlanId,
-      action_description: actionPlan.action_description || '',
-      observation_title: observationTitle,
-      due_date: actionPlan.due_date || '',
-      risk_rating: riskRating,
-      delegated_by_name: delegator.full_name || '',
-      delegation_notes: actionPlan.delegation_notes || '',
-      previous_owner_names: previousVersion.owner_names || ''
-    });
-  });
-}
+// queueDelegationNotification removed — replaced by universal queueNotification()
 
 function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   if (!user) throw new Error('User required');
@@ -1043,105 +1113,8 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
   return history;
 }
 
-function queueImplementationNotification(actionPlanId, actionPlan, implementer) {
-  var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
-  var observationTitle = parentWp ? parentWp.observation_title : '';
-  var riskRating = actionPlan.risk_rating || (parentWp ? parentWp.risk_rating : '');
-  var apDescTruncated = truncateWords(actionPlan.action_description || '', 8);
-
-  var evidence = [];
-  try { evidence = getActionPlanEvidence(actionPlanId); } catch (e) { /* non-fatal */ }
-
-  var auditors = getUsersDropdown().filter(function(u) {
-    return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(u.roleCode) >= 0;
-  });
-
-  var loginUrl = getSystemUrl();
-  var subject = 'Action Plan Marked as Implemented: ' + (apDescTruncated || actionPlanId);
-
-  auditors.forEach(function(auditor) {
-    var firstName = auditor.name ? auditor.name.split(' ')[0] : 'Auditor';
-    var intro = 'Dear ' + firstName + ',<br><br>' +
-      '<strong>' + (implementer.full_name || 'An auditee') + '</strong> has marked the following action plan as implemented and is awaiting your verification:';
-
-    var headers = ['Field', 'Details'];
-    var rows = [
-      ['Observation', String(observationTitle || '-')],
-      ['Action Plan', truncateWords(actionPlan.action_description || '-', 15)],
-      ['Risk Rating', ratingBadge(riskRating)],
-      ['Implemented By', String(implementer.full_name || '-')],
-      ['Implementation Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
-      ['Implementation Notes', String(actionPlan.implementation_notes || '-')],
-      ['Evidence Files', String(evidence.length) + ' file(s) attached']
-    ];
-
-    var outro = loginUrl
-      ? 'Please <a href="' + loginUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to verify this implementation.'
-      : 'Please log in to verify this implementation.';
-    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-
-    // CC audit team (deduplicated against primary recipient)
-    var ccString = buildAuditTeamCc(auditor.email);
-    sendEmail(auditor.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
-  });
-}
-
-/**
- * Send verification notification to action plan owners using table format.
- * Includes the action plan details + parent observation context.
- */
-function queueVerificationNotification(actionPlanId, actionPlan, action, verifier) {
-  var ownerIds = parseIdList(actionPlan.owner_ids);
-  var actionText = action === 'approve' ? 'Verified' : action === 'reject' ? 'Rejected' : 'Returned for Revision';
-
-  // Get parent work paper for observation context
-  var parentWp = actionPlan.work_paper_id ? getWorkPaperById(actionPlan.work_paper_id) : null;
-  var observationTitle = parentWp ? parentWp.observation_title : '';
-  var riskRating = actionPlan.risk_rating || (parentWp ? parentWp.risk_rating : '');
-
-  var loginUrl = ScriptApp.getService().getUrl();
-
-  ownerIds.forEach(function(ownerId) {
-    var owner = getUserById(ownerId);
-    if (!owner || !owner.email || !isActive(owner.is_active)) return;
-
-    var actionTextMap = { 'approve': 'Verified', 'reject': 'Rejected', 'return': 'Returned for Additional Work' };
-    var apDescShort = truncateWords(actionPlan.action_description || '', 8);
-    var subject = 'Action Plan ' + (actionTextMap[action] || actionText) + ': ' + (apDescShort || actionPlanId);
-    var ownerFirstName = owner.first_name || (owner.full_name || '').split(' ')[0] || 'Colleague';
-    var intro = 'Dear ' + ownerFirstName + ',<br><br>' +
-      'The following action plan has been <strong>' + actionText.toLowerCase() + '</strong> by ' +
-      (verifier.full_name || 'an auditor') + ':';
-
-    var headers = ['Field', 'Details'];
-    var rows = [
-      ['Observation', String(observationTitle || '-')],
-      ['Action Plan', truncateWords(actionPlan.action_description || '-', 15)],
-      ['Rating', ratingBadge(riskRating)],
-      ['Status', '<strong>' + actionText + '</strong>'],
-      ['Reviewed By', String(verifier.full_name || '-')],
-      ['Review Date', new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })]
-    ];
-
-    if (actionPlan.auditor_review_comments) {
-      rows.push(['Comments', String(actionPlan.auditor_review_comments)]);
-    }
-
-    var outro = '';
-    if (action === 'return') {
-      outro = 'Please log in, review the auditor\'s comments, and update your action plan accordingly.<br><br>' + loginUrl;
-    } else if (action === 'reject') {
-      outro = 'The auditor has provided feedback on this action plan. Please log in to review the comments and update your response accordingly.<br><br>' + loginUrl;
-    } else {
-      outro = 'Your action plan has been verified. No further action is required.<br><br>' + loginUrl;
-    }
-
-    var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
-    // CC audit team (deduplicated against primary recipient)
-    var ccString = buildAuditTeamCc(owner.email);
-    sendEmail(owner.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
-  });
-}
+// queueImplementationNotification and queueVerificationNotification removed
+// — replaced by universal queueNotification() in 05_NotificationService.gs
 
 function deleteRelatedRows(sheetName, foreignKeyColumn, foreignKeyValue) {
   var data = getSheetData(sheetName);
