@@ -104,19 +104,7 @@
           </a>
         </li>
 
-        <!-- Quick Stats (Role-based, shown inline) -->
-        <li class="nav-item nav-quick-stats" id="navQuickStats">
-          <div class="quick-stats-container">
-            <div class="quick-stat" onclick="navigateTo('work-papers', {status: 'Submitted'})" title="Pending Reviews">
-              <i class="bi bi-hourglass-split"></i>
-              <span id="quickStatPending">0</span>
-            </div>
-            <div class="quick-stat danger" onclick="navigateTo('action-plans-overdue')" title="Overdue Items">
-              <i class="bi bi-exclamation-triangle"></i>
-              <span id="quickStatOverdue">0</span>
-            </div>
-          </div>
-        </li>
+
 
         <!-- Work Papers with Submenu -->
         <li class="nav-item nav-has-submenu" id="navWorkPapersMenu">
@@ -593,11 +581,6 @@
     document.getElementById('notificationsList').innerHTML = '<div class="text-center py-3 text-muted">No new notifications</div>';
   }
 
-  // Update quick stats in sidebar
-  function updateQuickStats(pending, overdue) {
-    document.getElementById('quickStatPending').textContent = pending || 0;
-    document.getElementById('quickStatOverdue').textContent = overdue || 0;
-  }
   </script>
 </body>
 </html>
