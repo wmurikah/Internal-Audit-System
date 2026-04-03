@@ -112,7 +112,7 @@
               <select class="form-select" id="wpAssignedAuditor" onchange="updateFormProgress()">
                 <option value="">Select Auditor...</option>
               </select>
-              <small class="text-muted">Select the auditor who will complete the testing information and evidence.</small>
+              <small class="text-muted">Assign an auditor to complete testing and evidence</small>
             </div>
           </div>
 
@@ -144,13 +144,6 @@
             <div class="col-md-4">
               <label class="form-label">Audit Period To</label>
               <input type="date" class="form-control" id="wpPeriodTo">
-            </div>
-            <div class="col-md-6" id="wpAssignedAuditorWrap">
-              <label class="form-label">Assigned Auditor</label>
-              <select class="form-select" id="wpAssignedAuditor">
-                <option value="">-- Not Assigned --</option>
-              </select>
-              <small class="text-muted">Assign an auditor to complete testing and evidence</small>
             </div>
           </div>
 
@@ -1739,22 +1732,6 @@ function initWorkPaperForm(params) {
   populateDropdown('wpAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
   populateDropdown('wpAuditArea', window.appDropdowns?.auditAreas || [], 'id', 'display', 'Select Audit Area');
 
-  // Initialize assigned auditor dropdown (only auditors/senior auditors)
-  var auditorSelect = document.getElementById('wpAssignedAuditor');
-  var allUsers = window.appDropdowns?.users || [];
-  allUsers.forEach(function(u) {
-    if (u.id && u.name) {
-      var opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = u.name + (u.email ? ' (' + u.email + ')' : '');
-      auditorSelect.appendChild(opt);
-    }
-  });
-  // Only HOA (SUPER_ADMIN) can assign auditors — hide for others
-  if (window.currentUser?.role_code !== 'SUPER_ADMIN') {
-    document.getElementById('wpAssignedAuditorWrap').style.display = 'none';
-  }
-
   // Set default date
   document.getElementById('wpDate').value = new Date().toISOString().split('T')[0];
 
@@ -2130,9 +2107,6 @@ function applyEditPermissions(wp) {
   document.querySelectorAll('#wpResponsibleTags .remove-tag, #wpCCRecipientsTags .remove-tag').forEach(function(btn) {
     btn.style.display = 'none';
   });
-
-  // Hide the assigned auditor dropdown for non-HOA
-  document.getElementById('wpAssignedAuditorWrap').style.display = 'none';
 
   // Show the locked section banner and Request Change button
   document.getElementById('lockedSectionNotice').style.display = 'flex';

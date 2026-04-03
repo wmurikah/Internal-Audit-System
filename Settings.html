@@ -27,6 +27,9 @@
     <li class="nav-item">
       <a class="nav-link" data-bs-toggle="tab" href="#auditLog"><i class="bi bi-journal-text me-1"></i>Audit Log</a>
     </li>
+    <li class="nav-item" id="dropdownsTabNav" style="display:none">
+      <a class="nav-link" data-bs-toggle="tab" href="#dropdownManagement"><i class="bi bi-list-ul me-1"></i>Dropdowns</a>
+    </li>
   </ul>
 
   <!-- Tab Content -->
@@ -551,6 +554,21 @@
         </div>
       </div>
     </div>
+
+    <!-- Dropdown Management Tab (SUPER_ADMIN only) -->
+    <div class="tab-pane fade" id="dropdownManagement">
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-list-ul me-2"></i>Dropdown Management
+        </div>
+        <div class="card-body">
+          <p class="text-muted">Manage system dropdowns including audit areas, sub-areas, affiliates, risk ratings, control classifications, and more.</p>
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>Full dropdown management UI will be available in the next update.
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -577,6 +595,12 @@ function loadSettings(params) {
   // Always load these (visible to all settings users)
   loadUsers();
   loadRoles();
+
+  // Show Dropdowns tab for SUPER_ADMIN
+  if (role === 'SUPER_ADMIN') {
+    var dropdownsNav = document.getElementById('dropdownsTabNav');
+    if (dropdownsNav) dropdownsNav.style.display = '';
+  }
 
   // Only load restricted tabs if SUPER_ADMIN
   if (role === 'SUPER_ADMIN') {

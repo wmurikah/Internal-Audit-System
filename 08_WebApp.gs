@@ -641,6 +641,20 @@ function routeAction(action, data, user) {
       }
       return clearAllCaches();
 
+    // ========== DROPDOWN MANAGEMENT ==========
+    case 'getDropdownItems':
+      return getDropdownItems(data, user);
+    case 'createDropdownItem':
+      return createDropdownItem(data, user);
+    case 'updateDropdownItem':
+      return updateDropdownItem(data, user);
+    case 'deleteDropdownItem':
+      return deleteDropdownItem(data, user);
+    case 'updateDropdownOrder':
+      return updateDropdownOrder(data, user);
+    case 'saveConfigDropdown':
+      return saveConfigDropdown(data, user);
+
     default:
       return { success: false, error: 'Unknown action: ' + action };
   }
