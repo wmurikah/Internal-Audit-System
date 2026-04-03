@@ -34,6 +34,8 @@ function createWorkPaper(data, user) {
     management_response: sanitizeInput(data.management_response || ''),
     responsible_ids: data.responsible_ids || '',
     cc_recipients: data.cc_recipients || '',
+    assigned_auditor_id: data.assigned_auditor_id || '',
+    assigned_auditor_name: '',
     status: STATUS.WORK_PAPER.DRAFT,
     final_status: '',
     revision_count: 0,
@@ -64,12 +66,25 @@ function createWorkPaper(data, user) {
     work_paper_ref: workPaperId
   };
 
+  // Resolve assigned auditor name
+  if (workPaper.assigned_auditor_id) {
+    var assignedUser = getUserById(workPaper.assigned_auditor_id);
+    if (assignedUser) {
+      workPaper.assigned_auditor_name = assignedUser.full_name || '';
+    }
+  }
+
   // Write to Firestore
   syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, workPaper);
   invalidateSheetData(SHEETS.WORK_PAPERS);
 
   // Log audit event
   logAuditEvent('CREATE', 'WORK_PAPER', workPaperId, null, workPaper, user.user_id, user.email);
+
+  // Queue assignment notification if auditor was assigned on create
+  if (workPaper.assigned_auditor_id) {
+    try { queueAssignmentNotification(workPaper, workPaper.assigned_auditor_id, user); } catch(e) { console.warn('Assignment notification failed:', e.message); }
+  }
 
   return sanitizeForClient({ success: true, workPaperId: workPaperId, workPaper: workPaper });
 }
@@ -130,7 +145,7 @@ function updateWorkPaper(workPaperId, data, user) {
   
   // Build update object (only update provided fields)
   const updates = {};
-  const editableFields = [
+  const allEditableFields = [
     'year', 'affiliate_code', 'audit_area_id', 'sub_area_id',
     'work_paper_date', 'audit_period_from', 'audit_period_to',
     'control_objectives', 'control_classification', 'control_type', 'control_frequency', 'control_standards',
@@ -139,13 +154,35 @@ function updateWorkPaper(workPaperId, data, user) {
     'management_response', 'responsible_ids', 'cc_recipients',
     'assigned_auditor_id', 'assigned_auditor_name'
   ];
-  
+
+  // Assigned auditors can only edit testing/evidence fields (backend enforcement)
+  const auditorEditableFields = [
+    'control_objectives', 'risk_description', 'test_objective', 'testing_steps',
+    'control_classification', 'control_type', 'control_frequency', 'control_standards',
+    'observation_description', 'recommendation'
+  ];
+
+  var editableFields = allEditableFields;
+  if (user.role_code !== ROLES.SUPER_ADMIN &&
+      existing.assigned_auditor_id && existing.assigned_auditor_id === user.user_id) {
+    // Assigned auditor: restrict to testing/evidence fields only
+    editableFields = auditorEditableFields;
+  }
+
   editableFields.forEach(field => {
     if (data[field] !== undefined) {
       updates[field] = typeof data[field] === 'string' ? sanitizeInput(data[field]) : data[field];
     }
   });
-  
+
+  // If assigned_auditor_id is being changed, look up the name
+  if (updates.assigned_auditor_id && updates.assigned_auditor_id !== existing.assigned_auditor_id) {
+    var assignedUser = getUserById(updates.assigned_auditor_id);
+    if (assignedUser) {
+      updates.assigned_auditor_name = assignedUser.full_name || '';
+    }
+  }
+
   updates.updated_at = now;
   
   // Apply updates to existing
@@ -157,6 +194,11 @@ function updateWorkPaper(workPaperId, data, user) {
 
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
+
+  // Queue assignment notification if assigned_auditor_id changed
+  if (updated.assigned_auditor_id && updated.assigned_auditor_id !== existing.assigned_auditor_id) {
+    try { queueAssignmentNotification(updated, updated.assigned_auditor_id, user); } catch(e) { console.warn('Assignment notification failed:', e.message); }
+  }
 
   return sanitizeForClient({ success: true, workPaper: updated });
 }

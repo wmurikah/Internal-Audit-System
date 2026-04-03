@@ -67,6 +67,29 @@
 
     <!-- Tab Content -->
     <div class="tab-content card card-tabs" id="workPaperTabContent">
+
+      <!-- Locked Section Banner (shown to assigned auditors) -->
+      <div class="alert alert-secondary py-2 mx-3 mt-3 mb-0" id="lockedSectionNotice" style="display:none">
+        <i class="bi bi-lock me-2"></i>Basic Information, Observation, and Responsible Parties were set by the Head of Internal Audit. You can edit Testing Information and Evidence below.
+      </div>
+
+      <!-- Verification Notice for pre-populated testing fields -->
+      <div id="verificationNotice" class="alert alert-warning border-start border-4 border-warning shadow-sm mx-3 mt-3 mb-0" style="display:none">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-clipboard-check text-warning me-3" style="font-size:1.5rem"></i>
+          <div>
+            <strong>Please Verify Pre-filled Information</strong>
+            <p class="mb-1">The Testing Information below has been pre-filled from existing audit records. Please:</p>
+            <ol class="mb-0">
+              <li>Review each field for accuracy and relevance to this specific audit</li>
+              <li>Update any information that needs to be changed</li>
+              <li>Complete any empty fields</li>
+              <li>Upload supporting evidence documents</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
       <!-- Basic Info Panel -->
       <div class="tab-pane fade show active" id="panel-basic" role="tabpanel" aria-labelledby="tab-basic">
         <div class="card-body">
@@ -116,6 +139,13 @@
             <div class="col-md-4">
               <label class="form-label">Audit Period To</label>
               <input type="date" class="form-control" id="wpPeriodTo">
+            </div>
+            <div class="col-md-6" id="wpAssignedAuditorWrap">
+              <label class="form-label">Assigned Auditor</label>
+              <select class="form-select" id="wpAssignedAuditor">
+                <option value="">-- Not Assigned --</option>
+              </select>
+              <small class="text-muted">Assign an auditor to complete testing and evidence</small>
             </div>
           </div>
 
@@ -1641,6 +1671,22 @@ function initWorkPaperForm(params) {
   populateDropdown('wpAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
   populateDropdown('wpAuditArea', window.appDropdowns?.auditAreas || [], 'id', 'display', 'Select Audit Area');
 
+  // Initialize assigned auditor dropdown (only auditors/senior auditors)
+  var auditorSelect = document.getElementById('wpAssignedAuditor');
+  var allUsers = window.appDropdowns?.users || [];
+  allUsers.forEach(function(u) {
+    if (u.id && u.name) {
+      var opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.name + (u.email ? ' (' + u.email + ')' : '');
+      auditorSelect.appendChild(opt);
+    }
+  });
+  // Only HOA (SUPER_ADMIN) can assign auditors — hide for others
+  if (window.currentUser?.role_code !== 'SUPER_ADMIN') {
+    document.getElementById('wpAssignedAuditorWrap').style.display = 'none';
+  }
+
   // Set default date
   document.getElementById('wpDate').value = new Date().toISOString().split('T')[0];
 
@@ -1866,6 +1912,7 @@ function populateForm(wp) {
   document.getElementById('wpControlType').value = wp.control_type || '';
   document.getElementById('wpControlFreq').value = wp.control_frequency || '';
   document.getElementById('wpControlStandards').value = wp.control_standards || '';
+  document.getElementById('wpAssignedAuditor').value = wp.assigned_auditor_id || '';
 
   // Populate assigned auditor (SUPER_ADMIN only)
   if (wp.assigned_auditor_id && document.getElementById('wpAssignedAuditor')) {
@@ -1906,6 +1953,115 @@ function populateForm(wp) {
 
   // Apply role-based response tab visibility
   applyResponseTabRoleGating(wp);
+
+  // Apply section-level edit permissions for assigned auditors
+  applyEditPermissions(wp);
+}
+
+// =============================================
+// SECTION-LEVEL EDIT PERMISSIONS
+// =============================================
+
+/**
+ * Apply section-level edit permissions when an assigned auditor opens a work paper.
+ * - HOA (SUPER_ADMIN): all fields editable
+ * - Assigned auditor: only Testing + Evidence editable; Basic Info, Observation, Parties locked
+ * - Other users: normal edit rules
+ */
+function applyEditPermissions(wp) {
+  var user = window.currentUser;
+  if (!user || !wp) return;
+
+  var isHOA = user.role_code === 'SUPER_ADMIN';
+  var isAssignedAuditor = wp.assigned_auditor_id && wp.assigned_auditor_id === user.user_id;
+
+  // Only apply locking for assigned auditors who are NOT HOA
+  if (!isAssignedAuditor || isHOA) return;
+
+  // Store original values for locked selects (disabled selects don't submit)
+  window._lockedFieldValues = {};
+
+  // --- Basic Information fields to lock ---
+  var basicInfoFieldIds = ['wpYear', 'wpAffiliate', 'wpAuditArea', 'wpSubArea', 'wpDate', 'wpPeriodFrom', 'wpPeriodTo', 'wpAssignedAuditor'];
+
+  // --- Observation fields to lock ---
+  var observationFieldIds = ['wpObsTitle', 'wpRiskRating', 'wpRiskSummary'];
+
+  // --- Auditee/Parties fields to lock ---
+  var partiesFieldIds = ['wpManagementResponse'];
+
+  // Combine all locked field IDs
+  var lockedFieldIds = basicInfoFieldIds.concat(observationFieldIds).concat(partiesFieldIds);
+
+  // Field ID to data key mapping for storing original values
+  var fieldToDataKey = {
+    'wpYear': 'year', 'wpAffiliate': 'affiliate_code', 'wpAuditArea': 'audit_area_id',
+    'wpSubArea': 'sub_area_id', 'wpDate': 'work_paper_date', 'wpPeriodFrom': 'audit_period_from',
+    'wpPeriodTo': 'audit_period_to', 'wpAssignedAuditor': 'assigned_auditor_id',
+    'wpObsTitle': 'observation_title', 'wpRiskRating': 'risk_rating',
+    'wpRiskSummary': 'risk_summary', 'wpManagementResponse': 'management_response'
+  };
+
+  lockedFieldIds.forEach(function(fieldId) {
+    var el = document.getElementById(fieldId);
+    if (!el) return;
+
+    var dataKey = fieldToDataKey[fieldId];
+    if (dataKey) {
+      window._lockedFieldValues[dataKey] = el.value;
+    }
+
+    var tagName = el.tagName.toLowerCase();
+    if (tagName === 'select') {
+      el.disabled = true;
+      el.classList.add('bg-light');
+    } else if (tagName === 'textarea') {
+      el.readOnly = true;
+      el.classList.add('bg-light');
+    } else if (tagName === 'input') {
+      el.readOnly = true;
+      el.classList.add('bg-light');
+    }
+  });
+
+  // Lock Responsible and CC fields (autocomplete inputs + tags)
+  var responsibleInput = document.getElementById('wpResponsibleInput');
+  if (responsibleInput) {
+    responsibleInput.readOnly = true;
+    responsibleInput.classList.add('bg-light');
+    responsibleInput.placeholder = 'Locked — set by Head of Internal Audit';
+  }
+  // Store responsible_ids and cc_recipients
+  window._lockedFieldValues['responsible_ids'] = document.getElementById('wpResponsibleIds').value;
+  window._lockedFieldValues['cc_recipients'] = document.getElementById('wpCCRecipients').value;
+
+  var ccInput = document.getElementById('wpCCRecipientsInput');
+  if (ccInput) {
+    ccInput.readOnly = true;
+    ccInput.classList.add('bg-light');
+    ccInput.placeholder = 'Locked — set by Head of Internal Audit';
+  }
+
+  // Hide remove buttons on responsible/CC tags
+  document.querySelectorAll('#wpResponsibleTags .remove-tag, #wpCCRecipientsTags .remove-tag').forEach(function(btn) {
+    btn.style.display = 'none';
+  });
+
+  // Hide the assigned auditor dropdown for non-HOA
+  document.getElementById('wpAssignedAuditorWrap').style.display = 'none';
+
+  // Show the locked section banner
+  document.getElementById('lockedSectionNotice').style.display = 'block';
+
+  // Check if testing fields are pre-populated and show verification notice
+  var hasPrePopulated = (wp.control_objectives && wp.control_objectives.trim()) ||
+                        (wp.testing_steps && wp.testing_steps.trim()) ||
+                        (wp.test_objective && wp.test_objective.trim()) ||
+                        (wp.risk_description && wp.risk_description.trim());
+
+  if (hasPrePopulated) {
+    document.getElementById('verificationNotice').style.display = 'block';
+  }
 }
 
 /**
@@ -2162,6 +2318,15 @@ function getFormData() {
     assigned_auditor_id: auditorSelect ? auditorSelect.value : '',
     assigned_auditor_name: auditorOption ? auditorOption.text.split(' (')[0] : ''
   };
+
+  // For locked (disabled) selects, read from stored original values
+  if (window._lockedFieldValues) {
+    Object.keys(window._lockedFieldValues).forEach(function(key) {
+      data[key] = window._lockedFieldValues[key];
+    });
+  }
+
+  return data;
 }
 
 function getActionPlansData() {
