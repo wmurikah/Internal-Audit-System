@@ -114,10 +114,11 @@ function updateWorkPaper(workPaperId, data, user) {
   }
 
   // Check status - can only edit draft or revision required
+  // SUPER_ADMIN bypasses all status restrictions
   const editableStatuses = [STATUS.WORK_PAPER.DRAFT, STATUS.WORK_PAPER.REVISION_REQUIRED];
-  if (!editableStatuses.includes(existing.status)) {
+  if (!editableStatuses.includes(existing.status) && user.role_code !== ROLES.SUPER_ADMIN) {
     // Allow specific fields for reviewers even in non-editable status
-    const isReviewer = user.role_code === ROLES.SUPER_ADMIN || user.role_code === ROLES.SENIOR_AUDITOR;
+    const isReviewer = user.role_code === ROLES.SENIOR_AUDITOR;
     if (!isReviewer) {
       throw new Error('Work paper cannot be edited in current status: ' + existing.status);
     }
@@ -170,8 +171,8 @@ function deleteWorkPaper(workPaperId, user) {
     throw new Error('Permission denied: Cannot delete this work paper');
   }
   
-  // Only allow deletion of drafts
-  if (existing.status !== STATUS.WORK_PAPER.DRAFT) {
+  // Only allow deletion of drafts (SUPER_ADMIN can delete any status)
+  if (existing.status !== STATUS.WORK_PAPER.DRAFT && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Only draft work papers can be deleted');
   }
 
@@ -332,9 +333,9 @@ function submitWorkPaper(workPaperId, user) {
   const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
   
-  // Validate status
+  // Validate status (SUPER_ADMIN can submit from any status)
   const allowedStatuses = [STATUS.WORK_PAPER.DRAFT, STATUS.WORK_PAPER.REVISION_REQUIRED];
-  if (!allowedStatuses.includes(workPaper.status)) {
+  if (!allowedStatuses.includes(workPaper.status) && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Work paper cannot be submitted from status: ' + workPaper.status);
   }
   
@@ -420,8 +421,8 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
   
-  // Validate status
-  if (workPaper.status !== STATUS.WORK_PAPER.SUBMITTED && workPaper.status !== STATUS.WORK_PAPER.UNDER_REVIEW) {
+  // Validate status (SUPER_ADMIN can review from any status)
+  if (workPaper.status !== STATUS.WORK_PAPER.SUBMITTED && workPaper.status !== STATUS.WORK_PAPER.UNDER_REVIEW && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Work paper is not pending review');
   }
   
@@ -461,7 +462,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   if (!transition) {
     throw new Error('Invalid review action: ' + action);
   }
-  if (!transition.from.includes(workPaper.status)) {
+  if (!transition.from.includes(workPaper.status) && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Action "' + action + '" is not allowed from status: ' + workPaper.status);
   }
 
@@ -556,8 +557,8 @@ function sendToAuditee(workPaperId, user) {
   const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
 
-  // Must be approved
-  if (workPaper.status !== STATUS.WORK_PAPER.APPROVED) {
+  // Must be approved (SUPER_ADMIN can send from any status)
+  if (workPaper.status !== STATUS.WORK_PAPER.APPROVED && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Work paper must be approved before sending to auditee');
   }
 

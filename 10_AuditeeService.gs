@@ -43,15 +43,20 @@ function getAuditeeFindings(filters, user) {
     console.warn('Failed to check delegated action plans:', e.message);
   }
 
+  var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
+
   for (var i = 0; i < workPapers.length; i++) {
     var wp = workPapers[i];
 
-    // Only show "Sent to Auditee" status work papers
-    if (wp.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) continue;
+    // Only show "Sent to Auditee" status work papers (SUPER_ADMIN sees all)
+    if (!isSuperAdmin && wp.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) continue;
 
     // Check if user is assigned as responsible party OR owns a delegated action plan for this WP
-    var responsibleIds = parseIdList(wp.responsible_ids);
-    if (!responsibleIds.includes(user.user_id) && !delegatedWPIds[wp.work_paper_id]) continue;
+    // SUPER_ADMIN bypasses ownership check
+    if (!isSuperAdmin) {
+      var responsibleIds = parseIdList(wp.responsible_ids);
+      if (!responsibleIds.includes(user.user_id) && !delegatedWPIds[wp.work_paper_id]) continue;
+    }
 
     // Apply optional filters
     if (filters.response_status && wp.response_status !== filters.response_status) continue;
@@ -414,7 +419,8 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
   var wp = getWorkPaperById(workPaperId);
   if (!wp) throw new Error('Work paper not found');
 
-  if (wp.response_status !== STATUS.RESPONSE.SUBMITTED) {
+  // SUPER_ADMIN can review responses in any status
+  if (wp.response_status !== STATUS.RESPONSE.SUBMITTED && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('No pending response to review. Current status: ' + (wp.response_status || 'N/A'));
   }
 

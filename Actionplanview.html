@@ -216,15 +216,16 @@ function renderActionPlanView() {
   // Review comments
   renderAPReviewComments(ap);
 
-  // Upload button visibility
+  // Upload button visibility (SUPER_ADMIN always sees upload button)
   var uploadBtn = document.getElementById('apvUploadBtn');
   if (uploadBtn) {
     var user = window.currentUser;
+    var isAdmin = user?.role_code === 'SUPER_ADMIN';
     var isOwner = _apvIsOwner(ap, user);
     var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
     var isAuditor = auditorRoles.indexOf(user?.role_code) >= 0;
     var terminalStatuses = ['Verified', 'Closed', 'Not Implemented'];
-    uploadBtn.style.display = (isOwner || isAuditor) && terminalStatuses.indexOf(ap.status) === -1 ? '' : 'none';
+    uploadBtn.style.display = isAdmin || ((isOwner || isAuditor) && terminalStatuses.indexOf(ap.status) === -1) ? '' : 'none';
   }
 }
 
@@ -241,6 +242,7 @@ function renderAPActions(ap) {
   var role = user?.role_code || '';
   var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
   var hoaRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR'];
+  var isAdmin = role === 'SUPER_ADMIN';
   var isAuditor = auditorRoles.indexOf(role) >= 0;
   var isHOA = hoaRoles.indexOf(role) >= 0;
   var isOwner = _apvIsOwner(ap, user);
@@ -251,8 +253,8 @@ function renderAPActions(ap) {
   var evidence = ap.evidence || [];
   var hasEvidence = evidence.length > 0;
 
-  // Delegation banner (delegated to current user, pending acceptance)
-  if (isOwner && ap.delegated_by_id && ap.original_owner_ids) {
+  // Delegation banner (delegated to current user or SUPER_ADMIN can act on behalf)
+  if ((isAdmin || isOwner) && ap.delegated_by_id && ap.original_owner_ids) {
     html += '<div class="alert alert-info mb-3">' +
       '<i class="bi bi-person-plus me-2"></i>' +
       'This action plan was delegated to you by <strong>' + escapeHtml(ap.delegated_by_name || '') + '</strong>' +
@@ -264,21 +266,21 @@ function renderAPActions(ap) {
       '</div></div>';
   }
 
-  // Owner actions (non-terminal)
-  if (isOwner && !isTerminal) {
+  // Owner actions (non-terminal) — SUPER_ADMIN always sees these
+  if ((isAdmin || isOwner) && (isAdmin || !isTerminal)) {
     var implStatuses = ['Pending', 'Not Due', 'In Progress', 'Rejected'];
-    if (implStatuses.indexOf(ap.status) >= 0) {
+    if (isAdmin || implStatuses.indexOf(ap.status) >= 0) {
       html += '<button class="btn btn-success w-100 mb-2" onclick="markAPImplemented()" ' +
-        (!hasEvidence ? 'disabled title="Upload at least one evidence document first"' : '') + '>' +
+        (!hasEvidence && !isAdmin ? 'disabled title="Upload at least one evidence document first"' : '') + '>' +
         '<i class="bi bi-check-circle me-1"></i>Mark as Implemented' +
-        (!hasEvidence ? ' <small>(needs evidence)</small>' : '') + '</button>';
+        (!hasEvidence && !isAdmin ? ' <small>(needs evidence)</small>' : '') + '</button>';
     }
     html += '<button class="btn btn-outline-primary w-100 mb-2" onclick="showDelegateModal()"><i class="bi bi-person-plus me-1"></i>Delegate</button>';
     html += '<button class="btn btn-outline-secondary w-100 mb-2" onclick="_apvUploadEvidence()"><i class="bi bi-upload me-1"></i>Upload Evidence</button>';
   }
 
-  // Auditor: Verification buttons
-  if (isAuditor && ap.status === 'Pending Verification') {
+  // Auditor: Verification buttons — SUPER_ADMIN always sees these
+  if (isAuditor && (isAdmin || ap.status === 'Pending Verification')) {
     html += '<hr>';
     html += '<p class="small text-muted mb-2">Verification</p>';
     html += '<button class="btn btn-success w-100 mb-2" onclick="showVerifyModal(\'approve\')"><i class="bi bi-check-circle me-1"></i>Verify (Approve)</button>';
@@ -286,20 +288,20 @@ function renderAPActions(ap) {
     html += '<button class="btn btn-danger w-100 mb-2" onclick="showVerifyModal(\'reject\')"><i class="bi bi-x-circle me-1"></i>Reject</button>';
   }
 
-  // HOA: Final review buttons
-  if (isHOA && ap.status === 'Verified') {
+  // HOA: Final review buttons — SUPER_ADMIN always sees these
+  if (isHOA && (isAdmin || ap.status === 'Verified')) {
     html += '<hr>';
     html += '<p class="small text-muted mb-2">HOA Final Review</p>';
     html += '<button class="btn btn-primary w-100 mb-2" onclick="showHOAReviewModal(\'approve\')"><i class="bi bi-check-all me-1"></i>HOA Approve (Close)</button>';
     html += '<button class="btn btn-outline-danger w-100 mb-2" onclick="showHOAReviewModal(\'reject\')"><i class="bi bi-x-circle me-1"></i>HOA Reject</button>';
   }
 
-  // Auditor general actions
+  // Auditor general actions — SUPER_ADMIN sees all regardless of status
   if (isAuditor && !isReadOnly) {
     html += '<hr>';
-    var canEdit = ['Verified', 'Closed'].indexOf(ap.status) === -1;
-    var canDelegate = terminalStatuses.indexOf(ap.status) === -1;
-    var canDelete = ['Not Due', 'Pending', 'In Progress'].indexOf(ap.status) >= 0;
+    var canEdit = isAdmin || ['Verified', 'Closed'].indexOf(ap.status) === -1;
+    var canDelegate = isAdmin || terminalStatuses.indexOf(ap.status) === -1;
+    var canDelete = isAdmin || ['Not Due', 'Pending', 'In Progress'].indexOf(ap.status) >= 0;
 
     if (canEdit) html += '<button class="btn btn-outline-primary btn-sm me-1 mb-1" onclick="showEditAPModal()"><i class="bi bi-pencil me-1"></i>Edit</button>';
     if (canDelegate) html += '<button class="btn btn-outline-secondary btn-sm me-1 mb-1" onclick="showDelegateModal()"><i class="bi bi-person-plus me-1"></i>Delegate</button>';
@@ -337,8 +339,9 @@ function renderAPImplementation(ap) {
     html += '<p class="text-muted small"><i class="bi bi-calendar-check me-1"></i>Implemented on ' + formatDate(ap.implemented_date) + '</p>';
   }
 
-  // Show textarea for owner to add notes before marking implemented
-  if (isOwner && implStatuses.indexOf(ap.status) >= 0) {
+  // Show textarea for owner to add notes before marking implemented (SUPER_ADMIN always sees this)
+  var isAdmin = user?.role_code === 'SUPER_ADMIN';
+  if ((isAdmin || isOwner) && (isAdmin || implStatuses.indexOf(ap.status) >= 0)) {
     html += '<div class="mt-3">' +
       '<label class="form-label">Implementation Notes</label>' +
       '<textarea class="form-control" id="apvImplNotes" rows="3" placeholder="Describe what was implemented...">' + escapeHtml(ap.implementation_notes || '') + '</textarea>' +
@@ -374,7 +377,8 @@ function renderAPEvidence(evidence) {
   list.innerHTML = evidence.map(function(f) {
     var icon = typeof getFileIcon === 'function' ? getFileIcon(f.mime_type, f.file_name) : 'bi-file-earmark';
     var size = f.file_size ? (f.file_size < 1024 * 1024 ? Math.round(f.file_size / 1024) + ' KB' : (f.file_size / (1024 * 1024)).toFixed(1) + ' MB') : '';
-    var deleteBtn = canDelete && !isTerminal ? '<button class="btn btn-sm btn-outline-danger ms-2" onclick="event.stopPropagation(); deleteAPEvidence(\'' + f.evidence_id + '\')"><i class="bi bi-trash"></i></button>' : '';
+    var isAdmin = user?.role_code === 'SUPER_ADMIN';
+    var deleteBtn = canDelete && (isAdmin || !isTerminal) ? '<button class="btn btn-sm btn-outline-danger ms-2" onclick="event.stopPropagation(); deleteAPEvidence(\'' + f.evidence_id + '\')"><i class="bi bi-trash"></i></button>' : '';
     return '<li class="list-group-item d-flex justify-content-between align-items-center">' +
       '<a href="' + escapeHtml(f.drive_url || '#') + '" target="_blank" class="text-decoration-none">' +
       '<i class="bi ' + icon + ' me-2"></i>' + escapeHtml(f.file_name || 'File') +
