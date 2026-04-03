@@ -341,8 +341,8 @@ function renderAuditeeResponse() {
     var latestResponse = (_arData.responses && _arData.responses.length > 0) ? _arData.responses[0] : null;
     document.getElementById('arResponseTextDisplay').textContent = f.management_response || 'No response submitted yet';
 
-    // Show auditor review buttons if applicable
-    if ((isAuditor || isSuperAdmin) && responseStatus === 'Response Submitted') {
+    // Show auditor review buttons if applicable (SUPER_ADMIN sees them regardless of status)
+    if ((isAuditor || isSuperAdmin) && (isSuperAdmin || responseStatus === 'Response Submitted')) {
       document.getElementById('arAuditorReviewActions').style.display = 'flex';
     }
   }
@@ -356,9 +356,9 @@ function renderAuditeeResponse() {
     reviewActionsEl.style.setProperty('display', 'none', 'important');
   }
 
-  // Enforce max round limit in UI
+  // Enforce max round limit in UI (SUPER_ADMIN bypasses round limit)
   var maxRounds = _arData.maxRounds || 3;
-  if ((f.response_round || 0) >= maxRounds && responseStatus !== 'Response Accepted') {
+  if (!isSuperAdmin && (f.response_round || 0) >= maxRounds && responseStatus !== 'Response Accepted') {
     document.getElementById('arResponseActions').style.display = 'none';
     document.getElementById('btnAddActionPlan').style.display = 'none';
     var escalatedMsg = document.createElement('div');

@@ -36,12 +36,12 @@ function createActionPlan(data, user) {
     }
   }
 
-  // Verify work paper exists and is sent to auditee
+  // Verify work paper exists and is sent to auditee (SUPER_ADMIN bypasses status check)
   const workPaper = getWorkPaperById(data.work_paper_id);
   if (!workPaper) {
     throw new Error('Work paper not found: ' + data.work_paper_id);
   }
-  if (workPaper.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+  if (workPaper.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Action plans can only be created after work paper is sent to auditee');
   }
 
@@ -127,10 +127,10 @@ function createActionPlansBatch(workPaperId, plansData, user) {
   if (!workPaper) {
     throw new Error('Work paper not found: ' + workPaperId);
   }
-  if (workPaper.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
+  if (workPaper.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Action plans can only be created after work paper is sent to auditee');
   }
-  
+
   // Validate all due dates: must not be more than 6 months from today
   var maxDueDateBatch = new Date();
   maxDueDateBatch.setMonth(maxDueDateBatch.getMonth() + 6);
@@ -350,9 +350,9 @@ function deleteActionPlan(actionPlanId, user) {
     throw new Error('Permission denied: Cannot delete this action plan');
   }
   
-  // Only allow deletion if not yet implemented
+  // Only allow deletion if not yet implemented (SUPER_ADMIN can delete any status)
   const deletableStatuses = [STATUS.ACTION_PLAN.NOT_DUE, STATUS.ACTION_PLAN.PENDING, STATUS.ACTION_PLAN.IN_PROGRESS];
-  if (!deletableStatuses.includes(existing.status)) {
+  if (!deletableStatuses.includes(existing.status) && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Cannot delete action plan with status: ' + existing.status);
   }
   
@@ -596,9 +596,9 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
     throw new Error('Permission denied: Only owners can mark as implemented');
   }
 
-  // Evidence is mandatory to mark as implemented
+  // Evidence is mandatory to mark as implemented (SUPER_ADMIN can bypass)
   const evidence = getActionPlanEvidence(actionPlanId);
-  if (!evidence || evidence.length === 0) {
+  if ((!evidence || evidence.length === 0) && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Evidence attachment is required before marking as implemented. Please upload at least one supporting document.');
   }
 
@@ -651,13 +651,14 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   if (!actionPlan) throw new Error('Action plan not found');
   
   // Can only verify if status is pending verification (or legacy implemented)
+  // SUPER_ADMIN can verify any status
   const verifiableStatuses = [
     STATUS.ACTION_PLAN.PENDING_VERIFICATION,
     'Pending Verification',
     STATUS.ACTION_PLAN.IMPLEMENTED,
     'Implemented'
   ];
-  if (!verifiableStatuses.includes(actionPlan.status)) {
+  if (!verifiableStatuses.includes(actionPlan.status) && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Action plan must be marked as implemented and pending verification before verification');
   }
   
@@ -864,9 +865,9 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
     throw new Error('Permission denied: Only current owners or auditors can delegate action plans');
   }
 
-  // Cannot delegate closed/verified action plans
+  // Cannot delegate closed/verified action plans (SUPER_ADMIN can delegate any status)
   var closedStatuses = [STATUS.ACTION_PLAN.VERIFIED, STATUS.ACTION_PLAN.CLOSED, STATUS.ACTION_PLAN.NOT_IMPLEMENTED];
-  if (closedStatuses.includes(actionPlan.status)) {
+  if (closedStatuses.includes(actionPlan.status) && user.role_code !== ROLES.SUPER_ADMIN) {
     throw new Error('Cannot delegate action plan with status: ' + actionPlan.status);
   }
 
