@@ -495,7 +495,7 @@ function loadSidebarCountsBackground() {
     .then(result => {
       if (result && result.success) {
         window._sidebarCounts = result;
-        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
+        updateSidebarBadges(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
         window.loadingState.sidebarCounts = true;
         var respBadge = document.getElementById('responsesReviewCount');
         if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
@@ -529,7 +529,7 @@ function refreshBackgroundData() {
   apiCall('getSidebarCounts', {})
     .then(result => {
       if (result && result.success) {
-        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
+        updateSidebarBadges(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
         var respBadge = document.getElementById('responsesReviewCount');
         if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
         updateNewBadges(result);
@@ -847,12 +847,9 @@ function setupNavigation(p) {
     document.getElementById('navAdminSection')?.classList.add('d-none');
   }
 
-  // Audit Workbench - driven by AUDIT_WORKBENCH module permission
-  if (!p || !p.canViewAuditWorkbench) {
-    document.getElementById('navAuditWorkbench')?.classList.add('d-none');
-  }
-  // SENIOR_MGMT & UNIT_MANAGER: always hide Audit Workbench regardless of permissions
-  if (role === 'SENIOR_MGMT' || role === 'UNIT_MANAGER') {
+  // Audit Workbench - only visible to audit team roles
+  var auditWorkbenchRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+  if (auditWorkbenchRoles.indexOf(role) === -1) {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
   }
 
@@ -1746,7 +1743,7 @@ function exportToCSV(data, filename) {
 }
 
 // Update sidebar badge counts
-function updateQuickStats(pending, overdue, approvedQueue) {
+function updateSidebarBadges(pending, overdue, approvedQueue) {
   const pendingReviewCount = document.getElementById('pendingReviewCount');
   const overdueCount = document.getElementById('overdueCount');
   const sendQueueCount = document.getElementById('sendQueueCount');
@@ -1765,7 +1762,7 @@ function refreshSidebarCounts() {
   apiCall('getSidebarCounts', {})
     .then(result => {
       if (result.success) {
-        updateQuickStats(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
+        updateSidebarBadges(result.pendingReview || 0, result.overdueActionPlans || 0, result.approvedQueue || 0);
         var respBadge = document.getElementById('responsesReviewCount');
         if (respBadge) { var rc = result.pendingResponses || 0; respBadge.textContent = rc; respBadge.style.display = rc > 0 ? '' : 'none'; }
         updateNewBadges(result);
