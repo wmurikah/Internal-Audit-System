@@ -869,24 +869,61 @@ function getAuditeesDropdown() {
 }
 
 function getRiskRatings() {
-  return [
+  var defaultRatings = [
     { value: 'Extreme', label: 'Extreme', color: '#dc3545' },
     { value: 'High', label: 'High', color: '#fd7e14' },
     { value: 'Medium', label: 'Medium', color: '#ffc107' },
     { value: 'Low', label: 'Low', color: '#28a745' }
   ];
+  var riskConfig = firestoreGet(SHEETS.CONFIG, 'DROPDOWN_RISK_RATINGS');
+  if (riskConfig && riskConfig.config_value) {
+    try {
+      var values = JSON.parse(riskConfig.config_value);
+      if (Array.isArray(values) && values.length > 0) {
+        var colors = { 'Critical': '#7b2d8e', 'Extreme': '#dc3545', 'High': '#fd7e14', 'Medium': '#ffc107', 'Low': '#28a745' };
+        return values.map(function(v) {
+          return { value: v, label: v, color: colors[v] || '#6c757d' };
+        });
+      }
+    } catch (e) {}
+  }
+  return defaultRatings;
 }
 
 function getControlClassifications() {
-  return ['Preventive', 'Detective', 'Corrective', 'Directive'];
+  var defaults = ['Preventive', 'Detective', 'Corrective', 'Directive'];
+  var config = firestoreGet(SHEETS.CONFIG, 'DROPDOWN_CONTROL_CLASSIFICATIONS');
+  if (config && config.config_value) {
+    try {
+      var values = JSON.parse(config.config_value);
+      if (Array.isArray(values) && values.length > 0) return values;
+    } catch (e) {}
+  }
+  return defaults;
 }
 
 function getControlTypes() {
-  return ['Manual', 'Automated', 'IT-Dependent Manual', 'Hybrid'];
+  var defaults = ['Manual', 'Automated', 'IT-Dependent Manual', 'Hybrid'];
+  var config = firestoreGet(SHEETS.CONFIG, 'DROPDOWN_CONTROL_TYPES');
+  if (config && config.config_value) {
+    try {
+      var values = JSON.parse(config.config_value);
+      if (Array.isArray(values) && values.length > 0) return values;
+    } catch (e) {}
+  }
+  return defaults;
 }
 
 function getControlFrequencies() {
-  return ['Ad-hoc', 'Daily', 'Weekly', 'Monthly', 'Quarterly', 'Semi-Annual', 'Annual'];
+  var defaults = ['Ad-hoc', 'Daily', 'Weekly', 'Monthly', 'Quarterly', 'Semi-Annual', 'Annual'];
+  var config = firestoreGet(SHEETS.CONFIG, 'DROPDOWN_CONTROL_FREQUENCIES');
+  if (config && config.config_value) {
+    try {
+      var values = JSON.parse(config.config_value);
+      if (Array.isArray(values) && values.length > 0) return values;
+    } catch (e) {}
+  }
+  return defaults;
 }
 
 function getYearOptions() {
