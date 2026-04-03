@@ -484,7 +484,7 @@ function loadSidebarCountsBackground() {
         if (!window._postLoginRedirectDone) {
           window._postLoginRedirectDone = true;
           var role = window.currentUser?.role_code || '';
-          if (['JUNIOR_STAFF', 'UNIT_MANAGER'].includes(role)) {
+          if (['JUNIOR_STAFF'].includes(role)) {
             var myOverdue = result.myOverdue || 0;
             var currentHash = window.location.hash.slice(1).split('?')[0];
             // Only redirect if user is on default page (not deep-linked)
@@ -829,8 +829,8 @@ function setupNavigation(p) {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
     document.getElementById('navQuickStats')?.classList.add('d-none');
   }
-  // SENIOR_MGMT: always hide Audit Workbench regardless of permissions
-  if (role === 'SENIOR_MGMT') {
+  // SENIOR_MGMT & UNIT_MANAGER: always hide Audit Workbench regardless of permissions
+  if (role === 'SENIOR_MGMT' || role === 'UNIT_MANAGER') {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
     document.getElementById('navQuickStats')?.classList.add('d-none');
   }
@@ -886,7 +886,7 @@ function getDefaultPage() {
   var role = window.currentUser?.role_code || '';
 
   // Auditee roles: redirect to overdue APs if they have any, otherwise My Action Plans / My Observations
-  if (['JUNIOR_STAFF', 'UNIT_MANAGER'].includes(role)) {
+  if (['JUNIOR_STAFF'].includes(role)) {
     // Check if there are overdue items from sidebar badge data
     var odBadge = document.getElementById('overdueCount');
     var overdueCount = odBadge ? parseInt(odBadge.textContent || '0', 10) : 0;
