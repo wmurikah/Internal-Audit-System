@@ -292,6 +292,11 @@ function renderWorkbench(data) {
   // Render alerts
   renderAlerts(data.alerts || []);
 
+  // Check for pending batch notifications (SUPER_ADMIN only)
+  if (window.currentUser && window.currentUser.role_code === 'SUPER_ADMIN') {
+    _checkPendingBatchNotifications();
+  }
+
   // Render recent activity
   renderRecentActivity(data.recentActivity || data.recentWorkPapers || []);
 
@@ -656,5 +661,68 @@ function getRiskClass(risk) {
   if (r === 'medium') return 'risk-medium';
   if (r === 'low') return 'risk-low';
   return 'bg-secondary';
+}
+
+// ── Pending Batch Notification Indicator (SUPER_ADMIN) ──
+
+function _checkPendingBatchNotifications() {
+  apiCall('getPendingBatchNotificationCount', {}).then(function(result) {
+    if (!result || !result.success || !result.data) return;
+    var count = result.data.pending || 0;
+    _renderPendingBatchBadge(count, result.data.assignments || 0, result.data.changes || 0);
+  }).catch(function() { /* silent */ });
+}
+
+function _renderPendingBatchBadge(count, assignments, changes) {
+  var container = document.getElementById('alertsSection');
+  if (!container) return;
+
+  // Remove existing batch badge if any
+  var existing = document.getElementById('pendingBatchAlert');
+  if (existing) existing.remove();
+
+  if (count === 0) return;
+
+  var details = [];
+  if (assignments > 0) details.push(assignments + ' assignment(s)');
+  if (changes > 0) details.push(changes + ' update(s)');
+
+  var badge = document.createElement('div');
+  badge.id = 'pendingBatchAlert';
+  badge.className = 'alert-card info';
+  badge.innerHTML = '<i class="alert-icon bi bi-bell-fill"></i>' +
+    '<div class="flex-grow-1">' +
+      '<strong>' + count + ' assignment notification(s) pending</strong>' +
+      '<p class="mb-0 small">' + details.join(', ') + ' queued. Will be sent automatically within 30 minutes.</p>' +
+    '</div>' +
+    '<button class="btn btn-sm btn-outline-primary" id="batchSendNowDashBtn" onclick="_sendBatchNotificationsFromDashboard()">Send Now</button>';
+
+  container.insertBefore(badge, container.firstChild);
+}
+
+async function _sendBatchNotificationsFromDashboard() {
+  var btn = document.getElementById('batchSendNowDashBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  try {
+    var result = await apiCall('sendBatchedAssignmentNotifications', {});
+    if (result && result.success) {
+      var msg = 'Sent ' + (result.sent || 0) + ' notification(s) to auditors';
+      if (result.assignments) msg += ' (' + result.assignments + ' assignment(s)';
+      if (result.changes) msg += ', ' + result.changes + ' update(s)';
+      if (result.assignments || result.changes) msg += ')';
+      showToast(msg, 'success');
+
+      // Remove the badge
+      var badge = document.getElementById('pendingBatchAlert');
+      if (badge) badge.remove();
+    } else {
+      showToast(result?.error || 'Failed to send', 'danger');
+      if (btn) { btn.disabled = false; btn.textContent = 'Send Now'; }
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'danger');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Now'; }
+  }
 }
 </script>

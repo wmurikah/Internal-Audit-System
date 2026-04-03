@@ -402,6 +402,18 @@ function routeAction(action, data, user) {
       
     case 'getUserNotifications':
       return { success: true, notifications: getUserNotifications(user.user_id, data.limit) };
+
+    case 'sendBatchedAssignmentNotifications':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Head of Internal Audit can send batch notifications' };
+      }
+      return sendBatchedAssignmentNotifications();
+
+    case 'getPendingBatchNotificationCount':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access restricted' };
+      }
+      return { success: true, data: getPendingBatchNotificationCount() };
       
     // ========== ADMIN ==========
     case 'rebuildWorkPaperIndex':
