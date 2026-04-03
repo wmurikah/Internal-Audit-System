@@ -262,6 +262,50 @@ function queueTemplatedEmail(templateCode, recipientEmail, recipientUserId, vari
 }
 
 /**
+ * Queue assignment notification when HOA assigns an auditor to a work paper.
+ * Called from createWorkPaper() and updateWorkPaper() when assigned_auditor_id changes.
+ */
+function queueAssignmentNotification(workPaper, assignedAuditorId, assignedByUser) {
+  if (!assignedAuditorId) return;
+
+  var auditor = getUserById(assignedAuditorId);
+  if (!auditor || !auditor.email) {
+    console.warn('queueAssignmentNotification: auditor not found or no email for ID:', assignedAuditorId);
+    return;
+  }
+
+  var obsTitle = workPaper.observation_title || workPaper.work_paper_id || 'Untitled';
+  var wpRef = workPaper.work_paper_ref || workPaper.work_paper_id || '';
+  var riskRating = workPaper.risk_rating || 'Not Rated';
+  var affiliateCode = workPaper.affiliate_code || '-';
+  var auditArea = workPaper.audit_area_id || '-';
+  var assignedByName = (assignedByUser && assignedByUser.full_name) ? assignedByUser.full_name : 'Head of Internal Audit';
+
+  var subject = 'Work Paper Assigned: ' + obsTitle;
+  var body = 'Dear ' + (auditor.full_name || 'Colleague') + ',\n\n' +
+    'You have been assigned to complete the following work paper:\n\n' +
+    'Work Paper: ' + wpRef + '\n' +
+    'Observation: ' + obsTitle + '\n' +
+    'Risk Rating: ' + riskRating + '\n' +
+    'Affiliate: ' + affiliateCode + '\n' +
+    'Audit Area: ' + auditArea + '\n' +
+    'Assigned By: ' + assignedByName + ' (Head of Internal Audit)\n\n' +
+    'Please log in to review the pre-filled testing information and complete the work paper.\n\n' +
+    'Note: Basic Information and Observation details have been set and cannot be modified. ' +
+    'Please complete the Testing Information, upload evidence, and submit for review.';
+
+  return queueEmail({
+    template_code: 'WP_ASSIGNED',
+    recipient_email: auditor.email,
+    recipient_user_id: assignedAuditorId,
+    subject: subject,
+    body: body,
+    module: 'WORK_PAPER',
+    record_id: workPaper.work_paper_id || ''
+  });
+}
+
+/**
  * Get email template by code
  */
 function getEmailTemplate(templateCode) {

@@ -18,6 +18,9 @@
     <button class="btn btn-sm btn-outline-info quick-filter-btn" data-filter="recent" onclick="applyQuickFilter('recent')">
       <i class="bi bi-clock-history me-1"></i>Recent (7 days)
     </button>
+    <button class="btn btn-sm btn-outline-success quick-filter-btn" data-filter="assigned-to-me" onclick="applyQuickFilter('assigned-to-me')">
+      <i class="bi bi-person-check me-1"></i>Assigned to Me
+    </button>
   </div>
 
   <!-- Filters -->
@@ -320,6 +323,9 @@ function applyQuickFilter(filterType) {
         dateFrom.value = sevenDaysAgo.toISOString().split('T')[0];
       }
       break;
+    case 'assigned-to-me':
+      // Handled client-side after data loads
+      break;
   }
 
   wpCurrentPage = 1;
@@ -504,8 +510,16 @@ function loadWorkPapers(filters) {
 }
 
 function renderWorkPapers() {
+  // Apply client-side "Assigned to Me" filter
+  var filteredData = workPapersData;
+  if (wpActiveQuickFilter === 'assigned-to-me' && window.currentUser) {
+    filteredData = workPapersData.filter(function(wp) {
+      return wp.assigned_auditor_id === window.currentUser.user_id;
+    });
+  }
+
   // Sort data
-  const sorted = [...workPapersData].sort((a, b) => {
+  const sorted = [...filteredData].sort((a, b) => {
     let aVal = a[wpSortField] || '';
     let bVal = b[wpSortField] || '';
     
@@ -567,6 +581,9 @@ function renderWPTable(data) {
     const riskClass = getRiskClass(wp.risk_rating);
     const isChecked = wpSelectedIds.has(wp.work_paper_id);
 
+    var isAssignedToMe = window.currentUser && wp.assigned_auditor_id === window.currentUser.user_id;
+    var assignedBadge = isAssignedToMe ? ' <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size:0.7rem"><i class="bi bi-person-check me-1"></i>Assigned to you</span>' : '';
+
     html += `
       <tr class="${isChecked ? 'row-selected' : ''}" onclick="viewWorkPaper('${wp.work_paper_id}')" style="cursor:pointer;">
         <td onclick="event.stopPropagation();">
@@ -574,7 +591,7 @@ function renderWPTable(data) {
         </td>
         <td><code>${wp.work_paper_id}</code></td>
         <td>
-          <div class="fw-medium">${escapeHtml(wp.observation_title || 'Untitled')}</div>
+          <div class="fw-medium">${escapeHtml(wp.observation_title || 'Untitled')}${assignedBadge}</div>
           <small class="text-muted">${escapeHtml(wp.audit_area_id || '')}</small>
         </td>
         <td>${wp.affiliate_code || '-'}</td>
@@ -693,6 +710,9 @@ function renderWPCards(data) {
     const statusClass = getStatusClass(wp.status);
     const riskClass = getRiskClass(wp.risk_rating);
     
+    var isAssignedCard = window.currentUser && wp.assigned_auditor_id === window.currentUser.user_id;
+    var assignedCardBadge = isAssignedCard ? '<span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size:0.65rem"><i class="bi bi-person-check me-1"></i>Assigned to you</span>' : '';
+
     html += `
       <div class="col-md-6 col-lg-4">
         <div class="card h-100" style="cursor:pointer;" onclick="viewWorkPaper('${wp.work_paper_id}')">
@@ -701,7 +721,7 @@ function renderWPCards(data) {
               <code class="small">${wp.work_paper_id}</code>
               <span class="badge badge-status ${statusClass}">${wp.status || '-'}</span>
             </div>
-            <h6 class="card-title">${escapeHtml(wp.observation_title || 'Untitled')}</h6>
+            <h6 class="card-title">${escapeHtml(wp.observation_title || 'Untitled')} ${assignedCardBadge}</h6>
             <p class="card-text small text-muted text-truncate">${escapeHtml(wp.observation_description || 'No description')}</p>
             <div class="d-flex gap-2 flex-wrap">
               <span class="badge bg-light text-dark">${wp.affiliate_code || '-'}</span>
