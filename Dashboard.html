@@ -278,9 +278,9 @@ function renderWorkbench(data) {
   document.getElementById('statTotalAP').textContent = ap.total || data.totalActionPlans || 0;
   document.getElementById('statOverdue').textContent = overdueCount;
 
-  // Update sidebar quick stats
-  if (typeof updateQuickStats === 'function') {
-    updateQuickStats(pendingReviewCount, overdueCount);
+  // Update sidebar badge counts
+  if (typeof updateSidebarBadges === 'function') {
+    updateSidebarBadges(pendingReviewCount, overdueCount);
   }
 
   // Update welcome section
