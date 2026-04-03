@@ -2521,13 +2521,71 @@ async function saveWorkPaper(event) {
     hideLoading();
     clearDraft();
     stopAutoSave();
-    showToast('Saved successfully', 'success');
+
+    // If SUPER_ADMIN assigned an auditor, show assignment-queued toast with Send Now option
+    var role = window.currentUser?.role_code || '';
+    if (role === 'SUPER_ADMIN' && data.assigned_auditor_id) {
+      showToast('Saved successfully. Assignment notification queued — will be sent automatically within 30 minutes.', 'success', 8000);
+      _showSendNowBar();
+    } else {
+      showToast('Saved successfully', 'success');
+    }
+
     navigateTo('work-paper-view', { id: workPaperId });
 
   } catch (err) {
     hideLoading();
     showToast(err.message || 'Error saving', 'danger');
   }
+}
+
+/**
+ * Show a dismissible info bar with a 'Send Now' button for immediate batch notification dispatch.
+ */
+function _showSendNowBar() {
+  // Remove existing bar if any
+  var existing = document.getElementById('batchSendNowBar');
+  if (existing) existing.remove();
+
+  var bar = document.createElement('div');
+  bar.id = 'batchSendNowBar';
+  bar.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:9999; background:#1a365d; color:#fff; padding:12px 24px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.15); display:flex; align-items:center; gap:16px; font-size:14px; font-family:system-ui,-apple-system,sans-serif;';
+  bar.innerHTML = '<i class="bi bi-bell" style="font-size:18px;"></i>' +
+    '<span>Assignment notification queued.</span>' +
+    '<button onclick="_triggerSendNow()" style="background:#c9a83e; color:#fff; border:none; padding:6px 16px; border-radius:6px; font-weight:600; cursor:pointer; font-size:13px;">Send Now</button>' +
+    '<button onclick="this.parentElement.remove()" style="background:transparent; color:#ccc; border:none; cursor:pointer; font-size:18px; padding:0 4px;">&times;</button>';
+  document.body.appendChild(bar);
+
+  // Auto-dismiss after 15 seconds
+  setTimeout(function() {
+    var el = document.getElementById('batchSendNowBar');
+    if (el) el.remove();
+  }, 15000);
+}
+
+/**
+ * Trigger immediate sending of all pending batch notifications.
+ */
+async function _triggerSendNow() {
+  var bar = document.getElementById('batchSendNowBar');
+  if (bar) bar.querySelector('button').textContent = 'Sending...';
+
+  try {
+    var result = await apiCall('sendBatchedAssignmentNotifications', {});
+    if (result && result.success) {
+      var msg = 'Sent ' + (result.sent || 0) + ' notification(s)';
+      if (result.assignments) msg += ' (' + result.assignments + ' assignment(s)';
+      if (result.changes) msg += ', ' + result.changes + ' update(s)';
+      if (result.assignments || result.changes) msg += ')';
+      showToast(msg, 'success');
+    } else {
+      showToast(result?.error || 'Failed to send notifications', 'danger');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'danger');
+  }
+
+  if (bar) bar.remove();
 }
 
 async function saveAndSubmit() {

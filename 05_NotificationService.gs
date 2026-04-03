@@ -2342,6 +2342,354 @@ function processBatchedDelegationNotifications() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Batched WP Assignment & Change Notifications
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Process all pending WP assignment and change batch notifications.
+ * Groups by recipient and sends ONE consolidated email per auditor.
+ * If both assignments AND changes are pending for the same auditor,
+ * combines into a single email with two sections.
+ *
+ * Called by scheduled trigger (every 30 min) or manually via 'Send Now' button.
+ * @returns {{ sent: number, assignments: number, changes: number }}
+ */
+function sendBatchedAssignmentNotifications() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    console.log('Batch WP notification processor already running');
+    return { success: true, sent: 0, assignments: 0, changes: 0 };
+  }
+
+  try {
+    var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+    if (!data || data.length < 2) { lock.releaseLock(); return { success: true, sent: 0, assignments: 0, changes: 0 }; }
+    var headers = data[0];
+
+    var colMap = {};
+    headers.forEach(function(h, i) { colMap[h] = i; });
+
+    // Collect pending WP_ASSIGNMENT and WP_CHANGE batched notifications
+    var byRecipient = {};  // emailKey -> { email, userId, assignments: [], changes: [] }
+    var notificationIds = {};  // emailKey -> [{ notifId, rowData }]
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var status = row[colMap['status']];
+      var batchType = row[colMap['batch_type']];
+
+      if (status !== STATUS.NOTIFICATION.BATCHED) continue;
+      if (batchType !== 'WP_ASSIGNMENT' && batchType !== 'WP_CHANGE') continue;
+
+      var recipientEmail = row[colMap['recipient_email']];
+      var recipientUserId = row[colMap['recipient_user_id']];
+      var batchDataStr = row[colMap['batch_data']];
+      var notifId = row[colMap['notification_id']];
+
+      if (!recipientEmail) continue;
+
+      var emailKey = recipientEmail.toLowerCase();
+      if (!byRecipient[emailKey]) {
+        byRecipient[emailKey] = { email: recipientEmail, userId: recipientUserId, assignments: [], changes: [] };
+        notificationIds[emailKey] = [];
+      }
+
+      try {
+        var batchItem = JSON.parse(batchDataStr);
+        if (batchType === 'WP_ASSIGNMENT') {
+          byRecipient[emailKey].assignments.push(batchItem);
+        } else {
+          byRecipient[emailKey].changes.push(batchItem);
+        }
+      } catch (e) {
+        console.warn('Invalid batch_data for notification', notifId);
+      }
+
+      notificationIds[emailKey].push({ notifId: notifId, rowData: rowToObject(headers, data[i]) });
+    }
+
+    // Build audit area lookup cache
+    var areaNameCache = {};
+    try {
+      var areas = getAuditAreasDropdown();
+      areas.forEach(function(a) { areaNameCache[a.id] = a.name || a.code || a.id; });
+    } catch (e) { console.warn('Could not load audit areas for batch email:', e.message); }
+
+    var sentCount = 0;
+    var totalAssignments = 0;
+    var totalChanges = 0;
+    var now = new Date();
+    var systemUrl = getSystemUrl();
+
+    Object.keys(byRecipient).forEach(function(emailKey) {
+      var recipient = byRecipient[emailKey];
+      var assignmentItems = recipient.assignments;
+      var changeItems = recipient.changes;
+
+      if (assignmentItems.length === 0 && changeItems.length === 0) return;
+
+      // Resolve recipient name
+      var recipientUser = getUserById(recipient.userId);
+      var recipientName = recipientUser ? (recipientUser.full_name || 'Colleague') : 'Colleague';
+      var recipientFirstName = recipientUser ? (recipientUser.first_name || recipientName.split(' ')[0]) : 'Colleague';
+
+      // Determine the assigner name (use first assignment's or first change's)
+      var assignerName = 'Head of Internal Audit';
+      if (assignmentItems.length > 0 && assignmentItems[0].assigned_by_name) {
+        assignerName = assignmentItems[0].assigned_by_name;
+      } else if (changeItems.length > 0 && changeItems[0].changed_by_name) {
+        assignerName = changeItems[0].changed_by_name;
+      }
+
+      // Build subject
+      var subject;
+      if (assignmentItems.length > 0 && changeItems.length > 0) {
+        subject = 'Work Paper Notifications \u2014 ' + assignmentItems.length + ' new assignment(s), ' + changeItems.length + ' update(s)';
+      } else if (assignmentItems.length > 0) {
+        subject = 'Work Papers Assigned to You \u2014 ' + assignmentItems.length + ' new assignment(s)';
+      } else {
+        subject = 'Work Paper Updates \u2014 ' + changeItems.length + ' change(s) to your assigned work papers';
+      }
+
+      // Build intro
+      var introLines = ['Dear ' + recipientFirstName + ','];
+      if (assignmentItems.length > 0) {
+        introLines.push('<br><br>You have been assigned <strong>' + assignmentItems.length + '</strong> new work paper(s) by ' + assignerName + ' (Head of Internal Audit).');
+      }
+      if (changeItems.length > 0 && assignmentItems.length > 0) {
+        introLines.push(' Additionally, <strong>' + changeItems.length + '</strong> of your existing work papers have been updated.');
+      } else if (changeItems.length > 0) {
+        introLines.push('<br><br><strong>' + changeItems.length + '</strong> of your assigned work papers have been updated by ' + assignerName + '.');
+      }
+      var intro = introLines.join('');
+
+      // Build HTML sections
+      var sectionsHtml = '';
+
+      // --- New Assignments table ---
+      if (assignmentItems.length > 0) {
+        var assignHeaders = ['#', 'Reference', 'Observation', 'Risk', 'Affiliate', 'Audit Area', 'Assigned'];
+        var assignRows = assignmentItems.map(function(item, idx) {
+          var areaName = areaNameCache[item.audit_area_id] || item.audit_area_id || '-';
+          var assignedDate = item.assigned_at
+            ? new Date(item.assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '-';
+          return [
+            String(idx + 1),
+            String(item.work_paper_ref || '-'),
+            truncateWords(String(item.observation_title || '-'), 10),
+            ratingBadge(item.risk_rating || ''),
+            String(item.affiliate_code || '-'),
+            truncateWords(areaName, 6),
+            assignedDate
+          ];
+        });
+
+        if (changeItems.length > 0) {
+          sectionsHtml += _buildBatchSectionHtml('New Assignments', assignHeaders, assignRows);
+        } else {
+          sectionsHtml += _buildBatchTableHtml(assignHeaders, assignRows);
+        }
+        totalAssignments += assignmentItems.length;
+      }
+
+      // --- Changes table ---
+      if (changeItems.length > 0) {
+        var changeHeaders = ['#', 'Reference', 'Observation', 'Changes', 'Updated By'];
+        var changeRows = changeItems.map(function(item, idx) {
+          var changesStr = (item.changes || []).map(function(c) { return '\u2022 ' + c; }).join('<br>');
+          return [
+            String(idx + 1),
+            String(item.work_paper_ref || '-'),
+            truncateWords(String(item.observation_title || '-'), 10),
+            changesStr || '-',
+            String(item.changed_by_name || '-')
+          ];
+        });
+
+        if (assignmentItems.length > 0) {
+          sectionsHtml += _buildBatchSectionHtml('Updates to Existing Assignments', changeHeaders, changeRows);
+        } else {
+          sectionsHtml += _buildBatchTableHtml(changeHeaders, changeRows);
+        }
+        totalChanges += changeItems.length;
+      }
+
+      // Build outro
+      var outroLines = [];
+      if (assignmentItems.length > 0) {
+        outroLines.push('For each work paper:\n\u2022 Basic Information and Observation details have been set and cannot be modified\n\u2022 Please complete the Testing Information and upload evidence\n\u2022 Submit for review when complete');
+      }
+      var loginLink = systemUrl
+        ? '\n\nPlease <a href="' + systemUrl + '" style="color:#1a73e8; text-decoration:underline; font-weight:600;">log in</a> to get started.'
+        : '\n\nLog in to get started.';
+      outroLines.push(loginLink);
+      var outro = outroLines.join('');
+
+      // Build the full email HTML using the combined sections
+      var htmlBody = _buildBatchedWPEmailHtml(subject, intro, sectionsHtml, outro);
+
+      // CC HOA (SUPER_ADMIN users)
+      var ccString = buildAuditTeamCc(recipient.email);
+
+      sendEmail(recipient.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
+
+      // Mark all processed notifications as Sent
+      notificationIds[emailKey].forEach(function(entry) {
+        var updated = entry.rowData;
+        updated.status = STATUS.NOTIFICATION.SENT;
+        updated.sent_at = now;
+        syncToFirestore(SHEETS.NOTIFICATION_QUEUE, entry.notifId, updated);
+      });
+
+      sentCount++;
+    });
+
+    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
+    console.log('Batched WP notifications sent. Recipients:', sentCount, 'Assignments:', totalAssignments, 'Changes:', totalChanges);
+    return { success: true, sent: sentCount, assignments: totalAssignments, changes: totalChanges };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Build an HTML table for batched WP notification (no section heading).
+ */
+function _buildBatchTableHtml(headers, rows) {
+  var thCells = headers.map(function(h) {
+    return '<th style="padding:12px 14px; text-align:left; font-size:11px; font-weight:600; color:#ffffff; background-color:#1a365d; text-transform:uppercase; letter-spacing:0.5px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; white-space:nowrap;">' + h + '</th>';
+  }).join('');
+
+  var trRows = rows.map(function(row, idx) {
+    var bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+    var cells = row.map(function(cell) {
+      return '<td style="padding:11px 14px; font-size:14px; color:#1d1d1f; border-bottom:1px solid #e2e8f0; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; line-height:1.5;">' + cell + '</td>';
+    }).join('');
+    return '<tr style="background-color:' + bg + ';">' + cells + '</tr>';
+  }).join('');
+
+  return '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; border-radius:8px; overflow:hidden; border:1px solid #e2e8f0; margin:16px 0;">' +
+    '<thead><tr>' + thCells + '</tr></thead>' +
+    '<tbody>' + trRows + '</tbody></table>';
+}
+
+/**
+ * Build an HTML section with heading + table for batched WP notification.
+ */
+function _buildBatchSectionHtml(sectionTitle, headers, rows) {
+  var heading = '<h3 style="margin:24px 0 8px 0; color:#1a365d; font-size:16px; font-weight:600; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; border-bottom:2px solid #c9a83e; padding-bottom:6px;">' + sectionTitle + '</h3>';
+  return heading + _buildBatchTableHtml(headers, rows);
+}
+
+/**
+ * Build full email HTML for batched WP notifications using the Apple-clean template.
+ */
+function _buildBatchedWPEmailHtml(subject, intro, sectionsHtml, outro) {
+  var year = new Date().getFullYear();
+  var categoryLabel = 'Assignment Update';
+
+  var outroClean = outro ? stripUrls(outro) : '';
+  var outroHtml = outroClean
+    ? '<div style="background:#eff6ff; border-left:3px solid #2563eb; border-radius:6px; padding:16px 20px; margin-top:24px;"><div style="color:#1e40af; line-height:1.6; font-size:14px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + outroClean.replace(/\n/g, '<br>') + '</div></div>'
+    : '';
+
+  var systemUrl = getSystemUrl();
+  var ctaHtml = buildCtaButton(systemUrl);
+
+  return '<!DOCTYPE html>' +
+'<html lang="en">' +
+'<head>' +
+'  <meta charset="utf-8">' +
+'  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+'  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->' +
+'  <style>' +
+'    @media only screen and (max-width: 620px) {' +
+'      .email-outer { padding: 0 !important; }' +
+'      .email-inner { width: 100% !important; min-width: 100% !important; border-radius: 0 !important; }' +
+'      .email-content { padding: 24px 20px !important; }' +
+'      .email-header { padding: 20px 20px !important; }' +
+'      .email-footer-inner { padding: 16px 20px !important; }' +
+'    }' +
+'  </style>' +
+'</head>' +
+'<body style="margin:0; padding:0; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
+'  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
+'    ' + subject + ' &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
+'  </div>' +
+'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
+'    <tr><td align="center" style="padding:40px 16px;">' +
+'      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08); border-top:4px solid #c9a83e;" class="email-inner">' +
+'        <tr>' +
+'          <td style="padding:28px 36px 0 36px; border-bottom:none;" class="email-header">' +
+'            <p style="margin:0 0 2px 0; color:#86868b; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">HASS PETROLEUM</p>' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">Internal Audit</p>' +
+'          </td>' +
+'        </tr>' +
+'        <tr><td style="padding:16px 36px 0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
+'        <tr>' +
+'          <td style="padding:20px 36px 0 36px;">' +
+'            <div style="border-left:3px solid #2563eb; padding-left:12px; color:#2563eb; font-weight:600; font-size:12px; letter-spacing:1px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + categoryLabel + '</div>' +
+'          </td>' +
+'        </tr>' +
+'        <tr>' +
+'          <td style="padding:16px 36px 0 36px;" class="email-content">' +
+'            <p style="margin:0 0 20px 0; color:#1a202c; font-size:24px; font-weight:700; line-height:1.3; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + subject + '</p>' +
+'          </td>' +
+'        </tr>' +
+'        <tr>' +
+'          <td style="padding:0 36px 36px 36px;" class="email-content">' +
+'            <p style="margin:0 0 16px 0; color:#424245; font-size:15px; line-height:1.6; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif;">' + intro + '</p>' +
+             sectionsHtml +
+             outroHtml +
+             ctaHtml +
+'          </td>' +
+'        </tr>' +
+'        <tr><td style="padding:0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
+'        <tr>' +
+'          <td style="padding:16px 36px;" class="email-footer-inner">' +
+'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
+'              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
+'          </td>' +
+'        </tr>' +
+'      </table>' +
+'    </td></tr>' +
+'  </table>' +
+'</body>' +
+'</html>';
+}
+
+/**
+ * Get count of pending batched WP notifications (assignments + changes).
+ * Used by dashboard to show badge for SUPER_ADMIN.
+ * @returns {{ pending: number, assignments: number, changes: number }}
+ */
+function getPendingBatchNotificationCount() {
+  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  if (!data || data.length < 2) return { pending: 0, assignments: 0, changes: 0 };
+  var headers = data[0];
+  var colMap = {};
+  headers.forEach(function(h, i) { colMap[h] = i; });
+
+  var assignments = 0;
+  var changes = 0;
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var status = row[colMap['status']];
+    var batchType = row[colMap['batch_type']];
+
+    if (status !== STATUS.NOTIFICATION.BATCHED) continue;
+    if (batchType === 'WP_ASSIGNMENT') assignments++;
+    else if (batchType === 'WP_CHANGE') changes++;
+  }
+
+  return { pending: assignments + changes, assignments: assignments, changes: changes };
+}
+
 /**
  * Setup all notification triggers (run once to configure).
  *
@@ -2351,6 +2699,7 @@ function processBatchedDelegationNotifications() {
  *   - Overdue reminders: Monday 7:30 UTC (10:30 AM EAT)
  *   - Upcoming due reminders: Monday 7:30 UTC (10:30 AM EAT)
  *   - Biweekly summary: Every other Monday 8:00 UTC (11:00 AM EAT)
+ *   - Batched WP assignment notifications: every 30 min
  *
  * Note: GAS triggers use UTC. EAT = UTC+3.
  *       10:30 AM EAT = 7:30 AM UTC. We use atHour(7) which runs between 7–8 AM UTC.
@@ -2378,7 +2727,8 @@ function setupNotificationTriggers() {
     'sendBiweeklySummary',
     'weeklyReminderRunner',
     'dailyMaintenance',
-    'processBatchedDelegationNotifications'
+    'processBatchedDelegationNotifications',
+    'sendBatchedAssignmentNotifications'
   ];
 
   const triggers = ScriptApp.getProjectTriggers();
@@ -2424,7 +2774,21 @@ function setupNotificationTriggers() {
     .atHour(8)
     .create();
 
-  console.log('Notification triggers configured');
+  // Process batched WP assignment notifications every 30 minutes
+  var batchInterval = 30;
+  try {
+    var configInterval = getConfigValue('BATCH_NOTIFICATION_INTERVAL_MINUTES');
+    if (configInterval && !isNaN(parseInt(configInterval))) {
+      batchInterval = parseInt(configInterval);
+    }
+  } catch (e) { /* use default */ }
+
+  ScriptApp.newTrigger('sendBatchedAssignmentNotifications')
+    .timeBased()
+    .everyMinutes(batchInterval)
+    .create();
+
+  console.log('Notification triggers configured (batch interval: ' + batchInterval + ' min)');
   return { success: true };
 }
 
