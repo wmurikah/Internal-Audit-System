@@ -858,8 +858,8 @@ function setupNavigation(p) {
     document.getElementById('navResponsesReview')?.classList.add('d-none');
   }
 
-  // Board Reports: visible only for BOARD_MEMBER/BOARD and SUPER_ADMIN
-  var boardReportRoles = ['BOARD_MEMBER', 'BOARD', 'SUPER_ADMIN', 'SENIOR_MGMT'];
+  // Board Reports: visible for BOARD_MEMBER/BOARD, SUPER_ADMIN, SENIOR_MGMT, and UNIT_MANAGER
+  var boardReportRoles = ['BOARD_MEMBER', 'BOARD', 'SUPER_ADMIN', 'SENIOR_MGMT', 'UNIT_MANAGER'];
   if (boardReportRoles.indexOf(role) === -1) {
     document.getElementById('navBoardReports')?.classList.add('d-none');
   }
@@ -950,7 +950,7 @@ function navigateTo(page, params, updateHash = true) {
     return;
   }
   // Board Reports: OBSERVER/BOARD, SUPER_ADMIN, and SENIOR_MGMT
-  if (page === 'board-reports' && userRole !== 'BOARD_MEMBER' && userRole !== 'BOARD' && userRole !== 'SUPER_ADMIN' && userRole !== 'SENIOR_MGMT') {
+  if (page === 'board-reports' && userRole !== 'BOARD_MEMBER' && userRole !== 'BOARD' && userRole !== 'SUPER_ADMIN' && userRole !== 'SENIOR_MGMT' && userRole !== 'UNIT_MANAGER') {
     showToast('You do not have access to this page', 'danger');
     navigateTo(getDefaultPage(), {}, false);
     return;

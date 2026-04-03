@@ -372,7 +372,19 @@ function routeAction(action, data, user) {
 
     case 'getComprehensiveReportData':
       // Dashboard is visible to ALL authenticated users regardless of role
-      return { success: true, ...getComprehensiveReportData(data.filters) };
+      var comprehensiveResult = getComprehensiveReportData(data.filters);
+      // Role-based scoping: UNIT_MANAGER only sees their assigned items
+      var comprehensiveScopedRoles = ['UNIT_MANAGER', 'JUNIOR_STAFF'];
+      if (user && comprehensiveScopedRoles.indexOf(user.role_code) >= 0) {
+        var scopeUserId = String(user.user_id);
+        comprehensiveResult.workPapers = (comprehensiveResult.workPapers || []).filter(function(wp) {
+          return parseIdList(wp.responsible_ids).indexOf(scopeUserId) >= 0;
+        });
+        comprehensiveResult.actionPlans = (comprehensiveResult.actionPlans || []).filter(function(ap) {
+          return parseIdList(ap.owner_ids).indexOf(scopeUserId) >= 0;
+        });
+      }
+      return { success: true, ...comprehensiveResult };
 
     case 'getDashboardDataV2':
       // Redesigned dashboard — returns all raw data for client-side filtering
@@ -586,8 +598,9 @@ function routeAction(action, data, user) {
 
     // ========== BOARD REPORTS ==========
     case 'generateBoardReport':
-      if (user.role_code !== ROLES.BOARD_MEMBER && user.role_code !== 'BOARD' && user.role_code !== ROLES.SUPER_ADMIN) {
-        return { success: false, error: 'Access restricted to Board Members and Head of Internal Audit only' };
+      var boardReportAllowedRoles = [ROLES.BOARD_MEMBER, 'BOARD', ROLES.SUPER_ADMIN, ROLES.SENIOR_MGMT, ROLES.UNIT_MANAGER];
+      if (boardReportAllowedRoles.indexOf(user.role_code) === -1) {
+        return { success: false, error: 'Access restricted to authorized roles only' };
       }
       return generateBoardReport(data.filters, data.reportType, user);
 
@@ -1484,6 +1497,18 @@ function generateBoardReport(filters, reportType, user) {
     var reportData = getComprehensiveReportData(filters);
     var workPapers = reportData.workPapers || [];
     var actionPlans = reportData.actionPlans || [];
+
+    // Role-based scoping: UNIT_MANAGER only sees their assigned items
+    var scopedRoles = ['UNIT_MANAGER', 'JUNIOR_STAFF'];
+    if (user && scopedRoles.indexOf(user.role_code) >= 0) {
+      var userId = String(user.user_id);
+      workPapers = workPapers.filter(function(wp) {
+        return parseIdList(wp.responsible_ids).indexOf(userId) >= 0;
+      });
+      actionPlans = actionPlans.filter(function(ap) {
+        return parseIdList(ap.owner_ids).indexOf(userId) >= 0;
+      });
+    }
 
     // Apply date range filter
     if (filters.dateFrom || filters.dateTo) {
