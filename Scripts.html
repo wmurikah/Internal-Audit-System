@@ -136,34 +136,55 @@ async function safeAction(buttonElement, actionFn, cooldownMs) {
  * @param {string} targetStatus - The target status ('Submitted', 'Sent to Auditee', etc.)
  * @returns {string[]} Array of missing field labels (empty = valid)
  */
-function validateWorkPaperFields(data, targetStatus) {
+function validateWorkPaperFields(data, targetStatus, roleCode) {
   var missing = [];
+  var role = roleCode || (window.currentUser ? window.currentUser.role_code : '');
 
-  // Always required for submission
-  if (!data.observation_title || String(data.observation_title).trim() === '') {
-    missing.push('Observation Title');
-  }
-  if (!data.observation_description || String(data.observation_description).trim() === '') {
-    missing.push('Observation Description');
-  }
-  if (!data.risk_rating || String(data.risk_rating).trim() === '') {
-    missing.push('Risk Rating');
-  }
-  if (!data.affiliate_code || String(data.affiliate_code).trim() === '') {
-    missing.push('Affiliate');
-  }
-  if (!data.audit_area_id || String(data.audit_area_id).trim() === '') {
-    missing.push('Audit Area');
+  function isEmpty(val) {
+    return !val || String(val).trim() === '';
   }
 
-  // Additional fields required before sending to auditee
+  // ---- Basic fields (required for ALL roles) ----
+  if (isEmpty(data.year)) missing.push('Year');
+  if (isEmpty(data.affiliate_code)) missing.push('Affiliate');
+  if (isEmpty(data.audit_area_id)) missing.push('Audit Area');
+  if (isEmpty(data.observation_title)) missing.push('Observation Title');
+  if (isEmpty(data.risk_rating)) missing.push('Risk Rating');
+
+  // ---- SUPER_ADMIN only needs the 5 basic fields above ----
+  if (role === 'SUPER_ADMIN') {
+    // Additional fields for send-to-auditee still apply for SUPER_ADMIN
+    if (targetStatus === 'Sent to Auditee' || targetStatus === 'Approved') {
+      if (isEmpty(data.responsible_ids)) missing.push('Responsible Parties');
+      if (isEmpty(data.cc_recipients)) missing.push('CC Recipients');
+    }
+    return missing;
+  }
+
+  // ---- SENIOR_AUDITOR / AUDITOR: mandatory on save/submit ----
+  if (isEmpty(data.sub_area_id)) missing.push('Sub Area');
+  if (isEmpty(data.work_paper_date)) missing.push('Work Paper Date');
+  if (isEmpty(data.audit_period_from)) missing.push('Audit Period From');
+  if (isEmpty(data.audit_period_to)) missing.push('Audit Period To');
+  if (isEmpty(data.observation_description)) missing.push('Observation Description');
+  if (isEmpty(data.risk_summary)) missing.push('Risk Summary');
+  if (isEmpty(data.recommendation)) missing.push('Recommendation');
+
+  // ---- Additional fields required on submit for review ----
+  if (targetStatus === 'Submitted' || targetStatus === 'Sent to Auditee' || targetStatus === 'Approved') {
+    if (isEmpty(data.control_objectives)) missing.push('Control Objectives');
+    if (isEmpty(data.risk_description)) missing.push('Risk Description');
+    if (isEmpty(data.test_objective)) missing.push('Test Objective');
+    if (isEmpty(data.testing_steps)) missing.push('Testing Steps');
+    if (isEmpty(data.control_classification)) missing.push('Control Classification');
+    if (isEmpty(data.control_type)) missing.push('Control Type');
+    if (isEmpty(data.control_frequency)) missing.push('Control Frequency');
+  }
+
+  // ---- Additional fields required before send to auditee ----
   if (targetStatus === 'Sent to Auditee' || targetStatus === 'Approved') {
-    if (!data.responsible_ids || String(data.responsible_ids).trim() === '') {
-      missing.push('Responsible Parties');
-    }
-    if (!data.cc_recipients || String(data.cc_recipients).trim() === '') {
-      missing.push('CC Recipients');
-    }
+    if (isEmpty(data.responsible_ids)) missing.push('Responsible Parties');
+    if (isEmpty(data.cc_recipients)) missing.push('CC Recipients');
   }
 
   return missing;

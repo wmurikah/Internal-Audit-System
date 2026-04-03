@@ -98,6 +98,19 @@
           </h5>
           <p class="text-muted small mb-4">Enter the fundamental details for this work paper.</p>
 
+          <!-- Assigned Auditor Section (SUPER_ADMIN only) -->
+          <div class="card border-primary mb-3" id="assignAuditorSection" style="display:none">
+            <div class="card-body py-3">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-person-badge me-1 text-primary"></i>Assigned Auditor <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="wpAssignedAuditor" onchange="updateFormProgress()">
+                <option value="">Select Auditor...</option>
+              </select>
+              <small class="text-muted">Select the auditor who will complete the testing information and evidence.</small>
+            </div>
+          </div>
+
           <div class="row g-3">
             <div class="col-md-3">
               <label class="form-label">Year <span class="text-danger">*</span></label>
@@ -152,6 +165,14 @@
             <i class="bi bi-clipboard-check text-primary me-2"></i>Testing Information
           </h5>
           <p class="text-muted small mb-4">Document the audit testing methodology and procedures used.</p>
+
+          <!-- Auto-populate notification banner -->
+          <div id="autoPopulateNotice" class="alert alert-info alert-dismissible py-2 mb-3" style="display:none">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Testing information has been pre-filled from existing records.</strong> Please verify and update as needed.
+            <span id="autoPopulateSource" class="text-muted ms-2"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
 
           <div class="row g-3">
             <div class="col-12">
@@ -245,7 +266,7 @@
                      placeholder="Enter a clear, concise title for the observation">
             </div>
             <div class="col-12">
-              <label class="form-label">Observation Description <span class="text-danger">*</span></label>
+              <label class="form-label">Observation Description</label>
               <div class="char-counter-wrap">
                 <textarea class="form-control" id="wpObsDesc" rows="4" required onchange="updateFormProgress()"
                           oninput="updateCharCounter(this, 2000)"
@@ -272,7 +293,7 @@
                      placeholder="Brief summary of the risk implications">
             </div>
             <div class="col-12">
-              <label class="form-label">Recommendation <span class="text-danger">*</span></label>
+              <label class="form-label">Recommendation</label>
               <div class="char-counter-wrap">
                 <textarea class="form-control" id="wpRecommendation" rows="4" required onchange="updateFormProgress()"
                           oninput="updateCharCounter(this, 2000)"
@@ -1617,6 +1638,9 @@ function populateFormFromDraft(data) {
   if (data.control_type) document.getElementById('wpControlType').value = data.control_type;
   if (data.control_frequency) document.getElementById('wpControlFreq').value = data.control_frequency;
   if (data.control_standards) document.getElementById('wpControlStandards').value = data.control_standards;
+  if (data.assigned_auditor_id && document.getElementById('wpAssignedAuditor')) {
+    document.getElementById('wpAssignedAuditor').value = data.assigned_auditor_id;
+  }
 
   // Update char counters
   ['wpObsDesc', 'wpRecommendation', 'wpManagementResponse'].forEach(id => {
@@ -1665,6 +1689,23 @@ function initWorkPaperForm(params) {
 
   // Set default date
   document.getElementById('wpDate').value = new Date().toISOString().split('T')[0];
+
+  // Setup Assigned Auditor dropdown (SUPER_ADMIN only)
+  var assignSection = document.getElementById('assignAuditorSection');
+  if (window.currentUser && window.currentUser.role_code === 'SUPER_ADMIN') {
+    assignSection.style.display = 'block';
+    var auditorSelect = document.getElementById('wpAssignedAuditor');
+    var auditors = window.appDropdowns?.auditors || [];
+    auditorSelect.innerHTML = '<option value="">Select Auditor...</option>';
+    auditors.forEach(function(a) {
+      auditorSelect.innerHTML += '<option value="' + a.id + '">' + a.name + ' (' + a.email + ')</option>';
+    });
+  } else {
+    assignSection.style.display = 'none';
+  }
+
+  // Apply role-based mandatory field indicators
+  applyMandatoryFieldIndicators();
 
   // Setup autocomplete for Responsible and CC Recipients
   console.log('Setting up autocomplete fields...');
@@ -1728,6 +1769,67 @@ function loadSubAreas() {
 function autoFillFromSubArea() {
   const subAreaId = document.getElementById('wpSubArea').value;
   if (!subAreaId) return;
+
+  const auditAreaId = document.getElementById('wpAuditArea').value;
+  const affiliateCode = document.getElementById('wpAffiliate').value;
+
+  // Try backend auto-populate (checks existing WPs first, then sub-area template)
+  if (auditAreaId && subAreaId) {
+    apiCall('getAutoPopulateData', {
+      auditAreaId: auditAreaId,
+      subAreaId: subAreaId,
+      affiliateCode: affiliateCode
+    }).then(function(result) {
+      if (result && result.source) {
+        var fieldMap = {
+          'wpControlObjectives': 'control_objectives',
+          'wpRiskDesc': 'risk_description',
+          'wpTestObj': 'test_objective',
+          'wpTestSteps': 'testing_steps',
+          'wpControlClass': 'control_classification',
+          'wpControlType': 'control_type',
+          'wpControlFreq': 'control_frequency',
+          'wpControlStandards': 'control_standards'
+        };
+        var populated = false;
+        Object.keys(fieldMap).forEach(function(elId) {
+          var el = document.getElementById(elId);
+          var val = result[fieldMap[elId]];
+          if (el && !el.value.trim() && val) {
+            el.value = val;
+            populated = true;
+          }
+        });
+
+        if (populated) {
+          var notice = document.getElementById('autoPopulateNotice');
+          var sourceSpan = document.getElementById('autoPopulateSource');
+          if (notice) {
+            notice.style.display = 'block';
+            if (sourceSpan) {
+              sourceSpan.textContent = result.source === 'existing_wp'
+                ? '(Based on ' + (result.wp_id || 'existing work paper') + ')'
+                : '(Based on sub-area template)';
+            }
+          }
+          updateFormProgress();
+        }
+      } else {
+        // Fallback to local sub-area data
+        autoFillFromSubAreaLocal();
+      }
+    }).catch(function() {
+      // Fallback to local sub-area data on error
+      autoFillFromSubAreaLocal();
+    });
+  } else {
+    autoFillFromSubAreaLocal();
+  }
+}
+
+function autoFillFromSubAreaLocal() {
+  const subAreaId = document.getElementById('wpSubArea').value;
+  if (!subAreaId) return;
   const subArea = window.appDropdowns?.subAreas?.find(s => s.id === subAreaId);
   if (!subArea) return;
   ['wpControlObjectives', 'wpRiskDesc', 'wpTestObj', 'wpTestSteps'].forEach((id, i) => {
@@ -1773,6 +1875,9 @@ function populateFormFromDraft(data) {
   if (data.control_type) document.getElementById('wpControlType').value = data.control_type;
   if (data.control_frequency) document.getElementById('wpControlFreq').value = data.control_frequency;
   if (data.control_standards) document.getElementById('wpControlStandards').value = data.control_standards;
+  if (data.assigned_auditor_id && document.getElementById('wpAssignedAuditor')) {
+    document.getElementById('wpAssignedAuditor').value = data.assigned_auditor_id;
+  }
   updateFormProgress();
   // Update char counters
   ['wpObsDesc', 'wpRecommendation', 'wpManagementResponse'].forEach(function(id) {
@@ -1808,6 +1913,11 @@ function populateForm(wp) {
   document.getElementById('wpControlFreq').value = wp.control_frequency || '';
   document.getElementById('wpControlStandards').value = wp.control_standards || '';
   document.getElementById('wpAssignedAuditor').value = wp.assigned_auditor_id || '';
+
+  // Populate assigned auditor (SUPER_ADMIN only)
+  if (wp.assigned_auditor_id && document.getElementById('wpAssignedAuditor')) {
+    document.getElementById('wpAssignedAuditor').value = wp.assigned_auditor_id;
+  }
 
   // Populate responsible parties
   const responsibleIds = (wp.responsible_ids || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -2089,6 +2199,88 @@ function renderCCRecipientsTags() {
   hiddenInput.value = selectedCCRecipients.map(s => s.email).join('\n');
 }
 
+// =============================================
+// ROLE-BASED MANDATORY FIELD INDICATORS
+// =============================================
+
+function applyMandatoryFieldIndicators() {
+  var role = window.currentUser?.role_code || '';
+  var isSuperAdmin = (role === 'SUPER_ADMIN');
+
+  // Field ID to label element mapping for asterisk control
+  var fieldLabelMap = {
+    'wpYear': 'Year',
+    'wpAffiliate': 'Affiliate',
+    'wpAuditArea': 'Audit Area',
+    'wpObsTitle': 'Observation Title',
+    'wpRiskRating': 'Risk Rating',
+    'wpSubArea': 'Sub Area',
+    'wpDate': 'Work Paper Date',
+    'wpPeriodFrom': 'Audit Period From',
+    'wpPeriodTo': 'Audit Period To',
+    'wpObsDesc': 'Observation Description',
+    'wpRiskSummary': 'Risk Summary',
+    'wpRecommendation': 'Recommendation',
+    'wpControlObjectives': 'Control Objectives',
+    'wpRiskDesc': 'Risk Description',
+    'wpTestObj': 'Test Objective',
+    'wpTestSteps': 'Testing Steps',
+    'wpControlClass': 'Control Classification',
+    'wpControlType': 'Control Type',
+    'wpControlFreq': 'Control Frequency'
+  };
+
+  // Basic fields required for all roles
+  var basicRequired = ['wpYear', 'wpAffiliate', 'wpAuditArea', 'wpObsTitle', 'wpRiskRating'];
+
+  // Additional fields required for non-SUPER_ADMIN on save
+  var auditorSaveRequired = ['wpSubArea', 'wpDate', 'wpPeriodFrom', 'wpPeriodTo', 'wpObsDesc', 'wpRiskSummary', 'wpRecommendation'];
+
+  Object.keys(fieldLabelMap).forEach(function(fieldId) {
+    var el = document.getElementById(fieldId);
+    if (!el) return;
+    var label = el.closest('.col-12, .col-md-3, .col-md-4, .col-md-6, .col-md-8')?.querySelector('.form-label');
+    if (!label) return;
+
+    // Remove existing asterisks
+    var existing = label.querySelector('.mandatory-asterisk');
+    if (existing) existing.remove();
+
+    var isRequired = basicRequired.includes(fieldId);
+    if (!isSuperAdmin && auditorSaveRequired.includes(fieldId)) {
+      isRequired = true;
+    }
+
+    if (isRequired) {
+      // Check if there's already a hardcoded asterisk span
+      if (!label.querySelector('.text-danger')) {
+        var asterisk = document.createElement('span');
+        asterisk.className = 'text-danger mandatory-asterisk';
+        asterisk.textContent = ' *';
+        label.appendChild(asterisk);
+      }
+    } else {
+      // Remove hardcoded asterisks for fields not required for this role
+      var hardcoded = label.querySelector('.text-danger');
+      if (hardcoded && hardcoded.textContent.trim() === '*') {
+        hardcoded.remove();
+      }
+    }
+  });
+}
+
+function checkEvidenceRequirement() {
+  var role = window.currentUser?.role_code || '';
+  if (role === 'SUPER_ADMIN') return true;
+  var fileCount = uploadedEvidenceFiles ? uploadedEvidenceFiles.length : 0;
+  if (fileCount === 0) {
+    showToast('At least one evidence document is required before submitting for review.', 'danger', 8000);
+    goToTab('tab-evidence');
+    return false;
+  }
+  return true;
+}
+
 function formatDateInput(d) {
   if (!d) return '';
   const dt = new Date(d);
@@ -2096,7 +2288,9 @@ function formatDateInput(d) {
 }
 
 function getFormData() {
-  var data = {
+  var auditorSelect = document.getElementById('wpAssignedAuditor');
+  var auditorOption = auditorSelect && auditorSelect.selectedIndex > 0 ? auditorSelect.options[auditorSelect.selectedIndex] : null;
+  return {
     work_paper_id: document.getElementById('wpFormId').value || undefined,
     year: document.getElementById('wpYear').value,
     affiliate_code: document.getElementById('wpAffiliate').value,
@@ -2121,7 +2315,8 @@ function getFormData() {
     control_type: document.getElementById('wpControlType').value,
     control_frequency: document.getElementById('wpControlFreq').value,
     control_standards: document.getElementById('wpControlStandards').value,
-    assigned_auditor_id: document.getElementById('wpAssignedAuditor').value
+    assigned_auditor_id: auditorSelect ? auditorSelect.value : '',
+    assigned_auditor_name: auditorOption ? auditorOption.text.split(' (')[0] : ''
   };
 
   // For locked (disabled) selects, read from stored original values
@@ -2202,6 +2397,18 @@ async function saveWorkPaper(event) {
   }
 
   const data = getFormData();
+
+  // Role-based validation on save
+  var role = window.currentUser?.role_code || '';
+  if (role !== 'SUPER_ADMIN') {
+    var saveMissing = validateWorkPaperFields(data, 'Draft', role);
+    if (saveMissing.length > 0) { showValidationError(saveMissing); return; }
+  } else {
+    // SUPER_ADMIN: validate only the 5 basic fields
+    var basicMissing = validateWorkPaperFields(data, 'Draft', 'SUPER_ADMIN');
+    if (basicMissing.length > 0) { showValidationError(basicMissing); return; }
+  }
+
   const actionPlans = getActionPlansData();
   const isEdit = !!data.work_paper_id;
 
@@ -2272,9 +2479,12 @@ async function saveAndSubmit() {
 
   const data = getFormData();
 
-  // Validate mandatory fields before submission
+  // Validate mandatory fields before submission (role-aware)
   var missing = validateWorkPaperFields(data, 'Submitted');
   if (missing.length > 0) { showValidationError(missing); return; }
+
+  // Evidence requirement for non-SUPER_ADMIN
+  if (!checkEvidenceRequirement()) return;
 
   const actionPlans = getActionPlansData();
 
