@@ -2112,13 +2112,23 @@ function generateBoardReport(filters, reportType, user) {
     var blob = docFile.getAs('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     blob.setName(docTitle + '.docx');
 
-    // Save to Exports folder
-    var folders = DriveApp.getFoldersByName('Audit Report Exports');
+    // Save to Exports subfolder (from config), fall back to named folder
     var exportFolder;
-    if (folders.hasNext()) {
-      exportFolder = folders.next();
-    } else {
-      exportFolder = DriveApp.createFolder('Audit Report Exports');
+    var exportFolderId = getDriveFolderId('DRIVE_EXPORTS_FOLDER_ID');
+    if (exportFolderId) {
+      try {
+        exportFolder = DriveApp.getFolderById(exportFolderId);
+      } catch (folderErr) {
+        console.warn('Exports folder not accessible, falling back:', folderErr.message);
+      }
+    }
+    if (!exportFolder) {
+      var folders = DriveApp.getFoldersByName('Audit Report Exports');
+      if (folders.hasNext()) {
+        exportFolder = folders.next();
+      } else {
+        exportFolder = DriveApp.createFolder('Audit Report Exports');
+      }
     }
     var exportFile = exportFolder.createFile(blob);
 
@@ -2143,4 +2153,81 @@ function generateBoardReport(filters, reportType, user) {
     console.error('Error generating board report:', e);
     return { success: false, error: 'Failed to generate report: ' + e.message };
   }
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// ONE-TIME MIGRATION: Move misplaced files from parent folder
+// to correct subfolders based on Firestore references.
+// Run manually from the Apps Script editor. Do NOT add a trigger.
+// ─────────────────────────────────────────────────────────────
+
+function migrateExistingDriveFiles() {
+  var parentFolderId = getConfigValue('DRIVE_PARENT_FOLDER_ID') || getConfigValue('AUDIT_FILES_FOLDER_ID');
+  if (!parentFolderId) {
+    console.log('No parent folder configured. Aborting migration.');
+    return;
+  }
+
+  var wpFolderId = getConfigValue('DRIVE_WP_FILES_FOLDER_ID');
+  var apFolderId = getConfigValue('DRIVE_AP_EVIDENCE_FOLDER_ID');
+  var exportsFolderId = getConfigValue('DRIVE_EXPORTS_FOLDER_ID');
+
+  // Build lookup sets of known Drive file IDs from Firestore
+  var wpFileIds = {};
+  var apFileIds = {};
+
+  try {
+    var wpFiles = firestoreGetAll(SHEETS.WP_FILES);
+    wpFiles.forEach(function(f) { if (f.drive_file_id) wpFileIds[f.drive_file_id] = true; });
+    console.log('Found ' + Object.keys(wpFileIds).length + ' WP file references in Firestore.');
+  } catch (e) { console.warn('Could not load WP files:', e.message); }
+
+  try {
+    var apEvidence = firestoreGetAll(SHEETS.AP_EVIDENCE);
+    apEvidence.forEach(function(f) { if (f.drive_file_id) apFileIds[f.drive_file_id] = true; });
+    console.log('Found ' + Object.keys(apFileIds).length + ' AP evidence references in Firestore.');
+  } catch (e) { console.warn('Could not load AP evidence:', e.message); }
+
+  var parentFolder = DriveApp.getFolderById(parentFolderId);
+  var files = parentFolder.getFiles();
+  var moved = { wp: 0, ap: 0, exports: 0, skipped: 0 };
+
+  while (files.hasNext()) {
+    var file = files.next();
+    var fileId = file.getId();
+    var fileName = file.getName();
+
+    if (wpFileIds[fileId] && wpFolderId) {
+      try {
+        file.moveTo(DriveApp.getFolderById(wpFolderId));
+        moved.wp++;
+        console.log('Moved to WP Files: ' + fileName + ' (' + fileId + ')');
+      } catch (e) { console.warn('Failed to move WP file ' + fileId + ':', e.message); }
+    } else if (apFileIds[fileId] && apFolderId) {
+      try {
+        file.moveTo(DriveApp.getFolderById(apFolderId));
+        moved.ap++;
+        console.log('Moved to AP Evidence: ' + fileName + ' (' + fileId + ')');
+      } catch (e) { console.warn('Failed to move AP file ' + fileId + ':', e.message); }
+    } else if (exportsFolderId && (
+      fileName.toLowerCase().indexOf('export') >= 0 ||
+      fileName.toLowerCase().indexOf('report') >= 0 ||
+      fileName.toLowerCase().endsWith('.docx')
+    )) {
+      try {
+        file.moveTo(DriveApp.getFolderById(exportsFolderId));
+        moved.exports++;
+        console.log('Moved to Exports: ' + fileName + ' (' + fileId + ')');
+      } catch (e) { console.warn('Failed to move export file ' + fileId + ':', e.message); }
+    } else {
+      moved.skipped++;
+      console.log('Skipped (no match): ' + fileName + ' (' + fileId + ')');
+    }
+  }
+
+  var summary = 'Migration complete. Moved: ' + moved.wp + ' WP files, ' +
+    moved.ap + ' AP files, ' + moved.exports + ' exports. Skipped: ' + moved.skipped;
+  console.log(summary);
+  return summary;
 }

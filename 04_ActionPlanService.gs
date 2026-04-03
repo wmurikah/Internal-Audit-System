@@ -1041,16 +1041,21 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
     uploaded_at: now
   };
 
+  // Move file to Action Plans Evidence subfolder in Drive
+  if (evidence.drive_file_id) {
+    moveFileToSubfolder(evidence.drive_file_id, 'DRIVE_AP_EVIDENCE_FOLDER_ID');
+  }
+
   // Write to Firestore
   syncToFirestore(SHEETS.AP_EVIDENCE, evidenceId, evidence);
   invalidateSheetData(SHEETS.AP_EVIDENCE);
 
   // Add history entry
-  addActionPlanHistory(actionPlanId, actionPlan.status, actionPlan.status, 
+  addActionPlanHistory(actionPlanId, actionPlan.status, actionPlan.status,
     'Evidence uploaded: ' + evidence.file_name, user);
-  
+
   logAuditEvent('ADD_EVIDENCE', 'ACTION_PLAN', actionPlanId, null, evidence, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, evidenceId: evidenceId, evidence: evidence });
 }
 
