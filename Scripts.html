@@ -554,6 +554,10 @@ function updateNewBadges(result) {
   // My Observations badge
   var obsBadge = document.getElementById('myObservationsCount');
   if (obsBadge) { var c = result.myObservations || 0; obsBadge.textContent = c; obsBadge.style.display = c > 0 ? '' : 'none'; }
+
+  // Pending Assignments badge (amber, SUPER_ADMIN only)
+  var paBadge = document.getElementById('pendingAssignmentsCount');
+  if (paBadge) { var c = result.pendingAssignments || 0; paBadge.textContent = c; paBadge.style.display = c > 0 ? '' : 'none'; }
 }
 
 // Fast permission refresh - checks every 15 seconds if permissions changed
