@@ -557,15 +557,124 @@
 
     <!-- Dropdown Management Tab (SUPER_ADMIN only) -->
     <div class="tab-pane fade" id="dropdownManagement">
-      <div class="card">
-        <div class="card-header">
-          <i class="bi bi-list-ul me-2"></i>Dropdown Management
-        </div>
-        <div class="card-body">
-          <p class="text-muted">Manage system dropdowns including audit areas, sub-areas, affiliates, risk ratings, control classifications, and more.</p>
-          <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>Full dropdown management UI will be available in the next update.
+      <div class="row">
+        <!-- Category Sidebar -->
+        <div class="col-md-3">
+          <div class="list-group" id="ddCategorySidebar">
+            <a href="#" class="list-group-item list-group-item-action active" data-collection="audit_areas" onclick="selectDdCategory(this)">
+              <i class="bi bi-diagram-3 me-2"></i>Audit Areas <span class="badge bg-secondary float-end" id="ddCount_audit_areas">0</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-collection="sub_areas" onclick="selectDdCategory(this)">
+              <i class="bi bi-diagram-2 me-2"></i>Sub Areas <span class="badge bg-secondary float-end" id="ddCount_sub_areas">0</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-collection="affiliates" onclick="selectDdCategory(this)">
+              <i class="bi bi-building me-2"></i>Affiliates <span class="badge bg-secondary float-end" id="ddCount_affiliates">0</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-config-key="DROPDOWN_RISK_RATINGS" onclick="selectDdCategory(this)">
+              <i class="bi bi-exclamation-triangle me-2"></i>Risk Ratings <span class="badge bg-secondary float-end" id="ddCount_DROPDOWN_RISK_RATINGS">0</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-config-key="DROPDOWN_CONTROL_CLASSIFICATIONS" onclick="selectDdCategory(this)">
+              <i class="bi bi-shield-check me-2"></i>Control Classifications <span class="badge bg-secondary float-end" id="ddCount_DROPDOWN_CONTROL_CLASSIFICATIONS">0</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-config-key="DROPDOWN_CONTROL_TYPES" onclick="selectDdCategory(this)">
+              <i class="bi bi-gear me-2"></i>Control Types <span class="badge bg-secondary float-end" id="ddCount_DROPDOWN_CONTROL_TYPES">0</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-config-key="DROPDOWN_CONTROL_FREQUENCIES" onclick="selectDdCategory(this)">
+              <i class="bi bi-clock me-2"></i>Control Frequencies <span class="badge bg-secondary float-end" id="ddCount_DROPDOWN_CONTROL_FREQUENCIES">0</span>
+            </a>
           </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="col-md-9">
+          <!-- Collection-based panel (audit_areas, sub_areas, affiliates) -->
+          <div id="ddCollectionPanel" style="display:none">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0" id="ddCollectionTitle">Audit Areas</h5>
+              <button class="btn btn-primary btn-sm" onclick="showDdAddModal()"><i class="bi bi-plus-lg me-1"></i>Add New</button>
+            </div>
+            <!-- Sub Areas filter -->
+            <div id="ddSubAreaFilterRow" class="mb-3" style="display:none">
+              <div class="row">
+                <div class="col-md-4">
+                  <select class="form-select form-select-sm" id="ddSubAreaFilterSelect" onchange="filterSubAreaTable()">
+                    <option value="">All Audit Areas</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-hover table-sm mb-0">
+                    <thead id="ddCollectionThead"><tr></tr></thead>
+                    <tbody id="ddCollectionTbody">
+                      <tr><td colspan="8" class="text-center py-4 text-muted">Select a category</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Config-based panel (risk ratings, control types, etc.) -->
+          <div id="ddConfigPanel" style="display:none">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h5 class="mb-1" id="ddConfigTitle">Risk Ratings</h5>
+                <small class="text-muted">These values appear as dropdown options throughout the system.</small>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-body">
+                <div id="ddConfigListContainer"></div>
+                <button class="btn btn-outline-secondary btn-sm mt-2" onclick="ddConfigAddItem()"><i class="bi bi-plus-lg me-1"></i>Add Item</button>
+                <hr>
+                <div class="d-flex align-items-center justify-content-between">
+                  <button class="btn btn-primary" onclick="ddConfigSave()"><i class="bi bi-save me-1"></i>Save Changes</button>
+                  <span id="ddConfigUnsavedBadge" class="badge bg-warning text-dark" style="display:none"><i class="bi bi-exclamation-circle me-1"></i>Unsaved changes</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Initial loading state -->
+          <div id="ddLoadingPanel">
+            <div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="text-muted mt-2">Loading dropdown data...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dropdown Item Add/Edit Modal -->
+    <div class="modal fade" id="dropdownItemModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="ddModalTitle">Add Item</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="ddModalBody"></div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveDdItem()"><i class="bi bi-save me-1"></i>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dropdown Delete Confirmation Modal -->
+    <div class="modal fade" id="dropdownDeleteModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title"><i class="bi bi-trash me-2"></i>Delete Item</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="ddDeleteModalBody">
+            <p>Loading reference information...</p>
+          </div>
+          <div class="modal-footer" id="ddDeleteModalFooter"></div>
         </div>
       </div>
     </div>
@@ -600,6 +709,14 @@ function loadSettings(params) {
   if (role === 'SUPER_ADMIN') {
     var dropdownsNav = document.getElementById('dropdownsTabNav');
     if (dropdownsNav) dropdownsNav.style.display = '';
+    // Load sidebar counts eagerly
+    loadDdCollectionCounts();
+    loadDdConfigCounts();
+    // Init dropdown management when tab is shown
+    var ddTabLink = document.querySelector('a[href="#dropdownManagement"]');
+    if (ddTabLink) {
+      ddTabLink.addEventListener('shown.bs.tab', function() { initDropdownManagement(); });
+    }
   }
 
   // Only load restricted tabs if SUPER_ADMIN
@@ -614,7 +731,7 @@ function loadSettings(params) {
 
   // Auto-switch to requested tab
   if (params && params.tab) {
-    var tabMap = { 'users': 'userManagement', 'access': 'accessControl', 'ai': 'aiConfig', 'notifications': 'notificationConfig', 'config': 'systemConfig', 'backup': 'dataBackup', 'log': 'auditLog' };
+    var tabMap = { 'users': 'userManagement', 'access': 'accessControl', 'ai': 'aiConfig', 'notifications': 'notificationConfig', 'config': 'systemConfig', 'backup': 'dataBackup', 'log': 'auditLog', 'dropdowns': 'dropdownManagement' };
     var tabId = tabMap[params.tab];
     if (tabId) {
       var tabEl = document.querySelector('a[href="#' + tabId + '"]');
@@ -1892,6 +2009,590 @@ function runFullBackupNow() {
     hideLoading();
     resultContent.innerHTML = '<i class="bi bi-x-circle text-danger me-2"></i>Error: ' + (e.message || 'Unknown error');
     resultContent.className = 'alert alert-danger mb-0 small';
+  });
+}
+
+// ==================== Dropdown Management ====================
+
+var ddCurrentCategory = null;   // { collection, configKey, name }
+var ddCollectionData = [];      // items for current collection
+var ddConfigData = {};          // all config dropdown data keyed by config_key
+var ddConfigOriginal = null;    // snapshot for unsaved-change detection
+var ddEditingDocId = null;      // null = adding, string = editing
+var ddAuditAreasCache = [];     // cached audit areas for sub-area parent dropdown
+var ddAllSubAreas = [];         // all sub areas (before filter)
+
+var DD_CATEGORIES = [
+  { collection: 'audit_areas', name: 'Audit Areas' },
+  { collection: 'sub_areas', name: 'Sub Areas' },
+  { collection: 'affiliates', name: 'Affiliates' },
+  { configKey: 'DROPDOWN_RISK_RATINGS', name: 'Risk Ratings' },
+  { configKey: 'DROPDOWN_CONTROL_CLASSIFICATIONS', name: 'Control Classifications' },
+  { configKey: 'DROPDOWN_CONTROL_TYPES', name: 'Control Types' },
+  { configKey: 'DROPDOWN_CONTROL_FREQUENCIES', name: 'Control Frequencies' }
+];
+
+function initDropdownManagement() {
+  // Load the first category (Audit Areas)
+  var firstLink = document.querySelector('#ddCategorySidebar .list-group-item');
+  if (firstLink) selectDdCategory(firstLink);
+}
+
+function selectDdCategory(el) {
+  if (typeof el === 'string') {
+    el = document.querySelector('#ddCategorySidebar [data-collection="' + el + '"], #ddCategorySidebar [data-config-key="' + el + '"]');
+  }
+  if (!el) return;
+
+  // Check for unsaved config changes
+  if (ddCurrentCategory && ddCurrentCategory.configKey && ddConfigHasUnsaved()) {
+    if (!confirm('You have unsaved changes. Discard them?')) return;
+  }
+
+  // Update active state
+  document.querySelectorAll('#ddCategorySidebar .list-group-item').forEach(function(a) { a.classList.remove('active'); });
+  el.classList.add('active');
+
+  var collection = el.getAttribute('data-collection');
+  var configKey = el.getAttribute('data-config-key');
+
+  if (collection) {
+    ddCurrentCategory = { collection: collection, name: el.textContent.trim().replace(/\d+$/, '').trim() };
+    loadDdCollection(collection);
+  } else if (configKey) {
+    ddCurrentCategory = { configKey: configKey, name: el.textContent.trim().replace(/\d+$/, '').trim() };
+    loadDdConfig(configKey);
+  }
+}
+
+// ===== Collection-based Dropdowns =====
+
+function loadDdCollection(collection) {
+  document.getElementById('ddCollectionPanel').style.display = '';
+  document.getElementById('ddConfigPanel').style.display = 'none';
+  document.getElementById('ddLoadingPanel').style.display = 'none';
+  document.getElementById('ddCollectionTitle').textContent = ddCurrentCategory.name;
+  document.getElementById('ddCollectionTbody').innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</td></tr>';
+
+  // Show/hide sub area filter
+  document.getElementById('ddSubAreaFilterRow').style.display = collection === 'sub_areas' ? '' : 'none';
+
+  apiCall('getDropdownItems', { collection: collection }).then(function(r) {
+    if (r.success && r.items) {
+      ddCollectionData = r.items;
+      // Sort by display_order
+      ddCollectionData.sort(function(a, b) { return (parseInt(a.display_order) || 999) - (parseInt(b.display_order) || 999); });
+      updateDdCount(collection, ddCollectionData.length);
+
+      if (collection === 'sub_areas') {
+        ddAllSubAreas = ddCollectionData.slice();
+        loadAuditAreasForFilter();
+      }
+
+      renderDdCollectionTable(collection);
+    } else {
+      document.getElementById('ddCollectionTbody').innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">' + escapeHtml(r.error || 'Error loading data') + '</td></tr>';
+    }
+  }).catch(function(err) {
+    document.getElementById('ddCollectionTbody').innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Error: ' + escapeHtml(err.message || 'Network error') + '</td></tr>';
+  });
+}
+
+function loadAuditAreasForFilter() {
+  apiCall('getDropdownItems', { collection: 'audit_areas' }).then(function(r) {
+    if (r.success && r.items) {
+      ddAuditAreasCache = r.items.sort(function(a, b) { return (parseInt(a.display_order) || 999) - (parseInt(b.display_order) || 999); });
+      updateDdCount('audit_areas', ddAuditAreasCache.length);
+      // Populate filter dropdown
+      var sel = document.getElementById('ddSubAreaFilterSelect');
+      sel.innerHTML = '<option value="">All Audit Areas</option>';
+      ddAuditAreasCache.forEach(function(a) {
+        if (a.is_active === true || String(a.is_active) === 'true') {
+          sel.innerHTML += '<option value="' + escapeHtml(a.area_id) + '">' + escapeHtml(a.area_name) + '</option>';
+        }
+      });
+    }
+  }).catch(function() {});
+}
+
+function filterSubAreaTable() {
+  var filterVal = document.getElementById('ddSubAreaFilterSelect').value;
+  if (filterVal) {
+    ddCollectionData = ddAllSubAreas.filter(function(s) { return s.area_id === filterVal; });
+  } else {
+    ddCollectionData = ddAllSubAreas.slice();
+  }
+  renderDdCollectionTable('sub_areas');
+}
+
+function renderDdCollectionTable(collection) {
+  var thead = document.getElementById('ddCollectionThead');
+  var tbody = document.getElementById('ddCollectionTbody');
+
+  // Build headers
+  if (collection === 'audit_areas') {
+    thead.innerHTML = '<tr><th>Code</th><th>Name</th><th>Description</th><th>Status</th><th>Order</th><th>Sub Areas</th><th>Actions</th></tr>';
+  } else if (collection === 'sub_areas') {
+    thead.innerHTML = '<tr><th>Code</th><th>Name</th><th>Parent Area</th><th>Status</th><th>Order</th><th>Actions</th></tr>';
+  } else if (collection === 'affiliates') {
+    thead.innerHTML = '<tr><th>Code</th><th>Name</th><th>Country</th><th>Region</th><th>Status</th><th>Actions</th></tr>';
+  }
+
+  if (!ddCollectionData.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No items found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ddCollectionData.map(function(item) {
+    var isActive = item.is_active === true || String(item.is_active) === 'true';
+    var statusBadge = isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>';
+    var docId = item.area_id || item.sub_area_id || item.affiliate_code || '';
+
+    if (collection === 'audit_areas') {
+      var subCount = ddAllSubAreas ? ddAllSubAreas.filter(function(s) { return s.area_id === item.area_id; }).length : '-';
+      return '<tr>' +
+        '<td><code>' + escapeHtml(item.area_code || '') + '</code></td>' +
+        '<td>' + escapeHtml(item.area_name || '') + '</td>' +
+        '<td class="small text-muted">' + escapeHtml((item.description || '').substring(0, 60)) + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + (item.display_order || '-') + '</td>' +
+        '<td><span class="badge bg-info">' + subCount + '</span></td>' +
+        '<td>' + ddActionButtons(collection, docId) + '</td></tr>';
+    } else if (collection === 'sub_areas') {
+      var parentName = '-';
+      if (ddAuditAreasCache.length) {
+        var parent = ddAuditAreasCache.find(function(a) { return a.area_id === item.area_id; });
+        if (parent) parentName = parent.area_name;
+      }
+      return '<tr>' +
+        '<td><code>' + escapeHtml(item.sub_area_code || '') + '</code></td>' +
+        '<td>' + escapeHtml(item.sub_area_name || '') + '</td>' +
+        '<td>' + escapeHtml(parentName) + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + (item.display_order || '-') + '</td>' +
+        '<td>' + ddActionButtons(collection, docId) + '</td></tr>';
+    } else if (collection === 'affiliates') {
+      return '<tr>' +
+        '<td><code>' + escapeHtml(item.affiliate_code || '') + '</code></td>' +
+        '<td>' + escapeHtml(item.affiliate_name || '') + '</td>' +
+        '<td>' + escapeHtml(item.country || '-') + '</td>' +
+        '<td>' + escapeHtml(item.region || '-') + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + ddActionButtons(collection, docId) + '</td></tr>';
+    }
+    return '';
+  }).join('');
+}
+
+function ddActionButtons(collection, docId) {
+  return '<button class="btn btn-sm btn-outline-primary me-1" onclick="showDdEditModal(\'' + collection + '\',\'' + escapeHtml(docId) + '\')"><i class="bi bi-pencil"></i></button>' +
+         '<button class="btn btn-sm btn-outline-danger" onclick="showDdDeleteModal(\'' + collection + '\',\'' + escapeHtml(docId) + '\')"><i class="bi bi-trash"></i></button>';
+}
+
+function updateDdCount(key, count) {
+  var el = document.getElementById('ddCount_' + key);
+  if (el) el.textContent = count;
+}
+
+// ===== Add/Edit Modal =====
+
+function showDdAddModal() {
+  ddEditingDocId = null;
+  var col = ddCurrentCategory.collection;
+  document.getElementById('ddModalTitle').textContent = 'Add New ' + ddCurrentCategory.name.replace(/s$/, '');
+  renderDdModalFields(col, null);
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('dropdownItemModal')).show();
+}
+
+function showDdEditModal(collection, docId) {
+  ddEditingDocId = docId;
+  var items = collection === 'sub_areas' ? ddAllSubAreas : ddCollectionData;
+  var item = items.find(function(i) {
+    return (i.area_id || i.sub_area_id || i.affiliate_code) === docId;
+  });
+  if (!item) { showToast('Item not found', 'danger'); return; }
+
+  document.getElementById('ddModalTitle').textContent = 'Edit ' + ddCurrentCategory.name.replace(/s$/, '') + ': ' + (item.area_name || item.sub_area_name || item.affiliate_name || docId);
+  renderDdModalFields(collection, item);
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('dropdownItemModal')).show();
+}
+
+function renderDdModalFields(collection, item) {
+  var body = document.getElementById('ddModalBody');
+  var html = '';
+
+  if (collection === 'audit_areas') {
+    html += ddField('text', 'ddAreaCode', 'Area Code *', item ? item.area_code : '', 'e.g., HR', true);
+    html += ddField('text', 'ddAreaName', 'Area Name *', item ? item.area_name : '', 'e.g., Human Resources', true);
+    html += ddField('textarea', 'ddAreaDesc', 'Description', item ? item.description : '', '', false, 2);
+    html += ddCheckbox('ddAreaActive', 'Active', item ? (item.is_active === true || String(item.is_active) === 'true') : true);
+  } else if (collection === 'sub_areas') {
+    // Parent audit area dropdown
+    html += '<div class="mb-3"><label class="form-label">Parent Audit Area *</label><select class="form-select" id="ddSubAreaParent" required>';
+    html += '<option value="">Select Audit Area</option>';
+    ddAuditAreasCache.forEach(function(a) {
+      if (a.is_active === true || String(a.is_active) === 'true') {
+        var sel = item && item.area_id === a.area_id ? ' selected' : '';
+        html += '<option value="' + escapeHtml(a.area_id) + '"' + sel + '>' + escapeHtml(a.area_name) + '</option>';
+      }
+    });
+    html += '</select></div>';
+    html += ddField('text', 'ddSubAreaCode', 'Sub Area Code *', item ? item.sub_area_code : '', '', true);
+    html += ddField('text', 'ddSubAreaName', 'Sub Area Name *', item ? item.sub_area_name : '', '', true);
+    html += ddField('textarea', 'ddSubAreaCtrlObj', 'Control Objectives', item ? item.control_objectives : '', '', false, 3);
+    html += ddField('textarea', 'ddSubAreaRisk', 'Risk Description', item ? item.risk_description : '', '', false, 3);
+    html += ddField('textarea', 'ddSubAreaTestObj', 'Test Objective', item ? item.test_objective : '', '', false, 3);
+    html += ddField('textarea', 'ddSubAreaTestSteps', 'Testing Steps', item ? item.testing_steps : '', '', false, 3);
+    html += ddCheckbox('ddSubAreaActive', 'Active', item ? (item.is_active === true || String(item.is_active) === 'true') : true);
+  } else if (collection === 'affiliates') {
+    var isEdit = !!item;
+    html += '<div class="mb-3"><label class="form-label">Affiliate Code *</label>';
+    html += '<input type="text" class="form-control" id="ddAffCode" value="' + escapeHtml(item ? item.affiliate_code : '') + '" ' + (isEdit ? 'readonly' : '') + ' required>';
+    if (isEdit) html += '<small class="text-muted">Cannot be changed after creation</small>';
+    html += '</div>';
+    html += ddField('text', 'ddAffName', 'Affiliate Name *', item ? item.affiliate_name : '', '', true);
+    html += ddField('text', 'ddAffCountry', 'Country', item ? item.country : '', '');
+    html += ddField('text', 'ddAffRegion', 'Region', item ? item.region : '', '');
+    html += ddCheckbox('ddAffActive', 'Active', item ? (item.is_active === true || String(item.is_active) === 'true') : true);
+  }
+
+  body.innerHTML = html;
+}
+
+function ddField(type, id, label, value, placeholder, required, rows) {
+  var req = required ? ' required' : '';
+  if (type === 'textarea') {
+    return '<div class="mb-3"><label class="form-label">' + escapeHtml(label) + '</label>' +
+      '<textarea class="form-control" id="' + id + '" rows="' + (rows || 2) + '" placeholder="' + escapeHtml(placeholder || '') + '"' + req + '>' + escapeHtml(value || '') + '</textarea></div>';
+  }
+  return '<div class="mb-3"><label class="form-label">' + escapeHtml(label) + '</label>' +
+    '<input type="' + type + '" class="form-control" id="' + id + '" value="' + escapeHtml(value || '') + '" placeholder="' + escapeHtml(placeholder || '') + '"' + req + '></div>';
+}
+
+function ddCheckbox(id, label, checked) {
+  return '<div class="mb-3 form-check"><input type="checkbox" class="form-check-input" id="' + id + '"' + (checked ? ' checked' : '') + '>' +
+    '<label class="form-check-label" for="' + id + '">' + escapeHtml(label) + '</label></div>';
+}
+
+function saveDdItem() {
+  var collection = ddCurrentCategory.collection;
+  var data = {};
+
+  if (collection === 'audit_areas') {
+    data.area_code = document.getElementById('ddAreaCode').value.trim();
+    data.area_name = document.getElementById('ddAreaName').value.trim();
+    data.description = document.getElementById('ddAreaDesc').value.trim();
+    data.is_active = document.getElementById('ddAreaActive').checked ? 'true' : 'false';
+    if (!data.area_code || !data.area_name) { showToast('Code and Name are required', 'warning'); return; }
+  } else if (collection === 'sub_areas') {
+    data.area_id = document.getElementById('ddSubAreaParent').value;
+    data.sub_area_code = document.getElementById('ddSubAreaCode').value.trim();
+    data.sub_area_name = document.getElementById('ddSubAreaName').value.trim();
+    data.control_objectives = document.getElementById('ddSubAreaCtrlObj').value.trim();
+    data.risk_description = document.getElementById('ddSubAreaRisk').value.trim();
+    data.test_objective = document.getElementById('ddSubAreaTestObj').value.trim();
+    data.testing_steps = document.getElementById('ddSubAreaTestSteps').value.trim();
+    data.is_active = document.getElementById('ddSubAreaActive').checked ? 'true' : 'false';
+    if (!data.area_id || !data.sub_area_code || !data.sub_area_name) { showToast('Parent Area, Code and Name are required', 'warning'); return; }
+  } else if (collection === 'affiliates') {
+    data.affiliate_code = document.getElementById('ddAffCode').value.trim();
+    data.affiliate_name = document.getElementById('ddAffName').value.trim();
+    data.country = document.getElementById('ddAffCountry').value.trim();
+    data.region = document.getElementById('ddAffRegion').value.trim();
+    data.is_active = document.getElementById('ddAffActive').checked ? 'true' : 'false';
+    if (!data.affiliate_code || !data.affiliate_name) { showToast('Code and Name are required', 'warning'); return; }
+  }
+
+  showLoading('Saving...');
+
+  if (ddEditingDocId) {
+    apiCall('updateDropdownItem', { collection: collection, docId: ddEditingDocId, data: data }).then(function(r) {
+      hideLoading();
+      if (r.success) {
+        bootstrap.Modal.getInstance(document.getElementById('dropdownItemModal')).hide();
+        showToast('Item updated', 'success');
+        loadDdCollection(collection);
+      } else {
+        showToast(r.error || 'Error', 'danger');
+      }
+    }).catch(function() { hideLoading(); showToast('Error saving item', 'danger'); });
+  } else {
+    apiCall('createDropdownItem', { collection: collection, data: data }).then(function(r) {
+      hideLoading();
+      if (r.success) {
+        bootstrap.Modal.getInstance(document.getElementById('dropdownItemModal')).hide();
+        showToast('Item created', 'success');
+        loadDdCollection(collection);
+      } else {
+        showToast(r.error || 'Error', 'danger');
+      }
+    }).catch(function() { hideLoading(); showToast('Error creating item', 'danger'); });
+  }
+}
+
+// ===== Delete Modal =====
+
+function showDdDeleteModal(collection, docId) {
+  var body = document.getElementById('ddDeleteModalBody');
+  var footer = document.getElementById('ddDeleteModalFooter');
+  body.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm me-2"></div>Checking references...</div>';
+  footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>';
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('dropdownDeleteModal')).show();
+
+  // Get reference counts
+  apiCall('deleteDropdownItem', { collection: collection, docId: docId, confirmed: false }).then(function(r) {
+    if (!r.success) {
+      body.innerHTML = '<div class="alert alert-danger">' + escapeHtml(r.error || 'Error') + '</div>';
+      return;
+    }
+
+    var items = collection === 'sub_areas' ? ddAllSubAreas : ddCollectionData;
+    var item = items.find(function(i) { return (i.area_id || i.sub_area_id || i.affiliate_code) === docId; });
+    var itemName = item ? (item.area_name || item.sub_area_name || item.affiliate_name || docId) : docId;
+
+    if (r.totalReferences > 0) {
+      var refParts = [];
+      if (r.references.sub_areas) refParts.push(r.references.sub_areas + ' sub area(s)');
+      if (r.references.work_papers) refParts.push(r.references.work_papers + ' work paper(s)');
+      if (r.references.users) refParts.push(r.references.users + ' user(s)');
+
+      body.innerHTML =
+        '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>' +
+        '<strong>' + escapeHtml(itemName) + '</strong> is referenced by ' + refParts.join(', ') + '.' +
+        '<br><small>Deleting will not remove those references but the item won\'t be available in dropdowns for new records.</small></div>';
+
+      footer.innerHTML =
+        '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>' +
+        '<button type="button" class="btn btn-warning" onclick="ddDeactivateInstead(\'' + collection + '\',\'' + escapeHtml(docId) + '\')"><i class="bi bi-pause-circle me-1"></i>Deactivate Instead</button>' +
+        '<button type="button" class="btn btn-danger" onclick="ddConfirmDelete(\'' + collection + '\',\'' + escapeHtml(docId) + '\')"><i class="bi bi-trash me-1"></i>Delete Permanently</button>';
+    } else {
+      body.innerHTML =
+        '<p>Delete <strong>' + escapeHtml(itemName) + '</strong>? This cannot be undone.</p>' +
+        '<p class="text-muted small">No references found. Safe to delete.</p>';
+
+      footer.innerHTML =
+        '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>' +
+        '<button type="button" class="btn btn-danger" onclick="ddConfirmDelete(\'' + collection + '\',\'' + escapeHtml(docId) + '\')"><i class="bi bi-trash me-1"></i>Delete</button>';
+    }
+  }).catch(function(err) {
+    body.innerHTML = '<div class="alert alert-danger">Error checking references: ' + escapeHtml(err.message || 'Network error') + '</div>';
+  });
+}
+
+function ddConfirmDelete(collection, docId) {
+  showLoading('Deleting...');
+  apiCall('deleteDropdownItem', { collection: collection, docId: docId, confirmed: true }).then(function(r) {
+    hideLoading();
+    bootstrap.Modal.getInstance(document.getElementById('dropdownDeleteModal')).hide();
+    if (r.success && r.deleted) {
+      showToast('Item deleted', 'success');
+      loadDdCollection(collection);
+    } else {
+      showToast(r.error || 'Error deleting item', 'danger');
+    }
+  }).catch(function() { hideLoading(); showToast('Error deleting item', 'danger'); });
+}
+
+function ddDeactivateInstead(collection, docId) {
+  showLoading('Deactivating...');
+  apiCall('updateDropdownItem', { collection: collection, docId: docId, data: { is_active: 'false' } }).then(function(r) {
+    hideLoading();
+    bootstrap.Modal.getInstance(document.getElementById('dropdownDeleteModal')).hide();
+    if (r.success) {
+      showToast('Item deactivated', 'success');
+      loadDdCollection(collection);
+    } else {
+      showToast(r.error || 'Error', 'danger');
+    }
+  }).catch(function() { hideLoading(); showToast('Error deactivating item', 'danger'); });
+}
+
+// ===== Config-based Dropdowns =====
+
+function loadDdConfig(configKey) {
+  document.getElementById('ddCollectionPanel').style.display = 'none';
+  document.getElementById('ddConfigPanel').style.display = '';
+  document.getElementById('ddLoadingPanel').style.display = 'none';
+  document.getElementById('ddConfigTitle').textContent = ddCurrentCategory.name;
+  document.getElementById('ddConfigUnsavedBadge').style.display = 'none';
+  document.getElementById('ddConfigListContainer').innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</div>';
+
+  apiCall('getDropdownItems', { collection: 'config_dropdown' }).then(function(r) {
+    if (r.success && r.items) {
+      ddConfigData = {};
+      r.items.forEach(function(item) {
+        ddConfigData[item.config_key] = item;
+      });
+      // Update counts for all config categories
+      DD_CATEGORIES.forEach(function(cat) {
+        if (cat.configKey && ddConfigData[cat.configKey]) {
+          try {
+            var vals = JSON.parse(ddConfigData[cat.configKey].config_value || '[]');
+            updateDdCount(cat.configKey, vals.length);
+          } catch (e) { updateDdCount(cat.configKey, 0); }
+        }
+      });
+      renderDdConfigList(configKey);
+    } else {
+      document.getElementById('ddConfigListContainer').innerHTML = '<div class="alert alert-danger">' + escapeHtml(r.error || 'Error loading config') + '</div>';
+    }
+  }).catch(function(err) {
+    document.getElementById('ddConfigListContainer').innerHTML = '<div class="alert alert-danger">Error: ' + escapeHtml(err.message || 'Network error') + '</div>';
+  });
+}
+
+function renderDdConfigList(configKey) {
+  var values = [];
+  if (ddConfigData[configKey]) {
+    try { values = JSON.parse(ddConfigData[configKey].config_value || '[]'); } catch (e) { values = []; }
+  }
+  ddConfigOriginal = JSON.stringify(values);
+
+  var container = document.getElementById('ddConfigListContainer');
+  var html = '<div id="ddConfigSortable">';
+  values.forEach(function(val, idx) {
+    html += ddConfigRow(idx, val);
+  });
+  html += '</div>';
+  container.innerHTML = html;
+
+  initDdConfigDrag();
+}
+
+function ddConfigRow(idx, value) {
+  return '<div class="input-group mb-2 dd-config-row" data-index="' + idx + '">' +
+    '<span class="input-group-text dd-drag-handle" style="cursor:grab"><i class="bi bi-grip-vertical"></i></span>' +
+    '<input type="text" class="form-control dd-config-input" value="' + escapeHtml(value) + '" oninput="ddConfigMarkChanged()">' +
+    '<button class="btn btn-outline-danger" type="button" onclick="ddConfigRemoveItem(this)"><i class="bi bi-x-lg"></i></button>' +
+    '</div>';
+}
+
+function ddConfigAddItem() {
+  var sortable = document.getElementById('ddConfigSortable');
+  var count = sortable.querySelectorAll('.dd-config-row').length;
+  sortable.insertAdjacentHTML('beforeend', ddConfigRow(count, ''));
+  ddConfigMarkChanged();
+  // Focus the new input
+  var inputs = sortable.querySelectorAll('.dd-config-input');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+function ddConfigRemoveItem(btn) {
+  var rows = document.querySelectorAll('#ddConfigSortable .dd-config-row');
+  if (rows.length <= 1) {
+    showToast('At least one value is required', 'warning');
+    return;
+  }
+  btn.closest('.dd-config-row').remove();
+  ddConfigMarkChanged();
+}
+
+function ddConfigMarkChanged() {
+  var current = JSON.stringify(ddConfigGetValues());
+  var badge = document.getElementById('ddConfigUnsavedBadge');
+  badge.style.display = current !== ddConfigOriginal ? '' : 'none';
+}
+
+function ddConfigHasUnsaved() {
+  if (!ddCurrentCategory || !ddCurrentCategory.configKey) return false;
+  var current = JSON.stringify(ddConfigGetValues());
+  return current !== ddConfigOriginal;
+}
+
+function ddConfigGetValues() {
+  var values = [];
+  document.querySelectorAll('#ddConfigSortable .dd-config-input').forEach(function(input) {
+    var v = input.value.trim();
+    if (v) values.push(v);
+  });
+  return values;
+}
+
+function ddConfigSave() {
+  var configKey = ddCurrentCategory.configKey;
+  var values = ddConfigGetValues();
+  if (!values.length) { showToast('At least one value is required', 'warning'); return; }
+
+  showLoading('Saving...');
+  apiCall('saveConfigDropdown', { configKey: configKey, values: values }).then(function(r) {
+    hideLoading();
+    if (r.success) {
+      showToast('Saved successfully', 'success');
+      ddConfigOriginal = JSON.stringify(values);
+      document.getElementById('ddConfigUnsavedBadge').style.display = 'none';
+      updateDdCount(configKey, values.length);
+    } else {
+      showToast(r.error || 'Error', 'danger');
+    }
+  }).catch(function() { hideLoading(); showToast('Error saving', 'danger'); });
+}
+
+// Simple drag-and-drop for config list using HTML5 drag events
+function initDdConfigDrag() {
+  var container = document.getElementById('ddConfigSortable');
+  if (!container) return;
+  var dragged = null;
+
+  container.addEventListener('dragstart', function(e) {
+    var row = e.target.closest('.dd-config-row');
+    if (!row) return;
+    dragged = row;
+    row.style.opacity = '0.4';
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  container.addEventListener('dragend', function(e) {
+    var row = e.target.closest('.dd-config-row');
+    if (row) row.style.opacity = '1';
+    dragged = null;
+    ddConfigMarkChanged();
+  });
+
+  container.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    var target = e.target.closest('.dd-config-row');
+    if (target && target !== dragged) {
+      var rect = target.getBoundingClientRect();
+      var mid = rect.top + rect.height / 2;
+      if (e.clientY < mid) {
+        container.insertBefore(dragged, target);
+      } else {
+        container.insertBefore(dragged, target.nextSibling);
+      }
+    }
+  });
+
+  // Make drag handles trigger draggable
+  container.querySelectorAll('.dd-config-row').forEach(function(row) {
+    row.setAttribute('draggable', 'true');
+  });
+}
+
+// Load config counts on init
+function loadDdConfigCounts() {
+  apiCall('getDropdownItems', { collection: 'config_dropdown' }).then(function(r) {
+    if (r.success && r.items) {
+      r.items.forEach(function(item) {
+        try {
+          var vals = JSON.parse(item.config_value || '[]');
+          updateDdCount(item.config_key, vals.length);
+        } catch (e) {}
+      });
+    }
+  }).catch(function() {});
+}
+
+// Load collection counts
+function loadDdCollectionCounts() {
+  ['audit_areas', 'sub_areas', 'affiliates'].forEach(function(col) {
+    apiCall('getDropdownItems', { collection: col }).then(function(r) {
+      if (r.success && r.items) {
+        updateDdCount(col, r.items.length);
+        if (col === 'audit_areas') ddAuditAreasCache = r.items;
+      }
+    }).catch(function() {});
   });
 }
 </script>
