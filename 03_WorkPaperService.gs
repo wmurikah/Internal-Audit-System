@@ -152,7 +152,8 @@ function updateWorkPaper(workPaperId, data, user) {
     'risk_description', 'test_objective', 'testing_steps',
     'observation_title', 'observation_description', 'risk_rating', 'risk_summary', 'recommendation',
     'management_response', 'responsible_ids', 'cc_recipients',
-    'assigned_auditor_id', 'assigned_auditor_name'
+    'assigned_auditor_id', 'assigned_auditor_name',
+    'evidence_override'
   ];
 
   // Assigned auditors can only edit testing/evidence fields (backend enforcement)
@@ -174,6 +175,11 @@ function updateWorkPaper(workPaperId, data, user) {
       updates[field] = typeof data[field] === 'string' ? sanitizeInput(data[field]) : data[field];
     }
   });
+
+  // evidence_override is SUPER_ADMIN-only — strip if non-SUPER_ADMIN
+  if (user.role_code !== ROLES.SUPER_ADMIN) {
+    delete updates.evidence_override;
+  }
 
   // If assigned_auditor_id is being changed, look up the name
   if (updates.assigned_auditor_id && updates.assigned_auditor_id !== existing.assigned_auditor_id) {
@@ -399,11 +405,14 @@ function submitWorkPaper(workPaperId, user) {
     throw new Error('Missing required fields: ' + missing.join(', '));
   }
 
-  // Evidence check for non-SUPER_ADMIN
+  // Evidence check for non-SUPER_ADMIN (skip if evidence_override is set)
   if (user.role_code !== ROLES.SUPER_ADMIN) {
-    var wpFiles = getWorkPaperFiles(workPaperId);
-    if (!wpFiles || wpFiles.length === 0) {
-      throw new Error('At least one evidence document is required before submitting for review.');
+    var evidenceOverride = workPaper.evidence_override === true || workPaper.evidence_override === 'true';
+    if (!evidenceOverride) {
+      var wpFiles = getWorkPaperFiles(workPaperId);
+      if (!wpFiles || wpFiles.length === 0) {
+        throw new Error('At least one evidence document is required before submitting for review.');
+      }
     }
   }
   
@@ -1390,6 +1399,56 @@ function batchSendToAuditees(workPaperIds, user) {
     errors: errors.length > 0 ? errors : undefined,
     message: sentCount + ' work paper(s) sent to auditees'
   });
+}
+
+/**
+ * Request a change to a locked field on a work paper.
+ * Notifies all SUPER_ADMIN (HOA) users and logs a revision.
+ */
+function requestWorkPaperChange(params, user) {
+  var workPaperId = params.workPaperId;
+  var field = params.field;
+  var description = params.description;
+
+  if (!workPaperId || !field || !description) {
+    throw new Error('Missing required parameters: workPaperId, field, and description are required.');
+  }
+
+  // Get work paper details
+  var wp = getWorkPaperById(workPaperId);
+  if (!wp) throw new Error('Work paper not found: ' + workPaperId);
+
+  var wpRef = wp.work_paper_ref || workPaperId;
+  var obsTitle = wp.observation_title || 'Untitled';
+
+  // Find HOA users (SUPER_ADMIN)
+  var allUsers = getUsersDropdown();
+  var hoaUsers = allUsers.filter(function(u) { return u.roleCode === ROLES.SUPER_ADMIN; });
+
+  // Queue notification to each HOA user
+  var subject = 'Change Requested: ' + wpRef + ' — ' + sanitizeInput(field);
+  var body = 'A change has been requested by ' + (user.full_name || user.email) + '.\n\n' +
+    'Work Paper: ' + wpRef + '\n' +
+    'Observation: ' + obsTitle + '\n' +
+    'Field: ' + sanitizeInput(field) + '\n' +
+    'Description: ' + sanitizeInput(description);
+
+  hoaUsers.forEach(function(hoa) {
+    queueNotification({
+      template_code: 'WP_CHANGE_REQUEST',
+      recipient_user_id: hoa.id,
+      recipient_email: hoa.email,
+      subject: subject,
+      body: body,
+      module: 'WORK_PAPER',
+      record_id: workPaperId
+    });
+  });
+
+  // Log revision
+  addWorkPaperRevision(workPaperId, 'Change Requested', sanitizeInput(field) + ': ' + sanitizeInput(description), user);
+
+  return sanitizeForClient({ success: true });
 }
 
 // sanitizeInput() is defined in 01_Core.gs (canonical)

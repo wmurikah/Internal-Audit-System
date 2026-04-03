@@ -69,8 +69,13 @@
     <div class="tab-content card card-tabs" id="workPaperTabContent">
 
       <!-- Locked Section Banner (shown to assigned auditors) -->
-      <div class="alert alert-secondary py-2 mx-3 mt-3 mb-0" id="lockedSectionNotice" style="display:none">
-        <i class="bi bi-lock me-2"></i>Basic Information, Observation, and Responsible Parties were set by the Head of Internal Audit. You can edit Testing Information and Evidence below.
+      <div class="alert alert-secondary py-2 mx-3 mt-3 mb-0 d-flex align-items-center" id="lockedSectionNotice" style="display:none">
+        <div class="flex-grow-1">
+          <i class="bi bi-lock me-2"></i>Basic Information, Observation, and Responsible Parties were set by the Head of Internal Audit. You can edit Testing Information and Evidence below.
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="showRequestChangeModal()" style="display:none" id="btnRequestChange">
+          <i class="bi bi-pencil-square me-1"></i>Request Change
+        </button>
       </div>
 
       <!-- Verification Notice for pre-populated testing fields -->
@@ -172,6 +177,25 @@
             <strong>Testing information has been pre-filled from existing records.</strong> Please verify and update as needed.
             <span id="autoPopulateSource" class="text-muted ms-2"></span>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+
+          <!-- First-time audit area notice -->
+          <div id="firstTimeNotice" class="alert alert-light border py-2 mb-3" style="display:none">
+            <i class="bi bi-lightbulb me-2 text-primary"></i>
+            <strong>First audit for this area.</strong> No prior records found for this combination. Please complete all testing information.
+            <a href="#" onclick="toggleRefTemplate(); return false;">View sub-area template &rarr;</a>
+          </div>
+          <div id="refTemplateCard" class="card mb-3" style="display:none">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+              <small class="fw-bold text-muted">Sub-Area Template Reference</small>
+              <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="toggleRefTemplate()">Hide</button>
+            </div>
+            <div class="card-body py-2">
+              <div class="row g-2">
+                <div class="col-12"><small class="text-muted">Control Objectives:</small><p class="mb-1 small" id="refControlObjectives">—</p></div>
+                <div class="col-12"><small class="text-muted">Test Objective:</small><p class="mb-0 small" id="refTestObjective">—</p></div>
+              </div>
+            </div>
           </div>
 
           <div class="row g-3">
@@ -354,6 +378,14 @@
             <!-- Uploaded Files List -->
             <div class="col-12">
               <div id="wpEvidenceFilesList" class="file-items-container"></div>
+            </div>
+
+            <!-- Evidence Override (SUPER_ADMIN only) -->
+            <div class="col-12">
+              <div id="evidenceOverrideSection" class="form-check mt-2" style="display:none">
+                <input type="checkbox" class="form-check-input" id="wpEvidenceOverride">
+                <label class="form-check-label text-muted" for="wpEvidenceOverride">No evidence required for this work paper (HOA override)</label>
+              </div>
             </div>
           </div>
 
@@ -572,6 +604,42 @@
     </div>
   </div>
 </template>
+
+<!-- Request Change Modal -->
+<div class="modal fade" id="requestChangeModal" tabindex="-1" aria-labelledby="requestChangeModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="requestChangeModalLabel"><i class="bi bi-pencil-square me-2"></i>Request Change</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Request a change to a locked field. The Head of Internal Audit will be notified.</p>
+        <div class="mb-3">
+          <label class="form-label" for="rcFieldSelect">Field to Change <span class="text-danger">*</span></label>
+          <select class="form-select" id="rcFieldSelect">
+            <option value="">Select field...</option>
+            <option value="Affiliate">Affiliate</option>
+            <option value="Audit Area">Audit Area</option>
+            <option value="Sub Area">Sub Area</option>
+            <option value="Audit Period">Audit Period</option>
+            <option value="Risk Rating">Risk Rating</option>
+            <option value="Observation Title">Observation Title</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="rcDescription">Description <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="rcDescription" rows="3" placeholder="e.g., Affiliate should be HPK not HPC because..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitRequestChange()"><i class="bi bi-send me-1"></i>Send Request</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <style>
 /* Tab Navigation Styles */
@@ -1704,6 +1772,12 @@ function initWorkPaperForm(params) {
     assignSection.style.display = 'none';
   }
 
+  // Show evidence override checkbox for SUPER_ADMIN only
+  if (window.currentUser && window.currentUser.role_code === 'SUPER_ADMIN') {
+    var evidenceOverrideSection = document.getElementById('evidenceOverrideSection');
+    if (evidenceOverrideSection) evidenceOverrideSection.style.display = 'block';
+  }
+
   // Apply role-based mandatory field indicators
   applyMandatoryFieldIndicators();
 
@@ -1815,8 +1889,10 @@ function autoFillFromSubArea() {
           updateFormProgress();
         }
       } else {
-        // Fallback to local sub-area data
-        autoFillFromSubAreaLocal();
+        // No existing WP data — try local sub-area, or show first-time notice
+        if (!autoFillFromSubAreaLocal()) {
+          showFirstTimeNotice();
+        }
       }
     }).catch(function() {
       // Fallback to local sub-area data on error
@@ -1829,14 +1905,16 @@ function autoFillFromSubArea() {
 
 function autoFillFromSubAreaLocal() {
   const subAreaId = document.getElementById('wpSubArea').value;
-  if (!subAreaId) return;
+  if (!subAreaId) return false;
   const subArea = window.appDropdowns?.subAreas?.find(s => s.id === subAreaId);
-  if (!subArea) return;
+  if (!subArea) return false;
+  var populated = false;
   ['wpControlObjectives', 'wpRiskDesc', 'wpTestObj', 'wpTestSteps'].forEach((id, i) => {
     const el = document.getElementById(id);
     const val = [subArea.controlObjectives, subArea.riskDescription, subArea.testObjective, subArea.testingSteps][i];
-    if (el && !el.value && val) el.value = val;
+    if (el && !el.value && val) { el.value = val; populated = true; }
   });
+  return populated;
 }
 
 function loadWorkPaperForEdit(id) {
@@ -1936,6 +2014,12 @@ function populateForm(wp) {
     return user || { email: email, name: email };
   });
   renderCCRecipientsTags();
+
+  // Populate evidence override checkbox
+  if (wp.evidence_override === true || wp.evidence_override === 'true') {
+    var overrideCb = document.getElementById('wpEvidenceOverride');
+    if (overrideCb) overrideCb.checked = true;
+  }
 
   // Populate evidence files
   if (wp.files && wp.files.length > 0) {
@@ -2050,8 +2134,10 @@ function applyEditPermissions(wp) {
   // Hide the assigned auditor dropdown for non-HOA
   document.getElementById('wpAssignedAuditorWrap').style.display = 'none';
 
-  // Show the locked section banner
-  document.getElementById('lockedSectionNotice').style.display = 'block';
+  // Show the locked section banner and Request Change button
+  document.getElementById('lockedSectionNotice').style.display = 'flex';
+  var btnRC = document.getElementById('btnRequestChange');
+  if (btnRC && !isHOA) btnRC.style.display = 'inline-block';
 
   // Check if testing fields are pre-populated and show verification notice
   var hasPrePopulated = (wp.control_objectives && wp.control_objectives.trim()) ||
@@ -2272,6 +2358,9 @@ function applyMandatoryFieldIndicators() {
 function checkEvidenceRequirement() {
   var role = window.currentUser?.role_code || '';
   if (role === 'SUPER_ADMIN') return true;
+  // Skip evidence check if HOA has overridden the requirement
+  var overrideCb = document.getElementById('wpEvidenceOverride');
+  if (overrideCb && overrideCb.checked) return true;
   var fileCount = uploadedEvidenceFiles ? uploadedEvidenceFiles.length : 0;
   if (fileCount === 0) {
     showToast('At least one evidence document is required before submitting for review.', 'danger', 8000);
@@ -2290,7 +2379,7 @@ function formatDateInput(d) {
 function getFormData() {
   var auditorSelect = document.getElementById('wpAssignedAuditor');
   var auditorOption = auditorSelect && auditorSelect.selectedIndex > 0 ? auditorSelect.options[auditorSelect.selectedIndex] : null;
-  return {
+  var data = {
     work_paper_id: document.getElementById('wpFormId').value || undefined,
     year: document.getElementById('wpYear').value,
     affiliate_code: document.getElementById('wpAffiliate').value,
@@ -2316,7 +2405,8 @@ function getFormData() {
     control_frequency: document.getElementById('wpControlFreq').value,
     control_standards: document.getElementById('wpControlStandards').value,
     assigned_auditor_id: auditorSelect ? auditorSelect.value : '',
-    assigned_auditor_name: auditorOption ? auditorOption.text.split(' (')[0] : ''
+    assigned_auditor_name: auditorOption ? auditorOption.text.split(' (')[0] : '',
+    evidence_override: document.getElementById('wpEvidenceOverride')?.checked || false
   };
 
   // For locked (disabled) selects, read from stored original values
@@ -2554,6 +2644,75 @@ async function saveAndSubmit() {
   } finally {
     var submitBtn = document.querySelector('[onclick="saveAndSubmit()"]');
     if (submitBtn) { submitBtn.removeAttribute('data-processing'); }
+  }
+}
+
+// =============================================
+// REQUEST CHANGE MODAL
+// =============================================
+
+function showRequestChangeModal() {
+  document.getElementById('rcFieldSelect').value = '';
+  document.getElementById('rcDescription').value = '';
+  var modal = new bootstrap.Modal(document.getElementById('requestChangeModal'));
+  modal.show();
+}
+
+function submitRequestChange() {
+  var field = document.getElementById('rcFieldSelect').value;
+  var description = document.getElementById('rcDescription').value.trim();
+  if (!field) { showToast('Please select a field.', 'warning'); return; }
+  if (!description) { showToast('Please describe the change needed.', 'warning'); return; }
+
+  var workPaperId = document.getElementById('wpFormId').value;
+  if (!workPaperId) { showToast('Work paper must be saved first.', 'warning'); return; }
+
+  showLoading('Sending request...');
+  apiCall('requestWorkPaperChange', {
+    workPaperId: workPaperId,
+    field: field,
+    description: description
+  }).then(function(result) {
+    hideLoading();
+    if (result && result.success) {
+      var modal = bootstrap.Modal.getInstance(document.getElementById('requestChangeModal'));
+      if (modal) modal.hide();
+      showToast('Change request sent to Head of Internal Audit.', 'success');
+    } else {
+      showToast((result && result.error) || 'Failed to send request.', 'danger');
+    }
+  }).catch(function(err) {
+    hideLoading();
+    showToast(err.message || 'Error sending request.', 'danger');
+  });
+}
+
+// =============================================
+// FIRST-TIME AUDIT AREA NOTICE
+// =============================================
+
+function showFirstTimeNotice() {
+  // Hide auto-populate and verification notices
+  var autoNotice = document.getElementById('autoPopulateNotice');
+  var verifyNotice = document.getElementById('verificationNotice');
+  if (autoNotice) autoNotice.style.display = 'none';
+  if (verifyNotice) verifyNotice.style.display = 'none';
+
+  // Populate reference template from sub-area dropdown data
+  var subAreaId = document.getElementById('wpSubArea').value;
+  var subArea = window.appDropdowns?.subAreas?.find(function(s) { return s.id === subAreaId; });
+  if (subArea) {
+    document.getElementById('refControlObjectives').textContent = subArea.controlObjectives || '—';
+    document.getElementById('refTestObjective').textContent = subArea.testObjective || '—';
+  }
+
+  document.getElementById('firstTimeNotice').style.display = 'block';
+}
+
+function toggleRefTemplate() {
+  var card = document.getElementById('refTemplateCard');
+  if (card) {
+    card.style.display = card.style.display === 'none' ? 'block' : 'none';
   }
 }
 

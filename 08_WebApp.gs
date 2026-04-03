@@ -216,6 +216,9 @@ function routeAction(action, data, user) {
 
     case 'getAutoPopulateData':
       return getAutoPopulateData(data.auditAreaId, data.subAreaId, data.affiliateCode);
+
+    case 'requestWorkPaperChange':
+      return requestWorkPaperChange(data, user);
       
     case 'reviewWorkPaper':
       return reviewWorkPaper(data.workPaperId, data.action, data.comments, user);
