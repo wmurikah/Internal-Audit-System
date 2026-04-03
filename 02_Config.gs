@@ -1276,3 +1276,79 @@ function setConfigValue(key, value) {
   });
   return true;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Google Drive folder helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Get a Drive folder ID from config with fallback to parent folder.
+ * @param {string} configKey - The config key for the specific subfolder
+ * @return {string|null} The folder ID, or null if no config found
+ */
+function getDriveFolderId(configKey) {
+  return getConfigValue(configKey) || getConfigValue('DRIVE_PARENT_FOLDER_ID') || getConfigValue('AUDIT_FILES_FOLDER_ID');
+}
+
+/**
+ * Get a DriveApp Folder object from config with fallback.
+ * @param {string} configKey - The config key for the specific subfolder
+ * @return {GoogleAppsScript.Drive.Folder} The Drive folder
+ */
+function getDriveFolder(configKey) {
+  var folderId = getDriveFolderId(configKey);
+  if (!folderId) throw new Error('Drive folder not configured: ' + configKey);
+  return DriveApp.getFolderById(folderId);
+}
+
+/**
+ * Move a Drive file to the appropriate subfolder.
+ * Preserves file ID and sharing — existing URLs still work.
+ * @param {string} driveFileId - The file's Drive ID
+ * @param {string} configKey - Config key for the target subfolder
+ * @return {boolean} true if moved, false if skipped
+ */
+function moveFileToSubfolder(driveFileId, configKey) {
+  if (!driveFileId) return false;
+  var folderId = getConfigValue(configKey);
+  if (!folderId) return false; // No subfolder configured — leave in place
+  try {
+    var file = DriveApp.getFileById(driveFileId);
+    var targetFolder = DriveApp.getFolderById(folderId);
+    file.moveTo(targetFolder);
+    return true;
+  } catch (e) {
+    console.warn('Could not move file ' + driveFileId + ' to folder ' + configKey + ':', e.message);
+    return false;
+  }
+}
+
+/**
+ * Seed Drive folder config values if they don't already exist.
+ * Run once from the Apps Script editor to populate config.
+ */
+function seedDriveFolderConfig() {
+  var folderConfigs = [
+    { key: 'DRIVE_PARENT_FOLDER_ID', value: '1t6auxecnutG6JVS9HOXI0ggVIvrJAaM1', desc: 'Root Google Drive folder for the audit system' },
+    { key: 'DRIVE_WP_FILES_FOLDER_ID', value: '1NB2L6jsCwdGXkxrPjh7OzYFhEBo0maW5', desc: 'Subfolder for work paper evidence files' },
+    { key: 'DRIVE_AP_EVIDENCE_FOLDER_ID', value: '1YbvcAtgu-0AGz_X3Z16XvmUyRBZ52BDz', desc: 'Subfolder for action plan evidence files' },
+    { key: 'DRIVE_EXPORTS_FOLDER_ID', value: '1ldoVohMhaeeK6V76rhvetmK1Aaw2eKb-', desc: 'Subfolder for exported reports and documents' }
+  ];
+
+  folderConfigs.forEach(function(cfg) {
+    var existing = getConfigValue(cfg.key);
+    if (!existing) {
+      firestoreSet(SHEETS.CONFIG, cfg.key, {
+        config_key: cfg.key,
+        config_value: cfg.value,
+        description: cfg.desc,
+        updated_at: new Date().toISOString()
+      });
+      console.log('Seeded config: ' + cfg.key + ' = ' + cfg.value);
+    } else {
+      console.log('Config already exists: ' + cfg.key + ' = ' + existing);
+    }
+  });
+
+  console.log('Drive folder config seeding complete.');
+}

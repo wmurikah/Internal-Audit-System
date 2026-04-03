@@ -1096,11 +1096,16 @@ function addWorkPaperFile(workPaperId, fileData, user) {
     uploaded_at: now
   };
   
+  // Move file to Work Paper Files subfolder in Drive
+  if (file.drive_file_id) {
+    moveFileToSubfolder(file.drive_file_id, 'DRIVE_WP_FILES_FOLDER_ID');
+  }
+
   syncToFirestore(SHEETS.WP_FILES, fileId, file);
   invalidateSheetData(SHEETS.WP_FILES);
 
   logAuditEvent('ADD_FILE', 'WORK_PAPER', workPaperId, null, file, user.user_id, user.email);
-  
+
   return sanitizeForClient({ success: true, fileId: fileId, file: file });
 }
 
