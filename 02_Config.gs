@@ -28,8 +28,9 @@ const SCHEMAS = {
   USERS: [
     'user_id', 'email', 'password_hash', 'password_salt', 'full_name', 
     'first_name', 'last_name', 'role_code', 'affiliate_code', 'department', 
-    'phone', 'is_active', 'must_change_password', 'login_attempts', 
-    'locked_until', 'last_login', 'created_at', 'created_by', 'updated_at', 'updated_by'
+    'phone', 'is_active', 'must_change_password', 'login_attempts',
+    'locked_until', 'last_login', 'created_at', 'created_by', 'updated_at', 'updated_by',
+    'privacy_consent_accepted', 'privacy_consent_date', 'privacy_consent_version'
   ],
   AFFILIATES: ['affiliate_code', 'affiliate_name', 'country', 'region', 'is_active', 'display_order'],
   AUDIT_AREAS: ['area_id', 'area_code', 'area_name', 'description', 'is_active', 'display_order'],
