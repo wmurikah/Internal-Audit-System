@@ -272,7 +272,7 @@ function sendToAuditee(event) {
     var r = await apiCall('sendToAuditee', { workPaperId: currentWorkPaper.work_paper_id });
     if (r.success) {
       showToast('Sent to auditee', 'success');
-      loadWorkPaperView({ id: currentWorkPaper.work_paper_id });
+      navigateTo('send-queue');
     } else {
       showToast(r.error || 'Error', 'danger');
     }
@@ -286,7 +286,7 @@ function deleteWP() {
     var r = await apiCall('deleteWorkPaper', { workPaperId: currentWorkPaper.work_paper_id });
     if (r.success) {
       showToast('Work paper deleted', 'success');
-      navigateTo('workpapers');
+      navigateTo('work-papers');
     } else {
       showToast(r.error || 'Error deleting work paper', 'danger');
     }
