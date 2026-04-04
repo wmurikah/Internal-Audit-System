@@ -157,7 +157,13 @@ function routeAction(action, data, user) {
     
     case 'postLoginCleanup':
       return postLoginCleanup(data);
-      
+
+    case 'acceptPrivacyConsent':
+      return acceptPrivacyConsent(data, user);
+
+    case 'updateUserProfile':
+      return updateUserProfile(data, user);
+
     // ========== INIT ==========
     case 'getInitData':
       return getInitData(data.sessionToken);

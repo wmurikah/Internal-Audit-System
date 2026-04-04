@@ -93,7 +93,11 @@ function login(email, password) {
       role_name: roleName,
       affiliate_code: user.affiliate_code || '',
       department: user.department || '',
-      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+      phone: user.phone || '',
+      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE',
+      privacy_consent_accepted: user.privacy_consent_accepted || 'false',
+      privacy_consent_version: user.privacy_consent_version || '',
+      privacy_consent_date: user.privacy_consent_date || ''
     },
     permissions: permissions,
     dropdowns: dropdowns,
@@ -215,6 +219,85 @@ function updateLastLoginAsync(user) {
   } catch (e) {
     console.warn('updateLastLoginAsync failed:', e);
   }
+}
+
+function acceptPrivacyConsent(params, user) {
+  if (!user || !user.user_id) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  var version = (params && params.version) || '1.0';
+  var existingUser = getUserByIdCached(user.user_id);
+  if (!existingUser) {
+    return { success: false, error: 'User not found' };
+  }
+
+  var now = new Date();
+  var updates = {
+    privacy_consent_accepted: 'true',
+    privacy_consent_date: now.toISOString(),
+    privacy_consent_version: version,
+    updated_at: now
+  };
+
+  var updated = {};
+  for (var k in existingUser) {
+    if (k !== '_rowIndex') updated[k] = existingUser[k];
+  }
+  for (var k2 in updates) {
+    updated[k2] = updates[k2];
+  }
+
+  syncToFirestore(SHEETS.USERS, user.user_id, updated);
+  invalidateUserCache(existingUser.email, user.user_id);
+  invalidateSheetData(SHEETS.USERS);
+
+  logAuditEvent('CONSENT_ACCEPTED', 'USER', user.user_id, null, { version: version }, user.user_id, existingUser.email);
+
+  return { success: true };
+}
+
+function updateUserProfile(params, user) {
+  if (!user || !user.user_id) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  var existingUser = getUserByIdCached(user.user_id);
+  if (!existingUser) {
+    return { success: false, error: 'User not found' };
+  }
+
+  var now = new Date();
+  var updates = { updated_at: now, updated_by: user.user_id };
+  var allowedFields = ['full_name', 'phone', 'department'];
+
+  allowedFields.forEach(function(field) {
+    if (params[field] !== undefined) {
+      updates[field] = sanitizeInput(params[field]);
+    }
+  });
+
+  if (updates.full_name) {
+    var nameParts = updates.full_name.trim().split(' ');
+    updates.first_name = nameParts[0] || '';
+    updates.last_name = nameParts.slice(1).join(' ') || '';
+  }
+
+  var updated = {};
+  for (var k in existingUser) {
+    if (k !== '_rowIndex') updated[k] = existingUser[k];
+  }
+  for (var k2 in updates) {
+    updated[k2] = updates[k2];
+  }
+
+  syncToFirestore(SHEETS.USERS, user.user_id, updated);
+  invalidateUserCache(existingUser.email, user.user_id);
+  invalidateSheetData(SHEETS.USERS);
+
+  logAuditEvent('UPDATE_PROFILE', 'USER', user.user_id, existingUser, updated, user.user_id, existingUser.email);
+
+  return sanitizeForClient({ success: true, user: updated });
 }
 
 function logout(sessionToken) {

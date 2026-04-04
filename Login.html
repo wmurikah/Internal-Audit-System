@@ -23,7 +23,8 @@
       background: var(--bg-gradient);
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
-    .login-container { width: 100%; max-width: 420px; padding: 20px; }
+    .login-container { width: 100%; max-width: 420px; padding: 20px; transition: max-width 0.3s ease; }
+    .login-container.expanded { max-width: 520px; }
     .login-card {
       background: #fff;
       border-radius: 16px;
@@ -148,6 +149,40 @@
       text-decoration: none; margin-top: 20px; cursor: pointer;
     }
     .btn-continue:hover { background: #218838; color: #fff; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(40,167,69,0.3); }
+    .success-meta { color: #6c757d; font-size: 0.85rem; margin: 4px 0 0; }
+    .privacy-notice-card {
+      border-left: 4px solid #5a6f8a; background: #f8f9fb; border-radius: 8px;
+      padding: 18px; margin: 18px 0 10px; text-align: left;
+    }
+    .privacy-notice-card h6 { color: #1a365d; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .privacy-notice-card p { font-size: 0.82rem; color: #495057; margin-bottom: 8px; line-height: 1.5; }
+    .privacy-notice-card p:last-of-type { margin-bottom: 0; }
+    .privacy-accepted-line { font-size: 0.82rem; color: #6c757d; margin: 14px 0 6px; }
+    .privacy-accepted-line a { color: #1a365d; }
+    .quick-actions { margin-top: 16px; }
+    .quick-actions .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; font-weight: 600; border-radius: 10px; font-size: 1rem; }
+    .quick-actions .btn + .btn { margin-top: 8px; }
+    .quick-actions .btn-primary { background: var(--primary-color); border-color: var(--primary-color); }
+    .quick-actions .btn-primary:hover:not(:disabled) { background: #2d4a7c; border-color: #2d4a7c; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(26,54,93,0.3); }
+    .quick-actions .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .quick-actions .btn-outline-secondary { color: #495057; border-color: #ced4da; }
+    .quick-actions .btn-outline-secondary:hover { background: #f8f9fa; color: #1a365d; border-color: #1a365d; }
+    .quick-actions .btn-outline-danger { color: #dc3545; border-color: #f5c6cb; }
+    .quick-actions .btn-outline-danger:hover { background: #fff5f5; border-color: #dc3545; }
+    .profile-edit-section { margin-top: 16px; text-align: left; }
+    .profile-edit-section .form-label { font-size: 0.82rem; font-weight: 600; color: #495057; margin-bottom: 2px; }
+    .profile-edit-section .form-control { border-radius: 8px; font-size: 0.9rem; }
+    .profile-edit-section .form-control[readonly] { background: #f8f9fa; color: #6c757d; }
+    .profile-edit-section .field-note { font-size: 0.75rem; color: #adb5bd; margin-top: 2px; }
+    .profile-edit-btns { display: flex; gap: 8px; margin-top: 14px; }
+    .profile-edit-btns .btn { flex: 1; border-radius: 8px; font-weight: 600; padding: 10px; }
+    .toast-notification {
+      position: fixed; top: 20px; right: 20px; z-index: 10001;
+      background: #28a745; color: #fff; padding: 12px 20px; border-radius: 8px;
+      font-size: 0.9rem; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      animation: fadeIn 0.3s ease;
+    }
+    .toast-notification.error { background: #dc3545; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
     .shake { animation: shake 0.4s ease; }
@@ -268,18 +303,100 @@
           </div>
         </div>
 
-        <!-- ========== SUCCESS VIEW (outside form) ========== -->
-        <div id="successView" style="display: none; text-align: center; padding: 20px 0;">
-          <div style="width:80px;height:80px;background:#d4edda;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
-            <i class="bi bi-check-lg" style="font-size:40px;color:#28a745;"></i>
+        <!-- ========== SUCCESS VIEW ========== -->
+        <div id="successView" style="display: none; text-align: center; padding: 16px 0;">
+          <!-- Welcome Header -->
+          <div style="margin-bottom: 14px;">
+            <div style="width:50px;height:50px;background:#d4edda;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+              <i class="bi bi-check-lg" style="font-size:24px;color:#28a745;"></i>
+            </div>
+            <h5 style="color:#28a745;margin-bottom:4px;">Login Successful</h5>
+            <p style="color:#333;margin-bottom:2px;">Welcome back, <strong id="welcomeName"></strong></p>
+            <p class="success-meta" id="userRoleAffiliate"></p>
+            <p class="success-meta" id="userLastLogin"></p>
           </div>
-          <h4 style="color:#28a745;margin-bottom:8px;">Login Successful!</h4>
-          <p style="color:#6c757d;">Welcome back, <strong id="welcomeName"></strong></p>
-          <a id="continueBtn" href="#" target="_top" class="btn-continue">
-            <i class="bi bi-arrow-right-circle"></i>
-            Go to Dashboard
-          </a>
+
+          <!-- Privacy Notice (pending consent) -->
+          <div id="privacyNoticeSection" style="display: none;">
+            <div class="privacy-notice-card">
+              <h6><i class="bi bi-shield-lock"></i> Data Privacy Notice</h6>
+              <p><strong>What data we collect:</strong> Your name, email, role, department, and affiliate assignment. Your activity within the audit system (work paper actions, action plan updates, login timestamps) is logged for audit trail purposes.</p>
+              <p><strong>How we use it:</strong> Data is used solely for internal audit management, tracking audit observations and action plans, generating compliance reports, and maintaining accountability within the Hass Petroleum audit process.</p>
+              <p><strong>Data protection:</strong> All data is stored in Google Cloud Firestore with encryption at rest and in transit. Access is role-based and restricted to authorized personnel. Passwords are hashed using HMAC-SHA256 and are never stored in plain text.</p>
+              <p><strong>Your rights:</strong> You may request access to your personal data, correction of inaccurate data, or raise concerns with the Head of Internal Audit at any time.</p>
+              <p><strong>Data retention:</strong> Audit records are retained in accordance with Hass Petroleum's records retention policy and applicable regulatory requirements.</p>
+              <div class="form-check mt-3">
+                <input type="checkbox" class="form-check-input" id="privacyConsent" onchange="onConsentCheckboxChange()">
+                <label class="form-check-label" for="privacyConsent" style="font-size:0.85rem;">I have read and understood the Data Privacy Notice</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Privacy Notice (already accepted) -->
+          <div id="privacyAcceptedSection" style="display: none;">
+            <p class="privacy-accepted-line"><i class="bi bi-shield-check" style="color:#28a745;"></i> Data Privacy Notice accepted on <span id="consentDateDisplay"></span>. <a href="javascript:void(0)" onclick="togglePrivacyNoticeView()">View Policy</a></p>
+            <div id="privacyNoticeExpanded" style="display: none;">
+              <div class="privacy-notice-card">
+                <h6><i class="bi bi-shield-lock"></i> Data Privacy Notice</h6>
+                <p><strong>What data we collect:</strong> Your name, email, role, department, and affiliate assignment. Your activity within the audit system is logged for audit trail purposes.</p>
+                <p><strong>How we use it:</strong> Data is used solely for internal audit management, tracking audit observations and action plans, generating compliance reports, and maintaining accountability.</p>
+                <p><strong>Data protection:</strong> All data is stored in Google Cloud Firestore with encryption at rest and in transit. Access is role-based. Passwords are hashed using HMAC-SHA256.</p>
+                <p><strong>Your rights:</strong> You may request access to your personal data, correction of inaccurate data, or raise concerns with the Head of Internal Audit.</p>
+                <p><strong>Data retention:</strong> Audit records are retained per Hass Petroleum's records retention policy and applicable regulatory requirements.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div id="quickActionsSection" class="quick-actions">
+            <button type="button" class="btn btn-primary" id="dashboardBtn" onclick="goToDashboard()">
+              <i class="bi bi-speedometer2"></i> Go to Dashboard
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="editProfileBtn" onclick="showProfileEdit()">
+              <i class="bi bi-person-gear"></i> Edit Profile
+            </button>
+            <button type="button" class="btn btn-outline-danger" onclick="handleLogout()">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+          </div>
+
+          <!-- Profile Edit (hidden by default) -->
+          <div id="profileEditSection" class="profile-edit-section" style="display: none;">
+            <h6 style="color:#1a365d; margin-bottom:14px;"><i class="bi bi-person-gear"></i> Edit Profile</h6>
+            <div class="mb-2">
+              <label class="form-label">Full Name</label>
+              <input type="text" class="form-control" id="profileName">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Email</label>
+              <input type="text" class="form-control" id="profileEmail" readonly>
+              <div class="field-note">Contact administrator to change</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Phone</label>
+              <input type="text" class="form-control" id="profilePhone">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Department</label>
+              <input type="text" class="form-control" id="profileDept">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Role</label>
+              <input type="text" class="form-control" id="profileRole" readonly>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Affiliate</label>
+              <input type="text" class="form-control" id="profileAffiliate" readonly>
+            </div>
+            <div class="profile-edit-btns">
+              <button type="button" class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="cancelProfileEdit()">Cancel</button>
+            </div>
+          </div>
         </div>
+
+        <!-- Toast -->
+        <div class="toast-notification" id="toastNotification"></div>
 
       </div>
 
@@ -501,11 +618,17 @@
         .apiCall('login', loginData);
     }
 
+    var CURRENT_POLICY_VERSION = '1.0';
+    var currentLoginUser = null;
+    var consentPending = false;
+
     function onLoginSuccess(result) {
       if (result && result.success) {
-        setLoading(true, 'Preparing your dashboard...');
+        setLoading(true, 'Preparing your session...');
 
         if (result.sessionToken) sessionStorage.setItem('sessionToken', result.sessionToken);
+
+        currentLoginUser = result.user || {};
 
         sessionStorage.setItem('loginInitData', JSON.stringify({
           success: true,
@@ -516,25 +639,39 @@
           _needsCleanup: result._needsCleanup || false
         }));
 
-        // Keep loading overlay visible during redirect — no intermediate success screen
-        document.getElementById('loadingText').textContent = 'Welcome, ' + (result.user ? result.user.full_name : '') + '...';
+        // Check if must change password — let existing flow handle it
+        if (currentLoginUser.must_change_password) {
+          document.getElementById('loadingText').textContent = 'Welcome, ' + (currentLoginUser.full_name || '') + '...';
+          var a = document.createElement('a');
+          a.href = APP_URL; a.target = '_top'; a.style.display = 'none';
+          document.body.appendChild(a); a.click();
+          setTimeout(function() {
+            setLoading(false);
+            showSuccessView();
+          }, 3000);
+          return;
+        }
 
-        // Auto-redirect immediately (preserves target="_top" iframe breakout)
-        var a = document.createElement('a');
-        a.href = APP_URL;
-        a.target = '_top';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
+        // Check consent status
+        consentPending = currentLoginUser.privacy_consent_accepted !== 'true' ||
+                         currentLoginUser.privacy_consent_version !== CURRENT_POLICY_VERSION;
 
-        // Fallback: if click doesn't navigate within 3s, show manual link
-        setTimeout(function() {
+        if (!consentPending) {
+          // Consent already accepted — auto-redirect after brief success screen
+          document.getElementById('loadingText').textContent = 'Welcome, ' + (currentLoginUser.full_name || '') + '...';
+          var a2 = document.createElement('a');
+          a2.href = APP_URL; a2.target = '_top'; a2.style.display = 'none';
+          document.body.appendChild(a2); a2.click();
+          // Fallback if redirect doesn't work within 3s
+          setTimeout(function() {
+            setLoading(false);
+            showSuccessView();
+          }, 3000);
+        } else {
+          // Consent pending — show the success landing page immediately
           setLoading(false);
-          document.getElementById('loginFormView').style.display = 'none';
-          document.getElementById('successView').style.display = 'block';
-          document.getElementById('welcomeName').textContent = result.user ? result.user.full_name : 'User';
-          document.getElementById('continueBtn').href = APP_URL;
-        }, 3000);
+          showSuccessView();
+        }
       } else {
         setLoading(false);
         document.getElementById('password').value = '';
@@ -542,7 +679,186 @@
       }
     }
 
-    // onLoginFailure is handled inline with HTTP fallback above
+    function showSuccessView() {
+      document.getElementById('loginFormView').style.display = 'none';
+      document.getElementById('forgotPasswordView').style.display = 'none';
+      document.getElementById('successView').style.display = 'block';
+      document.querySelector('.login-container').classList.add('expanded');
+
+      // Populate welcome header
+      document.getElementById('welcomeName').textContent = currentLoginUser.full_name || 'User';
+      var roleName = currentLoginUser.role_name || currentLoginUser.role_code || '';
+      var affiliateCode = currentLoginUser.affiliate_code || '';
+      var metaParts = [];
+      if (roleName) metaParts.push('Role: ' + roleName);
+      if (affiliateCode) metaParts.push('Affiliate: ' + affiliateCode);
+      document.getElementById('userRoleAffiliate').textContent = metaParts.join(' | ');
+
+      // Show privacy notice or accepted line
+      if (consentPending) {
+        document.getElementById('privacyNoticeSection').style.display = 'block';
+        document.getElementById('privacyAcceptedSection').style.display = 'none';
+        document.getElementById('dashboardBtn').disabled = true;
+      } else {
+        document.getElementById('privacyNoticeSection').style.display = 'none';
+        document.getElementById('privacyAcceptedSection').style.display = 'block';
+        var consentDate = currentLoginUser.privacy_consent_date;
+        if (consentDate) {
+          try {
+            var d = new Date(consentDate);
+            document.getElementById('consentDateDisplay').textContent = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+          } catch(e) {
+            document.getElementById('consentDateDisplay').textContent = consentDate;
+          }
+        }
+        document.getElementById('dashboardBtn').disabled = false;
+      }
+    }
+
+    function onConsentCheckboxChange() {
+      var checked = document.getElementById('privacyConsent').checked;
+      document.getElementById('dashboardBtn').disabled = !checked;
+    }
+
+    function goToDashboard() {
+      if (consentPending) {
+        if (!document.getElementById('privacyConsent').checked) return;
+
+        document.getElementById('dashboardBtn').disabled = true;
+        document.getElementById('dashboardBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Please wait...';
+
+        var consentData = { version: CURRENT_POLICY_VERSION };
+
+        google.script.run
+          .withSuccessHandler(function() { navigateToDashboard(); })
+          .withFailureHandler(function() {
+            httpApiCall('acceptPrivacyConsent', consentData)
+              .then(function() { navigateToDashboard(); })
+              .catch(function() { navigateToDashboard(); });
+          })
+          .apiCall('acceptPrivacyConsent', consentData);
+      } else {
+        navigateToDashboard();
+      }
+    }
+
+    function navigateToDashboard() {
+      var a = document.createElement('a');
+      a.href = APP_URL; a.target = '_top'; a.style.display = 'none';
+      document.body.appendChild(a); a.click();
+    }
+
+    function togglePrivacyNoticeView() {
+      var el = document.getElementById('privacyNoticeExpanded');
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function showProfileEdit() {
+      document.getElementById('quickActionsSection').style.display = 'none';
+      document.getElementById('profileEditSection').style.display = 'block';
+
+      document.getElementById('profileName').value = currentLoginUser.full_name || '';
+      document.getElementById('profileEmail').value = currentLoginUser.email || '';
+      document.getElementById('profilePhone').value = currentLoginUser.phone || '';
+      document.getElementById('profileDept').value = currentLoginUser.department || '';
+      document.getElementById('profileRole').value = currentLoginUser.role_name || currentLoginUser.role_code || '';
+      document.getElementById('profileAffiliate').value = currentLoginUser.affiliate_code || '';
+    }
+
+    function cancelProfileEdit() {
+      document.getElementById('profileEditSection').style.display = 'none';
+      document.getElementById('quickActionsSection').style.display = 'block';
+    }
+
+    function saveProfile() {
+      var profileData = {
+        full_name: document.getElementById('profileName').value.trim(),
+        phone: document.getElementById('profilePhone').value.trim(),
+        department: document.getElementById('profileDept').value.trim()
+      };
+
+      if (!profileData.full_name) {
+        showToast('Full name is required.', true);
+        return;
+      }
+
+      var saveBtn = document.querySelector('#profileEditSection .btn-primary');
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+
+      google.script.run
+        .withSuccessHandler(function(result) { onProfileSaved(result, profileData, saveBtn); })
+        .withFailureHandler(function() {
+          httpApiCall('updateUserProfile', profileData)
+            .then(function(result) { onProfileSaved(result, profileData, saveBtn); })
+            .catch(function() {
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Save Changes';
+              showToast('Failed to save. Please try again.', true);
+            });
+        })
+        .apiCall('updateUserProfile', profileData);
+    }
+
+    function onProfileSaved(result, profileData, saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Changes';
+
+      if (result && result.success) {
+        currentLoginUser.full_name = profileData.full_name;
+        currentLoginUser.phone = profileData.phone;
+        currentLoginUser.department = profileData.department;
+        document.getElementById('welcomeName').textContent = profileData.full_name;
+
+        // Update sessionStorage
+        try {
+          var stored = JSON.parse(sessionStorage.getItem('loginInitData') || '{}');
+          if (stored.user) {
+            stored.user.full_name = profileData.full_name;
+            stored.user.phone = profileData.phone;
+            stored.user.department = profileData.department;
+            sessionStorage.setItem('loginInitData', JSON.stringify(stored));
+          }
+        } catch(e) {}
+
+        showToast('Profile updated.');
+        cancelProfileEdit();
+      } else {
+        showToast((result && result.error) || 'Failed to save profile.', true);
+      }
+    }
+
+    function handleLogout() {
+      var token = sessionStorage.getItem('sessionToken');
+      sessionStorage.removeItem('sessionToken');
+      sessionStorage.removeItem('loginInitData');
+
+      if (token) {
+        try {
+          google.script.run.apiCall('logout', { sessionToken: token });
+        } catch(e) {
+          httpApiCall('logout', { sessionToken: token }).catch(function() {});
+        }
+      }
+
+      document.getElementById('successView').style.display = 'none';
+      document.getElementById('profileEditSection').style.display = 'none';
+      document.getElementById('quickActionsSection').style.display = 'block';
+      document.getElementById('loginFormView').style.display = 'block';
+      document.querySelector('.login-container').classList.remove('expanded');
+      document.getElementById('password').value = '';
+      document.getElementById('email').focus();
+      currentLoginUser = null;
+      consentPending = false;
+    }
+
+    function showToast(message, isError) {
+      var el = document.getElementById('toastNotification');
+      el.textContent = message;
+      el.className = 'toast-notification' + (isError ? ' error' : '');
+      el.style.display = 'block';
+      setTimeout(function() { el.style.display = 'none'; }, 3000);
+    }
 
     // =============================================
     // INIT
