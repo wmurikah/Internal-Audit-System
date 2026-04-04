@@ -2668,7 +2668,7 @@ async function saveAndSubmit() {
     stopAutoSave();
     showToast('Submitted successfully', 'success');
     if (typeof refreshSidebarCounts === 'function') refreshSidebarCounts();
-    navigateTo('work-papers');
+    navigateTo('work-papers', { mine: true });
 
   } catch (err) {
     hideLoading();

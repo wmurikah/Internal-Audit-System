@@ -500,10 +500,11 @@ function submitResponseForm() {
     if (result && result.success) {
       if (result.aiRejected) {
         showToast(result.message || 'Your response was automatically reviewed. Please revise.', 'warning');
+        loadAuditeeResponse({ id: _arWorkPaperId });
       } else {
         showToast(result.message || 'Response submitted successfully', 'success');
+        navigateTo('auditee-findings');
       }
-      loadAuditeeResponse({ id: _arWorkPaperId });
     } else {
       showToast(result ? result.error : 'Submit failed', 'danger');
     }
@@ -535,8 +536,8 @@ function reviewResponseAction(action, event) {
       var auditorRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
       var isAuditor = auditorRoles.indexOf(window.currentUser?.role_code) >= 0;
       showToast('Response ' + (action === 'accept' ? 'accepted' : 'rejected') + ' successfully', 'success');
-      if (isAuditor && document.getElementById('page-responses-to-review')) {
-        setTimeout(function() { navigateTo('responses-to-review'); }, 500);
+      if (action === 'reject' && isAuditor) {
+        navigateTo('responses-to-review');
       } else {
         loadAuditeeResponse({ id: _arWorkPaperId });
       }
