@@ -24,7 +24,7 @@
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
     .login-container { width: 100%; max-width: 420px; padding: 20px; transition: max-width 0.3s ease; }
-    .login-container.expanded { max-width: 520px; }
+    .login-container.expanded { max-width: 640px; }
     .login-card {
       background: #fff;
       border-radius: 16px;
@@ -322,7 +322,7 @@
               <h6><i class="bi bi-shield-lock"></i> Data Privacy Notice</h6>
               <p><strong>What data we collect:</strong> Your name, email, role, department, and affiliate assignment. Your activity within the audit system (work paper actions, action plan updates, login timestamps) is logged for audit trail purposes.</p>
               <p><strong>How we use it:</strong> Data is used solely for internal audit management, tracking audit observations and action plans, generating compliance reports, and maintaining accountability within the Hass Petroleum audit process.</p>
-              <p><strong>Data protection:</strong> All data is stored in Google Cloud Firestore with encryption at rest and in transit. Access is role-based and restricted to authorized personnel. Passwords are hashed using HMAC-SHA256 and are never stored in plain text.</p>
+              <p><strong>Data protection:</strong> All data is stored in Firestore synced with Office 365 SharePoint with encryption at rest and in transit. Access is role-based and restricted to authorized personnel. Passwords are hashed using HMAC-SHA256 and are never stored in plain text.</p>
               <p><strong>Your rights:</strong> You may request access to your personal data, correction of inaccurate data, or raise concerns with the Head of Internal Audit at any time.</p>
               <p><strong>Data retention:</strong> Audit records are retained in accordance with Hass Petroleum's records retention policy and applicable regulatory requirements.</p>
               <div class="form-check mt-3">
@@ -340,7 +340,7 @@
                 <h6><i class="bi bi-shield-lock"></i> Data Privacy Notice</h6>
                 <p><strong>What data we collect:</strong> Your name, email, role, department, and affiliate assignment. Your activity within the audit system is logged for audit trail purposes.</p>
                 <p><strong>How we use it:</strong> Data is used solely for internal audit management, tracking audit observations and action plans, generating compliance reports, and maintaining accountability.</p>
-                <p><strong>Data protection:</strong> All data is stored in Google Cloud Firestore with encryption at rest and in transit. Access is role-based. Passwords are hashed using HMAC-SHA256.</p>
+                <p><strong>Data protection:</strong> All data is stored in Firestore synced with Office 365 SharePoint with encryption at rest and in transit. Access is role-based. Passwords are hashed using HMAC-SHA256.</p>
                 <p><strong>Your rights:</strong> You may request access to your personal data, correction of inaccurate data, or raise concerns with the Head of Internal Audit.</p>
                 <p><strong>Data retention:</strong> Audit records are retained per Hass Petroleum's records retention policy and applicable regulatory requirements.</p>
               </div>
@@ -724,19 +724,89 @@
       if (consentPending) {
         if (!document.getElementById('privacyConsent').checked) return;
 
-        document.getElementById('dashboardBtn').disabled = true;
-        document.getElementById('dashboardBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Please wait...';
+        var btn = document.getElementById('dashboardBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Please wait...';
 
+        var token = sessionStorage.getItem('sessionToken');
         var consentData = { version: CURRENT_POLICY_VERSION };
+        if (token) consentData.sessionToken = token;
 
-        google.script.run
-          .withSuccessHandler(function() { navigateToDashboard(); })
-          .withFailureHandler(function() {
-            httpApiCall('acceptPrivacyConsent', consentData)
-              .then(function() { navigateToDashboard(); })
-              .catch(function() { navigateToDashboard(); });
-          })
-          .apiCall('acceptPrivacyConsent', consentData);
+        function onConsentSaved() {
+          navigateToDashboard();
+        }
+
+        function onConsentError(err) {
+          console.warn('Consent save failed, navigating anyway:', err);
+          // Store consent flag to retry on next load
+          sessionStorage.setItem('pendingConsent', CURRENT_POLICY_VERSION);
+          navigateToDashboard();
+        }
+
+        function resetButton(errorMsg) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-speedometer2"></i> Go to Dashboard';
+          if (errorMsg) showError(errorMsg);
+        }
+
+        // Safety timeout: if nothing happens in 10s, navigate anyway
+        var safetyTimer = setTimeout(function() {
+          console.warn('Consent save timed out, navigating anyway');
+          sessionStorage.setItem('pendingConsent', CURRENT_POLICY_VERSION);
+          navigateToDashboard();
+        }, 10000);
+
+        function clearTimerAndNavigate() {
+          clearTimeout(safetyTimer);
+          onConsentSaved();
+        }
+
+        function clearTimerAndFallback(err) {
+          clearTimeout(safetyTimer);
+          onConsentError(err);
+        }
+
+        try {
+          google.script.run
+            .withSuccessHandler(function(result) {
+              if (result && result.success === false) {
+                // Server returned error object (not an exception)
+                console.warn('Consent API returned error:', result.error);
+                clearTimerAndFallback(result.error);
+              } else {
+                clearTimerAndNavigate();
+              }
+            })
+            .withFailureHandler(function(err) {
+              console.warn('google.script.run failed for consent, trying HTTP fallback:', err);
+              httpApiCall('acceptPrivacyConsent', consentData)
+                .then(function(result) {
+                  if (result && result.success === false) {
+                    clearTimerAndFallback(result.error);
+                  } else {
+                    clearTimerAndNavigate();
+                  }
+                })
+                .catch(function(fetchErr) {
+                  clearTimerAndFallback(fetchErr);
+                });
+            })
+            .apiCall('acceptPrivacyConsent', consentData);
+        } catch (e) {
+          // google.script.run not available at all
+          console.warn('google.script.run unavailable, trying HTTP:', e);
+          httpApiCall('acceptPrivacyConsent', consentData)
+            .then(function(result) {
+              if (result && result.success === false) {
+                clearTimerAndFallback(result.error);
+              } else {
+                clearTimerAndNavigate();
+              }
+            })
+            .catch(function(fetchErr) {
+              clearTimerAndFallback(fetchErr);
+            });
+        }
       } else {
         navigateToDashboard();
       }
