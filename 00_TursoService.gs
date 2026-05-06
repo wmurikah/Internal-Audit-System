@@ -99,7 +99,6 @@ function parseRows_(result) {
 function withPragmas_(stmts) {
   return [
     { type: 'execute', stmt: { sql: 'PRAGMA foreign_keys = ON' } },
-    { type: 'execute', stmt: { sql: 'PRAGMA recursive_triggers = ON' } },
     ...stmts,
     { type: 'close' }
   ];
@@ -407,8 +406,8 @@ function tursoBatchWrite(writes) {
  * For SELECT: returns an array of row objects.
  * For DML (INSERT/UPDATE/DELETE): returns affected_row_count.
  *
- * Note: withPragmas_ inserts 2 statements before the caller's stmt, so the
- * actual execute result for DML is at results[2], not results[0].
+ * Note: withPragmas_ inserts 1 statement before the caller's stmt, so the
+ * actual execute result for DML is at results[1], not results[0].
  */
 function tursoQuery_SQL(sql, args) {
   try {
