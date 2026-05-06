@@ -822,8 +822,9 @@ function formatEmailHtml(subject, body) {
 '        </tr>' +
 '        <tr>' +
 '          <td style="padding:16px 36px;" class="email-footer-inner">' +
-'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
+'            <p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
 '              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
+'            <p style="margin:0; color:#86868b; font-size:10px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
 '          </td>' +
 '        </tr>' +
 '      </table>' +
@@ -945,8 +946,9 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '        </tr>' +
 '        <tr>' +
 '          <td style="padding:16px 36px;" class="email-footer-inner">' +
-'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
+'            <p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
 '              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
+'            <p style="margin:0; color:#86868b; font-size:10px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
 '          </td>' +
 '        </tr>' +
 '      </table>' +
@@ -1198,8 +1200,9 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   var ctaHtml = buildCtaButton(systemUrl, 'View in Audit System');
 
   // Footer
-  var footerHtml = '<p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
-    '&copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>';
+  var footerHtml = '<p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
+    '&copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
+    '<p style="margin:0; color:#86868b; font-size:10px; font-family:system-ui,-apple-system,sans-serif; text-align:center;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>';
 
   // Assemble full email HTML
   var htmlBody = '<!DOCTYPE html>' +
@@ -2593,8 +2596,9 @@ function _buildBatchedWPEmailHtml(subject, intro, sectionsHtml, outro) {
 '        <tr><td style="padding:0 36px;"><div style="height:1px; background-color:#e5e5e5;"></div></td></tr>' +
 '        <tr>' +
 '          <td style="padding:16px 36px;" class="email-footer-inner">' +
-'            <p style="margin:0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
+'            <p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
 '              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
+'            <p style="margin:0; color:#86868b; font-size:10px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
 '          </td>' +
 '        </tr>' +
 '      </table>' +
