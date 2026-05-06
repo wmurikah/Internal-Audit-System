@@ -148,10 +148,12 @@ const STATUS = {
     RETURNED: 'Returned for Revision'
   },
   NOTIFICATION: {
-    PENDING: 'Pending',
-    SENT: 'Sent',
-    FAILED: 'Failed',
-    BATCHED: 'Batched'
+    PENDING: 'pending',
+    SENDING: 'sending',
+    SENT: 'sent',
+    FAILED: 'failed',
+    CANCELLED: 'cancelled',
+    DEAD_LETTER: 'dead_letter'
   }
 };
 
@@ -495,99 +497,20 @@ var _ID_PREFIX_MAP = {
   'AUDITEE_RESPONSE': 'AR-'
 };
 
-function generateId(entityType) {
-  // Check cached block first (no lock needed)
-  if (_idBlockCache[entityType] && _idBlockCache[entityType].remaining > 0) {
-    var cached = _idBlockCache[entityType];
-    var id = cached.prefix + String(cached.next).padStart(6, '0');
-    cached.next++;
-    cached.remaining--;
-    return id;
-  }
-
-  // Allocate a new block (requires lock + Firestore)
-  var configKey = _ID_CONFIG_KEY_MAP[entityType];
-  var prefix = _ID_PREFIX_MAP[entityType];
-  if (!configKey || !prefix) throw new Error('Unknown entity type: ' + entityType);
-
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-
-    var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
-    var currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
-
-    // Allocate block: increment by ID_BLOCK_SIZE instead of 1
-    firestoreSet(SHEETS.CONFIG, configKey, {
-      config_key: configKey,
-      config_value: currentValue + ID_BLOCK_SIZE,
-      description: 'Auto-generated ID counter',
-      updated_at: new Date().toISOString()
-    });
-
-    _idBlockCache[entityType] = {
-      prefix: prefix,
-      next: currentValue,
-      remaining: ID_BLOCK_SIZE
-    };
-
-    lock.releaseLock();
-    return generateId(entityType); // Recurse to use cached block
-  } finally {
-    try { lock.releaseLock(); } catch(e) {}
-  }
+function generateId(prefix) {
+  const counterKey = 'ID_COUNTER_' + prefix;
+  const next = tursoIncrementCounter(counterKey, 'GLOBAL');
+  return prefix + '-' + String(next).padStart(6, '0');
 }
 
-function generateIds(entityType, count) {
-  if (count <= 0) return [];
-  if (count === 1) return [generateId(entityType)];
-
-  var lock = LockService.getScriptLock();
-
-  try {
-    lock.waitLock(10000);
-
-    var configKeyMap = {
-      'WORK_PAPER': 'NEXT_WP_ID',
-      'ACTION_PLAN': 'NEXT_AP_ID',
-      'FILE': 'NEXT_FILE_ID',
-      'REQUIREMENT': 'NEXT_REQ_ID',
-      'EVIDENCE': 'NEXT_EVIDENCE_ID'
-    };
-
-    var prefixMap = {
-      'WORK_PAPER': 'WP-',
-      'ACTION_PLAN': 'AP-',
-      'FILE': 'FILE-',
-      'REQUIREMENT': 'REQ-',
-      'EVIDENCE': 'EVI-'
-    };
-
-    var configKey = configKeyMap[entityType];
-    var prefix = prefixMap[entityType];
-    if (!configKey || !prefix) throw new Error('Unknown entity type for batch: ' + entityType);
-
-    var currentValue = 1;
-
-    var configDoc = firestoreGet(SHEETS.CONFIG, configKey);
-    currentValue = configDoc ? (parseInt(configDoc.config_value) || 1) : 1;
-
-    firestoreSet(SHEETS.CONFIG, configKey, {
-      config_key: configKey,
-      config_value: currentValue + count,
-      description: 'Auto-generated ID counter',
-      updated_at: new Date().toISOString()
-    });
-
-    var ids = [];
-    for (var j = 0; j < count; j++) {
-      ids.push(prefix + String(currentValue + j).padStart(6, '0'));
-    }
-    return ids;
-
-  } finally {
-    lock.releaseLock();
+function generateIds(prefix, count) {
+  const counterKey = 'ID_COUNTER_' + prefix;
+  // Allocate a block: read current, jump by count, return the range
+  const ids = [];
+  for (let i = 0; i < count; i++) {
+    ids.push(generateId(prefix));
   }
+  return ids;
 }
 
 function getDropdownData() {
@@ -705,32 +628,15 @@ function getAffiliatesDropdown() {
   const cache = CacheService.getScriptCache();
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
-  
-  var data = getSheetData(SHEETS.AFFILIATES);
-  if (!data || data.length < 2) return [];
-  const headers = data[0];
 
-  const codeIdx = headers.indexOf('affiliate_code');
-  const nameIdx = headers.indexOf('affiliate_name');
-  const countryIdx = headers.indexOf('country');
-  const activeIdx = headers.indexOf('is_active');
-  const orderIdx = headers.indexOf('display_order');
-  
-  const affiliates = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (isActive(row[activeIdx])) {
-      affiliates.push({
-        code: row[codeIdx],
-        name: row[nameIdx],
-        country: row[countryIdx],
-        order: row[orderIdx] || 999,
-        display: row[codeIdx] + ' - ' + row[nameIdx]
-      });
-    }
-  }
-  
-  affiliates.sort((a, b) => (a.order || 999) - (b.order || 999));
+  const affiliates = tursoGetAll('06_Affiliates')
+    .filter(r => r.is_active == 1)
+    .map(r => ({
+      affiliate_code: r.affiliate_code,
+      affiliate_name: r.affiliate_name,
+      is_active: r.is_active
+    }));
+
   cache.put(cacheKey, JSON.stringify(affiliates), CONFIG.CACHE_TTL.DROPDOWNS);
   return affiliates;
 }
@@ -740,32 +646,18 @@ function getAuditAreasDropdown() {
   const cache = CacheService.getScriptCache();
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
-  
-  var data = getSheetData(SHEETS.AUDIT_AREAS);
-  if (!data || data.length < 2) return [];
-  const headers = data[0];
 
-  const idIdx = headers.indexOf('area_id');
-  const codeIdx = headers.indexOf('area_code');
-  const nameIdx = headers.indexOf('area_name');
-  const activeIdx = headers.indexOf('is_active');
-  const orderIdx = headers.indexOf('display_order');
-  
-  const areas = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (isActive(row[activeIdx])) {
-      areas.push({
-        id: row[idIdx],
-        code: row[codeIdx],
-        name: row[nameIdx],
-        order: row[orderIdx] || 999,
-        display: row[codeIdx] + ' - ' + row[nameIdx]
-      });
-    }
-  }
-  
-  areas.sort((a, b) => (a.order || 999) - (b.order || 999));
+  const areas = tursoGetAll('07_AuditAreas')
+    .filter(r => r.is_active == 1)
+    .sort((a, b) => a.display_order - b.display_order)
+    .map(r => ({
+      area_id: r.area_id,
+      area_code: r.area_code,
+      area_name: r.area_name,
+      is_active: r.is_active,
+      display_order: r.display_order
+    }));
+
   cache.put(cacheKey, JSON.stringify(areas), CONFIG.CACHE_TTL.DROPDOWNS);
   return areas;
 }
@@ -775,41 +667,11 @@ function getSubAreasDropdown() {
   const cache = CacheService.getScriptCache();
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
-  
-  var data = getSheetData(SHEETS.SUB_AREAS);
-  if (!data || data.length < 2) return [];
-  const headers = data[0];
 
-  const idIdx = headers.indexOf('sub_area_id');
-  const areaIdIdx = headers.indexOf('area_id');
-  const codeIdx = headers.indexOf('sub_area_code');
-  const nameIdx = headers.indexOf('sub_area_name');
-  const activeIdx = headers.indexOf('is_active');
-  const orderIdx = headers.indexOf('display_order');
-  const controlObjIdx = headers.indexOf('control_objectives');
-  const riskDescIdx = headers.indexOf('risk_description');
-  const testObjIdx = headers.indexOf('test_objective');
-  const testStepsIdx = headers.indexOf('testing_steps');
-  
-  const subAreas = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (isActive(row[activeIdx])) {
-      subAreas.push({
-        id: row[idIdx],
-        areaId: row[areaIdIdx],
-        code: row[codeIdx],
-        name: row[nameIdx],
-        order: row[orderIdx] || 999,
-        controlObjectives: row[controlObjIdx] || '',
-        riskDescription: row[riskDescIdx] || '',
-        testObjective: row[testObjIdx] || '',
-        testingSteps: row[testStepsIdx] || ''
-      });
-    }
-  }
-  
-  subAreas.sort((a, b) => (a.order || 999) - (b.order || 999));
+  const subAreas = tursoGetAll('08_ProcessSubAreas')
+    .filter(r => r.is_active == 1)
+    .sort((a, b) => a.display_order - b.display_order);
+
   cache.put(cacheKey, JSON.stringify(subAreas), CONFIG.CACHE_TTL.DROPDOWNS);
   return subAreas;
 }
@@ -819,36 +681,15 @@ function getUsersDropdown() {
   const cache = CacheService.getScriptCache();
   const cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) {} }
-  
-  var data = getSheetData(SHEETS.USERS);
-  if (!data || data.length < 2) return [];
-  const headers = data[0];
 
-  const idIdx = headers.indexOf('user_id');
-  const emailIdx = headers.indexOf('email');
-  const nameIdx = headers.indexOf('full_name');
-  const roleIdx = headers.indexOf('role_code');
-  const activeIdx = headers.indexOf('is_active');
-  const affiliateIdx = headers.indexOf('affiliate_code');
-  const deptIdx = headers.indexOf('department');
-  
-  const users = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (isActive(row[activeIdx])) {
-      users.push({
-        id: row[idIdx],
-        email: row[emailIdx],
-        name: row[nameIdx],
-        roleCode: row[roleIdx],
-        affiliate: row[affiliateIdx],
-        department: row[deptIdx],
-        display: row[nameIdx] + ' (' + row[emailIdx] + ')'
-      });
-    }
-  }
-  
-  users.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const users = tursoGetAll('05_Users').map(r => ({
+    user_id: r.user_id,
+    full_name: r.full_name,
+    email: r.email,
+    role_code: r.role_code,
+    is_active: r.is_active
+  }));
+
   cache.put(cacheKey, JSON.stringify(users), CONFIG.CACHE_TTL.DROPDOWNS);
   return users;
 }
@@ -876,55 +717,26 @@ function getRiskRatings() {
     { value: 'Medium', label: 'Medium', color: '#ffc107' },
     { value: 'Low', label: 'Low', color: '#28a745' }
   ];
-  var riskConfig = firestoreGet(SHEETS.CONFIG, 'DROPDOWN_RISK_RATINGS');
-  if (riskConfig && riskConfig.config_value) {
-    try {
-      var values = JSON.parse(riskConfig.config_value);
-      if (Array.isArray(values) && values.length > 0) {
-        var colors = { 'Critical': '#7b2d8e', 'Extreme': '#dc3545', 'High': '#fd7e14', 'Medium': '#ffc107', 'Low': '#28a745' };
-        return values.map(function(v) {
-          return { value: v, label: v, color: colors[v] || '#6c757d' };
-        });
-      }
-    } catch (e) {}
-  }
-  return defaultRatings;
+  const raw = tursoGetConfig('DROPDOWN_RISK_RATINGS', 'GLOBAL');
+  return raw ? JSON.parse(raw) : defaultRatings;
 }
 
 function getControlClassifications() {
   var defaults = ['Preventive', 'Detective', 'Corrective', 'Directive'];
-  var config = firestoreGet(SHEETS.CONFIG, 'DROPDOWN_CONTROL_CLASSIFICATIONS');
-  if (config && config.config_value) {
-    try {
-      var values = JSON.parse(config.config_value);
-      if (Array.isArray(values) && values.length > 0) return values;
-    } catch (e) {}
-  }
-  return defaults;
+  const raw = tursoGetConfig('DROPDOWN_CONTROL_CLASSIFICATIONS', 'GLOBAL');
+  return raw ? JSON.parse(raw) : defaults;
 }
 
 function getControlTypes() {
   var defaults = ['Manual', 'Automated', 'IT-Dependent Manual', 'Hybrid'];
-  var config = firestoreGet(SHEETS.CONFIG, 'DROPDOWN_CONTROL_TYPES');
-  if (config && config.config_value) {
-    try {
-      var values = JSON.parse(config.config_value);
-      if (Array.isArray(values) && values.length > 0) return values;
-    } catch (e) {}
-  }
-  return defaults;
+  const raw = tursoGetConfig('DROPDOWN_CONTROL_TYPES', 'GLOBAL');
+  return raw ? JSON.parse(raw) : defaults;
 }
 
 function getControlFrequencies() {
   var defaults = ['Ad-hoc', 'Daily', 'Weekly', 'Monthly', 'Quarterly', 'Semi-Annual', 'Annual'];
-  var config = firestoreGet(SHEETS.CONFIG, 'DROPDOWN_CONTROL_FREQUENCIES');
-  if (config && config.config_value) {
-    try {
-      var values = JSON.parse(config.config_value);
-      if (Array.isArray(values) && values.length > 0) return values;
-    } catch (e) {}
-  }
-  return defaults;
+  const raw = tursoGetConfig('DROPDOWN_CONTROL_FREQUENCIES', 'GLOBAL');
+  return raw ? JSON.parse(raw) : defaults;
 }
 
 function getYearOptions() {
@@ -1264,17 +1076,11 @@ function logAuditEvent(action, entityType, entityId, oldData, newData, userId, u
 }
 
 function getConfigValue(key) {
-  var doc = firestoreGet(SHEETS.CONFIG, key);
-  return doc ? doc.config_value : null;
+  return tursoGetConfig(key, 'GLOBAL');
 }
 
 function setConfigValue(key, value) {
-  firestoreSet(SHEETS.CONFIG, key, {
-    config_key: key,
-    config_value: value,
-    description: '',
-    updated_at: new Date().toISOString()
-  });
+  tursoSetConfig(key, value, 'GLOBAL');
   return true;
 }
 
