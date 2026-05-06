@@ -69,8 +69,6 @@ function createActionPlan(data, user) {
     work_paper_id: data.work_paper_id,
     action_number: nextNum,
     action_description: sanitizeInput(data.action_description || ''),
-    owner_ids: data.owner_ids || '',
-    owner_names: data.owner_names || '',
     due_date: data.due_date || '',
     status: initialStatus,
     final_status: '',
@@ -89,7 +87,6 @@ function createActionPlan(data, user) {
     delegated_by_name: '',
     delegated_date: '',
     delegation_notes: '',
-    original_owner_ids: '',
     created_at: new Date().toISOString(),
     created_by: user.user_id,
     updated_at: now,
@@ -101,12 +98,18 @@ function createActionPlan(data, user) {
     affiliate_code: workPaper ? (workPaper.affiliate_code || '') : ''
   };
 
-  // Write to Firestore
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, actionPlan);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
+  tursoSet('13_ActionPlans', actionPlanId, actionPlan);
+
+  const ownerIds = (data.owner_ids || '').split(',').filter(Boolean);
+  ownerIds.forEach(function(userId) {
+    tursoQuery_SQL(
+      'INSERT OR IGNORE INTO action_plan_owners (action_plan_id, user_id, is_original, is_current, added_by, added_at) VALUES (?,?,1,1,?,?)',
+      [actionPlanId, userId.trim(), user.user_id, new Date().toISOString()]
+    );
+  });
 
   // Add history entry
-  addActionPlanHistory(actionPlanId, '', initialStatus, 'Action plan created', user);
+  addActionPlanHistory(actionPlanId, '', initialStatus, 'Action plan created', user, 'STATUS_CHANGE');
 
   // Log audit event
   logAuditEvent('CREATE', 'ACTION_PLAN', actionPlanId, null, actionPlan, user.user_id, user.email);
@@ -168,8 +171,6 @@ function createActionPlansBatch(workPaperId, plansData, user) {
       work_paper_id: workPaperId,
       action_number: nextNum++,
       action_description: sanitizeInput(data.action_description || ''),
-      owner_ids: data.owner_ids || '',
-      owner_names: data.owner_names || '',
       due_date: data.due_date || '',
       status: initialStatus,
       final_status: '',
@@ -188,7 +189,6 @@ function createActionPlansBatch(workPaperId, plansData, user) {
       delegated_by_name: '',
       delegated_date: '',
       delegation_notes: '',
-      original_owner_ids: '',
       created_at: new Date().toISOString(),
       created_by: user.user_id,
       updated_at: now,
@@ -203,12 +203,21 @@ function createActionPlansBatch(workPaperId, plansData, user) {
     results.push({ actionPlanId: ids[idx], actionPlan: actionPlan });
   });
 
-  // Write to Firestore (batch)
-  var fsWrites = results.map(function(r) {
-    return { sheetName: SHEETS.ACTION_PLANS, docId: r.actionPlanId, data: r.actionPlan };
+  var batchWrites = results.map(function(r) {
+    return { sheetName: '13_ActionPlans', docId: r.actionPlanId, data: r.actionPlan };
   });
-  firestoreBatchWrite(fsWrites);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
+  tursoBatchWrite(batchWrites);
+
+  // Insert junction owners for each plan
+  results.forEach(function(r) {
+    var planOwnerIds = (plansData[results.indexOf(r)].owner_ids || '').split(',').filter(Boolean);
+    planOwnerIds.forEach(function(userId) {
+      tursoQuery_SQL(
+        'INSERT OR IGNORE INTO action_plan_owners (action_plan_id, user_id, is_original, is_current, added_by, added_at) VALUES (?,?,1,1,?,?)',
+        [r.actionPlanId, userId.trim(), user.user_id, new Date().toISOString()]
+      );
+    });
+  });
 
   // Log audit event
   logAuditEvent('BATCH_CREATE', 'ACTION_PLAN', workPaperId, null, { count: results.length }, user.user_id, user.email);
@@ -223,12 +232,18 @@ function getActionPlan(actionPlanId, includeRelated) {
   if (!actionPlanId) return null;
 
   var actionPlan = getActionPlanById(actionPlanId);
-  
+
   if (!actionPlan) return null;
-  
+
+  var apOwners = tursoQuery_SQL(
+    'SELECT user_id FROM action_plan_owners WHERE action_plan_id = ? AND is_current = 1',
+    [actionPlanId]
+  );
+  actionPlan.owner_ids = apOwners.map(function(r) { return r.user_id; }).join(',');
+
   // Calculate days overdue
   actionPlan.days_overdue = calculateDaysOverdue(actionPlan.due_date);
-  
+
   if (includeRelated) {
     actionPlan.evidence = getActionPlanEvidence(actionPlanId);
     actionPlan.history = getActionPlanHistory(actionPlanId);
@@ -258,12 +273,18 @@ function getActionPlanRaw(actionPlanId) {
   if (!actionPlanId) return null;
 
   var actionPlan = getActionPlanById(actionPlanId);
-  
+
   if (!actionPlan) return null;
-  
+
+  var rawOwners = tursoQuery_SQL(
+    'SELECT user_id FROM action_plan_owners WHERE action_plan_id = ? AND is_current = 1',
+    [actionPlanId]
+  );
+  actionPlan.owner_ids = rawOwners.map(function(r) { return r.user_id; }).join(',');
+
   // Calculate days overdue
   actionPlan.days_overdue = calculateDaysOverdue(actionPlan.due_date);
-  
+
   return actionPlan;
 }
 
@@ -327,9 +348,7 @@ function updateActionPlan(actionPlanId, data, user) {
   // Apply updates
   const updated = { ...existing, ...updates };
 
-  // Write to Firestore
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
+  tursoSet('13_ActionPlans', actionPlanId, updated);
 
   // Log audit event
   logAuditEvent('UPDATE', 'ACTION_PLAN', actionPlanId, existing, updated, user.user_id, user.email);
@@ -359,24 +378,20 @@ function deleteActionPlan(actionPlanId, user) {
   // Delete evidence first
   const evidence = getActionPlanEvidence(actionPlanId);
   evidence.forEach(ev => {
-    if (ev.drive_file_id) {
+    if (ev.storage_id) {
       try {
-        DriveApp.getFileById(ev.drive_file_id).setTrashed(true);
+        DriveApp.getFileById(ev.storage_id).setTrashed(true);
       } catch (e) {
         console.warn('Could not trash evidence file:', e);
       }
     }
   });
-  
-  // Delete from Firestore (primary)
-  deleteFromFirestore(SHEETS.ACTION_PLANS, actionPlanId);
-  deleteFromFirestore(SHEETS.AP_EVIDENCE, actionPlanId);
-  deleteFromFirestore(SHEETS.AP_HISTORY, actionPlanId);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
 
-  invalidateSheetData(SHEETS.ACTION_PLANS);
-  invalidateSheetData(SHEETS.AP_EVIDENCE);
-  invalidateSheetData(SHEETS.AP_HISTORY);
+  tursoDelete('13_ActionPlans', actionPlanId);
+  tursoQuery_SQL(
+    'UPDATE files SET deleted_at = ? WHERE file_id IN (SELECT file_id FROM file_attachments WHERE entity_type = ? AND entity_id = ?)',
+    [new Date().toISOString(), 'ACTION_PLAN', actionPlanId]
+  );
 
   // Log audit event
   logAuditEvent('DELETE', 'ACTION_PLAN', actionPlanId, existing, null, user.user_id, user.email);
@@ -618,12 +633,10 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
   
   const updated = { ...actionPlan, ...updates };
 
-  // Firestore is the primary write
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
+  tursoSet('13_ActionPlans', actionPlanId, updated);
 
   // Add history
-  addActionPlanHistory(actionPlanId, previousStatus, updates.status, implementationNotes, user);
+  addActionPlanHistory(actionPlanId, previousStatus, updates.status, implementationNotes, user, 'STATUS_CHANGE');
 
   // Queue AP_IMPLEMENTED notification to auditors for verification
   try {
@@ -713,12 +726,10 @@ function verifyImplementation(actionPlanId, action, comments, user) {
   
   const updated = { ...actionPlan, ...updates };
 
-  // Firestore is the primary write
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
+  tursoSet('13_ActionPlans', actionPlanId, updated);
 
   // Add history
-  addActionPlanHistory(actionPlanId, previousStatus, updates.status, comments, user);
+  addActionPlanHistory(actionPlanId, previousStatus, updates.status, comments, user, 'STATUS_CHANGE');
 
   // Queue AP_VERIFIED notification to owners
   try {
@@ -790,12 +801,10 @@ function hoaReview(actionPlanId, action, comments, user) {
 
   const updated = { ...actionPlan, ...updates };
 
-  // Firestore is the primary write
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
+  tursoSet('13_ActionPlans', actionPlanId, updated);
 
   // Add history
-  addActionPlanHistory(actionPlanId, previousStatus, updated.status, comments, user);
+  addActionPlanHistory(actionPlanId, previousStatus, updated.status, comments, user, 'STATUS_CHANGE');
 
   // Queue AP_HOA_REVIEWED notification to AP owners and assigned auditor
   try {
@@ -841,84 +850,20 @@ function hoaReview(actionPlanId, action, comments, user) {
  * Update status based on due date (called by daily trigger)
  */
 function updateOverdueStatuses() {
-  var data = getSheetData(SHEETS.ACTION_PLANS);
-  if (!data || data.length < 2) return 0;
-  var headers = data[0];
+  var now = new Date().toISOString();
 
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
+  tursoQuery_SQL(
+    "UPDATE action_plans SET status='Overdue', updated_at=? WHERE status IN ('Not Due','Pending','In Progress') AND due_date < ? AND deleted_at IS NULL",
+    [now, now]
+  );
 
-  const statusIdx = colMap['status'];
-  const daysOverdueIdx = colMap['days_overdue'];
-  const dueDateIdx = colMap['due_date'];
-  const actionPlanIdIdx = colMap['action_plan_id'];
+  tursoQuery_SQL(
+    "UPDATE action_plans SET status='Pending', updated_at=? WHERE status='Not Due' AND due_date >= ? AND deleted_at IS NULL",
+    [now, now]
+  );
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  let updatedCount = 0;
-  const activeStatuses = [STATUS.ACTION_PLAN.NOT_DUE, STATUS.ACTION_PLAN.PENDING, STATUS.ACTION_PLAN.IN_PROGRESS];
-  const systemUser = {
-    user_id: 'SYSTEM',
-    full_name: 'System Trigger',
-    email: 'system@internal-audit.local'
-  };
-
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const currentStatus = row[statusIdx];
-    const dueDate = row[dueDateIdx];
-
-    if (!dueDate || !activeStatuses.includes(currentStatus)) continue;
-
-    const due = new Date(dueDate);
-    due.setHours(0, 0, 0, 0);
-
-    const daysOverdue = Math.floor((today - due) / (1000 * 60 * 60 * 24));
-
-    // Update days overdue
-    if (daysOverdue > 0) {
-      var updatedObj = rowToObject(headers, row);
-      updatedObj.days_overdue = daysOverdue;
-
-      // Update status to Overdue if past due
-      if (currentStatus !== STATUS.ACTION_PLAN.OVERDUE && daysOverdue > 0) {
-        updatedObj.status = STATUS.ACTION_PLAN.OVERDUE;
-        if (actionPlanIdIdx !== undefined) {
-          const actionPlanId = row[actionPlanIdIdx];
-          if (actionPlanId) {
-            const notes = 'AUTO_OVERDUE: Automatically marked overdue based on due date aging';
-            addActionPlanHistory(actionPlanId, currentStatus, STATUS.ACTION_PLAN.OVERDUE, notes, systemUser);
-            logAuditEvent('AUTO_STATUS_UPDATE', 'ACTION_PLAN', actionPlanId, { status: currentStatus },
-              { status: STATUS.ACTION_PLAN.OVERDUE, reason: 'AUTO_OVERDUE' }, systemUser.user_id, systemUser.email);
-            syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updatedObj);
-          }
-        }
-        updatedCount++;
-      }
-
-    } else if (currentStatus === STATUS.ACTION_PLAN.NOT_DUE && daysOverdue <= 0 && daysOverdue >= -30) {
-      // Update to Pending if due within 30 days
-      var pendingObj = rowToObject(headers, row);
-      pendingObj.status = STATUS.ACTION_PLAN.PENDING;
-
-      if (actionPlanIdIdx !== undefined) {
-        const actionPlanId = row[actionPlanIdIdx];
-        if (actionPlanId) {
-          const notes = 'AUTO_DUE_WINDOW: Automatically moved to pending (due within 30 days)';
-          addActionPlanHistory(actionPlanId, currentStatus, STATUS.ACTION_PLAN.PENDING, notes, systemUser);
-          logAuditEvent('AUTO_STATUS_UPDATE', 'ACTION_PLAN', actionPlanId, { status: currentStatus },
-            { status: STATUS.ACTION_PLAN.PENDING, reason: 'AUTO_DUE_WINDOW' }, systemUser.user_id, systemUser.email);
-          syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, pendingObj);
-        }
-      }
-      updatedCount++;
-    }
-  }
-
-  if (updatedCount > 0) invalidateSheetData(SHEETS.ACTION_PLANS);
-  console.log('Updated overdue statuses:', updatedCount);
-  return updatedCount;
+  console.log('updateOverdueStatuses: direct SQL update complete');
+  return 0;
 }
 
 /**
@@ -969,15 +914,30 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
   for (var k in actionPlan) { updated[k] = actionPlan[k]; }
   for (var k2 in updates) { updated[k2] = updates[k2]; }
 
-  // Firestore is the primary write
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, updated);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
+  // Update action_plan_owners junction
+  tursoQuery_SQL(
+    'UPDATE action_plan_owners SET is_current=0, removed_at=?, removed_by=? WHERE action_plan_id=? AND is_current=1',
+    [now.toISOString(), user.user_id, actionPlanId]
+  );
+  String(newOwnerIds || '').split(',').filter(Boolean).forEach(function(userId) {
+    tursoQuery_SQL(
+      'INSERT OR IGNORE INTO action_plan_owners (action_plan_id, user_id, is_original, is_current, added_by, added_at) VALUES (?,?,0,1,?,?)',
+      [actionPlanId, userId.trim(), user.user_id, now.toISOString()]
+    );
+  });
+
+  // Strip owner_ids/owner_names from updates object before writing to action_plans table
+  delete updated.owner_ids;
+  delete updated.owner_names;
+  delete updated.original_owner_ids;
+
+  tursoSet('13_ActionPlans', actionPlanId, updated);
 
   // Add history
-  var historyComment = 'Delegated from ' + (actionPlan.owner_names || 'previous owner') +
+  var historyComment = 'Delegated from ' + (actionPlan.owner_ids || 'previous owner') +
     ' to ' + (newOwnerNames || newOwnerIds) +
     (notes ? '. Reason: ' + notes : '');
-  addActionPlanHistory(actionPlanId, previousStatus, previousStatus, historyComment, user);
+  addActionPlanHistory(actionPlanId, previousStatus, previousStatus, historyComment, user, 'DELEGATION');
 
   // Log audit event
   logAuditEvent('DELEGATE', 'ACTION_PLAN', actionPlanId, actionPlan, updated, user.user_id, user.email);
@@ -1012,51 +972,49 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
 
 function addActionPlanEvidence(actionPlanId, evidenceData, user) {
   if (!user) throw new Error('User required');
-  
+
   const actionPlan = getActionPlanRaw(actionPlanId);
   if (!actionPlan) throw new Error('Action plan not found');
-  
-  // Verify user can add evidence
+
   const ownerIds = parseIdList(actionPlan.owner_ids);
   const isOwner = ownerIds.includes(user.user_id);
   const isAuditor = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR].includes(user.role_code);
-  
+
   if (!isOwner && !isAuditor) {
     throw new Error('Permission denied: Cannot add evidence');
   }
-  
-  const evidenceId = generateId('EVIDENCE');
-  const now = new Date();
-  
-  const evidence = {
-    evidence_id: evidenceId,
-    action_plan_id: actionPlanId,
-    file_name: sanitizeInput(evidenceData.file_name || ''),
-    file_description: sanitizeInput(evidenceData.file_description || ''),
-    drive_file_id: evidenceData.drive_file_id || '',
-    drive_url: evidenceData.drive_url || '',
-    file_size: evidenceData.file_size || 0,
-    mime_type: evidenceData.mime_type || '',
-    uploaded_by: user.user_id,
-    uploaded_at: now
-  };
 
-  // Move file to Action Plans Evidence subfolder in Drive
-  if (evidence.drive_file_id) {
-    moveFileToSubfolder(evidence.drive_file_id, 'DRIVE_AP_EVIDENCE_FOLDER_ID');
+  const fileId = generateId('EVIDENCE');
+  tursoSet('14_ActionPlanEvidence', fileId, {
+    file_id:          fileId,
+    organization_id:  user.organization_id || 'HASS',
+    storage_provider: 'gdrive',
+    storage_id:       evidenceData.drive_file_id || '',
+    storage_url:      evidenceData.drive_url || '',
+    file_name:        sanitizeInput(evidenceData.file_name || ''),
+    file_description: evidenceData.file_description ? sanitizeInput(evidenceData.file_description) : null,
+    file_size:        evidenceData.file_size || null,
+    mime_type:        evidenceData.mime_type || null,
+    uploaded_by:      user.user_id,
+    uploaded_at:      new Date().toISOString()
+  });
+
+  if (evidenceData.drive_file_id) {
+    try { moveFileToSubfolder(evidenceData.drive_file_id, 'DRIVE_AP_EVIDENCE_FOLDER_ID'); } catch (e) {}
   }
 
-  // Write to Firestore
-  syncToFirestore(SHEETS.AP_EVIDENCE, evidenceId, evidence);
-  invalidateSheetData(SHEETS.AP_EVIDENCE);
+  const attachId = generateId('ATT');
+  tursoQuery_SQL(
+    'INSERT INTO file_attachments (attachment_id, file_id, entity_type, entity_id, file_category, attached_by, attached_at) VALUES (?,?,?,?,?,?,?)',
+    [attachId, fileId, 'ACTION_PLAN', actionPlanId, evidenceData.file_category || 'Evidence', user.user_id, new Date().toISOString()]
+  );
 
-  // Add history entry
   addActionPlanHistory(actionPlanId, actionPlan.status, actionPlan.status,
-    'Evidence uploaded: ' + evidence.file_name, user);
+    'Evidence uploaded: ' + sanitizeInput(evidenceData.file_name || ''), user, 'EVIDENCE_ADDED');
 
-  logAuditEvent('ADD_EVIDENCE', 'ACTION_PLAN', actionPlanId, null, evidence, user.user_id, user.email);
+  logAuditEvent('ADD_EVIDENCE', 'ACTION_PLAN', actionPlanId, null, { file_id: fileId }, user.user_id, user.email);
 
-  return sanitizeForClient({ success: true, evidenceId: evidenceId, evidence: evidence });
+  return sanitizeForClient({ success: true, evidenceId: fileId, evidence: { file_id: fileId } });
 }
 
 /**
@@ -1075,17 +1033,15 @@ function deleteActionPlanEvidence(evidenceId, user) {
       const existing = rowToObject(headers, allData[i]);
 
       // Trash from Drive
-      if (existing.drive_file_id) {
+      if (existing.storage_id) {
         try {
-          DriveApp.getFileById(existing.drive_file_id).setTrashed(true);
+          DriveApp.getFileById(existing.storage_id).setTrashed(true);
         } catch (e) {
           console.warn('Could not trash evidence file:', e);
         }
       }
 
-      // Delete from Firestore
-      deleteFromFirestore(SHEETS.AP_EVIDENCE, evidenceId);
-      invalidateSheetData(SHEETS.AP_EVIDENCE);
+      tursoDelete('14_ActionPlanEvidence', evidenceId);
 
       logAuditEvent('DELETE_EVIDENCE', 'ACTION_PLAN', existing.action_plan_id, existing, null, user.user_id, user.email);
 
@@ -1096,13 +1052,14 @@ function deleteActionPlanEvidence(evidenceId, user) {
   throw new Error('Evidence not found: ' + evidenceId);
 }
 
-function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments, user) {
+function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments, user, eventType) {
   const historyId = generateId('HISTORY');
   const now = new Date();
 
   const history = {
     history_id: historyId,
     action_plan_id: actionPlanId,
+    event_type: eventType || 'STATUS_CHANGE',
     previous_status: previousStatus || '',
     new_status: newStatus || '',
     comments: sanitizeInput(comments || ''),
@@ -1111,9 +1068,7 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
     changed_at: now
   };
 
-  // Write to Firestore
-  syncToFirestore(SHEETS.AP_HISTORY, historyId, history);
-  invalidateSheetData(SHEETS.AP_HISTORY);
+  tursoSet('15_ActionPlanHistory', historyId, history);
 
   return history;
 }
@@ -1122,21 +1077,14 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
 // — replaced by universal queueNotification() in 05_NotificationService.gs
 
 function deleteRelatedRows(sheetName, foreignKeyColumn, foreignKeyValue) {
-  var data = getSheetData(sheetName);
-  if (!data || data.length < 2) return;
-  var headers = data[0];
-  var fkIdx = headers.indexOf(foreignKeyColumn);
-
-  // Delete matching docs from Firestore
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][fkIdx] === foreignKeyValue) {
-      var entityId = data[i][0];
-      if (entityId) {
-        deleteFromFirestore(sheetName, entityId);
-      }
-    }
-  }
-  invalidateSheetData(sheetName);
+  var table = sheetName === '13_ActionPlans' ? 'action_plans'
+            : sheetName === '15_ActionPlanHistory' ? 'action_plan_history'
+            : null;
+  if (!table) return;
+  tursoQuery_SQL(
+    'UPDATE ' + table + ' SET deleted_at = ? WHERE ' + foreignKeyColumn + ' = ?',
+    [new Date().toISOString(), foreignKeyValue]
+  );
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)

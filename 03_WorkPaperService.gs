@@ -32,8 +32,6 @@ function createWorkPaper(data, user) {
     risk_summary: sanitizeInput(data.risk_summary || ''),
     recommendation: sanitizeInput(data.recommendation || ''),
     management_response: sanitizeInput(data.management_response || ''),
-    responsible_ids: data.responsible_ids || '',
-    cc_recipients: data.cc_recipients || '',
     assigned_auditor_id: data.assigned_auditor_id || '',
     assigned_auditor_name: '',
     status: STATUS.WORK_PAPER.DRAFT,
@@ -74,9 +72,22 @@ function createWorkPaper(data, user) {
     }
   }
 
-  // Write to Firestore
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, workPaper);
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  tursoSet('09_WorkPapers', workPaperId, workPaper);
+
+  const responsibleIds = (data.responsible_ids || '').split(',').filter(Boolean);
+  const ccList = (data.cc_recipients || '').split(',').filter(Boolean);
+  responsibleIds.forEach(function(userId) {
+    tursoQuery_SQL(
+      'INSERT OR IGNORE INTO work_paper_responsibles (work_paper_id, user_id, role_in_finding, added_by) VALUES (?, ?, ?, ?)',
+      [workPaperId, userId.trim(), 'PRIMARY', user.user_id]
+    );
+  });
+  ccList.forEach(function(email) {
+    tursoQuery_SQL(
+      'INSERT OR IGNORE INTO work_paper_cc_recipients (work_paper_id, email, added_at) VALUES (?, ?, ?)',
+      [workPaperId, email.trim(), new Date().toISOString()]
+    );
+  });
 
   // Log audit event
   logAuditEvent('CREATE', 'WORK_PAPER', workPaperId, null, workPaper, user.user_id, user.email);
@@ -125,6 +136,18 @@ function getWorkPaper(workPaperId, includeRelated) {
 
   var workPaper = getWorkPaperById(workPaperId);
   if (!workPaper) return null;
+
+  var wpResponsibles = tursoQuery_SQL(
+    'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+    [workPaperId]
+  );
+  workPaper.responsible_ids = wpResponsibles.map(function(r) { return r.user_id; }).join(',');
+
+  var wpCcRows = tursoQuery_SQL(
+    'SELECT email FROM work_paper_cc_recipients WHERE work_paper_id = ?',
+    [workPaperId]
+  );
+  workPaper.cc_recipients = wpCcRows.map(function(r) { return r.email; }).join(',');
 
   if (includeRelated) {
     workPaper.requirements = getWorkPaperRequirements(workPaperId);
@@ -219,15 +242,39 @@ function updateWorkPaper(workPaperId, data, user) {
 
   updates.updated_at = now;
 
+  // Handle junction tables for responsible_ids and cc_recipients
+  const newResponsibleIds = updates.responsible_ids;
+  const newCcRecipients = updates.cc_recipients;
+  delete updates.responsible_ids;
+  delete updates.cc_recipients;
+
+  if (newResponsibleIds !== undefined) {
+    tursoQuery_SQL('DELETE FROM work_paper_responsibles WHERE work_paper_id = ?', [workPaperId]);
+    String(newResponsibleIds || '').split(',').filter(Boolean).forEach(function(userId) {
+      tursoQuery_SQL(
+        'INSERT OR IGNORE INTO work_paper_responsibles (work_paper_id, user_id, role_in_finding, added_by) VALUES (?, ?, ?, ?)',
+        [workPaperId, userId.trim(), 'PRIMARY', user.user_id]
+      );
+    });
+  }
+
+  if (newCcRecipients !== undefined) {
+    tursoQuery_SQL('DELETE FROM work_paper_cc_recipients WHERE work_paper_id = ?', [workPaperId]);
+    String(newCcRecipients || '').split(',').filter(Boolean).forEach(function(email) {
+      tursoQuery_SQL(
+        'INSERT OR IGNORE INTO work_paper_cc_recipients (work_paper_id, email, added_at) VALUES (?, ?, ?)',
+        [workPaperId, email.trim(), new Date().toISOString()]
+      );
+    });
+  }
+
   // Snapshot before applying updates (for change notification)
   var oldWP = { ...existing };
 
   // Apply updates to existing
   const updated = { ...existing, ...updates };
 
-  // Write to Firestore
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  tursoSet('09_WorkPapers', workPaperId, updated);
 
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
@@ -302,9 +349,7 @@ function deleteWorkPaper(workPaperId, user) {
     throw new Error('Only draft work papers can be deleted');
   }
 
-  // Delete from Firestore
-  deleteFromFirestore(SHEETS.WORK_PAPERS, workPaperId);
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  tursoDelete('09_WorkPapers', workPaperId);
 
   // Log audit event
   logAuditEvent('DELETE', 'WORK_PAPER', workPaperId, existing, null, user.user_id, user.email);
@@ -317,7 +362,22 @@ function deleteWorkPaper(workPaperId, user) {
  */
 function getWorkPaperRaw(workPaperId) {
   if (!workPaperId) return null;
-  return getWorkPaperById(workPaperId);
+  var wp = getWorkPaperById(workPaperId);
+  if (!wp) return null;
+
+  var rawResponsibles = tursoQuery_SQL(
+    'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+    [workPaperId]
+  );
+  wp.responsible_ids = rawResponsibles.map(function(r) { return r.user_id; }).join(',');
+
+  var rawCc = tursoQuery_SQL(
+    'SELECT email FROM work_paper_cc_recipients WHERE work_paper_id = ?',
+    [workPaperId]
+  );
+  wp.cc_recipients = rawCc.map(function(r) { return r.email; }).join(',');
+
+  return wp;
 }
 
 function getWorkPapers(filters, user) {
@@ -501,8 +561,7 @@ function submitWorkPaper(workPaperId, user) {
   const updated = { ...workPaper, ...updates };
 
   // Critical: update the work paper first
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  tursoSet('09_WorkPapers', workPaperId, updated);
 
   // Batch secondary writes (revision + audit log) in one HTTP call
   try {
@@ -518,6 +577,8 @@ function submitWorkPaper(workPaperId, user) {
       work_paper_id: workPaperId,
       revision_number: nextNum,
       action: 'Submitted',
+      from_status: workPaper.status,
+      to_status: STATUS.WORK_PAPER.SUBMITTED,
       comments: 'Submitted for review',
       changes_summary: '',
       user_id: user.user_id,
@@ -538,11 +599,10 @@ function submitWorkPaper(workPaperId, user) {
       ip_address: ''
     };
 
-    firestoreBatchWrite([
-      { sheetName: SHEETS.WP_REVISIONS, docId: revisionId, data: revisionObj },
-      { sheetName: SHEETS.AUDIT_LOG, docId: logId, data: logObj }
+    tursoBatchWrite([
+      { sheetName: '12_WorkPaperRevisions', docId: revisionId, data: revisionObj },
+      { sheetName: '16_AuditLog', docId: logId, data: logObj }
     ]);
-    invalidateSheetData(SHEETS.WP_REVISIONS);
   } catch(e) { console.warn('Secondary writes failed (non-fatal):', e.message); }
 
   // Queue WP_SUBMITTED notifications to all HOA/Senior Auditor users
@@ -729,12 +789,10 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   
   const updated = { ...workPaper, ...updates };
 
-  // Write to Firestore
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  tursoSet('09_WorkPapers', workPaperId, updated);
 
   // Add revision history
-  addWorkPaperRevision(workPaperId, revisionAction, comments, user);
+  addWorkPaperRevision(workPaperId, revisionAction, comments, user, workPaper.status, updates.status);
 
   // Queue WP_REVIEWED notification to preparer
   try {
@@ -848,32 +906,32 @@ function sendToAuditee(workPaperId, user) {
 
   const updated = { ...workPaper, ...updates };
 
-  // Write to Firestore
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updated);
+  tursoSet('09_WorkPapers', workPaperId, updated);
 
   // Verify critical fields were persisted
-  var verification = firestoreGet(SHEETS.WORK_PAPERS, workPaperId);
+  var verification = tursoGet('09_WorkPapers', workPaperId);
   if (!verification || verification.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) {
-    console.error('sendToAuditee: Firestore write verification FAILED for', workPaperId,
+    console.error('sendToAuditee: write verification FAILED for', workPaperId,
       'Expected status:', STATUS.WORK_PAPER.SENT_TO_AUDITEE,
       'Got:', verification ? verification.status : 'null document');
     throw new Error('Failed to update work paper status in database. Please try again.');
   }
-  if (!verification.responsible_ids) {
+  var verifyResponsibles = tursoQuery_SQL(
+    'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+    [workPaperId]
+  );
+  if (!verifyResponsibles || verifyResponsibles.length === 0) {
     console.error('sendToAuditee: responsible_ids is empty after write for', workPaperId);
     throw new Error('Responsible parties were not saved correctly. Please verify and try again.');
   }
   console.log('sendToAuditee: Verified —', workPaperId,
     'status:', verification.status,
-    'responsible_ids:', verification.responsible_ids,
+    'responsible_ids:', verifyResponsibles.map(function(r) { return r.user_id; }).join(','),
     'response_status:', verification.response_status);
 
-  // Invalidate in-memory cache so subsequent reads (e.g. createActionPlan)
-  // see the new SENT_TO_AUDITEE status instead of stale APPROVED status
-  invalidateSheetData(SHEETS.WORK_PAPERS);
-
   // Add revision history
-  addWorkPaperRevision(workPaperId, 'Sent to Auditee', 'Work paper sent to auditee for response', user);
+  addWorkPaperRevision(workPaperId, 'Sent to Auditee', 'Work paper sent to auditee for response', user,
+    STATUS.WORK_PAPER.APPROVED, STATUS.WORK_PAPER.SENT_TO_AUDITEE);
 
   // ── AUTO-CREATE ACTION PLAN for auditees ──
   // Creates a skeleton action plan so that responsible parties see it
@@ -924,7 +982,11 @@ function sendToAuditee(workPaperId, user) {
 
   // Queue WP_SENT_TO_AUDITEE notifications to each responsible party (URGENT)
   try {
-    var responsibleUserIds = parseIdList(updated.responsible_ids);
+    var sendResponsibles = tursoQuery_SQL(
+      'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+      [workPaperId]
+    );
+    var responsibleUserIds = sendResponsibles.map(function(r) { return r.user_id; });
     var auditeeData = {
       work_paper_id: workPaperId,
       work_paper_ref: updated.work_paper_ref || workPaperId,
@@ -1003,8 +1065,7 @@ function addWorkPaperRequirement(workPaperId, requirementData, user) {
     created_by: user.user_id
   };
   
-  syncToFirestore(SHEETS.WP_REQUIREMENTS, requirementId, requirement);
-  invalidateSheetData(SHEETS.WP_REQUIREMENTS);
+  tursoSet('10_WorkPaperRequirements', requirementId, requirement);
 
   logAuditEvent('ADD_REQUIREMENT', 'WORK_PAPER', workPaperId, null, requirement, user.user_id, user.email);
   
@@ -1032,9 +1093,7 @@ function updateWorkPaperRequirement(requirementId, data, user) {
       if (data.status !== undefined) updated.status = data.status;
       if (data.notes !== undefined) updated.notes = sanitizeInput(data.notes);
 
-      // Write to Firestore
-      syncToFirestore(SHEETS.WP_REQUIREMENTS, requirementId, updated);
-      invalidateSheetData(SHEETS.WP_REQUIREMENTS);
+      tursoSet('10_WorkPaperRequirements', requirementId, updated);
 
       logAuditEvent('UPDATE_REQUIREMENT', 'WORK_PAPER', existing.work_paper_id, existing, updated, user.user_id, user.email);
 
@@ -1060,9 +1119,7 @@ function deleteWorkPaperRequirement(requirementId, user) {
     if (allData[i][idIdx] === requirementId) {
       const existing = rowToObject(headers, allData[i]);
 
-      // Delete from Firestore
-      deleteFromFirestore(SHEETS.WP_REQUIREMENTS, requirementId);
-      invalidateSheetData(SHEETS.WP_REQUIREMENTS);
+      tursoDelete('10_WorkPaperRequirements', requirementId);
 
       logAuditEvent('DELETE_REQUIREMENT', 'WORK_PAPER', existing.work_paper_id, existing, null, user.user_id, user.email);
 
@@ -1073,40 +1130,40 @@ function deleteWorkPaperRequirement(requirementId, user) {
   throw new Error('Requirement not found: ' + requirementId);
 }
 
-function addWorkPaperFile(workPaperId, fileData, user) {
+function addWorkPaperFile(workPaperId, data, user) {
   if (!user) throw new Error('User required');
-  
+
   const workPaper = getWorkPaperRaw(workPaperId);
   if (!workPaper) throw new Error('Work paper not found');
-  
+
   const fileId = generateId('FILE');
-  const now = new Date();
-  
-  const file = {
-    file_id: fileId,
-    work_paper_id: workPaperId,
-    file_category: fileData.file_category || 'Supporting Document',
-    file_name: sanitizeInput(fileData.file_name || ''),
-    file_description: sanitizeInput(fileData.file_description || ''),
-    drive_file_id: fileData.drive_file_id || '',
-    drive_url: fileData.drive_url || '',
-    file_size: fileData.file_size || 0,
-    mime_type: fileData.mime_type || '',
-    uploaded_by: user.user_id,
-    uploaded_at: now
-  };
-  
-  // Move file to Work Paper Files subfolder in Drive
-  if (file.drive_file_id) {
-    moveFileToSubfolder(file.drive_file_id, 'DRIVE_WP_FILES_FOLDER_ID');
+  tursoSet('11_WorkPaperFiles', fileId, {
+    file_id:          fileId,
+    organization_id:  user.organization_id || 'HASS',
+    storage_provider: 'gdrive',
+    storage_id:       data.drive_file_id || '',
+    storage_url:      data.drive_url || '',
+    file_name:        sanitizeInput(data.file_name || ''),
+    file_description: data.file_description ? sanitizeInput(data.file_description) : null,
+    file_size:        data.file_size || null,
+    mime_type:        data.mime_type || null,
+    uploaded_by:      user.user_id,
+    uploaded_at:      new Date().toISOString()
+  });
+
+  if (data.drive_file_id) {
+    try { moveFileToSubfolder(data.drive_file_id, 'DRIVE_WP_FILES_FOLDER_ID'); } catch (e) {}
   }
 
-  syncToFirestore(SHEETS.WP_FILES, fileId, file);
-  invalidateSheetData(SHEETS.WP_FILES);
+  const attachId = generateId('ATT');
+  tursoQuery_SQL(
+    'INSERT INTO file_attachments (attachment_id, file_id, entity_type, entity_id, file_category, attached_by, attached_at) VALUES (?,?,?,?,?,?,?)',
+    [attachId, fileId, 'WORK_PAPER', workPaperId, data.file_category || 'Evidence', user.user_id, new Date().toISOString()]
+  );
 
-  logAuditEvent('ADD_FILE', 'WORK_PAPER', workPaperId, null, file, user.user_id, user.email);
+  logAuditEvent('ADD_FILE', 'WORK_PAPER', workPaperId, null, { file_id: fileId }, user.user_id, user.email);
 
-  return sanitizeForClient({ success: true, fileId: fileId, file: file });
+  return sanitizeForClient({ success: true, fileId: fileId, file: { file_id: fileId } });
 }
 
 /**
@@ -1125,17 +1182,15 @@ function deleteWorkPaperFile(fileId, user) {
       var existing = rowToObject(headers, allData[i]);
 
       // Optionally delete from Drive
-      if (existing.drive_file_id) {
+      if (existing.storage_id) {
         try {
-          DriveApp.getFileById(existing.drive_file_id).setTrashed(true);
+          DriveApp.getFileById(existing.storage_id).setTrashed(true);
         } catch (e) {
           console.warn('Could not trash Drive file:', e);
         }
       }
 
-      // Delete from Firestore
-      deleteFromFirestore(SHEETS.WP_FILES, fileId);
-      invalidateSheetData(SHEETS.WP_FILES);
+      tursoDelete('11_WorkPaperFiles', fileId);
 
       logAuditEvent('DELETE_FILE', 'WORK_PAPER', existing.work_paper_id, existing, null, user.user_id, user.email);
 
@@ -1146,28 +1201,29 @@ function deleteWorkPaperFile(fileId, user) {
   throw new Error('File not found: ' + fileId);
 }
 
-function addWorkPaperRevision(workPaperId, action, comments, user) {
+function addWorkPaperRevision(workPaperId, action, comments, user, fromStatus, toStatus) {
   const revisionId = generateId('REVISION');
   const now = new Date();
-  
+
   // Get next revision number
   const existing = getWorkPaperRevisions(workPaperId);
   const nextNum = existing.length > 0 ? Math.max(...existing.map(r => r.revision_number || 0)) + 1 : 1;
-  
+
   const revision = {
     revision_id: revisionId,
     work_paper_id: workPaperId,
     revision_number: nextNum,
     action: action,
+    from_status: fromStatus || '',
+    to_status: toStatus || '',
     comments: sanitizeInput(comments || ''),
     changes_summary: '',
     user_id: user.user_id,
     user_name: user.full_name,
     action_date: now
   };
-  
-  syncToFirestore(SHEETS.WP_REVISIONS, revisionId, revision);
-  invalidateSheetData(SHEETS.WP_REVISIONS);
+
+  tursoSet('12_WorkPaperRevisions', revisionId, revision);
 
   return revision;
 }
@@ -1308,11 +1364,11 @@ function batchSendToAuditees(workPaperIds, user) {
       for (var key in wp) { updated[key] = wp[key]; }
       for (var key in updates) { updated[key] = updates[key]; }
 
-      // Write to Firestore
-      syncToFirestore(SHEETS.WORK_PAPERS, wp.work_paper_id, updated);
+      tursoSet('09_WorkPapers', wp.work_paper_id, updated);
 
       // Add revision history
-      addWorkPaperRevision(wp.work_paper_id, 'Sent to Auditee', 'Batch sent to auditee', user);
+      addWorkPaperRevision(wp.work_paper_id, 'Sent to Auditee', 'Batch sent to auditee', user,
+        STATUS.WORK_PAPER.APPROVED, STATUS.WORK_PAPER.SENT_TO_AUDITEE);
 
       // Auto-create action plan
       try {
@@ -1350,8 +1406,7 @@ function batchSendToAuditees(workPaperIds, user) {
     }
   });
 
-  // Invalidate caches
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  // Invalidate script cache
   try { CacheService.getScriptCache().remove('sidebar_counts_all'); } catch (e) {}
 
   // ── SEND BATCHED EMAILS (one per auditee) ──
