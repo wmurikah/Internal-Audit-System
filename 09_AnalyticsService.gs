@@ -4,106 +4,65 @@ function getAnalyticsData(year, user) {
   year = year || new Date().getFullYear();
 
   try {
-    // Get all work papers for the year
-    var wpData = getSheetData(SHEETS.WORK_PAPERS);
-    if (!wpData || wpData.length < 2) return sanitizeForClient({ success: true, data: { workPapers: {total:0}, actionPlans: {total:0}, trends: {monthly:[]}, highRiskFindings: [], overdueActionPlans: [], auditorPerformance: [] } });
-    const wpHeaders = wpData[0];
+    // Get work papers for the year via filtered SQL
+    var wpRows = tursoQuery_SQL(
+      'SELECT * FROM work_papers WHERE year = ? AND deleted_at IS NULL',
+      [year]
+    );
+    if (!wpRows || wpRows.length === 0) {
+      return sanitizeForClient({ success: true, data: { workPapers: {total:0}, actionPlans: {total:0}, trends: {monthly:[]}, highRiskFindings: [], overdueActionPlans: [], auditorPerformance: [] } });
+    }
 
-    const yearIdx = wpHeaders.indexOf('year');
-    const statusIdx = wpHeaders.indexOf('status');
-    const riskIdx = wpHeaders.indexOf('risk_rating');
-    const affiliateIdx = wpHeaders.indexOf('affiliate_code');
-    const createdIdx = wpHeaders.indexOf('created_at');
-    const preparedByIdx = wpHeaders.indexOf('prepared_by_id');
-    const preparedByNameIdx = wpHeaders.indexOf('prepared_by_name');
-    const approvedDateIdx = wpHeaders.indexOf('approved_date');
-    const submittedDateIdx = wpHeaders.indexOf('submitted_date');
-    const wpIdIdx = wpHeaders.indexOf('work_paper_id');
-    const titleIdx = wpHeaders.indexOf('observation_title');
-
-    // Get all action plans
-    var apData = getSheetData(SHEETS.ACTION_PLANS);
-    if (!apData || apData.length < 1) apData = [[]];
-    const apHeaders = apData[0];
-
-    const apIdIdx = apHeaders.indexOf ? apHeaders.indexOf('action_plan_id') : -1;
-    const apWpIdIdx = apHeaders.indexOf('work_paper_id');
-    const apStatusIdx = apHeaders.indexOf('status');
-    const apDueDateIdx = apHeaders.indexOf('due_date');
-    const apOwnerNamesIdx = apHeaders.indexOf('owner_names');
-    const apDescIdx = apHeaders.indexOf('action_description');
-    const apDaysOverdueIdx = apHeaders.indexOf('days_overdue');
-    const apCreatedIdx = apHeaders.indexOf('created_at');
-    const apImplementedDateIdx = apHeaders.indexOf('implemented_date');
+    // Get action plans for the year (join via work_papers.year)
+    var apRows = tursoQuery_SQL(
+      'SELECT ap.* FROM action_plans ap' +
+      ' INNER JOIN work_papers wp ON ap.work_paper_id = wp.work_paper_id' +
+      ' WHERE wp.year = ? AND ap.deleted_at IS NULL',
+      [year]
+    );
 
     // Process work papers
-    const workPapers = {
-      total: 0,
-      byStatus: {},
-      byRisk: {},
-      byAffiliate: {},
-      byMonth: {}
-    };
-
+    const workPapers = { total: 0, byStatus: {}, byRisk: {}, byAffiliate: {}, byMonth: {} };
     const highRiskFindings = [];
     const auditorStats = {};
 
-    for (let i = 1; i < wpData.length; i++) {
-      const row = wpData[i];
-      const wpYear = row[yearIdx];
-
-      // Filter by year if specified
-      if (year && wpYear && parseInt(wpYear) !== parseInt(year)) continue;
-
+    wpRows.forEach(function(row) {
       workPapers.total++;
 
-      // By Status
-      const status = row[statusIdx] || 'Unknown';
+      const status = row.status || 'Unknown';
       workPapers.byStatus[status] = (workPapers.byStatus[status] || 0) + 1;
 
-      // By Risk
-      const risk = row[riskIdx] || 'Not Rated';
+      const risk = row.risk_rating || 'Not Rated';
       workPapers.byRisk[risk] = (workPapers.byRisk[risk] || 0) + 1;
 
-      // By Affiliate
-      const affiliate = row[affiliateIdx] || 'Unknown';
+      const affiliate = row.affiliate_code || 'Unknown';
       workPapers.byAffiliate[affiliate] = (workPapers.byAffiliate[affiliate] || 0) + 1;
 
-      // By Month
-      const created = row[createdIdx];
+      const created = row.created_at;
       if (created) {
         const month = new Date(created).toLocaleDateString('en-US', { month: 'short' });
         workPapers.byMonth[month] = (workPapers.byMonth[month] || 0) + 1;
       }
 
-      // High risk findings
       if (risk === 'Extreme' || risk === 'High') {
         const createdDate = created ? new Date(created) : null;
         const daysOpen = createdDate ? Math.floor((new Date() - createdDate) / (1000 * 60 * 60 * 24)) : 0;
-
         highRiskFindings.push({
-          work_paper_id: row[wpIdIdx],
-          observation_title: row[titleIdx],
-          risk_rating: risk,
-          status: status,
-          days_open: daysOpen
+          work_paper_id:     row.work_paper_id,
+          observation_title: row.observation_title,
+          risk_rating:       risk,
+          status:            status,
+          days_open:         daysOpen
         });
       }
 
-      // Auditor stats
-      const preparerId = row[preparedByIdx];
-      const preparerName = row[preparedByNameIdx];
+      const preparerId = row.prepared_by_id;
       if (preparerId) {
         if (!auditorStats[preparerId]) {
           auditorStats[preparerId] = {
-            id: preparerId,
-            name: preparerName || 'Unknown',
-            total: 0,
-            draft: 0,
-            submitted: 0,
-            approved: 0,
-            totalDaysToApprove: 0,
-            approvedCount: 0
+            id: preparerId, name: row.prepared_by_name || 'Unknown',
+            total: 0, draft: 0, submitted: 0, approved: 0,
+            totalDaysToApprove: 0, approvedCount: 0
           };
         }
         auditorStats[preparerId].total++;
@@ -111,77 +70,60 @@ function getAnalyticsData(year, user) {
         if (status === 'Submitted' || status === 'Under Review') auditorStats[preparerId].submitted++;
         if (status === 'Approved' || status === 'Sent to Auditee') {
           auditorStats[preparerId].approved++;
-          // Calculate days to approve
-          const submitted = row[submittedDateIdx];
-          const approved = row[approvedDateIdx];
-          if (submitted && approved) {
-            const days = Math.floor((new Date(approved) - new Date(submitted)) / (1000 * 60 * 60 * 24));
+          if (row.submitted_date && row.approved_date) {
+            const days = Math.floor((new Date(row.approved_date) - new Date(row.submitted_date)) / (1000 * 60 * 60 * 24));
             auditorStats[preparerId].totalDaysToApprove += days;
             auditorStats[preparerId].approvedCount++;
           }
         }
       }
-    }
+    });
 
     // Process action plans
     const actionPlans = {
-      total: 0,
-      overdue: 0,
-      implemented: 0,
-      verified: 0,
+      total: 0, overdue: 0, implemented: 0, verified: 0,
       byStatus: {},
-      aging: {
-        '0-30 days': 0,
-        '31-60 days': 0,
-        '61-90 days': 0,
-        '91-180 days': 0,
-        '180+ days': 0
-      }
+      aging: { '0-30 days': 0, '31-60 days': 0, '61-90 days': 0, '91-180 days': 0, '180+ days': 0 }
     };
-
     const overdueActionPlans = [];
     const monthlyTrends = {};
 
-    for (let i = 1; i < apData.length; i++) {
-      const row = apData[i];
+    apRows.forEach(function(row) {
       actionPlans.total++;
 
-      const status = row[apStatusIdx] || 'Unknown';
+      const status = row.status || 'Unknown';
       actionPlans.byStatus[status] = (actionPlans.byStatus[status] || 0) + 1;
 
       if (status === 'Implemented') actionPlans.implemented++;
       if (status === 'Verified') actionPlans.verified++;
 
-      const daysOverdue = row[apDaysOverdueIdx] || 0;
+      const daysOverdue = row.days_overdue || 0;
       if (daysOverdue > 0 || status === 'Overdue') {
         actionPlans.overdue++;
         overdueActionPlans.push({
-          action_plan_id: row[apIdIdx],
-          action_description: row[apDescIdx],
-          owner_names: row[apOwnerNamesIdx],
-          days_overdue: daysOverdue,
-          due_date: row[apDueDateIdx]
+          action_plan_id:    row.action_plan_id,
+          action_description: row.action_description,
+          owner_names:       row.owner_names,
+          days_overdue:      daysOverdue,
+          due_date:          row.due_date
         });
       }
 
-      // Aging calculation
-      const created = row[apCreatedIdx];
+      const created = row.created_at;
       if (created) {
         const age = Math.floor((new Date() - new Date(created)) / (1000 * 60 * 60 * 24));
-        if (age <= 30) actionPlans.aging['0-30 days']++;
-        else if (age <= 60) actionPlans.aging['31-60 days']++;
-        else if (age <= 90) actionPlans.aging['61-90 days']++;
+        if (age <= 30)       actionPlans.aging['0-30 days']++;
+        else if (age <= 60)  actionPlans.aging['31-60 days']++;
+        else if (age <= 90)  actionPlans.aging['61-90 days']++;
         else if (age <= 180) actionPlans.aging['91-180 days']++;
-        else actionPlans.aging['180+ days']++;
+        else                 actionPlans.aging['180+ days']++;
       }
 
-      // Monthly closure trends
-      const implementedDate = row[apImplementedDateIdx];
-      if (implementedDate) {
-        const month = new Date(implementedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+      if (row.implemented_date) {
+        const month = new Date(row.implemented_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
         monthlyTrends[month] = (monthlyTrends[month] || 0) + 1;
       }
-    }
+    });
 
     // Calculate implementation rate
     actionPlans.implementationRate = actionPlans.total > 0
@@ -242,23 +184,14 @@ function getAnalyticsData(year, user) {
 }
 
 function getUserStats() {
-  var data = getSheetData(SHEETS.USERS);
-  if (!data || data.length < 2) return sanitizeForClient({ total: 0, active: 0, locked: 0, inactive: 0 });
-  const headers = data[0];
-
-  const activeIdx = headers.indexOf('is_active');
-  const lockedIdx = headers.indexOf('locked_until');
-
-  let total = 0, active = 0, locked = 0;
+  var users = tursoGetAll('05_Users');
   const now = new Date();
-
-  for (let i = 1; i < data.length; i++) {
+  let total = 0, active = 0, locked = 0;
+  users.forEach(function(u) {
     total++;
-    if (isActive(data[i][activeIdx])) active++;
-    const lockedUntil = data[i][lockedIdx];
-    if (lockedUntil && new Date(lockedUntil) > now) locked++;
-  }
-
+    if (isActive(u.is_active)) active++;
+    if (u.locked_until && new Date(u.locked_until) > now) locked++;
+  });
   return sanitizeForClient({ total, active, locked, inactive: total - active });
 }
 
@@ -326,11 +259,8 @@ function saveSystemConfigValues(config, user) {
   }
 
   Object.entries(config).forEach(([key, value]) => {
-    setConfigValue(key, value);
+    tursoSetConfig(key, value, 'GLOBAL');
   });
-
-  // Clear config cache
-  Cache.remove('config_all');
 
   logAuditEvent('UPDATE_CONFIG', 'CONFIG', 'SYSTEM', null, config, user.user_id, user.email);
 
@@ -341,46 +271,36 @@ function saveSystemConfigValues(config, user) {
  * Get audit log entries
  */
 function getAuditLogs(actionFilter, page, pageSize) {
-  var data = getSheetData(SHEETS.AUDIT_LOG);
-  if (!data || data.length < 2) return [];
-  const headers = data[0];
-
   page = page || 1;
   pageSize = pageSize || 25;
+  const offset = (page - 1) * pageSize;
 
-  const logs = [];
-  for (let i = data.length - 1; i >= 1; i--) {
-    const row = data[i];
-    const log = {};
-    headers.forEach((h, idx) => log[h] = row[idx]);
-
-    // Filter by action if specified
-    if (actionFilter && log.action !== actionFilter) continue;
-
-    logs.push(log);
+  var sql, args;
+  if (actionFilter) {
+    sql  = 'SELECT * FROM audit_log WHERE action = ? ORDER BY occurred_at DESC LIMIT ? OFFSET ?';
+    args = [actionFilter, pageSize, offset];
+  } else {
+    sql  = 'SELECT * FROM audit_log ORDER BY occurred_at DESC LIMIT ? OFFSET ?';
+    args = [pageSize, offset];
   }
 
-  // Paginate
-  const start = (page - 1) * pageSize;
-  return sanitizeForClient(logs.slice(start, start + pageSize));
+  return sanitizeForClient(tursoQuery_SQL(sql, args));
 }
 
 /**
  * Get audit log count
  */
 function getAuditLogCount(actionFilter) {
-  var data = getSheetData(SHEETS.AUDIT_LOG);
-  if (!data || data.length < 2) return 0;
-
-  if (!actionFilter) return data.length - 1;
-
-  var headers = data[0];
-  var actionIdx = headers.indexOf('action');
-  var count = 0;
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][actionIdx] === actionFilter) count++;
+  var sql, args;
+  if (actionFilter) {
+    sql  = 'SELECT COUNT(*) as cnt FROM audit_log WHERE action = ?';
+    args = [actionFilter];
+  } else {
+    sql  = 'SELECT COUNT(*) as cnt FROM audit_log';
+    args = [];
   }
-  return count;
+  var rows = tursoQuery_SQL(sql, args);
+  return rows.length > 0 ? (rows[0].cnt || 0) : 0;
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)

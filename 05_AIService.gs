@@ -51,7 +51,7 @@ function setAIApiKey(provider, apiKey, user) {
   props.setProperty(keyName, apiKey);
 
   // Update config to track enabled provider
-  setConfigValue('AI_PROVIDER_' + provider.toUpperCase() + '_ENABLED', 'true');
+  tursoSetConfig('AI_PROVIDER_' + provider.toUpperCase() + '_ENABLED', 'true', 'GLOBAL');
 
   logAuditEvent('SET_AI_KEY', 'CONFIG', provider, null, { provider: provider }, user.user_id, user.email);
 
@@ -70,7 +70,7 @@ function removeAIApiKey(provider, user) {
   const keyName = 'AI_API_KEY_' + provider.toUpperCase();
 
   props.deleteProperty(keyName);
-  setConfigValue('AI_PROVIDER_' + provider.toUpperCase() + '_ENABLED', 'false');
+  tursoSetConfig('AI_PROVIDER_' + provider.toUpperCase() + '_ENABLED', 'false', 'GLOBAL');
 
   logAuditEvent('REMOVE_AI_KEY', 'CONFIG', provider, null, null, user.user_id, user.email);
 
@@ -122,7 +122,7 @@ function setActiveAIProvider(provider, user) {
     }
   }
 
-  setConfigValue('AI_ACTIVE_PROVIDER', provider || '');
+  tursoSetConfig('AI_ACTIVE_PROVIDER', provider || '', 'GLOBAL');
 
   return { success: true, provider: provider };
 }
@@ -364,6 +364,16 @@ Please provide:
     logAuditEvent('AI_INSIGHTS', 'WORK_PAPER', workPaperId, null,
       { provider: aiResponse.provider, usage: aiResponse.usage }, user.user_id, user.email);
 
+    var _pt = (aiResponse.usage && (aiResponse.usage.prompt_tokens || aiResponse.usage.input_tokens)) || 0;
+    var _ct = (aiResponse.usage && (aiResponse.usage.completion_tokens || aiResponse.usage.output_tokens)) || 0;
+    tursoQuery_SQL(
+      'INSERT INTO ai_invocations (invocation_id, organization_id, user_id, provider_code, model, purpose, related_entity_type, related_entity_id, prompt_tokens, completion_tokens, total_tokens, success, occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [generateId('AIV'), user.organization_id || 'HASS', user.user_id,
+       aiResponse.provider, aiResponse.model || '', 'WORK_PAPER_INSIGHTS', 'WORK_PAPER', workPaperId,
+       _pt, _ct, (aiResponse.usage && aiResponse.usage.total_tokens) || (_pt + _ct), 1,
+       new Date().toISOString()]
+    );
+
     return {
       success: true,
       insights: aiResponse.content,
@@ -442,6 +452,16 @@ Provide a thorough evaluation.`;
 
   try {
     const aiResponse = callAI(userPrompt, systemPrompt, { temperature: 0.2 });
+
+    var _pt = (aiResponse.usage && (aiResponse.usage.prompt_tokens || aiResponse.usage.input_tokens)) || 0;
+    var _ct = (aiResponse.usage && (aiResponse.usage.completion_tokens || aiResponse.usage.output_tokens)) || 0;
+    tursoQuery_SQL(
+      'INSERT INTO ai_invocations (invocation_id, organization_id, user_id, provider_code, model, purpose, related_entity_type, related_entity_id, prompt_tokens, completion_tokens, total_tokens, success, occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [generateId('AIV'), user.organization_id || 'HASS', user.user_id,
+       aiResponse.provider, aiResponse.model || '', 'VALIDATE_ACTION_PLAN', null, null,
+       _pt, _ct, (aiResponse.usage && aiResponse.usage.total_tokens) || (_pt + _ct), 1,
+       new Date().toISOString()]
+    );
 
     // Parse JSON response
     let validation;
@@ -579,6 +599,16 @@ Provide:
   try {
     const aiResponse = callAI(userPrompt, systemPrompt, { maxTokens: 1500 });
 
+    var _pt = (aiResponse.usage && (aiResponse.usage.prompt_tokens || aiResponse.usage.input_tokens)) || 0;
+    var _ct = (aiResponse.usage && (aiResponse.usage.completion_tokens || aiResponse.usage.output_tokens)) || 0;
+    tursoQuery_SQL(
+      'INSERT INTO ai_invocations (invocation_id, organization_id, user_id, provider_code, model, purpose, related_entity_type, related_entity_id, prompt_tokens, completion_tokens, total_tokens, success, occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [generateId('AIV'), user.organization_id || 'HASS', user.user_id,
+       aiResponse.provider, aiResponse.model || '', 'ANALYTICS_INSIGHTS', null, null,
+       _pt, _ct, (aiResponse.usage && aiResponse.usage.total_tokens) || (_pt + _ct), 1,
+       new Date().toISOString()]
+    );
+
     return {
       success: true,
       insights: aiResponse.content,
@@ -607,14 +637,14 @@ function testAIConnection(provider, user) {
     const currentProvider = getConfigValue('AI_ACTIVE_PROVIDER');
 
     // Temporarily set this provider as active
-    setConfigValue('AI_ACTIVE_PROVIDER', provider);
+    tursoSetConfig('AI_ACTIVE_PROVIDER', provider, 'GLOBAL');
 
     // Test with a simple prompt
     const result = callAI('Say "Hello, AI connection successful!" in one sentence.',
       'You are a helpful assistant.', { maxTokens: 50 });
 
     // Restore original provider
-    setConfigValue('AI_ACTIVE_PROVIDER', currentProvider || '');
+    tursoSetConfig('AI_ACTIVE_PROVIDER', currentProvider || '', 'GLOBAL');
 
     return {
       success: true,
@@ -705,6 +735,17 @@ function evaluateAuditeeResponse(workPaperId, managementResponse, actionPlanIds,
 
   try {
     var aiResponse = callAI(userPrompt, systemPrompt, { temperature: 0.2, maxTokens: 500 });
+
+    var _pt = (aiResponse.usage && (aiResponse.usage.prompt_tokens || aiResponse.usage.input_tokens)) || 0;
+    var _ct = (aiResponse.usage && (aiResponse.usage.completion_tokens || aiResponse.usage.output_tokens)) || 0;
+    tursoQuery_SQL(
+      'INSERT INTO ai_invocations (invocation_id, organization_id, user_id, provider_code, model, purpose, related_entity_type, related_entity_id, prompt_tokens, completion_tokens, total_tokens, success, occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [generateId('AIV'), 'HASS', null,
+       aiResponse.provider, aiResponse.model || '', 'EVALUATE_AUDITEE_RESPONSE', 'WORK_PAPER', workPaperId,
+       _pt, _ct, (aiResponse.usage && aiResponse.usage.total_tokens) || (_pt + _ct), 1,
+       new Date().toISOString()]
+    );
+
     var jsonMatch = aiResponse.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     var parsed = JSON.parse(jsonMatch[0]);

@@ -165,7 +165,7 @@ function getSidebarCounts(user) {
     const roleCode = user ? user.role_code : '';
     const userId = user ? user.user_id : '';
 
-    // ── CACHE: avoid 2 full-sheet reads on every sidebar refresh ──
+    // ── CACHE: avoid repeated SQL queries on every sidebar refresh ──
     var cache = CacheService.getScriptCache();
     var cacheKey = 'sidebar_counts_all';
     var cached = cache.get(cacheKey);
@@ -176,104 +176,80 @@ function getSidebarCounts(user) {
     }
 
     if (!allCounts) {
-      // Compute counts ONCE for all roles, cache for 20 seconds
-      var wpData = getSheetData(SHEETS.WORK_PAPERS);
-      var wpHeaders = (wpData && wpData.length > 0) ? wpData[0] : [];
-      var wpStatusIdx = wpHeaders.indexOf ? wpHeaders.indexOf('status') : -1;
+      // ── Work Paper counts via SQL ──
+      var wpStatusRows = tursoQuery_SQL(
+        'SELECT status, assigned_auditor_id, prepared_by_id, responsible_ids, response_status,' +
+        ' COUNT(*) as cnt FROM work_papers WHERE deleted_at IS NULL GROUP BY status, assigned_auditor_id, prepared_by_id, responsible_ids, response_status',
+        []
+      );
 
+      // Simpler scalar queries for well-defined counts
       var pendingReviewAll = 0;
       var approvedQueueAll = 0;
       var pendingResponsesAll = 0;
-      var wpResponsibleIdx = wpHeaders.indexOf ? wpHeaders.indexOf('responsible_ids') : -1;
-      var wpResponseStatusIdx = wpHeaders.indexOf ? wpHeaders.indexOf('response_status') : -1;
-      var wpPreparedByIdx = wpHeaders.indexOf ? wpHeaders.indexOf('prepared_by_id') : -1;
-      var wpAssignedAuditorIdx = wpHeaders.indexOf ? wpHeaders.indexOf('assigned_auditor_id') : -1;
-
-      // Per-user WP tracking
+      var pendingAssignmentsAll = 0;
+      var totalWps = 0;
       var wpByCreator = {};
-      // Per-user observations tracking (WPs sent to auditee needing attention)
       var obsByResponsible = {};
       var totalPendingObservations = 0;
-      // Pending assignments: assigned but still Draft (auditor hasn't started)
-      var pendingAssignmentsAll = 0;
 
-      for (var wi = 1; wi < (wpData ? wpData.length : 0); wi++) {
-        var wpStatus = wpStatusIdx >= 0 ? wpData[wi][wpStatusIdx] : '';
-        if (wpStatus === 'Submitted') pendingReviewAll++;
-        if (wpStatus === 'Approved' && wpResponsibleIdx >= 0 && wpData[wi][wpResponsibleIdx]) approvedQueueAll++;
-        if (wpResponseStatusIdx >= 0 && wpData[wi][wpResponseStatusIdx] === 'Response Submitted') pendingResponsesAll++;
-
-        // Count pending assignments: assigned_auditor_id is set AND status is Draft
-        if (wpStatus === 'Draft' && wpAssignedAuditorIdx >= 0) {
-          var assignedAuditor = String(wpData[wi][wpAssignedAuditorIdx] || '').trim();
-          if (assignedAuditor) pendingAssignmentsAll++;
+      // Load all WPs for in-memory aggregations that need composite logic
+      var allWPs = tursoGetAll('09_WorkPapers');
+      allWPs.forEach(function(wp) {
+        totalWps++;
+        var st = wp.status || '';
+        if (st === 'Submitted') pendingReviewAll++;
+        if (st === 'Approved' && wp.responsible_ids) approvedQueueAll++;
+        if (wp.response_status === 'Response Submitted') pendingResponsesAll++;
+        if (st === 'Draft' && wp.assigned_auditor_id) pendingAssignmentsAll++;
+        if (wp.prepared_by_id) {
+          wpByCreator[wp.prepared_by_id] = (wpByCreator[wp.prepared_by_id] || 0) + 1;
         }
-
-        // Count WPs per creator
-        if (wpPreparedByIdx >= 0 && wpData[wi][wpPreparedByIdx]) {
-          var creator = String(wpData[wi][wpPreparedByIdx]).trim();
-          if (creator) wpByCreator[creator] = (wpByCreator[creator] || 0) + 1;
+        if (st === 'Sent to Auditee' && wp.response_status !== 'Accepted') {
+          totalPendingObservations++;
+          String(wp.responsible_ids || '').split(',').forEach(function(id) {
+            id = id.trim();
+            if (id) obsByResponsible[id] = (obsByResponsible[id] || 0) + 1;
+          });
         }
+      });
 
-        // Count observations: WPs sent to auditee that still need attention
-        if (wpStatus === 'Sent to Auditee') {
-          var respStatus = wpResponseStatusIdx >= 0 ? String(wpData[wi][wpResponseStatusIdx] || '') : '';
-          if (respStatus !== 'Accepted') {
-            totalPendingObservations++;
-            if (wpResponsibleIdx >= 0 && wpData[wi][wpResponsibleIdx]) {
-              var respParties = String(wpData[wi][wpResponsibleIdx]).split(',');
-              for (var ri = 0; ri < respParties.length; ri++) {
-                var rpId = respParties[ri].trim();
-                if (rpId) obsByResponsible[rpId] = (obsByResponsible[rpId] || 0) + 1;
-              }
-            }
-          }
-        }
-      }
-
-      var apData = getSheetData(SHEETS.ACTION_PLANS);
-      var apHeaders = (apData && apData.length > 0) ? apData[0] : [];
-      var apStatusIdx = apHeaders.indexOf ? apHeaders.indexOf('status') : -1;
-      var apDueDateIdx = apHeaders.indexOf ? apHeaders.indexOf('due_date') : -1;
-      var apOwnerIdx = apHeaders.indexOf ? apHeaders.indexOf('owner_ids') : -1;
-
+      // ── Action Plan counts via SQL ──
       var today = new Date();
       today.setHours(0, 0, 0, 0);
       var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
 
+      var allAPs = tursoGetAll('13_ActionPlans');
       var overdueAll = 0;
       var overdueByOwner = {};
-      // Per-user active AP tracking
       var activeApByOwner = {};
       var totalActiveAps = 0;
 
-      for (var ai = 1; ai < apData.length; ai++) {
-        var apStatus = apData[ai][apStatusIdx];
-        var apDue = apData[ai][apDueDateIdx];
-        var apOwners = String(apData[ai][apOwnerIdx] || '').split(',');
+      allAPs.forEach(function(ap) {
+        var apStatus = ap.status || '';
+        var apDue = ap.due_date;
+        var apOwners = String(ap.owner_ids || '').split(',');
 
-        // Count active APs per owner
-        if (apStatus && !closedStatuses.includes(apStatus)) {
+        if (!closedStatuses.includes(apStatus)) {
           totalActiveAps++;
-          for (var aoi = 0; aoi < apOwners.length; aoi++) {
-            var aoId = apOwners[aoi].trim();
-            if (aoId) activeApByOwner[aoId] = (activeApByOwner[aoId] || 0) + 1;
-          }
+          apOwners.forEach(function(oid) {
+            oid = oid.trim();
+            if (oid) activeApByOwner[oid] = (activeApByOwner[oid] || 0) + 1;
+          });
         }
 
-        if (apStatus && !closedStatuses.includes(apStatus) && apDue) {
+        if (!closedStatuses.includes(apStatus) && apDue) {
           var due = new Date(apDue);
           due.setHours(0, 0, 0, 0);
           if (due < today) {
             overdueAll++;
-            // Track per-owner for filtering
-            for (var oi = 0; oi < apOwners.length; oi++) {
-              var oid = apOwners[oi].trim();
+            apOwners.forEach(function(oid) {
+              oid = oid.trim();
               if (oid) overdueByOwner[oid] = (overdueByOwner[oid] || 0) + 1;
-            }
+            });
           }
         }
-      }
+      });
 
       allCounts = {
         pendingReview: pendingReviewAll,
@@ -282,7 +258,7 @@ function getSidebarCounts(user) {
         approvedQueue: approvedQueueAll,
         pendingResponses: pendingResponsesAll,
         wpByCreator: wpByCreator,
-        totalWps: (wpData ? wpData.length - 1 : 0),
+        totalWps: totalWps,
         activeApByOwner: activeApByOwner,
         totalActiveAps: totalActiveAps,
         obsByResponsible: obsByResponsible,
@@ -1122,27 +1098,14 @@ function getComprehensiveReportData(filters) {
   var workPapers = getWorkPapers(filters, null);
   var actionPlans = getActionPlans(filters, null);
 
-  // Build area lookup: area_id -> area_name from Audit Areas sheet
+  // Build area lookup: area_id -> area_name
   var areaLookup = {};
   try {
-    var areaData = getSheetData(SHEETS.AUDIT_AREAS);
-    if (areaData && areaData.length > 1) {
-      var areaHeaders = areaData[0];
-      var areaIdIdx = areaHeaders.indexOf('area_id');
-      var areaNameIdx = areaHeaders.indexOf('area_name');
-      var areaCodeIdx = areaHeaders.indexOf('area_code');
-      for (var ai = 1; ai < areaData.length; ai++) {
-        var aid = areaData[ai][areaIdIdx];
-        if (aid) {
-          areaLookup[aid] = areaData[ai][areaNameIdx] || areaData[ai][areaCodeIdx] || aid;
-        }
-        // Also map area_code -> area_name for fallback
-        var acode = areaData[ai][areaCodeIdx];
-        if (acode && !areaLookup[acode]) {
-          areaLookup[acode] = areaData[ai][areaNameIdx] || acode;
-        }
-      }
-    }
+    var areaData = tursoGetAll('07_AuditAreas');
+    areaData.forEach(function(area) {
+      if (area.area_id) areaLookup[area.area_id] = area.area_name || area.area_code || area.area_id;
+      if (area.area_code && !areaLookup[area.area_code]) areaLookup[area.area_code] = area.area_name || area.area_code;
+    });
   } catch(e) { console.warn('Failed to load audit areas lookup:', e); }
 
   // Enrich work papers with area_name from lookup
@@ -1488,19 +1451,11 @@ function getDashboardDataV2(params) {
     // ── Build area lookup for enrichment ──
     var areaLookup = {};
     try {
-      var areaData = getSheetData(SHEETS.AUDIT_AREAS);
-      if (areaData && areaData.length > 1) {
-        var areaHeaders = areaData[0];
-        var areaIdIdx = areaHeaders.indexOf('area_id');
-        var areaNameIdx = areaHeaders.indexOf('area_name');
-        var areaCodeIdx = areaHeaders.indexOf('area_code');
-        for (var ai = 1; ai < areaData.length; ai++) {
-          var aid = areaData[ai][areaIdIdx];
-          if (aid) areaLookup[aid] = areaData[ai][areaNameIdx] || areaData[ai][areaCodeIdx] || aid;
-          var acode = areaData[ai][areaCodeIdx];
-          if (acode && !areaLookup[acode]) areaLookup[acode] = areaData[ai][areaNameIdx] || acode;
-        }
-      }
+      var areaData = tursoGetAll('07_AuditAreas');
+      areaData.forEach(function(area) {
+        if (area.area_id) areaLookup[area.area_id] = area.area_name || area.area_code || area.area_id;
+        if (area.area_code && !areaLookup[area.area_code]) areaLookup[area.area_code] = area.area_name || area.area_code;
+      });
     } catch (e) { console.warn('getDashboardDataV2: area lookup failed:', e.message); }
 
     // ── Build WP lookup for AP enrichment ──
@@ -1629,8 +1584,8 @@ function getDashboardDataV2(params) {
  */
 function updateDashboardSummary_WPStatus(oldStatus, newStatus) {
   try {
-    var summary = firestoreGet('00_Config', 'dashboard_summary');
-    if (!summary) summary = { config_key: 'dashboard_summary', description: 'Dashboard summary counters' };
+    var raw = tursoGetConfig('dashboard_summary', 'GLOBAL');
+    var summary = raw ? JSON.parse(raw) : {};
 
     var wpByStatus = summary.wp_by_status || {};
     if (oldStatus) wpByStatus[oldStatus] = Math.max(0, (wpByStatus[oldStatus] || 0) - 1);
@@ -1638,7 +1593,7 @@ function updateDashboardSummary_WPStatus(oldStatus, newStatus) {
 
     summary.wp_by_status = wpByStatus;
     summary.last_updated = new Date().toISOString();
-    firestoreSet('00_Config', 'dashboard_summary', summary);
+    tursoSetConfig('dashboard_summary', JSON.stringify(summary), 'GLOBAL');
   } catch (e) {
     console.warn('Dashboard summary update (WP) failed:', e.message);
   }
@@ -1651,8 +1606,8 @@ function updateDashboardSummary_WPStatus(oldStatus, newStatus) {
  */
 function updateDashboardSummary_APStatus(oldStatus, newStatus) {
   try {
-    var summary = firestoreGet('00_Config', 'dashboard_summary');
-    if (!summary) summary = { config_key: 'dashboard_summary', description: 'Dashboard summary counters' };
+    var raw = tursoGetConfig('dashboard_summary', 'GLOBAL');
+    var summary = raw ? JSON.parse(raw) : {};
 
     var apByStatus = summary.ap_by_status || {};
     if (oldStatus) apByStatus[oldStatus] = Math.max(0, (apByStatus[oldStatus] || 0) - 1);
@@ -1660,7 +1615,7 @@ function updateDashboardSummary_APStatus(oldStatus, newStatus) {
 
     summary.ap_by_status = apByStatus;
     summary.last_updated = new Date().toISOString();
-    firestoreSet('00_Config', 'dashboard_summary', summary);
+    tursoSetConfig('dashboard_summary', JSON.stringify(summary), 'GLOBAL');
   } catch (e) {
     console.warn('Dashboard summary update (AP) failed:', e.message);
   }
@@ -1671,32 +1626,30 @@ function updateDashboardSummary_APStatus(oldStatus, newStatus) {
  * @return {Object} The rebuilt summary
  */
 function rebuildDashboardSummary() {
-  var wpData = firestoreGetAll(SHEETS.WORK_PAPERS) || [];
-  var apData = firestoreGetAll(SHEETS.ACTION_PLANS) || [];
+  var wpStatusRows = tursoQuery_SQL(
+    'SELECT status, COUNT(*) as cnt FROM work_papers WHERE deleted_at IS NULL GROUP BY status', []
+  );
+  var apStatusRows = tursoQuery_SQL(
+    'SELECT status, COUNT(*) as cnt FROM action_plans WHERE deleted_at IS NULL GROUP BY status', []
+  );
 
   var wpByStatus = {};
-  wpData.forEach(function(wp) {
-    var s = wp.status || 'Unknown';
-    wpByStatus[s] = (wpByStatus[s] || 0) + 1;
-  });
+  var wpTotal = 0;
+  wpStatusRows.forEach(function(r) { wpByStatus[r.status || 'Unknown'] = r.cnt; wpTotal += r.cnt; });
 
   var apByStatus = {};
-  apData.forEach(function(ap) {
-    var s = ap.status || 'Unknown';
-    apByStatus[s] = (apByStatus[s] || 0) + 1;
-  });
+  var apTotal = 0;
+  apStatusRows.forEach(function(r) { apByStatus[r.status || 'Unknown'] = r.cnt; apTotal += r.cnt; });
 
   var summary = {
-    config_key: 'dashboard_summary',
-    description: 'Dashboard summary counters',
-    wp_total: wpData.length,
-    ap_total: apData.length,
+    wp_total:     wpTotal,
+    ap_total:     apTotal,
     wp_by_status: wpByStatus,
     ap_by_status: apByStatus,
     last_updated: new Date().toISOString()
   };
 
-  firestoreSet('00_Config', 'dashboard_summary', summary);
+  tursoSetConfig('dashboard_summary', JSON.stringify(summary), 'GLOBAL');
   return summary;
 }
 

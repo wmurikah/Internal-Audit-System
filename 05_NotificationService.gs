@@ -70,21 +70,34 @@ function queueNotification(params) {
     var notificationId = generateId('NOTIFICATION');
     var now = new Date();
 
-    var notification = {
-      notification_id: notificationId,
-      batch_type: params.type,
-      priority: params.priority || 'normal',
-      recipient_user_id: params.recipient_user_id,
-      recipient_email: recipientEmail,
-      cc: params.cc || false,
-      data: JSON.stringify(params.data || {}),
-      status: 'pending',
-      created_at: now.toISOString(),
-      sent_at: null
+    var mainRow = {
+      notification_id:      notificationId,
+      batch_type:           params.batch_type || params.notificationType || params.type,
+      priority:             params.priority || 'normal',
+      recipient_user_id:    params.recipient_user_id,
+      recipient_email:      recipientEmail,
+      is_cc:                params.cc ? 1 : 0,
+      payload:              JSON.stringify(params.data || {}),
+      related_entity_type:  params.entityType || null,
+      related_entity_id:    params.entityId   || null,
+      status:               'pending',
+      created_at:           now.toISOString(),
+      sent_at:              null
     };
 
-    syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
-    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
+    tursoSet('21_NotificationQueue', notificationId, mainRow);
+
+    // Write separate CC rows for any explicit CC email addresses
+    var ccList = params.ccList || [];
+    ccList.forEach(function(ccEmail) {
+      var ccId = generateId('NTF');
+      tursoSet('21_NotificationQueue', ccId, Object.assign({}, mainRow, {
+        notification_id:  ccId,
+        recipient_email:  ccEmail,
+        is_cc:            1,
+        cc_of_user_id:    params.recipient_user_id
+      }));
+    });
 
     return notificationId;
   } catch (e) {
@@ -288,10 +301,8 @@ function queueEmail(data) {
       created_at: now
     };
     
-    // Write to Firestore
-    syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
-    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
-    
+    tursoSet('21_NotificationQueue', notificationId, notification);
+
     return sanitizeForClient({ success: true, notificationId: notificationId });
   } catch (e) {
     console.error('Failed to queue email:', e);
@@ -390,40 +401,32 @@ function queueTemplatedEmail(templateCode, recipientEmail, recipientUserId, vari
  * Max one reminder per WP per 3 days (checks notification_queue).
  */
 function sendStaleAssignmentReminders() {
-  var wpData = getSheetData(SHEETS.WORK_PAPERS);
-  if (!wpData || wpData.length < 2) { console.log('sendStaleAssignmentReminders: No WP data'); return 0; }
-
-  var headers = wpData[0];
-  var colMap = {};
-  headers.forEach(function(h, i) { colMap[h] = i; });
+  var wpRows = tursoQuery('09_WorkPapers', 'status', '==', 'Draft');
+  if (!wpRows || wpRows.length === 0) { console.log('sendStaleAssignmentReminders: No WP data'); return 0; }
 
   var now = new Date();
   var threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
   // Collect stale assignments
   var staleWPs = [];
-  for (var i = 1; i < wpData.length; i++) {
-    var row = wpData[i];
-    var status = colMap.status >= 0 ? String(row[colMap.status] || '') : '';
-    var assignedAuditorId = colMap.assigned_auditor_id >= 0 ? String(row[colMap.assigned_auditor_id] || '').trim() : '';
-    var createdAt = colMap.created_at >= 0 ? row[colMap.created_at] : '';
+  wpRows.forEach(function(row) {
+    var assignedAuditorId = String(row.assigned_auditor_id || '').trim();
+    var createdAt = row.created_at;
 
-    if (status !== 'Draft' || !assignedAuditorId) continue;
-
-    // Check if created more than 3 days ago
-    if (!createdAt) continue;
+    if (!assignedAuditorId) return;
+    if (!createdAt) return;
     var createdDate = new Date(createdAt);
-    if (isNaN(createdDate.getTime()) || createdDate >= threeDaysAgo) continue;
+    if (isNaN(createdDate.getTime()) || createdDate >= threeDaysAgo) return;
 
     staleWPs.push({
-      work_paper_id: colMap.work_paper_id >= 0 ? String(row[colMap.work_paper_id] || '') : '',
-      work_paper_ref: colMap.work_paper_ref >= 0 ? String(row[colMap.work_paper_ref] || '') : '',
-      observation_title: colMap.observation_title >= 0 ? String(row[colMap.observation_title] || '') : '',
+      work_paper_id:       String(row.work_paper_id || ''),
+      work_paper_ref:      String(row.work_paper_ref || ''),
+      observation_title:   String(row.observation_title || ''),
       assigned_auditor_id: assignedAuditorId,
-      created_at: createdDate,
-      days_ago: Math.floor((now - createdDate) / (1000 * 60 * 60 * 24))
+      created_at:          createdDate,
+      days_ago:            Math.floor((now - createdDate) / (1000 * 60 * 60 * 24))
     });
-  }
+  });
 
   if (staleWPs.length === 0) {
     console.log('sendStaleAssignmentReminders: No stale assignments found');
@@ -431,40 +434,21 @@ function sendStaleAssignmentReminders() {
   }
 
   // Check notification_queue for recent stale reminders (within last 3 days)
-  var nqData = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-  var nqHeaders = (nqData && nqData.length > 0) ? nqData[0] : [];
-  var nqColMap = {};
-  nqHeaders.forEach(function(h, i) { nqColMap[h] = i; });
+  var recentRows = tursoQuery_SQL(
+    'SELECT batch_type, recipient_user_id, created_at, payload FROM notification_queue' +
+    ' WHERE batch_type = ? AND created_at >= ? AND deleted_at IS NULL',
+    [NOTIFICATION_TYPES.STALE_REMINDER, threeDaysAgo.toISOString()]
+  );
 
   var recentReminders = {};
-  if (nqData && nqData.length > 1) {
-    for (var ni = 1; ni < nqData.length; ni++) {
-      // Check both old template_code and new batch_type fields
-      var tplCode = nqColMap.template_code >= 0 ? String(nqData[ni][nqColMap.template_code] || '') : '';
-      var batchType = nqColMap.batch_type >= 0 ? String(nqData[ni][nqColMap.batch_type] || '') : '';
-      if (tplCode !== 'WP_STALE_REMINDER' && batchType !== NOTIFICATION_TYPES.STALE_REMINDER) continue;
-
-      var recipientId = nqColMap.recipient_user_id >= 0 ? String(nqData[ni][nqColMap.recipient_user_id] || '') : '';
-      var nqCreated = nqColMap.created_at >= 0 ? nqData[ni][nqColMap.created_at] : '';
-
-      if (!nqCreated) continue;
-      var nqDate = new Date(nqCreated);
-      if (isNaN(nqDate.getTime()) || nqDate < threeDaysAgo) continue;
-
-      // Extract work_paper_id from data JSON or use record_id
-      var wpIdForKey = '';
-      var nqDataStr = nqColMap.data >= 0 ? String(nqData[ni][nqColMap.data] || '') : '';
-      if (nqDataStr) {
-        try { var parsed = JSON.parse(nqDataStr); wpIdForKey = parsed.work_paper_id || ''; } catch (e) {}
-      }
-      if (!wpIdForKey) {
-        wpIdForKey = nqColMap.record_id >= 0 ? String(nqData[ni][nqColMap.record_id] || '') : '';
-      }
-
-      var key = wpIdForKey + '|' + recipientId;
-      recentReminders[key] = true;
+  recentRows.forEach(function(nq) {
+    var recipientId = String(nq.recipient_user_id || '');
+    var wpIdForKey = '';
+    try { wpIdForKey = JSON.parse(nq.payload || '{}').work_paper_id || ''; } catch (e) {}
+    if (wpIdForKey && recipientId) {
+      recentReminders[wpIdForKey + '|' + recipientId] = true;
     }
-  }
+  });
 
   var loginUrl = '';
   try { loginUrl = ScriptApp.getService().getUrl(); } catch (e) {}
@@ -540,23 +524,15 @@ function getEmailTemplate(templateCode) {
   const cacheKey = 'email_template_' + templateCode;
   const cache = CacheService.getScriptCache();
   const cached = cache.get(cacheKey);
-  
+
   if (cached) {
     try { return JSON.parse(cached); } catch (e) {}
   }
-  
-  var data = getSheetData(SHEETS.EMAIL_TEMPLATES);
-  if (!data || data.length < 2) return null;
-  const headers = data[0];
-  const codeIdx = headers.indexOf('template_code');
-  const activeIdx = headers.indexOf('is_active');
 
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][codeIdx] === templateCode && isActive(data[i][activeIdx])) {
-      const template = rowToObject(headers, data[i]);
-      cache.put(cacheKey, JSON.stringify(template), 3600); // 1 hour cache
-      return template;
-    }
+  const template = tursoGet('22_EmailTemplates', templateCode);
+  if (template && isActive(template.is_active)) {
+    cache.put(cacheKey, JSON.stringify(template), 3600);
+    return template;
   }
 
   return null;
@@ -566,19 +542,8 @@ function getEmailTemplate(templateCode) {
  * Get all active email templates
  */
 function getEmailTemplates() {
-  var data = getSheetData(SHEETS.EMAIL_TEMPLATES);
-  if (!data || data.length < 2) return [];
-  const headers = data[0];
-  const activeIdx = headers.indexOf('is_active');
-  
-  const templates = [];
-  for (let i = 1; i < data.length; i++) {
-    if (isActive(data[i][activeIdx])) {
-      templates.push(rowToObject(headers, data[i]));
-    }
-  }
-  
-  return sanitizeForClient(templates);
+  const all = tursoGetAll('22_EmailTemplates');
+  return sanitizeForClient(all.filter(function(t) { return isActive(t.is_active); }));
 }
 
 // Process pending emails in queue (called by time-based trigger)
@@ -593,83 +558,70 @@ function processEmailQueue() {
   }
   
   try {
-  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-  if (!data || data.length < 2) { lock.releaseLock(); return { sent: 0, failed: 0, skipped: false }; }
-  const headers = data[0];
+    var pending = tursoQuery_SQL(
+      'SELECT * FROM notification_queue WHERE status = ? AND deleted_at IS NULL ORDER BY created_at ASC',
+      ['pending']
+    );
+    if (!pending || pending.length === 0) { lock.releaseLock(); return { sent: 0, failed: 0, skipped: false }; }
 
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
+    const now = new Date();
+    const fromName = 'Internal Audit Notification';
 
-  const now = new Date();
-  const fromName = 'Internal Audit Notification';
+    let sentCount = 0;
+    let failedCount = 0;
 
-  let sentCount = 0;
-  let failedCount = 0;
+    for (let i = 0; i < pending.length; i++) {
+      const row = pending[i];
+      const scheduledFor = row.scheduled_for;
 
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const status = row[colMap['status']];
-    const scheduledFor = row[colMap['scheduled_for']];
+      if (scheduledFor && new Date(scheduledFor) > now) continue;
 
-    // Skip if not pending or scheduled for future
-    if (status !== STATUS.NOTIFICATION.PENDING) continue;
-    if (scheduledFor && new Date(scheduledFor) > now) continue;
+      const recipientEmail = row.recipient_email;
+      const subject = row.subject;
+      const body = row.body;
+      const templateCode = row.template_code || '';
+      const notifId = row.notification_id;
 
-    const recipientEmail = row[colMap['recipient_email']];
-    const subject = row[colMap['subject']];
-    const body = row[colMap['body']];
-    const templateCode = row[colMap['template_code']] || '';
+      if (!recipientEmail || !subject) continue;
 
-    if (!recipientEmail || !subject) continue;
+      const replyTo = 'hassaudit@outlook.com';
 
-    const rowIndex = i + 1;
-    const replyTo = 'hassaudit@outlook.com';
-
-    // Determine CC: audit team CC on all notifications except welcome/password emails
-    var privateTemplates = ['WELCOME', 'PASSWORD_RESET', 'RESET_PASSWORD', 'NEW_USER'];
-    var ccString = '';
-    if (privateTemplates.indexOf(templateCode) === -1) {
-      ccString = buildAuditTeamCc(recipientEmail) || '';
-    }
-
-    try {
-      // Send email via unified sender (Outlook Graph API with MailApp fallback)
-      const htmlBody = formatEmailHtml(subject, body);
-      const result = sendEmail(recipientEmail, subject, body, htmlBody, ccString, fromName, replyTo);
-      if (!result.success) {
-        throw new Error(result.error || 'Email send failed');
+      var privateTemplates = ['WELCOME', 'PASSWORD_RESET', 'RESET_PASSWORD', 'NEW_USER'];
+      var ccString = '';
+      if (privateTemplates.indexOf(templateCode) === -1) {
+        ccString = buildAuditTeamCc(recipientEmail) || '';
       }
 
-      // Update status to Sent in Firestore
-      var sentObj = rowToObject(headers, data[i]);
-      sentObj.status = STATUS.NOTIFICATION.SENT;
-      sentObj.sent_at = now;
-      var notifId = sentObj.notification_id || row[colMap['notification_id']];
-      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notifId, sentObj);
+      try {
+        const htmlBody = formatEmailHtml(subject, body);
+        const result = sendEmail(recipientEmail, subject, body, htmlBody, ccString, fromName, replyTo);
+        if (!result.success) {
+          throw new Error(result.error || 'Email send failed');
+        }
 
-      sentCount++;
+        tursoUpdate('21_NotificationQueue', notifId, {
+          status:  'sent',
+          sent_at: now.toISOString()
+        });
+        sentCount++;
 
-    } catch (e) {
-      // Mark as failed in Firestore
-      var failedObj = rowToObject(headers, data[i]);
-      failedObj.status = STATUS.NOTIFICATION.FAILED;
-      failedObj.error_message = e.message;
-      var failNotifId = failedObj.notification_id || row[colMap['notification_id']];
-      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, failNotifId, failedObj);
+      } catch (e) {
+        tursoUpdate('21_NotificationQueue', notifId, {
+          status:        'failed',
+          error_message: e.message
+        });
+        failedCount++;
+        console.error('Failed to send email to', recipientEmail + ':', e.message);
+      }
 
-      failedCount++;
-      console.error('Failed to send email to', recipientEmail + ':', e.message);
+      if (sentCount >= 50) {
+        console.log('Batch limit reached, will continue in next run');
+        break;
+      }
     }
 
-    // Rate limiting - don't send too many at once
-    if (sentCount >= 50) {
-      console.log('Batch limit reached, will continue in next run');
-      break;
-    }
-  }
-  
-  console.log('Email queue processed. Sent:', sentCount, 'Failed:', failedCount);
-  return { sent: sentCount, failed: failedCount };
+    console.log('Email queue processed. Sent:', sentCount, 'Failed:', failedCount);
+    return { sent: sentCount, failed: failedCount };
   } finally {
     lock.releaseLock();
   }
@@ -994,28 +946,17 @@ function ratingBadge(rating) {
  * Retry failed emails
  */
 function retryFailedEmails() {
-  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-  if (!data || data.length < 2) return 0;
-  const headers = data[0];
+  var failed = tursoQuery('21_NotificationQueue', 'status', '==', 'failed');
+  if (!failed || failed.length === 0) return 0;
 
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
-
-  let resetCount = 0;
-
-  for (let i = 1; i < data.length; i++) {
-    const status = data[i][colMap['status']];
-
-    if (status === STATUS.NOTIFICATION.FAILED) {
-      // Reset to pending in Firestore
-      var updatedObj = rowToObject(headers, data[i]);
-      updatedObj.status = STATUS.NOTIFICATION.PENDING;
-      updatedObj.error_message = '';
-      var notifId = updatedObj.notification_id || data[i][colMap['notification_id']];
-      syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notifId, updatedObj);
-      resetCount++;
-    }
-  }
+  var resetCount = 0;
+  failed.forEach(function(row) {
+    tursoUpdate('21_NotificationQueue', row.notification_id, {
+      status:        'pending',
+      error_message: ''
+    });
+    resetCount++;
+  });
 
   console.log('Reset failed emails for retry:', resetCount);
   return resetCount;
@@ -1347,44 +1288,25 @@ function sendOverdueReminders() {
   });
 
   // Build a map of last sent OVERDUE_REMINDER per AP+owner from notification_queue
-  var nqData = getSheetData(SHEETS.NOTIFICATION_QUEUE);
+  var lastSentRows = tursoQuery_SQL(
+    'SELECT batch_type, status, recipient_user_id, payload, created_at FROM notification_queue' +
+    ' WHERE batch_type = ? AND status IN (\'sent\', \'pending\') AND deleted_at IS NULL',
+    [NOTIFICATION_TYPES.OVERDUE_REMINDER]
+  );
   var lastSentMap = {}; // key: "action_plan_id|owner_id" -> Date
-  if (nqData && nqData.length > 1) {
-    var nqHeaders = nqData[0];
-    var nqColMap = {};
-    nqHeaders.forEach(function(h, i) { nqColMap[h] = i; });
-
-    for (var ni = 1; ni < nqData.length; ni++) {
-      var nqRow = nqData[ni];
-      var nqBatchType = nqColMap.batch_type >= 0 ? String(nqRow[nqColMap.batch_type] || '') : '';
-      if (nqBatchType !== NOTIFICATION_TYPES.OVERDUE_REMINDER) continue;
-
-      var nqStatus = nqColMap.status >= 0 ? String(nqRow[nqColMap.status] || '') : '';
-      // Count both 'sent' and 'pending' to avoid duplicate queuing
-      if (nqStatus !== 'sent' && nqStatus !== 'pending') continue;
-
-      var nqRecipient = nqColMap.recipient_user_id >= 0 ? String(nqRow[nqColMap.recipient_user_id] || '') : '';
-      var nqDataStr = nqColMap.data >= 0 ? String(nqRow[nqColMap.data] || '') : '';
-      var nqCreated = nqColMap.created_at >= 0 ? nqRow[nqColMap.created_at] : '';
-
-      if (!nqCreated || !nqRecipient) continue;
-
-      // Extract action_plan_id from data JSON
-      var nqApId = '';
-      try {
-        var nqParsed = JSON.parse(nqDataStr);
-        nqApId = nqParsed.action_plan_id || '';
-      } catch (e) { continue; }
-
-      var nqDate = new Date(nqCreated);
-      if (isNaN(nqDate.getTime())) continue;
-
-      var mapKey = nqApId + '|' + nqRecipient;
-      if (!lastSentMap[mapKey] || nqDate > lastSentMap[mapKey]) {
-        lastSentMap[mapKey] = nqDate;
-      }
+  lastSentRows.forEach(function(nq) {
+    var nqRecipient = String(nq.recipient_user_id || '');
+    var nqCreated = nq.created_at;
+    if (!nqCreated || !nqRecipient) return;
+    var nqApId = '';
+    try { nqApId = JSON.parse(nq.payload || '{}').action_plan_id || ''; } catch (e) { return; }
+    var nqDate = new Date(nqCreated);
+    if (isNaN(nqDate.getTime())) return;
+    var mapKey = nqApId + '|' + nqRecipient;
+    if (!lastSentMap[mapKey] || nqDate > lastSentMap[mapKey]) {
+      lastSentMap[mapKey] = nqDate;
     }
-  }
+  });
 
   var now = new Date();
   var notificationCount = 0;
@@ -1474,12 +1396,8 @@ function sendOverdueReminders() {
  * Groups by owner and sends ONE table email per person.
  */
 function sendUpcomingDueReminders() {
-  var data = getSheetData(SHEETS.ACTION_PLANS);
-  if (!data || data.length < 2) { console.log('No action plan data'); return 0; }
-  const headers = data[0];
-
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
+  var apRows = tursoGetAll('13_ActionPlans');
+  if (!apRows || apRows.length === 0) { console.log('No action plan data'); return 0; }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1488,23 +1406,17 @@ function sendUpcomingDueReminders() {
 
   // Collect action plans due within 14 days that are not yet closed
   var upcoming = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const status = row[colMap['status']];
-    const dueDate = row[colMap['due_date']];
-
-    if (!dueDate) continue;
-    if (isImplementedOrVerified(status)) continue;
+  apRows.forEach(function(ap) {
+    const dueDate = ap.due_date;
+    if (!dueDate) return;
+    if (isImplementedOrVerified(ap.status)) return;
 
     const due = new Date(dueDate);
     due.setHours(0, 0, 0, 0);
     const daysUntilDue = Math.floor((due - today) / (1000 * 60 * 60 * 24));
 
-    // Due within 14 days and not overdue (overdue handled by sendOverdueReminders)
     if (daysUntilDue > 0 && daysUntilDue <= 14) {
-      var ap = rowToObject(headers, data[i]);
       ap._daysUntilDue = daysUntilDue;
-      // Enrich with parent observation title
       if (ap.work_paper_id) {
         var wp = getWorkPaperById(ap.work_paper_id);
         ap._observation_title = wp ? wp.observation_title : '';
@@ -1512,7 +1424,7 @@ function sendUpcomingDueReminders() {
       }
       upcoming.push(ap);
     }
-  }
+  });
 
   if (upcoming.length === 0) {
     console.log('No upcoming due action plans');
@@ -1578,12 +1490,8 @@ function sendUpcomingDueReminders() {
  * Called by daily trigger (dailyMaintenance or dailyReminderRunner).
  */
 function sendEvidenceReminders() {
-  var data = getSheetData(SHEETS.ACTION_PLANS);
-  if (!data || data.length < 2) { console.log('sendEvidenceReminders: No action plan data'); return 0; }
-  var headers = data[0];
-
-  var colMap = {};
-  headers.forEach(function(h, i) { colMap[h] = i; });
+  var apRows = tursoGetAll('13_ActionPlans');
+  if (!apRows || apRows.length === 0) { console.log('sendEvidenceReminders: No action plan data'); return 0; }
 
   var today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1592,52 +1500,39 @@ function sendEvidenceReminders() {
 
   // Collect APs due in exactly 7 days or exactly 0 days with no evidence
   var qualifying = [];
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var status = row[colMap['status']];
-    var dueDate = row[colMap['due_date']];
-
-    if (!dueDate) continue;
-    // Only target active APs that are not yet implemented/closed
-    if (isImplementedOrVerified(status)) continue;
-    // Specifically target 'Not Implemented', 'Pending', 'In Progress', 'Not Due', 'Overdue' statuses
-    // Skip 'Implemented', 'Verified', 'Closed', 'Rejected'
+  apRows.forEach(function(ap) {
+    var dueDate = ap.due_date;
+    if (!dueDate) return;
+    if (isImplementedOrVerified(ap.status)) return;
 
     var due = new Date(dueDate);
     due.setHours(0, 0, 0, 0);
     var daysUntilDue = Math.round((due - today) / (1000 * 60 * 60 * 24));
 
-    // Only trigger on exact day -7 or day 0
-    if (daysUntilDue !== 7 && daysUntilDue !== 0) continue;
+    if (daysUntilDue !== 7 && daysUntilDue !== 0) return;
 
-    var ap = rowToObject(headers, data[i]);
     ap._daysUntilDue = daysUntilDue;
     ap._reminderType = daysUntilDue === 7 ? 'day_minus_7' : 'day_0';
 
     // Check evidence count for this AP
     var hasEvidence = false;
     try {
-      var evidenceRecords = firestoreQuery(SHEETS.AP_EVIDENCE, 'action_plan_id', 'EQUAL', ap.action_plan_id);
+      var evidenceRecords = tursoQuery('14_ActionPlanEvidence', 'action_plan_id', '==', ap.action_plan_id);
       if (evidenceRecords && evidenceRecords.length > 0) {
-        // Count only records with actual drive_file_id (not orphaned metadata)
-        var realEvidence = evidenceRecords.filter(function(ev) { return ev.drive_file_id; });
-
-        // For small batches, verify Drive file accessibility
+        var realEvidence = evidenceRecords.filter(function(ev) { return ev.storage_id; });
         if (realEvidence.length > 0 && realEvidence.length <= 5) {
           realEvidence = realEvidence.filter(function(ev) {
-            try { DriveApp.getFileById(ev.drive_file_id); return true; } catch (e) { return false; }
+            try { DriveApp.getFileById(ev.storage_id); return true; } catch (e) { return false; }
           });
         }
-
         hasEvidence = realEvidence.length > 0;
       }
     } catch (e) {
       console.error('sendEvidenceReminders: Evidence check failed for', ap.action_plan_id, ':', e.message);
     }
 
-    if (hasEvidence) continue; // Skip — evidence already uploaded
+    if (hasEvidence) return;
 
-    // Enrich with parent work paper data
     if (ap.work_paper_id) {
       var wp = getWorkPaperById(ap.work_paper_id);
       ap._observation_title = wp ? wp.observation_title : '';
@@ -1645,7 +1540,7 @@ function sendEvidenceReminders() {
     }
 
     qualifying.push(ap);
-  }
+  });
 
   if (qualifying.length === 0) {
     console.log('sendEvidenceReminders: No APs need evidence reminders today');
@@ -1743,12 +1638,8 @@ function sendEvidenceReminders() {
  * Called by daily trigger.
  */
 function sendOverdueEvidenceEscalation() {
-  var data = getSheetData(SHEETS.ACTION_PLANS);
-  if (!data || data.length < 2) { console.log('sendOverdueEvidenceEscalation: No action plan data'); return 0; }
-  var headers = data[0];
-
-  var colMap = {};
-  headers.forEach(function(h, i) { colMap[h] = i; });
+  var apRows = tursoGetAll('13_ActionPlans');
+  if (!apRows || apRows.length === 0) { console.log('sendOverdueEvidenceEscalation: No action plan data'); return 0; }
 
   var today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1757,34 +1648,29 @@ function sendOverdueEvidenceEscalation() {
 
   // Collect APs overdue by exactly 1 day or exactly 7 days with no evidence
   var qualifying = [];
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var status = row[colMap['status']];
-    var dueDate = row[colMap['due_date']];
-
-    if (!dueDate) continue;
-    if (isImplementedOrVerified(status)) continue;
+  apRows.forEach(function(ap) {
+    var dueDate = ap.due_date;
+    if (!dueDate) return;
+    if (isImplementedOrVerified(ap.status)) return;
 
     var due = new Date(dueDate);
     due.setHours(0, 0, 0, 0);
     var daysOverdue = Math.round((today - due) / (1000 * 60 * 60 * 24));
 
-    // Only trigger on exact day +1 or day +7
-    if (daysOverdue !== 1 && daysOverdue !== 7) continue;
+    if (daysOverdue !== 1 && daysOverdue !== 7) return;
 
-    var ap = rowToObject(headers, data[i]);
     ap._daysOverdue = daysOverdue;
     ap._escalationLevel = daysOverdue === 1 ? 'day_plus_1' : 'day_plus_7';
 
     // Check evidence count
     var hasEvidence = false;
     try {
-      var evidenceRecords = firestoreQuery(SHEETS.AP_EVIDENCE, 'action_plan_id', 'EQUAL', ap.action_plan_id);
+      var evidenceRecords = tursoQuery('14_ActionPlanEvidence', 'action_plan_id', '==', ap.action_plan_id);
       if (evidenceRecords && evidenceRecords.length > 0) {
-        var realEvidence = evidenceRecords.filter(function(ev) { return ev.drive_file_id; });
+        var realEvidence = evidenceRecords.filter(function(ev) { return ev.storage_id; });
         if (realEvidence.length > 0 && realEvidence.length <= 5) {
           realEvidence = realEvidence.filter(function(ev) {
-            try { DriveApp.getFileById(ev.drive_file_id); return true; } catch (e) { return false; }
+            try { DriveApp.getFileById(ev.storage_id); return true; } catch (e) { return false; }
           });
         }
         hasEvidence = realEvidence.length > 0;
@@ -1793,7 +1679,7 @@ function sendOverdueEvidenceEscalation() {
       console.error('sendOverdueEvidenceEscalation: Evidence check failed for', ap.action_plan_id, ':', e.message);
     }
 
-    if (hasEvidence) continue;
+    if (hasEvidence) return;
 
     // Enrich with parent work paper data + CC recipients
     if (ap.work_paper_id) {
@@ -1804,7 +1690,7 @@ function sendOverdueEvidenceEscalation() {
     }
 
     qualifying.push(ap);
-  }
+  });
 
   if (qualifying.length === 0) {
     console.log('sendOverdueEvidenceEscalation: No overdue APs need escalation today');
@@ -2248,8 +2134,7 @@ function queueBatchedDelegationNotification(recipientEmail, recipientUserId, bat
       batch_data: JSON.stringify(batchData)
     };
 
-    syncToFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId, notification);
-    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
+    tursoSet('21_NotificationQueue', notificationId, notification);
   } catch (e) {
     console.error('Failed to queue batched delegation notification:', e.message);
   }
@@ -2270,34 +2155,26 @@ function processBatchedDelegationNotifications() {
   }
 
   try {
-    var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-    if (!data || data.length < 2) { lock.releaseLock(); return { sent: 0 }; }
-    var headers = data[0];
-
-    var colMap = {};
-    headers.forEach(function(h, i) { colMap[h] = i; });
+    var pendingRows = tursoQuery_SQL(
+      'SELECT * FROM notification_queue WHERE status = ? AND batch_type = ? AND deleted_at IS NULL',
+      ['batched', 'delegation']
+    );
+    if (!pendingRows || pendingRows.length === 0) { lock.releaseLock(); return { sent: 0 }; }
 
     var now = new Date();
     var byRecipient = {};
     var notificationIds = {};
 
-    // Collect all batched delegation notifications that are due
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var status = row[colMap['status']];
-      var batchType = row[colMap['batch_type']];
-      var scheduledFor = row[colMap['scheduled_for']];
+    pendingRows.forEach(function(row) {
+      var scheduledFor = row.scheduled_for;
+      if (scheduledFor && new Date(scheduledFor) > now) return;
 
-      if (status !== STATUS.NOTIFICATION.BATCHED) continue;
-      if (batchType !== 'delegation') continue;
-      if (scheduledFor && new Date(scheduledFor) > now) continue;
+      var recipientEmail = row.recipient_email;
+      var recipientUserId = row.recipient_user_id;
+      var batchDataStr = row.batch_data;
+      var notifId = row.notification_id;
 
-      var recipientEmail = row[colMap['recipient_email']];
-      var recipientUserId = row[colMap['recipient_user_id']];
-      var batchDataStr = row[colMap['batch_data']];
-      var notifId = row[colMap['notification_id']];
-
-      if (!recipientEmail) continue;
+      if (!recipientEmail) return;
 
       var emailKey = recipientEmail.toLowerCase();
       if (!byRecipient[emailKey]) {
@@ -2312,8 +2189,8 @@ function processBatchedDelegationNotifications() {
         console.warn('Invalid batch_data for notification', notifId);
       }
 
-      notificationIds[emailKey].push({ notifId: notifId, rowData: rowToObject(headers, data[i]) });
-    }
+      notificationIds[emailKey].push({ notifId: notifId });
+    });
 
     var sentCount = 0;
     var systemUrl = getSystemUrl();
@@ -2361,16 +2238,15 @@ function processBatchedDelegationNotifications() {
 
       // Mark all processed notifications as Sent
       notificationIds[emailKey].forEach(function(entry) {
-        var updated = entry.rowData;
-        updated.status = STATUS.NOTIFICATION.SENT;
-        updated.sent_at = now;
-        syncToFirestore(SHEETS.NOTIFICATION_QUEUE, entry.notifId, updated);
+        tursoUpdate('21_NotificationQueue', entry.notifId, {
+          status:  'sent',
+          sent_at: now.toISOString()
+        });
       });
 
       sentCount++;
     });
 
-    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
     console.log('Processed batched delegation notifications. Recipients:', sentCount);
     return { sent: sentCount };
   } finally {
@@ -2401,31 +2277,24 @@ function sendBatchedAssignmentNotifications() {
   }
 
   try {
-    var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-    if (!data || data.length < 2) { lock.releaseLock(); return { success: true, sent: 0, assignments: 0, changes: 0 }; }
-    var headers = data[0];
-
-    var colMap = {};
-    headers.forEach(function(h, i) { colMap[h] = i; });
+    var batchRows = tursoQuery_SQL(
+      'SELECT * FROM notification_queue WHERE status = ? AND batch_type IN (\'WP_ASSIGNMENT\', \'WP_CHANGE\') AND deleted_at IS NULL',
+      ['batched']
+    );
+    if (!batchRows || batchRows.length === 0) { lock.releaseLock(); return { success: true, sent: 0, assignments: 0, changes: 0 }; }
 
     // Collect pending WP_ASSIGNMENT and WP_CHANGE batched notifications
     var byRecipient = {};  // emailKey -> { email, userId, assignments: [], changes: [] }
-    var notificationIds = {};  // emailKey -> [{ notifId, rowData }]
+    var notificationIds = {};  // emailKey -> [{ notifId }]
 
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var status = row[colMap['status']];
-      var batchType = row[colMap['batch_type']];
+    batchRows.forEach(function(row) {
+      var recipientEmail = row.recipient_email;
+      var recipientUserId = row.recipient_user_id;
+      var batchDataStr = row.batch_data;
+      var notifId = row.notification_id;
+      var batchType = row.batch_type;
 
-      if (status !== STATUS.NOTIFICATION.BATCHED) continue;
-      if (batchType !== 'WP_ASSIGNMENT' && batchType !== 'WP_CHANGE') continue;
-
-      var recipientEmail = row[colMap['recipient_email']];
-      var recipientUserId = row[colMap['recipient_user_id']];
-      var batchDataStr = row[colMap['batch_data']];
-      var notifId = row[colMap['notification_id']];
-
-      if (!recipientEmail) continue;
+      if (!recipientEmail) return;
 
       var emailKey = recipientEmail.toLowerCase();
       if (!byRecipient[emailKey]) {
@@ -2444,8 +2313,8 @@ function sendBatchedAssignmentNotifications() {
         console.warn('Invalid batch_data for notification', notifId);
       }
 
-      notificationIds[emailKey].push({ notifId: notifId, rowData: rowToObject(headers, data[i]) });
-    }
+      notificationIds[emailKey].push({ notifId: notifId });
+    });
 
     // Build audit area lookup cache
     var areaNameCache = {};
@@ -2575,16 +2444,15 @@ function sendBatchedAssignmentNotifications() {
 
       // Mark all processed notifications as Sent
       notificationIds[emailKey].forEach(function(entry) {
-        var updated = entry.rowData;
-        updated.status = STATUS.NOTIFICATION.SENT;
-        updated.sent_at = now;
-        syncToFirestore(SHEETS.NOTIFICATION_QUEUE, entry.notifId, updated);
+        tursoUpdate('21_NotificationQueue', entry.notifId, {
+          status:  'sent',
+          sent_at: now.toISOString()
+        });
       });
 
       sentCount++;
     });
 
-    invalidateSheetData(SHEETS.NOTIFICATION_QUEUE);
     console.log('Batched WP notifications sent. Recipients:', sentCount, 'Assignments:', totalAssignments, 'Changes:', totalChanges);
     return { success: true, sent: sentCount, assignments: totalAssignments, changes: totalChanges };
   } finally {
@@ -2704,25 +2572,18 @@ function _buildBatchedWPEmailHtml(subject, intro, sectionsHtml, outro) {
  * @returns {{ pending: number, assignments: number, changes: number }}
  */
 function getPendingBatchNotificationCount() {
-  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-  if (!data || data.length < 2) return { pending: 0, assignments: 0, changes: 0 };
-  var headers = data[0];
-  var colMap = {};
-  headers.forEach(function(h, i) { colMap[h] = i; });
-
+  var rows = tursoQuery_SQL(
+    'SELECT batch_type, COUNT(*) as cnt FROM notification_queue' +
+    ' WHERE status = ? AND batch_type IN (\'WP_ASSIGNMENT\', \'WP_CHANGE\') AND deleted_at IS NULL' +
+    ' GROUP BY batch_type',
+    ['batched']
+  );
   var assignments = 0;
   var changes = 0;
-
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var status = row[colMap['status']];
-    var batchType = row[colMap['batch_type']];
-
-    if (status !== STATUS.NOTIFICATION.BATCHED) continue;
-    if (batchType === 'WP_ASSIGNMENT') assignments++;
-    else if (batchType === 'WP_CHANGE') changes++;
-  }
-
+  rows.forEach(function(r) {
+    if (r.batch_type === 'WP_ASSIGNMENT') assignments = r.cnt;
+    else if (r.batch_type === 'WP_CHANGE') changes = r.cnt;
+  });
   return { pending: assignments + changes, assignments: assignments, changes: changes };
 }
 
@@ -2906,35 +2767,21 @@ function dailyMaintenance() {
  * Clean up old sent notifications
  */
 function cleanupOldNotifications(daysOld) {
-  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-  if (!data || data.length < 2) return 0;
-  const headers = data[0];
-
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
-
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
-  let deletedCount = 0;
+  var old = tursoQuery_SQL(
+    'SELECT notification_id FROM notification_queue WHERE status = ? AND sent_at < ? AND deleted_at IS NULL',
+    ['sent', cutoffDate.toISOString()]
+  );
 
-  // Delete from bottom to top
-  for (let i = data.length - 1; i >= 1; i--) {
-    const status = data[i][colMap['status']];
-    const sentAt = data[i][colMap['sent_at']];
-
-    if (status === STATUS.NOTIFICATION.SENT && sentAt) {
-      const sentDate = new Date(sentAt);
-      if (sentDate < cutoffDate) {
-        // Delete from Firestore
-        var notificationId = data[i][colMap['notification_id']];
-        if (notificationId) {
-          deleteFromFirestore(SHEETS.NOTIFICATION_QUEUE, notificationId);
-        }
-        deletedCount++;
-      }
+  var deletedCount = 0;
+  old.forEach(function(row) {
+    if (row.notification_id) {
+      tursoDelete('21_NotificationQueue', row.notification_id);
+      deletedCount++;
     }
-  }
+  });
 
   return deletedCount;
 }
@@ -2962,27 +2809,17 @@ function sendImmediateEmail(recipientEmail, subject, body, ccEmails) {
  * Get notification queue status
  */
 function getNotificationQueueStatus() {
-  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-  if (!data || data.length < 2) return sanitizeForClient({ pending: 0, sent: 0, failed: 0, total: 0 });
-  const headers = data[0];
-
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
-
-  const counts = {
-    pending: 0,
-    sent: 0,
-    failed: 0,
-    total: data.length - 1
-  };
-
-  for (let i = 1; i < data.length; i++) {
-    const status = data[i][colMap['status']];
-    if (status === STATUS.NOTIFICATION.PENDING) counts.pending++;
-    else if (status === STATUS.NOTIFICATION.SENT) counts.sent++;
-    else if (status === STATUS.NOTIFICATION.FAILED) counts.failed++;
-  }
-
+  var rows = tursoQuery_SQL(
+    'SELECT status, COUNT(*) as cnt FROM notification_queue WHERE deleted_at IS NULL GROUP BY status',
+    []
+  );
+  var counts = { pending: 0, sent: 0, failed: 0, total: 0 };
+  rows.forEach(function(r) {
+    counts.total += r.cnt;
+    if (r.status === 'pending') counts.pending = r.cnt;
+    else if (r.status === 'sent')    counts.sent    = r.cnt;
+    else if (r.status === 'failed')  counts.failed  = r.cnt;
+  });
   return sanitizeForClient(counts);
 }
 
@@ -2992,22 +2829,13 @@ function getNotificationQueueStatus() {
 function getUserNotifications(userId, limit) {
   limit = limit || 20;
 
-  var data = getSheetData(SHEETS.NOTIFICATION_QUEUE);
-  if (!data || data.length < 2) return sanitizeForClient([]);
-  const headers = data[0];
+  var rows = tursoQuery_SQL(
+    'SELECT * FROM notification_queue WHERE recipient_user_id = ? AND deleted_at IS NULL' +
+    ' ORDER BY created_at DESC LIMIT ?',
+    [userId, limit]
+  );
 
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
-
-  const notifications = [];
-
-  for (let i = data.length - 1; i >= 1 && notifications.length < limit; i--) {
-    if (data[i][colMap['recipient_user_id']] === userId) {
-      notifications.push(rowToObject(headers, data[i]));
-    }
-  }
-
-  return sanitizeForClient(notifications);
+  return sanitizeForClient(rows);
 }
 
 /**
@@ -3291,19 +3119,8 @@ function formatPasswordResetEmailHtml(opts) {
  * Returns all templates including inactive ones for admin editing.
  */
 function getEmailTemplatesAll() {
-  var data = getSheetData(SHEETS.EMAIL_TEMPLATES);
-  if (!data || data.length < 2) return sanitizeForClient([]);
-  var headers = data[0];
-
-  var templates = [];
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0]) {
-      var t = rowToObject(headers, data[i]);
-      t._rowIndex = i + 1;
-      templates.push(t);
-    }
-  }
-  return sanitizeForClient(templates);
+  var all = tursoGetAll('22_EmailTemplates');
+  return sanitizeForClient(all);
 }
 
 /**
@@ -3315,32 +3132,20 @@ function saveEmailTemplateAction(templateCode, updates, user) {
   }
   if (!templateCode) return { success: false, error: 'Template code required' };
 
-  var data = getSheetData(SHEETS.EMAIL_TEMPLATES);
-  if (!data || data.length < 2) return { success: false, error: 'No template data found' };
-  var headers = data[0];
-  var codeIdx = headers.indexOf('template_code');
+  var existing = tursoGet('22_EmailTemplates', templateCode);
+  if (!existing) return { success: false, error: 'Template not found: ' + templateCode };
 
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][codeIdx] === templateCode) {
-      var existing = rowToObject(headers, data[i]);
-      if (updates.subject_template !== undefined) existing.subject_template = sanitizeInput(updates.subject_template);
-      if (updates.body_template !== undefined) existing.body_template = sanitizeInput(updates.body_template);
-      if (updates.is_active !== undefined) existing.is_active = updates.is_active;
+  if (updates.subject_template !== undefined) existing.subject_template = sanitizeInput(updates.subject_template);
+  if (updates.body_template !== undefined)    existing.body_template    = sanitizeInput(updates.body_template);
+  if (updates.is_active !== undefined)        existing.is_active        = updates.is_active;
 
-      // Write to Firestore
-      syncToFirestore(SHEETS.EMAIL_TEMPLATES, existing.template_code || templateCode, existing);
-      invalidateSheetData(SHEETS.EMAIL_TEMPLATES);
+  tursoSet('22_EmailTemplates', templateCode, existing);
 
-      // Clear template cache
-      var cache = CacheService.getScriptCache();
-      cache.remove('email_template_' + templateCode);
+  // Clear template cache
+  CacheService.getScriptCache().remove('email_template_' + templateCode);
 
-      logAuditEvent('UPDATE_TEMPLATE', 'CONFIG', 'EMAIL', null, { template_code: templateCode }, user.user_id, user.email);
-      return { success: true };
-    }
-  }
-
-  return { success: false, error: 'Template not found: ' + templateCode };
+  logAuditEvent('UPDATE_TEMPLATE', 'CONFIG', 'EMAIL', null, { template_code: templateCode }, user.user_id, user.email);
+  return { success: true };
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)

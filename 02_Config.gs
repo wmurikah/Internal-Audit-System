@@ -790,24 +790,12 @@ function invalidateUserCache(email, userId) {
 
 function getUserById(userId) {
   if (!userId) return null;
-
-  if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
-    var user = firestoreGet(SHEETS.USERS, userId);
-    if (user) return user;
-  }
-
-  console.log('getUserById: User not found in Firestore:', userId);
-  return null;
+  return tursoGet('05_Users', userId) || null;
 }
 
 function getWorkPaperById(workPaperId) {
   if (!workPaperId) return null;
-
-  if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
-    return firestoreGet(SHEETS.WORK_PAPERS, workPaperId);
-  }
-
-  return null;
+  return tursoGet('09_WorkPapers', workPaperId) || null;
 }
 
 function getWorkPaperFull(workPaperId) {
@@ -890,12 +878,7 @@ function getActionPlansByWorkPaper(workPaperId) {
 
 function getActionPlanById(actionPlanId) {
   if (!actionPlanId) return null;
-
-  if (typeof firestoreGet === 'function' && isFirestoreEnabled()) {
-    return firestoreGet(SHEETS.ACTION_PLANS, actionPlanId);
-  }
-
-  return null;
+  return tursoGet('13_ActionPlans', actionPlanId) || null;
 }
 
 function getActionPlanFull(actionPlanId) {
@@ -1054,25 +1037,8 @@ function isPastDue(dueDate) {
 }
 
 function logAuditEvent(action, entityType, entityId, oldData, newData, userId, userEmail) {
-  try {
-    var logId = generateId('LOG');
-    var logData = {
-      log_id: logId,
-      action: action,
-      entity_type: entityType,
-      entity_id: entityId || '',
-      old_data: oldData ? JSON.stringify(oldData) : '',
-      new_data: newData ? JSON.stringify(newData) : '',
-      user_id: userId || '',
-      user_email: userEmail || Session.getActiveUser().getEmail() || '',
-      timestamp: new Date().toISOString(),
-      ip_address: ''
-    };
-
-    firestoreSet(SHEETS.AUDIT_LOG, logId, logData);
-  } catch (e) {
-    console.error('Failed to log audit event:', e);
-  }
+  logAudit(action, entityType, entityId, oldData, newData,
+    { user_id: userId || null, email: userEmail || null });
 }
 
 function getConfigValue(key) {
@@ -1145,12 +1111,7 @@ function seedDriveFolderConfig() {
   folderConfigs.forEach(function(cfg) {
     var existing = getConfigValue(cfg.key);
     if (!existing) {
-      firestoreSet(SHEETS.CONFIG, cfg.key, {
-        config_key: cfg.key,
-        config_value: cfg.value,
-        description: cfg.desc,
-        updated_at: new Date().toISOString()
-      });
+      tursoSetConfig(cfg.key, cfg.value, 'GLOBAL');
       console.log('Seeded config: ' + cfg.key + ' = ' + cfg.value);
     } else {
       console.log('Config already exists: ' + cfg.key + ' = ' + existing);
