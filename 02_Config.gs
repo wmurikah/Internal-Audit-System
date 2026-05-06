@@ -44,7 +44,8 @@ const SCHEMAS = {
     'control_objectives', 'control_classification', 'control_type', 'control_frequency', 'control_standards',
     'risk_description', 'test_objective', 'testing_steps',
     'observation_title', 'observation_description', 'risk_rating', 'risk_summary', 'recommendation',
-    'management_response', 'responsible_ids', 'cc_recipients',
+    'management_response', 'cc_recipients',
+    // responsible_ids → work_paper_responsibles junction table
     'status', 'final_status', 'revision_count',
     'prepared_by_id', 'prepared_by_name', 'prepared_date',
     'submitted_date', 'reviewed_by_id', 'reviewed_by_name', 'review_date', 'review_comments',
@@ -62,7 +63,7 @@ const SCHEMAS = {
   ],
   WP_FILES: [
     'file_id', 'work_paper_id', 'file_category', 'file_name', 'file_description',
-    'drive_file_id', 'drive_url', 'file_size', 'mime_type', 'uploaded_by', 'uploaded_at'
+    'storage_id', 'storage_url', 'file_size', 'mime_type', 'uploaded_by', 'uploaded_at'
   ],
   WP_REVISIONS: [
     'revision_id', 'work_paper_id', 'revision_number', 'action', 'comments',
@@ -70,12 +71,13 @@ const SCHEMAS = {
   ],
   ACTION_PLANS: [
     'action_plan_id', 'work_paper_id', 'action_number', 'action_description',
-    'owner_ids', 'owner_names', 'due_date', 'status', 'final_status',
+    // owner_ids → action_plan_owners junction table
+    'owner_names', 'due_date', 'status', 'final_status',
     'implementation_notes', 'implemented_date', 'implemented_by',
     'auditor_review_status', 'auditor_review_by', 'auditor_review_date', 'auditor_review_comments',
     'hoa_review_status', 'hoa_review_by', 'hoa_review_date', 'hoa_review_comments',
     'days_overdue',
-    'delegated_by_id', 'delegated_by_name', 'delegated_date', 'delegation_notes', 'original_owner_ids',
+    'delegated_by_id', 'delegated_by_name', 'delegated_date', 'delegation_notes',
     'delegation_rejected', 'delegation_accepted', 'delegation_rejected_by', 'delegation_reject_reason', 'delegation_rejected_date',
     'created_at', 'created_by', 'updated_at', 'updated_by',
     'affiliate_id', 'affiliate_name', 'year', 'audit_area_id',
@@ -83,7 +85,7 @@ const SCHEMAS = {
   ],
   AP_EVIDENCE: [
     'evidence_id', 'action_plan_id', 'file_name', 'file_description',
-    'drive_file_id', 'drive_url', 'file_size', 'mime_type', 'uploaded_by', 'uploaded_at'
+    'storage_id', 'storage_url', 'file_size', 'mime_type', 'uploaded_by', 'uploaded_at'
   ],
   AP_HISTORY: [
     'history_id', 'action_plan_id', 'previous_status', 'new_status', 'comments',
@@ -94,7 +96,7 @@ const SCHEMAS = {
     'user_id', 'user_email', 'timestamp', 'ip_address'
   ],
   SESSIONS: [
-    'session_id', 'user_id', 'session_token', 'created_at', 'expires_at',
+    'session_id', 'user_id', 'session_token_hash', 'created_at', 'expires_at',
     'ip_address', 'user_agent', 'is_valid'
   ],
   NOTIFICATION_QUEUE: [

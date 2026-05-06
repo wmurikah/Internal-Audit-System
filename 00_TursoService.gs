@@ -179,7 +179,7 @@ function resolvePK_(table) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Public API — mirrors firestoreGet / firestoreGetAll / etc.
+// Public API — CRUD methods (tursoGet, tursoGetAll, tursoQuery, tursoSet, tursoUpdate, tursoDelete)
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -433,7 +433,7 @@ function tursoQuery_SQL(sql, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Config helpers  (replaces firestoreGetSystemSettings / firestoreSetSystemSettings)
+// Config helpers — tursoGetConfig, tursoSetConfig, tursoIncrementCounter
 // ─────────────────────────────────────────────────────────────
 
 /**

@@ -942,8 +942,8 @@ function uploadFileToDrive(fileName, mimeType, base64Data, folderId, sessionToke
     return {
       success: true,
       file: {
-        drive_file_id: file.getId(),
-        drive_url: file.getUrl(),
+        storage_id:  file.getId(),
+        storage_url: file.getUrl(),
         file_name: file.getName(),
         file_size: file.getSize(),
         mime_type: file.getMimeType()

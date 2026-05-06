@@ -989,8 +989,8 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
     file_id:          fileId,
     organization_id:  user.organization_id || 'HASS',
     storage_provider: 'gdrive',
-    storage_id:       evidenceData.drive_file_id || '',
-    storage_url:      evidenceData.drive_url || '',
+    storage_id:       evidenceData.storage_id || '',
+    storage_url:      evidenceData.storage_url || '',
     file_name:        sanitizeInput(evidenceData.file_name || ''),
     file_description: evidenceData.file_description ? sanitizeInput(evidenceData.file_description) : null,
     file_size:        evidenceData.file_size || null,
@@ -999,8 +999,8 @@ function addActionPlanEvidence(actionPlanId, evidenceData, user) {
     uploaded_at:      new Date().toISOString()
   });
 
-  if (evidenceData.drive_file_id) {
-    try { moveFileToSubfolder(evidenceData.drive_file_id, 'DRIVE_AP_EVIDENCE_FOLDER_ID'); } catch (e) {}
+  if (evidenceData.storage_id) {
+    try { moveFileToSubfolder(evidenceData.storage_id, 'DRIVE_AP_EVIDENCE_FOLDER_ID'); } catch (e) {}
   }
 
   const attachId = generateId('ATT');
