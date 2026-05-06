@@ -2125,7 +2125,7 @@ function queueBatchedDelegationNotification(recipientEmail, recipientUserId, bat
       body: '',
       module: 'ACTION_PLAN',
       record_id: batchData.action_plan_id || '',
-      status: STATUS.NOTIFICATION.BATCHED,
+      status: 'batched',
       scheduled_for: scheduledFor,
       sent_at: '',
       error_message: '',
