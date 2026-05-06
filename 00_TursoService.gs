@@ -421,7 +421,7 @@ function tursoQuery_SQL(sql, args) {
       resultIdx = 0;
     } else {
       results   = tursoExecute_(withPragmas_([stmt]));
-      resultIdx = 2; // indices 0–1 are PRAGMA results
+      resultIdx = 1; // indices 0–1 are PRAGMA results
     }
 
     const execResult = results[resultIdx].response.result;
