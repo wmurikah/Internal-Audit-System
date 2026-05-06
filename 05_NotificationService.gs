@@ -15,11 +15,18 @@ function getSenderEmail() {
 }
 
 var _cachedReplyToEmail = null;
+// Returns a comma-separated string of all reply-to addresses.
+// Set AUDIT_REPLY_TO_EMAIL in Script Properties as a comma-separated list.
 function getReplyToEmail() {
   if (!_cachedReplyToEmail) {
     _cachedReplyToEmail = PropertiesService.getScriptProperties().getProperty('AUDIT_REPLY_TO_EMAIL') || '';
   }
   return _cachedReplyToEmail;
+}
+
+// Parses getReplyToEmail() into an array of trimmed, non-empty address strings.
+function getReplyToEmailList() {
+  return getReplyToEmail().split(',').map(function(e) { return e.trim(); }).filter(Boolean);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -217,7 +224,7 @@ function getOutlookAccessToken() {
  * Uses OAuth2 access token obtained from refresh token flow.
  * Falls back to MailApp if Outlook is not configured.
  */
-function sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails) {
+function sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails, replyTo) {
   var accessToken = getOutlookAccessToken();
 
   if (!accessToken) {
@@ -243,6 +250,15 @@ function sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails) {
     if (ccList.length > 0) {
       message.ccRecipients = ccList;
     }
+  }
+
+  // Wire reply-to addresses into the Graph API message object.
+  var replyToAddresses = (replyTo ? String(replyTo).split(',') : getReplyToEmailList())
+    .map(function(e) { return e.trim(); }).filter(Boolean);
+  if (replyToAddresses.length > 0) {
+    message.replyTo = replyToAddresses.map(function(addr) {
+      return { emailAddress: { address: addr } };
+    });
   }
 
   var payload = {
@@ -282,7 +298,7 @@ function sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails) {
  */
 function sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo) {
   // Try Outlook (Microsoft Graph API) first
-  var outlookResult = sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails);
+  var outlookResult = sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails, replyTo);
   if (outlookResult.success) { return outlookResult; }
   if (!outlookResult.fallback) { return outlookResult; }
 
@@ -292,7 +308,7 @@ function sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, 
     subject: subject,
     body: body,
     name: fromName || 'Hass Audit',
-    replyTo: replyTo || getSenderEmail(),
+    replyTo: replyTo || getReplyToEmail(),
     htmlBody: htmlBody
   };
   if (ccEmails) {
@@ -2997,7 +3013,7 @@ function formatWelcomeEmailHtml(opts) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:' + getReplyToEmail() + '" style="color:#1a73e8; text-decoration:underline;">' + getReplyToEmail() + '</a></p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -3123,7 +3139,7 @@ function formatPasswordResetEmailHtml(opts) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:' + getReplyToEmail() + '" style="color:#1a73e8; text-decoration:underline;">' + getReplyToEmail() + '</a></p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
