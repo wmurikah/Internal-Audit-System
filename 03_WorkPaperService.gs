@@ -1141,8 +1141,8 @@ function addWorkPaperFile(workPaperId, data, user) {
     file_id:          fileId,
     organization_id:  user.organization_id || 'HASS',
     storage_provider: 'gdrive',
-    storage_id:       data.drive_file_id || '',
-    storage_url:      data.drive_url || '',
+    storage_id:       data.storage_id || '',
+    storage_url:      data.storage_url || '',
     file_name:        sanitizeInput(data.file_name || ''),
     file_description: data.file_description ? sanitizeInput(data.file_description) : null,
     file_size:        data.file_size || null,
@@ -1151,8 +1151,8 @@ function addWorkPaperFile(workPaperId, data, user) {
     uploaded_at:      new Date().toISOString()
   });
 
-  if (data.drive_file_id) {
-    try { moveFileToSubfolder(data.drive_file_id, 'DRIVE_WP_FILES_FOLDER_ID'); } catch (e) {}
+  if (data.storage_id) {
+    try { moveFileToSubfolder(data.storage_id, 'DRIVE_WP_FILES_FOLDER_ID'); } catch (e) {}
   }
 
   const attachId = generateId('ATT');

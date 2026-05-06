@@ -1,4 +1,5 @@
 // ARCHIVED: Replaced by 00_TursoService.gs on 2026-05-06
+// Retained for reference. Do not call any function in this file.
 // 00_FirestoreService.gs - Firestore Integration Layer (FIRESTORE-ONLY)
 // Cloud Firestore is the SOLE data store. Google Sheets removed entirely.
 //
