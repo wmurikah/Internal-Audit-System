@@ -10,7 +10,7 @@ const CONFIG = {
     USER_BY_EMAIL: 300   // 5 min - email to user mapping
   },
   
-  // Entity type → Firestore collection key mappings
+  // Entity type → Turso table key mappings
   // Used by DB.getById, DB.getFiltered, DB.count
   DATA_SHEETS: {
     'WORK_PAPER': '09_WorkPapers',
@@ -170,43 +170,31 @@ const DB = {
   getById: function(entityType, entityId) {
     var sheetName = CONFIG.DATA_SHEETS[entityType];
     if (!sheetName) return null;
-
-    // Firestore is the source of truth
-    var doc = firestoreGet(sheetName, entityId);
-    return doc || null;
+    return tursoGet(sheetName, entityId) || null;
   },
 
   getByIds: function(entityType, entityIds) {
     if (!entityIds || entityIds.length === 0) return [];
-
     var sheetName = CONFIG.DATA_SHEETS[entityType];
     if (!sheetName) return [];
-
-    // Firestore is the source of truth
-    var allDocs = firestoreGetAll(sheetName);
+    var allDocs = tursoGetAll(sheetName);
     if (!allDocs) return [];
-    var idField = (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined') ? FIRESTORE_DOC_ID_FIELD[sheetName] : null;
-    if (!idField) return [];
     var idSet = {};
     entityIds.forEach(function(id) { idSet[id] = true; });
+    var pkMap = (typeof TURSO_PK !== 'undefined') ? TURSO_PK : {};
+    var tableName = (typeof TURSO_TABLES !== 'undefined') ? TURSO_TABLES[sheetName] : null;
+    var idField = tableName ? (pkMap[tableName] || 'id') : 'id';
     return allDocs.filter(function(doc) { return idSet[doc[idField]]; });
   },
 
   getAll: function(sheetName) {
-    // Firestore is the sole source of truth
-    if (typeof FIRESTORE_DOC_ID_FIELD !== 'undefined' && FIRESTORE_DOC_ID_FIELD[sheetName] &&
-        typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled()) {
-      return firestoreGetAll(sheetName) || [];
-    }
-    return [];
+    return tursoGetAll(sheetName) || [];
   },
 
   getFiltered: function(entityType, filters) {
     var sheetName = CONFIG.DATA_SHEETS[entityType];
     if (!sheetName) return [];
-
-    // Firestore is the source of truth — filter in memory
-    var allDocs = firestoreGetAll(sheetName);
+    var allDocs = tursoGetAll(sheetName);
     if (!allDocs) return [];
     return allDocs.filter(function(doc) {
       for (var key in filters) {
@@ -223,8 +211,7 @@ const DB = {
   }
 };
 
-// DBWrite and Transaction have been removed (Firestore-only mode).
-// All writes go directly through firestoreSet / firestoreUpdate / firestoreDelete.
+// All writes go directly through tursoSet / tursoUpdate / tursoDelete.
 
 function getConfig(key) {
   const allConfig = getAllConfig();
@@ -238,8 +225,8 @@ function getAllConfig() {
   let config = Cache.get(cacheKey);
   if (config) return config;
   
-  // Load from sheet
-  const data = DB.getAll('00_Config');
+  // Load from Turso
+  const data = tursoGetAll('00_Config');
   config = {};
   
   data.forEach(row => {
@@ -497,7 +484,7 @@ function getRoleName(roleCode) {
   let roleMap = Cache.get(cacheKey);
   
   if (!roleMap) {
-    const roles = DB.getAll('01_Roles');
+    const roles = tursoGetAll('01_Roles');
     roleMap = {};
     roles.forEach(r => {
       roleMap[r.role_code] = r.role_name;

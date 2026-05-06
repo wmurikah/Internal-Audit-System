@@ -505,10 +505,7 @@ function routeAction(action, data, user) {
       return { success: true, report: purgeAndSeedTestData() };
 
     case 'purgeAndResyncFirestore':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
-        return { success: false, error: 'Only Super Admin can resync Firestore' };
-      }
-      return { success: true, report: purgeAndResyncFirestore() };
+      return { success: false, error: 'purgeAndResyncFirestore is deprecated. System now uses Turso exclusively.' };
 
     // ========== DATA & BACKUP ==========
     case 'getBackupStatus':
@@ -2184,15 +2181,15 @@ function migrateExistingDriveFiles() {
   var apFileIds = {};
 
   try {
-    var wpFiles = firestoreGetAll(SHEETS.WP_FILES);
-    wpFiles.forEach(function(f) { if (f.drive_file_id) wpFileIds[f.drive_file_id] = true; });
-    console.log('Found ' + Object.keys(wpFileIds).length + ' WP file references in Firestore.');
+    var wpFiles = tursoGetAll('11_WorkPaperFiles');
+    wpFiles.forEach(function(f) { if (f.storage_id) wpFileIds[f.storage_id] = true; });
+    console.log('Found ' + Object.keys(wpFileIds).length + ' WP file references in Turso.');
   } catch (e) { console.warn('Could not load WP files:', e.message); }
 
   try {
-    var apEvidence = firestoreGetAll(SHEETS.AP_EVIDENCE);
-    apEvidence.forEach(function(f) { if (f.drive_file_id) apFileIds[f.drive_file_id] = true; });
-    console.log('Found ' + Object.keys(apFileIds).length + ' AP evidence references in Firestore.');
+    var apEvidence = tursoGetAll('14_ActionPlanEvidence');
+    apEvidence.forEach(function(f) { if (f.storage_id) apFileIds[f.storage_id] = true; });
+    console.log('Found ' + Object.keys(apFileIds).length + ' AP evidence references in Turso.');
   } catch (e) { console.warn('Could not load AP evidence:', e.message); }
 
   var parentFolder = DriveApp.getFolderById(parentFolderId);

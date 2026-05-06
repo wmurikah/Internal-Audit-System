@@ -31,11 +31,10 @@ function getDropdownItems(params, user) {
   var collection = params.collection;
 
   if (collection === 'config_dropdown') {
-    var allConfig = DB.getAll('00_Config');
-    var dropdownConfigs = allConfig.filter(function(doc) {
-      return doc.config_key && doc.config_key.indexOf('DROPDOWN_') === 0;
-    });
-    return { success: true, items: dropdownConfigs };
+    var allConfig = tursoQuery_SQL(
+      "SELECT * FROM config WHERE config_key LIKE 'DROPDOWN_%'", []
+    );
+    return { success: true, items: allConfig };
   }
 
   var sheetName = DROPDOWN_COLLECTION_MAP[collection];
@@ -43,7 +42,7 @@ function getDropdownItems(params, user) {
     return { success: false, error: 'Unknown collection: ' + collection };
   }
 
-  var items = DB.getAll(sheetName);
+  var items = tursoGetAll(sheetName);
   return { success: true, items: items };
 }
 
@@ -63,7 +62,7 @@ function createDropdownItem(params, user) {
     if (!data.area_code || !data.area_name) {
       return { success: false, error: 'area_code and area_name are required.' };
     }
-    var existingAreas = DB.getAll('07_AuditAreas');
+    var existingAreas = tursoGetAll('07_AuditAreas');
     var maxOrder = 0;
     existingAreas.forEach(function(a) {
       var ord = parseInt(a.display_order) || 0;
@@ -75,10 +74,10 @@ function createDropdownItem(params, user) {
       area_code: data.area_code,
       area_name: data.area_name,
       description: data.description || '',
-      is_active: 'true',
+      is_active: 1,
       display_order: maxOrder + 1
     };
-    syncToFirestore('07_AuditAreas', areaId, areaDoc);
+    tursoSet('07_AuditAreas', areaId, areaDoc);
     invalidateDropdownCache();
     return { success: true, item: areaDoc };
 
@@ -90,11 +89,11 @@ function createDropdownItem(params, user) {
       return { success: false, error: 'area_id is required for sub_areas.' };
     }
     // Validate area_id exists
-    var parentArea = firestoreGet('07_AuditAreas', data.area_id);
+    var parentArea = tursoGet('07_AuditAreas', data.area_id);
     if (!parentArea) {
       return { success: false, error: 'Parent audit area not found: ' + data.area_id };
     }
-    var existingSubs = DB.getAll('08_ProcessSubAreas');
+    var existingSubs = tursoGetAll('08_ProcessSubAreas');
     var maxSubOrder = 0;
     existingSubs.forEach(function(s) {
       var ord = parseInt(s.display_order) || 0;
@@ -110,10 +109,10 @@ function createDropdownItem(params, user) {
       risk_description: data.risk_description || '',
       test_objective: data.test_objective || '',
       testing_steps: data.testing_steps || '',
-      is_active: 'true',
+      is_active: 1,
       display_order: maxSubOrder + 1
     };
-    syncToFirestore('08_ProcessSubAreas', subId, subDoc);
+    tursoSet('08_ProcessSubAreas', subId, subDoc);
     invalidateDropdownCache();
     return { success: true, item: subDoc };
 
@@ -122,11 +121,11 @@ function createDropdownItem(params, user) {
       return { success: false, error: 'affiliate_code and affiliate_name are required.' };
     }
     // Check if affiliate_code already exists
-    var existingAff = firestoreGet('06_Affiliates', data.affiliate_code);
+    var existingAff = tursoGet('06_Affiliates', data.affiliate_code);
     if (existingAff) {
       return { success: false, error: 'Affiliate code already exists: ' + data.affiliate_code };
     }
-    var allAffs = DB.getAll('06_Affiliates');
+    var allAffs = tursoGetAll('06_Affiliates');
     var maxAffOrder = 0;
     allAffs.forEach(function(a) {
       var ord = parseInt(a.display_order) || 0;
@@ -137,10 +136,10 @@ function createDropdownItem(params, user) {
       affiliate_name: data.affiliate_name,
       country: data.country || '',
       region: data.region || '',
-      is_active: 'true',
+      is_active: 1,
       display_order: maxAffOrder + 1
     };
-    syncToFirestore('06_Affiliates', data.affiliate_code, affDoc);
+    tursoSet('06_Affiliates', data.affiliate_code, affDoc);
     invalidateDropdownCache();
     return { success: true, item: affDoc };
 
@@ -167,7 +166,7 @@ function updateDropdownItem(params, user) {
     return { success: false, error: 'Unknown collection: ' + collection };
   }
 
-  var existing = firestoreGet(sheetName, docId);
+  var existing = tursoGet(sheetName, docId);
   if (!existing) {
     return { success: false, error: 'Document not found: ' + docId };
   }
@@ -179,7 +178,7 @@ function updateDropdownItem(params, user) {
 
   // For sub_areas, validate new area_id if being changed
   if (collection === 'sub_areas' && data.area_id && data.area_id !== existing.area_id) {
-    var newParent = firestoreGet('07_AuditAreas', data.area_id);
+    var newParent = tursoGet('07_AuditAreas', data.area_id);
     if (!newParent) {
       return { success: false, error: 'Parent audit area not found: ' + data.area_id };
     }
@@ -191,7 +190,7 @@ function updateDropdownItem(params, user) {
   Object.keys(data).forEach(function(k) { updated[k] = data[k]; });
   updated.updated_at = now;
 
-  syncToFirestore(sheetName, docId, updated);
+  tursoSet(sheetName, docId, updated);
   invalidateDropdownCache();
   return { success: true, item: updated };
 }
@@ -214,31 +213,42 @@ function deleteDropdownItem(params, user) {
     return { success: false, error: 'Unknown collection: ' + collection };
   }
 
-  var existing = firestoreGet(sheetName, docId);
+  var existing = tursoGet(sheetName, docId);
   if (!existing) {
     return { success: false, error: 'Document not found: ' + docId };
   }
 
-  // Count references
+  // Count references via SQL
   var references = {};
   if (collection === 'audit_areas') {
-    var subAreas = DB.getAll('08_ProcessSubAreas');
-    var subAreaRefs = subAreas.filter(function(s) { return s.area_id === docId; }).length;
-    var workPapers = DB.getAll('09_WorkPapers');
-    var wpRefs = workPapers.filter(function(w) { return w.audit_area_id === docId; }).length;
-    references = { sub_areas: subAreaRefs, work_papers: wpRefs };
+    var subAreaCnt = tursoQuery_SQL(
+      'SELECT COUNT(*) as cnt FROM sub_areas WHERE area_id = ? AND deleted_at IS NULL', [docId]
+    );
+    var wpAreaCnt = tursoQuery_SQL(
+      'SELECT COUNT(*) as cnt FROM work_papers WHERE audit_area_id = ? AND deleted_at IS NULL', [docId]
+    );
+    references = {
+      sub_areas:   subAreaCnt[0] ? subAreaCnt[0].cnt : 0,
+      work_papers: wpAreaCnt[0]  ? wpAreaCnt[0].cnt  : 0
+    };
 
   } else if (collection === 'sub_areas') {
-    var wps = DB.getAll('09_WorkPapers');
-    var wpSubRefs = wps.filter(function(w) { return w.sub_area_id === docId; }).length;
-    references = { work_papers: wpSubRefs };
+    var wpSubCnt = tursoQuery_SQL(
+      'SELECT COUNT(*) as cnt FROM work_papers WHERE sub_area_id = ? AND deleted_at IS NULL', [docId]
+    );
+    references = { work_papers: wpSubCnt[0] ? wpSubCnt[0].cnt : 0 };
 
   } else if (collection === 'affiliates') {
-    var users = DB.getAll('05_Users');
-    var userRefs = users.filter(function(u) { return u.affiliate_code === docId; }).length;
-    var allWps = DB.getAll('09_WorkPapers');
-    var wpAffRefs = allWps.filter(function(w) { return w.affiliate_code === docId; }).length;
-    references = { users: userRefs, work_papers: wpAffRefs };
+    var userCnt = tursoQuery_SQL(
+      'SELECT COUNT(*) as cnt FROM users WHERE affiliate_code = ? AND deleted_at IS NULL', [docId]
+    );
+    var wpAffCnt = tursoQuery_SQL(
+      'SELECT COUNT(*) as cnt FROM work_papers WHERE affiliate_code = ? AND deleted_at IS NULL', [docId]
+    );
+    references = {
+      users:       userCnt[0]   ? userCnt[0].cnt   : 0,
+      work_papers: wpAffCnt[0]  ? wpAffCnt[0].cnt  : 0
+    };
   }
 
   var totalRefs = 0;
@@ -252,7 +262,7 @@ function deleteDropdownItem(params, user) {
   }
 
   // Confirmed deletion
-  deleteFromFirestore(sheetName, docId);
+  tursoDelete(sheetName, docId);
   invalidateDropdownCache();
   return { success: true, deleted: true };
 }
@@ -277,23 +287,14 @@ function updateDropdownOrder(params, user) {
     return { success: false, error: 'Unknown collection: ' + collection };
   }
 
-  var writes = [];
+  var updatedCount = 0;
   for (var i = 0; i < orderedIds.length; i++) {
-    var docId = orderedIds[i];
-    var existing = firestoreGet(sheetName, docId);
-    if (existing) {
-      existing.display_order = i + 1;
-      existing.updated_at = new Date().toISOString();
-      writes.push({ sheetName: sheetName, docId: docId, data: existing });
-    }
-  }
-
-  if (writes.length > 0) {
-    firestoreBatchWrite(writes);
+    tursoUpdate(sheetName, orderedIds[i], { display_order: i + 1 });
+    updatedCount++;
   }
 
   invalidateDropdownCache();
-  return { success: true, updated: writes.length };
+  return { success: true, updated: updatedCount };
 }
 
 /**
@@ -315,15 +316,7 @@ function saveConfigDropdown(params, user) {
     return { success: false, error: 'values must be an array.' };
   }
 
-  var configDoc = {
-    config_key: configKey,
-    config_value: JSON.stringify(values),
-    description: 'Custom dropdown values',
-    updated_at: new Date().toISOString()
-  };
-
-  syncToFirestore('00_Config', configKey, configDoc);
-  Cache.remove('config_all');
+  tursoSetConfig(configKey, JSON.stringify(values), 'GLOBAL');
   invalidateDropdownCache();
   return { success: true, saved: true, configKey: configKey, values: values };
 }
