@@ -73,43 +73,13 @@ function getSheetData(sheetName, skipCache) {
     return _sheetDataCache[sheetName];
   }
 
-  // Firestore-backed collection — Firestore is the sole source of truth
-  var isFirestoreBacked = typeof FIRESTORE_DOC_ID_FIELD !== 'undefined' && FIRESTORE_DOC_ID_FIELD[sheetName] &&
-      typeof firestoreGetAll === 'function' && typeof isFirestoreEnabled === 'function' && isFirestoreEnabled();
-
-  if (isFirestoreBacked) {
-    // Let errors propagate — no silent fallback to Sheets
-    var fsDocs = firestoreGetAll(sheetName);
-
-    // Determine headers from schema or document keys
-    var schemaKey = _sheetNameToSchemaKey(sheetName);
-    var headers = (schemaKey && typeof SCHEMAS !== 'undefined' && SCHEMAS[schemaKey])
-      ? SCHEMAS[schemaKey]
-      : (fsDocs && fsDocs.length > 0 ? Object.keys(fsDocs[0]) : []);
-
-    // Empty collection is valid — return just headers
-    if (!fsDocs || fsDocs.length === 0) {
-      var emptyData = headers.length > 0 ? [headers] : [];
-      _sheetDataCache[sheetName] = emptyData;
-      return emptyData;
-    }
-
-    var data = [headers];
-    for (var d = 0; d < fsDocs.length; d++) {
-      var row = [];
-      for (var h = 0; h < headers.length; h++) {
-        var val = fsDocs[d][headers[h]];
-        row.push(val !== undefined && val !== null ? val : '');
-      }
-      data.push(row);
-    }
-    _sheetDataCache[sheetName] = data;
-    return data;
-  }
-
-  // All collections should be Firestore-backed at this point
-  console.warn('getSheetData: No Firestore mapping for', sheetName);
-  return [];
+  const rows = tursoGetAll(sheetName);
+  if (!rows || rows.length === 0) return [[], []];
+  const headers = Object.keys(rows[0]);
+  const data    = rows.map(r => headers.map(h => r[h]));
+  const result  = [headers, data];
+  _sheetDataCache[sheetName] = result;
+  return result;
 }
 
 /** Invalidate in-memory cache for a sheet after writes */
@@ -285,14 +255,7 @@ function getAllConfig() {
 }
 
 function setConfig(key, value) {
-  // Firestore is the source of truth
-  firestoreSet('00_Config', key, {
-    config_key: key,
-    config_value: value,
-    description: '',
-    updated_at: new Date().toISOString()
-  });
-
+  tursoSetConfig(key, value, 'GLOBAL');
   Cache.remove('config_all');
   return true;
 }
@@ -433,26 +396,51 @@ function formatStringArray(arr) {
   return arr.join(',');
 }
 
-function logAudit(action, entityType, entityId, oldData, newData, userId) {
+function logAudit(action, entityType, entityId, oldData, newData, user) {
   try {
-    var logId = generateId('LOG');
-    var logData = {
-      log_id: logId,
-      action: action,
-      entity_type: entityType,
-      entity_id: entityId,
-      old_data: oldData ? JSON.stringify(oldData) : '',
-      new_data: newData ? JSON.stringify(newData) : '',
-      user_id: userId || '',
-      user_email: '',
-      timestamp: new Date().toISOString(),
-      ip_address: ''
+    const logId = generateId('LOG');
+    const now   = new Date().toISOString();
+
+    // Get previous row hash for chain
+    const prevRows = tursoQuery_SQL(
+      'SELECT row_hash FROM audit_log ORDER BY occurred_at DESC LIMIT 1', []
+    );
+    const prevHash = prevRows.length > 0 ? prevRows[0].row_hash : null;
+
+    // Compute row hash: SHA-256 of key fields concatenated
+    const hashInput = [logId, now, (user && user.email) || '',
+                       action, entityType, entityId || '', prevHash || ''].join('|');
+    const hashBytes = Utilities.computeDigest(
+      Utilities.DigestAlgorithm.SHA_256,
+      hashInput,
+      Utilities.Charset.UTF_8
+    );
+    const rowHash = hashBytes.map(b => ('0' + (b < 0 ? b + 256 : b).toString(16)).slice(-2)).join('');
+
+    const logRow = {
+      log_id:          logId,
+      organization_id: (user && user.organization_id) || 'HASS',
+      occurred_at:     now,
+      actor_user_id:   (user && user.user_id)  || null,
+      actor_email:     (user && user.email)     || null,
+      actor_role:      (user && user.role_code) || null,
+      actor_ip:        null,
+      action:          action,
+      entity_type:     entityType,
+      entity_id:       entityId  || null,
+      old_data:        oldData   ? JSON.stringify(oldData)  : null,
+      new_data:        newData   ? JSON.stringify(newData)  : null,
+      severity:        'info',
+      success:         1,
+      correlation_id:  null,
+      prev_hash:       prevHash,
+      row_hash:        rowHash
     };
 
-    // Firestore is the source of truth
-    firestoreSet('16_AuditLog', logId, logData);
-  } catch (e) {
-    console.warn('Audit log error:', e.message);
+    tursoSet('16_AuditLog', logId, logRow);
+  } catch(e) {
+    // Audit log failure must never crash the caller
+    console.error('[logAudit] ' + e.message);
   }
 }
 
