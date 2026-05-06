@@ -438,7 +438,7 @@ function createSession(user) {
   const sessionObject = {
     session_id: sessionId,
     user_id: user.user_id,
-    organization_id: user.organization_id || 'HASS',
+    organization_id:    user.organization_id,
     session_token_hash: hashToken_(sessionToken),
     created_at: now.toISOString(),
     expires_at: expiresAt.toISOString(),
