@@ -652,7 +652,7 @@ function resetPassword(userId, adminUser) {
     reason: 'admin_reset'
   });
 
-  const emailResult = sendEmail(user.email, 'Password Reset - Hass Petroleum Audit System', resetPlain, resetHtml, null, 'Internal Audit Notification', 'hassaudit@outlook.com');
+  const emailResult = sendEmail(user.email, 'Password Reset - Hass Petroleum Audit System', resetPlain, resetHtml, null, 'Internal Audit Notification', getSenderEmail());
   if (!emailResult.success) {
     console.error('Failed to send password reset email:', emailResult.error);
   }
@@ -798,7 +798,7 @@ function createUser(userData, adminUser) {
     'Please log in and change your password immediately.\n\n' +
     loginUrl + '\n\nBest regards,\nInternal Audit Department';
 
-  var emailResult = sendEmail(user.email, welcomeSubject, welcomePlain, welcomeHtml, null, 'Hass Audit', 'hassaudit@outlook.com');
+  var emailResult = sendEmail(user.email, welcomeSubject, welcomePlain, welcomeHtml, null, 'Hass Audit', getSenderEmail());
   if (!emailResult.success) {
     console.error('Failed to send welcome email:', emailResult.error);
   }
@@ -960,7 +960,7 @@ function forgotPassword(email) {
     reason: 'forgot'
   });
 
-  const emailResult = sendEmail(user.email, 'Password Reset - Hass Petroleum Audit System', forgotPlain, forgotHtml, null, 'Internal Audit Notification', 'hassaudit@outlook.com');
+  const emailResult = sendEmail(user.email, 'Password Reset - Hass Petroleum Audit System', forgotPlain, forgotHtml, null, 'Internal Audit Notification', getSenderEmail());
   if (!emailResult.success) {
     console.error('Failed to send forgot password email:', emailResult.error);
   }

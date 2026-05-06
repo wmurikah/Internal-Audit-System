@@ -361,8 +361,8 @@
         </div>
         <div class="card-body">
           <p class="text-muted small mb-3">
-            Emails are sent directly from <strong>hassaudit@outlook.com</strong> via Microsoft Graph API (Azure free tier).
-            Credentials are configured in Script Properties. If not configured, the system falls back to Gmail via MailApp.
+            Emails are sent via Microsoft Graph API (Azure free tier) from the address configured in Script Properties (<code>OUTLOOK_SENDER_EMAIL</code>).
+            If not configured, the system falls back to Gmail via MailApp.
           </p>
           <div class="row g-3 align-items-center">
             <div class="col-md-6">
@@ -1502,7 +1502,7 @@ function loadOutlookConfig() {
     const badge = document.getElementById('outlookStatus');
 
     if (r.configured) {
-      badge.textContent = 'Configured — sending from hassaudit@outlook.com';
+      badge.textContent = 'Configured — Outlook sending active';
       badge.className = 'badge bg-success';
     } else {
       badge.textContent = 'Not Configured (using Gmail fallback)';
@@ -1525,7 +1525,7 @@ function testOutlookEmail() {
   apiCall('testOutlookEmail', { recipientEmail: userEmail }).then(r => {
     hideLoading();
     if (r.success) {
-      showToast('Test email sent from hassaudit@outlook.com to ' + userEmail + '. Check your inbox!', 'success');
+      showToast('Test email sent to ' + userEmail + '. Check your inbox!', 'success');
     } else {
       showToast('Test failed: ' + (r.error || 'Unknown error'), 'danger');
     }

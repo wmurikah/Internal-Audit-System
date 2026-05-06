@@ -1,6 +1,28 @@
 // 05_NotificationService.gs - Email Queue, Templates, Reminders, Alerts
 
 // ─────────────────────────────────────────────────────────────
+// Email address helpers — read from Script Properties at runtime.
+// Set OUTLOOK_SENDER_EMAIL and AUDIT_REPLY_TO_EMAIL in
+// Project Settings → Script Properties to configure these values.
+// ─────────────────────────────────────────────────────────────
+
+var _cachedSenderEmail = null;
+function getSenderEmail() {
+  if (!_cachedSenderEmail) {
+    _cachedSenderEmail = PropertiesService.getScriptProperties().getProperty('OUTLOOK_SENDER_EMAIL') || '';
+  }
+  return _cachedSenderEmail;
+}
+
+var _cachedReplyToEmail = null;
+function getReplyToEmail() {
+  if (!_cachedReplyToEmail) {
+    _cachedReplyToEmail = PropertiesService.getScriptProperties().getProperty('AUDIT_REPLY_TO_EMAIL') || '';
+  }
+  return _cachedReplyToEmail;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Notification Type Constants
 // ─────────────────────────────────────────────────────────────
 
@@ -191,7 +213,7 @@ function getOutlookAccessToken() {
 }
 
 /**
- * Send email via Microsoft Graph API (sends directly from hassaudit@outlook.com).
+ * Send email via Microsoft Graph API (sends from the configured sender address).
  * Uses OAuth2 access token obtained from refresh token flow.
  * Falls back to MailApp if Outlook is not configured.
  */
@@ -255,7 +277,7 @@ function sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails) {
 
 /**
  * Unified email sending function.
- * Primary: Microsoft Graph API (sends from hassaudit@outlook.com).
+ * Primary: Microsoft Graph API (sends from the configured sender address).
  * Fallback: Google Apps Script MailApp.
  */
 function sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo) {
@@ -270,7 +292,7 @@ function sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, 
     subject: subject,
     body: body,
     name: fromName || 'Hass Audit',
-    replyTo: replyTo || 'hassaudit@outlook.com',
+    replyTo: replyTo || getSenderEmail(),
     htmlBody: htmlBody
   };
   if (ccEmails) {
@@ -584,7 +606,7 @@ function processEmailQueue() {
 
       if (!recipientEmail || !subject) continue;
 
-      const replyTo = 'hassaudit@outlook.com';
+      const replyTo = getSenderEmail();
 
       var privateTemplates = ['WELCOME', 'PASSWORD_RESET', 'RESET_PASSWORD', 'NEW_USER'];
       var ccString = '';
@@ -1215,7 +1237,7 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
 
   // CC audit team + existing CC recipients (deduplicated)
   var auditTeamCc = buildAuditTeamCc(auditeeEmail, ccEmails);
-  sendEmail(auditeeEmail, subject, subject, htmlBody, auditTeamCc, 'Hass Audit', 'hassaudit@outlook.com');
+  sendEmail(auditeeEmail, subject, subject, htmlBody, auditTeamCc, 'Hass Audit', getSenderEmail());
 }
 
 function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
@@ -1245,7 +1267,7 @@ function sendBatchedResponseNotification(responses, auditorEmail, auditorName) {
 
   var htmlBody = formatTableEmailHtml(subject, intro, headers, rows, outro);
   var ccString = buildAuditTeamCc(auditorEmail);
-  sendEmail(auditorEmail, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
+  sendEmail(auditorEmail, subject, subject, htmlBody, ccString, 'Hass Audit', getSenderEmail());
 }
 
 /**
@@ -1472,7 +1494,7 @@ function sendUpcomingDueReminders() {
     var outro = loginLink;
     var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
     var upcomingCc = buildAuditTeamCc(owner.email);
-    sendEmail(owner.email, subject, subject, htmlBody, upcomingCc, 'Hass Audit', 'hassaudit@outlook.com');
+    sendEmail(owner.email, subject, subject, htmlBody, upcomingCc, 'Hass Audit', getSenderEmail());
     notificationCount++;
   });
 
@@ -1618,7 +1640,7 @@ function sendEvidenceReminders() {
 
     // CC audit team on evidence reminders
     var evidenceCc = buildAuditTeamCc(owner.email);
-    sendEmail(owner.email, subject, subject, htmlBody, evidenceCc, 'Hass Audit', 'hassaudit@outlook.com');
+    sendEmail(owner.email, subject, subject, htmlBody, evidenceCc, 'Hass Audit', getSenderEmail());
     notificationCount++;
   });
 
@@ -1776,7 +1798,7 @@ function sendOverdueEvidenceEscalation() {
 
     // CC audit team + work paper CC recipients (merged and deduplicated)
     var escalationCc = buildAuditTeamCc(owner.email, ccString);
-    sendEmail(owner.email, subject, subject, htmlBody, escalationCc, 'Hass Audit', 'hassaudit@outlook.com');
+    sendEmail(owner.email, subject, subject, htmlBody, escalationCc, 'Hass Audit', getSenderEmail());
     notificationCount++;
   });
 
@@ -1864,7 +1886,7 @@ function sendAuditorUnsentWorkPaperNudge() {
 
     var htmlBody = formatTableEmailHtml(subject, intro, tableHeaders, rows, outro);
     var nudgeCc = buildAuditTeamCc(auditor.email);
-    sendEmail(auditor.email, subject, subject, htmlBody, nudgeCc, 'Hass Audit', 'hassaudit@outlook.com');
+    sendEmail(auditor.email, subject, subject, htmlBody, nudgeCc, 'Hass Audit', getSenderEmail());
     notificationCount++;
   });
 
@@ -1928,7 +1950,7 @@ function sendBiweeklySummary() {
   let notificationCount = 0;
 
   recipientEmails.forEach(function(email) {
-    sendEmail(email, subject, subject, htmlBody, null, 'Hass Audit', 'hassaudit@outlook.com');
+    sendEmail(email, subject, subject, htmlBody, null, 'Hass Audit', getSenderEmail());
     notificationCount++;
   });
 
@@ -2234,7 +2256,7 @@ function processBatchedDelegationNotifications() {
       // CC audit team on delegation batch emails
       var ccString = buildAuditTeamCc(recipient.email);
 
-      sendEmail(recipient.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
+      sendEmail(recipient.email, subject, subject, htmlBody, ccString, 'Hass Audit', getSenderEmail());
 
       // Mark all processed notifications as Sent
       notificationIds[emailKey].forEach(function(entry) {
@@ -2440,7 +2462,7 @@ function sendBatchedAssignmentNotifications() {
       // CC HOA (SUPER_ADMIN users)
       var ccString = buildAuditTeamCc(recipient.email);
 
-      sendEmail(recipient.email, subject, subject, htmlBody, ccString, 'Hass Audit', 'hassaudit@outlook.com');
+      sendEmail(recipient.email, subject, subject, htmlBody, ccString, 'Hass Audit', getSenderEmail());
 
       // Mark all processed notifications as Sent
       notificationIds[emailKey].forEach(function(entry) {
@@ -2790,7 +2812,7 @@ function cleanupOldNotifications(daysOld) {
 function sendImmediateEmail(recipientEmail, subject, body, ccEmails) {
   try {
     const fromName = 'Internal Audit Notification';
-    const replyTo = 'hassaudit@outlook.com';
+    const replyTo = getSenderEmail();
     const htmlBody = formatEmailHtml(subject, body);
 
     const result = sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, replyTo);
@@ -2862,7 +2884,7 @@ function testOutlookEmailAction(recipientEmail, user) {
   }
 
   var subject = 'Test Email - Hass Petroleum Audit System';
-  var body = 'This is a test email from the Internal Audit System.\n\nIf you received this, your Outlook email integration is working correctly.\n\nSent from: hassaudit@outlook.com via Microsoft Graph API\nSent at: ' + new Date().toISOString();
+  var body = 'This is a test email from the Internal Audit System.\n\nIf you received this, your Outlook email integration is working correctly.\n\nSent via Microsoft Graph API\nSent at: ' + new Date().toISOString();
   var htmlBody = formatEmailHtml(subject, body);
 
   var result = sendEmailViaOutlook(recipientEmail, subject, htmlBody, null);
@@ -2975,7 +2997,7 @@ function formatWelcomeEmailHtml(opts) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:' + getReplyToEmail() + '" style="color:#1a73e8; text-decoration:underline;">' + getReplyToEmail() + '</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -3101,7 +3123,7 @@ function formatPasswordResetEmailHtml(opts) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1a73e8; text-decoration:underline;">audit@hasspetroleum.com</a></p>' +
+'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to <a href="mailto:' + getReplyToEmail() + '" style="color:#1a73e8; text-decoration:underline;">' + getReplyToEmail() + '</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
