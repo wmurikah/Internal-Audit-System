@@ -24,39 +24,53 @@ function getAuditeeFindings(filters, user) {
   if (!user) throw new Error('User required');
 
   filters = filters || {};
-  var workPapers = getWorkPapersRaw({}, null);
-  var results = [];
+  var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
 
-  // Build a set of work paper IDs where the user owns a delegated action plan
-  // This ensures delegatees see the parent observation even if they're not in responsible_ids
-  var delegatedWPIds = {};
-  try {
-    var allActionPlans = getActionPlansRaw({}, null);
-    for (var j = 0; j < allActionPlans.length; j++) {
-      var ap = allActionPlans[j];
-      var apOwnerIds = parseIdList(ap.owner_ids);
-      if (apOwnerIds.includes(user.user_id) && ap.work_paper_id) {
-        delegatedWPIds[ap.work_paper_id] = true;
-      }
+  // Load work papers visible to this user
+  var workPapers;
+  if (isSuperAdmin) {
+    workPapers = getWorkPapersRaw({}, null);
+  } else {
+    // Primary: work papers where user is a responsible party (junction table)
+    var assignedWPs = tursoQuery_SQL(
+      'SELECT wp.* FROM work_papers wp JOIN work_paper_responsibles wpr ON wp.work_paper_id = wpr.work_paper_id WHERE wpr.user_id = ? AND wp.deleted_at IS NULL AND wp.status = ?',
+      [user.user_id, 'Sent to Auditee']
+    );
+
+    // Also include WPs where user owns a delegated action plan
+    var delegatedWPIds = {};
+    try {
+      var delegatedAPs = tursoQuery_SQL(
+        'SELECT DISTINCT ap.work_paper_id FROM action_plan_owners apo JOIN action_plans ap ON ap.action_plan_id = apo.action_plan_id WHERE apo.user_id = ? AND apo.is_current = 1 AND ap.deleted_at IS NULL',
+        [user.user_id]
+      );
+      delegatedAPs.forEach(function(r) { delegatedWPIds[r.work_paper_id] = true; });
+    } catch (e) {
+      console.warn('Failed to check delegated action plans:', e.message);
     }
-  } catch (e) {
-    console.warn('Failed to check delegated action plans:', e.message);
+
+    var assignedIds = {};
+    assignedWPs.forEach(function(w) { assignedIds[w.work_paper_id] = true; });
+
+    // Fetch delegated WPs not already in assignedWPs
+    var extraWPs = [];
+    Object.keys(delegatedWPIds).forEach(function(wpId) {
+      if (!assignedIds[wpId]) {
+        var w = tursoQuery_SQL('SELECT * FROM work_papers WHERE work_paper_id = ? AND deleted_at IS NULL AND status = ?',
+          [wpId, 'Sent to Auditee']);
+        if (w && w.length > 0) extraWPs.push(w[0]);
+      }
+    });
+
+    workPapers = assignedWPs.concat(extraWPs);
   }
 
-  var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
+  var results = [];
 
   for (var i = 0; i < workPapers.length; i++) {
     var wp = workPapers[i];
 
-    // Only show "Sent to Auditee" status work papers (SUPER_ADMIN sees all)
     if (!isSuperAdmin && wp.status !== STATUS.WORK_PAPER.SENT_TO_AUDITEE) continue;
-
-    // Check if user is assigned as responsible party OR owns a delegated action plan for this WP
-    // SUPER_ADMIN bypasses ownership check
-    if (!isSuperAdmin) {
-      var responsibleIds = parseIdList(wp.responsible_ids);
-      if (!responsibleIds.includes(user.user_id) && !delegatedWPIds[wp.work_paper_id]) continue;
-    }
 
     // Apply optional filters
     if (filters.response_status && wp.response_status !== filters.response_status) continue;
@@ -125,8 +139,13 @@ function getAuditeeResponseData(workPaperId, user) {
   // Verify access: user must be a responsible party, delegated AP owner, or SUPER_ADMIN
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
   var isAuditor = [ROLES.SENIOR_AUDITOR, ROLES.AUDITOR].includes(user.role_code);
-  var responsibleIds = parseIdList(wp.responsible_ids);
+  var ardResponsibles = tursoQuery_SQL(
+    'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+    [workPaperId]
+  );
+  var responsibleIds = ardResponsibles.map(function(r) { return r.user_id; });
   var isAssigned = responsibleIds.includes(user.user_id);
+  wp.responsible_ids = responsibleIds.join(',');
 
   // Also check if user owns a delegated action plan for this work paper
   var isDelegatedOwner = false;
@@ -215,9 +234,13 @@ function saveDraftResponse(workPaperId, data, user) {
   var wp = getWorkPaperById(workPaperId);
   if (!wp) throw new Error('Work paper not found');
 
-  // Permission check
+  // Permission check — responsible_ids live in junction table
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
-  var responsibleIds = parseIdList(wp.responsible_ids);
+  var draftResponsibles = tursoQuery_SQL(
+    'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+    [workPaperId]
+  );
+  var responsibleIds = draftResponsibles.map(function(r) { return r.user_id; });
   if (!isSuperAdmin && !responsibleIds.includes(user.user_id)) {
     throw new Error('Permission denied');
   }
@@ -241,8 +264,7 @@ function saveDraftResponse(workPaperId, data, user) {
   for (var k in wp) { updatedWp[k] = wp[k]; }
   for (var k2 in wpUpdates) { updatedWp[k2] = wpUpdates[k2]; }
 
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updatedWp);
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  tursoSet('09_WorkPapers', workPaperId, updatedWp);
 
   logAuditEvent('DRAFT_RESPONSE', 'WORK_PAPER', workPaperId, wp, updatedWp, user.user_id, user.email);
 
@@ -260,9 +282,13 @@ function submitAuditeeResponse(workPaperId, data, user) {
   var wp = getWorkPaperById(workPaperId);
   if (!wp) throw new Error('Work paper not found');
 
-  // Permission check
+  // Permission check — responsible_ids live in junction table
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
-  var responsibleIds = parseIdList(wp.responsible_ids);
+  var submitResponsibles = tursoQuery_SQL(
+    'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+    [workPaperId]
+  );
+  var responsibleIds = submitResponsibles.map(function(r) { return r.user_id; });
   if (!isSuperAdmin && !responsibleIds.includes(user.user_id)) {
     throw new Error('Permission denied');
   }
@@ -305,7 +331,7 @@ function submitAuditeeResponse(workPaperId, data, user) {
     submitted_by_name: user.full_name || '',
     submitted_date: now,
     action_plan_ids: actionPlanIds,
-    status: STATUS.REVIEW.PENDING,
+    status: 'Pending Review',
     reviewed_by_id: '',
     reviewed_by_name: '',
     review_date: '',
@@ -314,8 +340,7 @@ function submitAuditeeResponse(workPaperId, data, user) {
     updated_at: now
   };
 
-  syncToFirestore(SHEETS.AUDITEE_RESPONSES, responseId, responseRecord);
-  invalidateSheetData(SHEETS.AUDITEE_RESPONSES);
+  tursoSet('24_AuditeeResponses', responseId, responseRecord);
 
   // Update work paper
   var wpUpdates = {
@@ -331,25 +356,21 @@ function submitAuditeeResponse(workPaperId, data, user) {
   for (var k in wp) { updatedWp[k] = wp[k]; }
   for (var k2 in wpUpdates) { updatedWp[k2] = wpUpdates[k2]; }
 
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updatedWp);
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  tursoSet('09_WorkPapers', workPaperId, updatedWp);
 
   // Link action plans to this response
   if (data.action_plan_ids && data.action_plan_ids.length > 0) {
     data.action_plan_ids.forEach(function(apId) {
       try {
-        var ap = getActionPlanById(apId);
-        if (ap) {
-          ap.response_id = responseId;
-          ap.auditee_proposed = true;
-          ap.updated_at = now;
-          syncToFirestore(SHEETS.ACTION_PLANS, apId, ap);
-        }
+        tursoUpdate('13_ActionPlans', apId, {
+          response_id: responseId,
+          auditee_proposed: 1,
+          updated_at: now
+        });
       } catch (e) {
         console.warn('Failed to link AP ' + apId + ' to response:', e.message);
       }
     });
-    invalidateSheetData(SHEETS.ACTION_PLANS);
   }
 
   // Add work paper revision
@@ -367,16 +388,20 @@ function submitAuditeeResponse(workPaperId, data, user) {
         wpUpdates.response_review_comments = 'AI Assessment: ' + aiEval.feedback;
         updatedWp.response_status = STATUS.RESPONSE.REJECTED;
         updatedWp.response_review_comments = 'AI Assessment: ' + aiEval.feedback;
-        responseRecord.status = STATUS.REVIEW.REJECTED;
+        responseRecord.status = 'Rejected';
         responseRecord.review_comments = aiEval.feedback;
         responseRecord.reviewed_by_id = 'AI_SYSTEM';
         responseRecord.reviewed_by_name = 'AI Auto-Review';
         responseRecord.review_date = now;
-        syncToFirestore(SHEETS.AUDITEE_RESPONSES, responseId, responseRecord);
-        syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updatedWp);
+        tursoSet('24_AuditeeResponses', responseId, responseRecord);
+        tursoSet('09_WorkPapers', workPaperId, updatedWp);
         // Queue RESPONSE_REVIEWED rejection notification to auditee
-        var aiRejResponsibleIds = parseIdList(updatedWp.responsible_ids);
-        aiRejResponsibleIds.forEach(function(uid) {
+        var aiRejResponsibles = tursoQuery_SQL(
+          'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+          [workPaperId]
+        );
+        aiRejResponsibles.forEach(function(r) {
+          var uid = r.user_id;
           queueNotification({
             type: NOTIFICATION_TYPES.RESPONSE_REVIEWED,
             recipient_user_id: uid,
@@ -469,9 +494,28 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
 
   var now = new Date();
 
+  // Map action to status values per REVIEW_STATUS / RESPONSE_STATUS enums
+  var responseRecordStatus;
+  var newResponseStatus;
+  if (action === 'accept') {
+    responseRecordStatus = 'Approved';
+    newResponseStatus    = 'Response Accepted';
+  } else if (action === 'escalate') {
+    responseRecordStatus = 'Rejected';
+    newResponseStatus    = 'Escalated';
+  } else if (action === 'return') {
+    responseRecordStatus = 'Returned for Revision';
+    newResponseStatus    = 'Response Rejected';
+  } else {
+    // 'reject' — or max-rounds auto-escalate
+    var currentRound = wp.response_round || 1;
+    responseRecordStatus = 'Rejected';
+    newResponseStatus = currentRound >= RESPONSE_DEFAULTS.MAX_ROUNDS ? 'Escalated' : 'Response Rejected';
+  }
+
   // Update response record
   var responseUpdates = {
-    status: action === 'accept' ? STATUS.REVIEW.APPROVED : STATUS.REVIEW.REJECTED,
+    status: responseRecordStatus,
     reviewed_by_id: user.user_id,
     reviewed_by_name: user.full_name || '',
     review_date: now,
@@ -483,21 +527,7 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
   for (var rk in latestResponse) { updatedResponse[rk] = latestResponse[rk]; }
   for (var rk2 in responseUpdates) { updatedResponse[rk2] = responseUpdates[rk2]; }
 
-  syncToFirestore(SHEETS.AUDITEE_RESPONSES, latestResponse.response_id, updatedResponse);
-
-  // Update work paper
-  var newResponseStatus;
-  if (action === 'accept') {
-    newResponseStatus = STATUS.RESPONSE.ACCEPTED;
-  } else {
-    // Check if max rounds exceeded -> escalate
-    var currentRound = wp.response_round || 1;
-    if (currentRound >= RESPONSE_DEFAULTS.MAX_ROUNDS) {
-      newResponseStatus = STATUS.RESPONSE.ESCALATED;
-    } else {
-      newResponseStatus = STATUS.RESPONSE.REJECTED;
-    }
-  }
+  tursoSet('24_AuditeeResponses', latestResponse.response_id, updatedResponse);
 
   var wpUpdates = {
     response_status: newResponseStatus,
@@ -511,8 +541,7 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
   for (var k in wp) { updatedWp[k] = wp[k]; }
   for (var k2 in wpUpdates) { updatedWp[k2] = wpUpdates[k2]; }
 
-  syncToFirestore(SHEETS.WORK_PAPERS, workPaperId, updatedWp);
-  invalidateSheetData(SHEETS.WORK_PAPERS);
+  tursoSet('09_WorkPapers', workPaperId, updatedWp);
 
   // Add revision
   var revisionAction = action === 'accept' ? 'Response Accepted' : 'Response Rejected';
@@ -520,7 +549,7 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
 
   // Queue RESPONSE_REVIEWED notification to auditees
   try {
-    var reviewActionLabel = action === 'accept' ? 'Accepted' : (newResponseStatus === STATUS.RESPONSE.ESCALATED ? 'Escalated' : 'Rejected');
+    var reviewActionLabel = action === 'accept' ? 'Accepted' : (newResponseStatus === 'Escalated' ? 'Escalated' : 'Rejected');
     var respReviewData = {
       work_paper_id: workPaperId,
       work_paper_ref: updatedWp.work_paper_ref || workPaperId,
@@ -532,20 +561,24 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
       round_number: updatedWp.response_round || 0,
       max_rounds: RESPONSE_DEFAULTS.MAX_ROUNDS
     };
-    var respResponsibleIds = parseIdList(updatedWp.responsible_ids);
-    respResponsibleIds.forEach(function(uid) {
+    var rrResponsibles = tursoQuery_SQL(
+      'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+      [workPaperId]
+    );
+    var isEscalated = (newResponseStatus === 'Escalated');
+    rrResponsibles.forEach(function(r) {
       queueNotification({
         type: NOTIFICATION_TYPES.RESPONSE_REVIEWED,
-        recipient_user_id: uid,
+        recipient_user_id: r.user_id,
         data: respReviewData,
-        priority: newResponseStatus === STATUS.RESPONSE.ESCALATED ? 'urgent' : 'normal'
+        priority: isEscalated ? 'urgent' : 'normal'
       });
     });
     // CC HOA
     queueHoaCcNotifications({
       type: NOTIFICATION_TYPES.RESPONSE_REVIEWED,
       data: respReviewData,
-      priority: newResponseStatus === STATUS.RESPONSE.ESCALATED ? 'urgent' : 'normal'
+      priority: isEscalated ? 'urgent' : 'normal'
     }, user.user_id);
   } catch (e) { console.warn('RESPONSE_REVIEWED notification failed:', e.message); }
 
@@ -556,7 +589,7 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
     workPaper: updatedWp,
     message: action === 'accept'
       ? 'Response accepted successfully.'
-      : (newResponseStatus === STATUS.RESPONSE.ESCALATED
+      : (newResponseStatus === 'Escalated'
           ? 'Maximum rounds reached. Observation has been escalated to CC recipients.'
           : 'Response rejected. Auditee will be notified to revise.')
   });
@@ -578,8 +611,11 @@ function createAuditeeActionPlan(data, user) {
 
   // Permission: auditee must be assigned, or SUPER_ADMIN
   var isSuperAdmin = (user.role_code === ROLES.SUPER_ADMIN);
-  var responsibleIds = parseIdList(wp.responsible_ids);
-  if (!isSuperAdmin && !responsibleIds.includes(user.user_id)) {
+  var caapResponsibles = tursoQuery_SQL(
+    'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
+    [data.work_paper_id]
+  );
+  if (!isSuperAdmin && !caapResponsibles.some(function(r) { return r.user_id === user.user_id; })) {
     throw new Error('Permission denied');
   }
 
@@ -646,10 +682,22 @@ function createAuditeeActionPlan(data, user) {
     response_id: data.response_id || ''
   };
 
-  syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, actionPlan);
-  invalidateSheetData(SHEETS.ACTION_PLANS);
+  // Strip owner_ids from action_plans row; write to junction table instead
+  var auditeeApOwnerIds = (actionPlan.owner_ids || '').split(',').filter(Boolean);
+  delete actionPlan.owner_ids;
+  delete actionPlan.owner_names;
+  delete actionPlan.original_owner_ids;
 
-  addActionPlanHistory(actionPlanId, '', initialStatus, 'Action plan proposed by auditee', user);
+  tursoSet('13_ActionPlans', actionPlanId, actionPlan);
+
+  auditeeApOwnerIds.forEach(function(userId) {
+    tursoQuery_SQL(
+      'INSERT OR IGNORE INTO action_plan_owners (action_plan_id, user_id, is_original, is_current, added_by, added_at) VALUES (?,?,1,1,?,?)',
+      [actionPlanId, userId.trim(), user.user_id, new Date().toISOString()]
+    );
+  });
+
+  addActionPlanHistory(actionPlanId, '', initialStatus, 'Action plan proposed by auditee', user, 'STATUS_CHANGE');
   logAuditEvent('CREATE', 'ACTION_PLAN', actionPlanId, null, actionPlan, user.user_id, user.email);
 
   return sanitizeForClient({ success: true, actionPlanId: actionPlanId, actionPlan: actionPlan });
@@ -665,7 +713,7 @@ function createAuditeeActionPlan(data, user) {
 function getResponseHistory(workPaperId) {
   if (!workPaperId) return [];
 
-  var allResponses = firestoreQuery(SHEETS.AUDITEE_RESPONSES, 'work_paper_id', 'EQUAL', workPaperId);
+  var allResponses = tursoQuery('24_AuditeeResponses', 'work_paper_id', '==', workPaperId);
   if (!allResponses || allResponses.length === 0) return [];
 
   allResponses.sort(function(a, b) {
@@ -702,11 +750,13 @@ function respondToDelegation(actionPlanId, action, reason, user) {
     addActionPlanHistory(actionPlanId, ap.status, ap.status,
       'Delegation accepted by ' + (user.full_name || user.user_id), user);
 
-    var acceptUpdates = { delegation_accepted: true, updated_at: now, updated_by: user.user_id };
-    var acceptedAp = {};
-    for (var k in ap) { acceptedAp[k] = ap[k]; }
-    for (var k2 in acceptUpdates) { acceptedAp[k2] = acceptUpdates[k2]; }
-    syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, acceptedAp);
+    tursoUpdate('13_ActionPlans', actionPlanId, {
+      delegation_accepted: 1,
+      delegation_accepted_date: now.toISOString(),
+      updated_at: now,
+      updated_by: user.user_id
+    });
+    var acceptedAp = Object.assign({}, ap, { delegation_accepted: 1, delegation_accepted_date: now.toISOString() });
 
     // Queue AP_DELEGATION_RESPONSE accepted notification to the delegator
     if (ap.delegated_by_id) {
@@ -736,34 +786,35 @@ function respondToDelegation(actionPlanId, action, reason, user) {
       throw new Error('A reason is required when rejecting delegation (minimum 5 characters)');
     }
 
-    // Revert to original owner
-    var revertUpdates = {
-      owner_ids: ap.original_owner_ids || ap.delegated_by_id || ap.owner_ids,
-      owner_names: '', // Will be resolved below
-      delegation_rejected: true,
+    // Restore original owner in action_plan_owners junction table
+    tursoQuery_SQL(
+      'UPDATE action_plan_owners SET is_current=1 WHERE action_plan_id=? AND is_original=1',
+      [actionPlanId]
+    );
+
+    // Soft-mark delegated (non-original) current owners as removed
+    tursoQuery_SQL(
+      'UPDATE action_plan_owners SET is_current=0, removed_at=?, removed_by=? WHERE action_plan_id=? AND is_original=0 AND is_current=1',
+      [now.toISOString(), user.user_id, actionPlanId]
+    );
+
+    tursoUpdate('13_ActionPlans', actionPlanId, {
+      delegation_rejected: 1,
       delegation_reject_reason: sanitizeInput(reason),
       delegation_rejected_by: user.user_id,
       delegation_rejected_date: now,
       updated_at: now,
       updated_by: user.user_id
-    };
+    });
 
-    // Resolve original owner names
-    var origIds = String(revertUpdates.owner_ids).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    revertUpdates.owner_names = origIds.map(function(id) {
-      var u = getUserById(id);
-      return u ? u.full_name : id;
-    }).join(', ');
-
-    var revertedAp = {};
-    for (var rk in ap) { revertedAp[rk] = ap[rk]; }
-    for (var rk2 in revertUpdates) { revertedAp[rk2] = revertUpdates[rk2]; }
-
-    syncToFirestore(SHEETS.ACTION_PLANS, actionPlanId, revertedAp);
-    invalidateSheetData(SHEETS.ACTION_PLANS);
+    var revertedAp = Object.assign({}, ap, {
+      delegation_rejected: 1,
+      delegation_reject_reason: sanitizeInput(reason),
+      delegation_rejected_by: user.user_id
+    });
 
     addActionPlanHistory(actionPlanId, ap.status, ap.status,
-      'Delegation rejected by ' + (user.full_name || user.user_id) + '. Reason: ' + reason, user);
+      'Delegation rejected by ' + (user.full_name || user.user_id) + '. Reason: ' + reason, user, 'DELEGATION');
 
     // Queue AP_DELEGATION_RESPONSE notification to the delegator
     if (revertedAp.delegated_by_id) {
