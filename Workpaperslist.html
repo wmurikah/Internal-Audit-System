@@ -902,7 +902,7 @@ function initWPFilters() {
   const affiliateSelect = document.getElementById('wpFilterAffiliate');
   if (window.appDropdowns && window.appDropdowns.affiliates) {
     window.appDropdowns.affiliates.forEach(a => {
-      affiliateSelect.innerHTML += `<option value="${a.code}">${a.code} - ${a.name}</option>`;
+      affiliateSelect.innerHTML += `<option value="${a.code}">${a.code}: ${a.name}</option>`;
     });
   }
 

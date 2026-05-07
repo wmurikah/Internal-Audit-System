@@ -2903,7 +2903,7 @@ function testOutlookEmailAction(recipientEmail, user) {
     return { success: false, error: 'No recipient email provided' };
   }
 
-  var subject = 'Test Email - Hass Petroleum Audit System';
+  var subject = 'Test Email. Hass Petroleum Audit System';
   var body = 'This is a test email from the Internal Audit System.\n\nIf you received this, your Outlook email integration is working correctly.\n\nSent via Microsoft Graph API\nSent at: ' + new Date().toISOString();
   var htmlBody = formatEmailHtml(subject, body);
 
@@ -2946,7 +2946,7 @@ function formatWelcomeEmailHtml(opts) {
 '</head>' +
 '<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
-'    Welcome to the Internal Audit System &mdash; Your account is ready &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
+'    Welcome to the Internal Audit System. Your account is ready &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
 '  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
 '    <tr><td align="center" style="padding:32px 16px;">' +
@@ -2966,7 +2966,7 @@ function formatWelcomeEmailHtml(opts) {
 '          <td style="padding:32px 36px;" class="email-content">' +
 '            <p style="margin:0 0 16px 0; color:#1d1d1f; font-size:16px; font-weight:600; font-family:system-ui,-apple-system,sans-serif;">Dear ' + (opts.firstName || 'Colleague') + ',</p>' +
 '            <p style="margin:0 0 20px 0; color:#424245; font-size:14px; line-height:1.75; font-family:system-ui,-apple-system,sans-serif;">' +
-'              Your account has been created for the Hass Petroleum Internal Audit System. You have been assigned the role of <strong style="color:#1d1d1f;">' + (opts.roleName || opts.email) + '</strong>. Please use the credentials below to log in.</p>' +
+'              Your account has been created for the Hass Petroleum Internal Audit System. Access to the system has been granted. Please use the credentials below to log in and change your password on first access.</p>' +
 '            <!-- CREDENTIALS BOX -->' +
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc; border-radius:10px; border:1px solid #e5e7eb; margin:0 0 24px 0;" class="cred-table">' +
 '              <tr>' +
@@ -3044,7 +3044,7 @@ function formatWelcomeEmailHtml(opts) {
  */
 function formatPasswordResetEmailHtml(opts) {
   var year = new Date().getFullYear();
-  var subject = 'Password Reset - Hass Petroleum Audit System';
+  var subject = 'Password Reset. Hass Petroleum Audit System';
 
   var introParagraph = opts.reason === 'forgot'
     ? 'A password reset was requested for your account. Please use the new temporary credentials below to log in.'
@@ -3073,7 +3073,7 @@ function formatPasswordResetEmailHtml(opts) {
 '</head>' +
 '<body style="margin:0; padding:0; font-family:system-ui,-apple-system,\'SF Pro Display\',\'Helvetica Neue\',Arial,sans-serif; background-color:#f5f5f7; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;">' +
 '  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">' +
-'    Your password has been reset &mdash; Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
+'    Your password has been reset. Hass Petroleum Internal Audit &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;' +
 '  </div>' +
 '  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f7;" class="email-outer">' +
 '    <tr><td align="center" style="padding:32px 16px;">' +

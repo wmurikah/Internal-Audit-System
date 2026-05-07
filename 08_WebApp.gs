@@ -8,7 +8,7 @@ function doGet(e) {
     if (page === 'consent') {
       return HtmlService.createTemplateFromFile('PrivacyConsent')
         .evaluate()
-        .setTitle('Data Protection & Privacy — Hass Petroleum Audit System')
+        .setTitle('Data Protection and Privacy. Hass Petroleum Audit System')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
@@ -16,7 +16,7 @@ function doGet(e) {
     if (page !== 'app') {
       return HtmlService.createTemplateFromFile('Login')
         .evaluate()
-        .setTitle('Login - Hass Petroleum Audit System')
+        .setTitle('Hass Petroleum Audit System')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }

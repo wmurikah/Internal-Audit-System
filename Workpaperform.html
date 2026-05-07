@@ -2090,7 +2090,7 @@ function applyEditPermissions(wp) {
   if (responsibleInput) {
     responsibleInput.readOnly = true;
     responsibleInput.classList.add('bg-light');
-    responsibleInput.placeholder = 'Locked — set by Head of Internal Audit';
+    responsibleInput.placeholder = 'Locked. Set by Head of Internal Audit';
   }
   // Store responsible_ids and cc_recipients
   window._lockedFieldValues['responsible_ids'] = document.getElementById('wpResponsibleIds').value;
@@ -2100,7 +2100,7 @@ function applyEditPermissions(wp) {
   if (ccInput) {
     ccInput.readOnly = true;
     ccInput.classList.add('bg-light');
-    ccInput.placeholder = 'Locked — set by Head of Internal Audit';
+    ccInput.placeholder = 'Locked. Set by Head of Internal Audit';
   }
 
   // Hide remove buttons on responsible/CC tags
@@ -2525,7 +2525,7 @@ async function saveWorkPaper(event) {
     // If SUPER_ADMIN assigned an auditor, show assignment-queued toast with Send Now option
     var role = window.currentUser?.role_code || '';
     if (role === 'SUPER_ADMIN' && data.assigned_auditor_id) {
-      showToast('Saved successfully. Assignment notification queued — will be sent automatically within 30 minutes.', 'success', 8000);
+      showToast('Saved successfully. Assignment notification queued. Will be sent automatically within 30 minutes.', 'success', 8000);
       _showSendNowBar();
     } else {
       showToast('Saved successfully', 'success');
