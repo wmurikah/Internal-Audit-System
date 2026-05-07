@@ -6,7 +6,7 @@
   <title>Login — Hass Petroleum Audit System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fraunces:ital,wght@1,400&display=swap" rel="stylesheet">
   <style>
     /* ============================================================
        TOKENS
@@ -297,21 +297,72 @@
     .session-check-content p { margin-top: 16px; font-size: 1rem; opacity: 0.8; }
 
     /* ============================================================
-       LOADING OVERLAY
+       LOADING OVERLAY — navy fullscreen greeting
     ============================================================ */
     #loadingOverlay {
       position: fixed;
       inset: 0;
-      background: rgba(255,255,255,0.92);
-      display: none;
+      background: linear-gradient(145deg, #0f1930 0%, #1F2D5C 50%, #162348 100%);
+      display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 7000;
-      backdrop-filter: blur(3px);
+      z-index: 9000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
     }
-    #loadingOverlay.show { display: flex; }
-    .loading-spinner { text-align: center; }
-    .loading-spinner p { margin-top: 16px; color: var(--navy); font-weight: 500; font-size: 0.95rem; }
+    #loadingOverlay.show { opacity: 1; pointer-events: all; }
+
+    .loading-greeting-inner {
+      text-align: center;
+      padding: 40px 24px;
+      max-width: 640px;
+      width: 100%;
+    }
+    .loading-shield {
+      margin: 0 auto 28px;
+      width: 64px; height: 64px;
+      animation: greetPulse 2.8s ease-in-out infinite;
+    }
+    .loading-greet-line1 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-style: italic;
+      font-size: clamp(1.25rem, 4vw, 2rem);
+      font-weight: 400;
+      color: var(--white);
+      line-height: 1.45;
+      margin: 0 0 16px;
+      min-height: 2.9em;
+      transition: opacity 0.25s ease;
+    }
+    .loading-greet-line2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--gold);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin: 0 0 36px;
+    }
+    .loading-progress-track {
+      width: 280px;
+      max-width: 70vw;
+      height: 3px;
+      background: rgba(229,184,27,0.2);
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 0 auto;
+    }
+    .loading-progress-fill {
+      height: 100%;
+      width: 45%;
+      background: var(--gold);
+      border-radius: 2px;
+      animation: loadingProgress 1.6s ease-in-out infinite;
+    }
+    @keyframes loadingProgress {
+      0%   { transform: translateX(-200%); }
+      100% { transform: translateX(350%); }
+    }
 
     /* ============================================================
        FORM CARD & HEADER
@@ -892,12 +943,19 @@
   </div>
 
   <!-- ============================================================
-       LOADING OVERLAY
+       LOADING OVERLAY — navy fullscreen greeting
   ============================================================ -->
-  <div id="loadingOverlay">
-    <div class="loading-spinner">
-      <div class="spinner spinner-navy" style="width:44px;height:44px;border-width:3px;"></div>
-      <p id="loadingText">Signing in&hellip;</p>
+  <div id="loadingOverlay" role="status" aria-live="polite">
+    <div class="loading-greeting-inner">
+      <svg class="loading-shield" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M36 4L8 16v20c0 16.6 11.9 32.1 28 36 16.1-3.9 28-19.4 28-36V16L36 4z" fill="rgba(229,184,27,0.15)" stroke="#E5B81B" stroke-width="2"/>
+        <path d="M25 37l8 8 16-16" stroke="#E5B81B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="loading-greet-line1" id="loadingGreetLine1"></div>
+      <div class="loading-greet-line2" id="loadingGreetLine2">Loading your workspace&hellip;</div>
+      <div class="loading-progress-track">
+        <div class="loading-progress-fill"></div>
+      </div>
     </div>
   </div>
 
@@ -1161,9 +1219,11 @@
   <div id="toastNotification"></div>
 
   <script>
-    var APP_URL  = '<?= ScriptApp.getService().getUrl() ?>?page=app';
-    var BASE_URL = '<?= ScriptApp.getService().getUrl() ?>';
+    var APP_URL      = '<?= ScriptApp.getService().getUrl() ?>?page=app';
+    var BASE_URL     = '<?= ScriptApp.getService().getUrl() ?>';
+    var CONSENT_URL  = '<?= ScriptApp.getService().getUrl() ?>?page=consent';
     var STORAGE_KEY_EMAIL = 'hass_audit_remembered_email';
+    var _loadingPeriod = null;
 
     /* ============================================================
        HTTP FALLBACK
@@ -1187,26 +1247,21 @@
         "Good morning. The audit record doesn't lie — let's build it.",
         "Morning. Controls checked, coffee optional.",
         "Good morning. Another day, another clean audit trail.",
-        "Early start. The best findings go to those who show up first.",
-        "Good morning. Integrity starts before 9."
+        "Early start. The best findings go to those who show up first."
       ],
       afternoon: [
         "Good afternoon. Mid-session — keep the momentum.",
         "Afternoon. Half the day gone, findings still outstanding?",
         "Good afternoon. The work papers won't review themselves.",
-        "Afternoon check-in. How's the evidence looking?",
         "Good afternoon. Clear eyes, clean controls."
       ],
       evening: [
         "Good evening. Late session — we respect the dedication.",
         "Evening. The audit never sleeps, but you should soon.",
-        "Good evening. Wrapping up or just getting started?",
-        "Evening commitment noted. Log your findings before you go.",
-        "Good evening. The best auditors review twice."
+        "Good evening. Wrapping up or just getting started?"
       ],
       night: [
         "It's late. The findings can wait — you probably can't.",
-        "Night shift auditing. Rare, noted, and respected.",
         "Still here? Save your work. Get some rest."
       ]
     };
@@ -1401,28 +1456,30 @@
       if (_cycleTimer) { clearInterval(_cycleTimer); _cycleTimer = null; }
     }
 
-    function setLoading(on, text) {
+    function setLoading(on) {
       var btn     = document.getElementById('loginBtn');
       var btnText = document.getElementById('loginBtnText');
       var spinner = document.getElementById('loginBtnSpinner');
       var email   = document.getElementById('email');
       var pw      = document.getElementById('password');
+      var ov      = document.getElementById('loadingOverlay');
 
-      btn.disabled    = on;
-      btnText.style.display  = on ? 'none' : '';
-      spinner.style.display  = on ? 'inline-flex' : 'none';
-      email.disabled  = on;
-      pw.disabled     = on;
+      btn.disabled          = on;
+      email.disabled        = on;
+      pw.disabled           = on;
+      btnText.style.display = on ? 'none' : '';
+      spinner.style.display = on ? 'inline-flex' : 'none';
 
       if (on) {
+        _loadingPeriod = getTimePeriod();
+        document.getElementById('loadingGreetLine1').textContent = pickRandom(GREETINGS[_loadingPeriod]);
+        document.getElementById('loadingGreetLine2').textContent = 'Loading your workspace…';
         startBtnCycle();
+        ov.classList.add('show');
       } else {
         stopBtnCycle();
+        ov.classList.remove('show');
       }
-
-      if (text) document.getElementById('loadingText').textContent = text;
-      var ov = document.getElementById('loadingOverlay');
-      if (on) ov.classList.add('show'); else ov.classList.remove('show');
     }
 
     function showForgotPassword() {
@@ -1535,10 +1592,29 @@
     var currentLoginUser = null;
     var consentPending   = false;
 
+    function updateGreetingWithName(firstName) {
+      if (!firstName) return;
+      var period = _loadingPeriod || getTimePeriod();
+      var greetPre = { morning: 'Good morning', afternoon: 'Good afternoon', evening: 'Good evening' }[period];
+      var personalGreeting = greetPre
+        ? greetPre + ', ' + firstName + '. Welcome back.'
+        : 'Welcome back, ' + firstName + '.';
+      var line1 = document.getElementById('loadingGreetLine1');
+      line1.style.opacity = '0';
+      setTimeout(function() {
+        line1.textContent = personalGreeting;
+        line1.style.opacity = '1';
+      }, 180);
+    }
+
+    function navigateTop(url) {
+      var a = document.createElement('a');
+      a.href = url; a.target = '_top'; a.style.display = 'none';
+      document.body.appendChild(a); a.click();
+    }
+
     function onLoginSuccess(result) {
       if (result && result.success) {
-        setLoading(true, 'Preparing your session…');
-
         if (result.sessionToken) sessionStorage.setItem('sessionToken', result.sessionToken);
         currentLoginUser = result.user || {};
 
@@ -1551,28 +1627,24 @@
           _needsCleanup: result._needsCleanup || false
         }));
 
+        var firstName = (currentLoginUser.full_name || '').split(' ')[0] || '';
+        updateGreetingWithName(firstName);
+
         if (currentLoginUser.must_change_password) {
-          document.getElementById('loadingText').textContent = 'Welcome, ' + (currentLoginUser.full_name || '') + '…';
-          var a = document.createElement('a');
-          a.href = APP_URL; a.target = '_top'; a.style.display = 'none';
-          document.body.appendChild(a); a.click();
-          setTimeout(function() { setLoading(false); showSuccessView(); }, 3000);
+          setTimeout(function() {
+            navigateTop(APP_URL);
+            setTimeout(function() { setLoading(false); showSuccessView(); }, 3000);
+          }, 800);
           return;
         }
 
-        consentPending = currentLoginUser.privacy_consent_accepted !== 'true' ||
-                         currentLoginUser.privacy_consent_version  !== CURRENT_POLICY_VERSION;
+        /* THE CORE FIX: consent is needed only when privacy_consent_accepted !== 1 */
+        consentPending = (currentLoginUser.privacy_consent_accepted !== 1);
 
-        if (!consentPending) {
-          document.getElementById('loadingText').textContent = 'Welcome, ' + (currentLoginUser.full_name || '') + '…';
-          var a2 = document.createElement('a');
-          a2.href = APP_URL; a2.target = '_top'; a2.style.display = 'none';
-          document.body.appendChild(a2); a2.click();
+        setTimeout(function() {
+          navigateTop(consentPending ? CONSENT_URL : APP_URL);
           setTimeout(function() { setLoading(false); showSuccessView(); }, 3000);
-        } else {
-          setLoading(false);
-          showSuccessView();
-        }
+        }, 800);
       } else {
         setLoading(false);
         document.getElementById('password').value = '';
@@ -1642,9 +1714,7 @@
     }
 
     function navigateToDashboard() {
-      var a = document.createElement('a');
-      a.href = APP_URL; a.target = '_top'; a.style.display = 'none';
-      document.body.appendChild(a); a.click();
+      navigateTop(APP_URL);
     }
 
     function togglePrivacyNoticeView() {
