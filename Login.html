@@ -3,444 +3,1306 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Hass Petroleum Audit System</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <title>Login — Hass Petroleum Audit System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    /* ============================================================
+       TOKENS
+    ============================================================ */
     :root {
-      --primary-color: #1a365d;
-      --accent-color: #c9a227;
-      --bg-gradient: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%);
-      --success-color: #28a745;
-      --error-color: #dc3545;
+      --navy:        #1F2D5C;
+      --navy-dark:   #161f42;
+      --navy-mid:    #253570;
+      --navy-light:  #2e4080;
+      --gold:        #E5B81B;
+      --gold-hover:  #d4a918;
+      --gold-dim:    rgba(229,184,27,0.18);
+      --white:       #ffffff;
+      --off-white:   #f7f8fc;
+      --border:      #e2e6f0;
+      --text-muted:  #6b7280;
+      --text-body:   #1f2937;
+      --red:         #dc2626;
+      --red-bg:      #fef2f2;
+      --red-border:  #fecaca;
+      --green:       #16a34a;
+      --shadow-card: 0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08);
+      --radius:      14px;
+      --transition:  0.22s cubic-bezier(0.4,0,0.2,1);
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ============================================================
+       RESET & BASE
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
     body {
-      min-height: 100vh;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--navy-dark);
+      color: var(--text-body);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ============================================================
+       GREETING OVERLAY
+    ============================================================ */
+    #greetingOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: linear-gradient(145deg, #0f1930 0%, #1F2D5C 50%, #162348 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bg-gradient);
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.6s ease;
     }
-    .login-container { width: 100%; max-width: 420px; padding: 20px; transition: max-width 0.3s ease; }
-    .login-container.expanded { max-width: 520px; }
-    .login-card {
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    #greetingOverlay.visible { opacity: 1; pointer-events: all; }
+    #greetingOverlay.fading  { opacity: 0; pointer-events: none; }
+
+    .greeting-inner {
+      text-align: center;
+      padding: 40px 32px;
+      max-width: 680px;
+    }
+    .greeting-icon {
+      margin: 0 auto 28px;
+      width: 72px; height: 72px;
+      animation: greetPulse 2.8s ease-in-out infinite;
+    }
+    .greeting-line1 {
+      font-size: clamp(1.4rem, 3.5vw, 2rem);
+      font-weight: 600;
+      color: var(--white);
+      line-height: 1.35;
+      margin-bottom: 14px;
+      opacity: 0;
+      transform: translateY(16px);
+      animation: greetTextIn 0.5s 0.25s forwards;
+    }
+    .greeting-line2 {
+      font-size: clamp(0.9rem, 2vw, 1.1rem);
+      font-weight: 400;
+      color: rgba(255,255,255,0.72);
+      letter-spacing: 0.02em;
+      opacity: 0;
+      transform: translateY(12px);
+      animation: greetTextIn 0.5s 0.45s forwards;
+    }
+    .greeting-accent {
+      margin: 24px auto 0;
+      width: 56px; height: 3px;
+      background: var(--gold);
+      border-radius: 2px;
+      opacity: 0;
+      animation: greetAccentIn 0.4s 0.65s forwards;
+    }
+
+    @keyframes greetTextIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes greetAccentIn {
+      to { opacity: 1; }
+    }
+    @keyframes greetPulse {
+      0%, 100% { transform: scale(1);   opacity: 1; }
+      50%       { transform: scale(1.06); opacity: 0.85; }
+    }
+
+    /* ============================================================
+       TWO-COLUMN LAYOUT
+    ============================================================ */
+    .page-layout {
+      display: flex;
+      min-height: 100vh;
+      opacity: 0;
+      animation: pageFadeIn 0.6s 0.1s forwards;
+    }
+    @keyframes pageFadeIn {
+      to { opacity: 1; }
+    }
+
+    /* ---- LEFT BRAND PANEL ---- */
+    .brand-panel {
+      width: 55%;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(229,184,27,0.07) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 80%, rgba(46,64,128,0.6) 0%, transparent 60%),
+        linear-gradient(160deg, #0f1930 0%, #1F2D5C 40%, #1a2850 70%, #0d1628 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
       overflow: hidden;
-      animation: fadeIn 0.5s ease;
+      padding: 60px 48px;
     }
-    .login-header {
-      background: var(--primary-color);
-      padding: 30px;
+
+    /* animated mesh dots */
+    .brand-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle, rgba(229,184,27,0.12) 1px, transparent 1px);
+      background-size: 40px 40px;
+      animation: meshDrift 24s linear infinite;
+      pointer-events: none;
+    }
+    .brand-panel::after {
+      content: '';
+      position: absolute;
+      top: -120px; right: -120px;
+      width: 480px; height: 480px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(229,184,27,0.06) 0%, transparent 70%);
+      animation: floatOrb 14s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes meshDrift {
+      0%   { background-position: 0 0; }
+      100% { background-position: 40px 40px; }
+    }
+    @keyframes floatOrb {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50%       { transform: translateY(40px) scale(1.06); }
+    }
+
+    .brand-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .brand-logo-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+    .brand-shield {
+      width: 64px; height: 64px;
+      flex-shrink: 0;
+      filter: drop-shadow(0 4px 16px rgba(229,184,27,0.35));
+    }
+    .brand-wordmark h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--white);
+      line-height: 1.15;
+      text-align: left;
+    }
+    .brand-wordmark span {
+      font-size: 0.72rem;
+      font-weight: 400;
+      color: rgba(255,255,255,0.55);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      display: block;
+      margin-top: 2px;
+      text-align: left;
+    }
+
+    .brand-divider {
+      width: 40px; height: 2px;
+      background: var(--gold);
+      border-radius: 1px;
+      margin: 0 auto 36px;
+      opacity: 0.7;
+    }
+
+    /* rotating quotes */
+    .quote-carousel {
+      position: relative;
+      min-height: 100px;
+      margin-bottom: 48px;
+    }
+    .quote-item {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.9s ease;
+    }
+    .quote-item.active { opacity: 1; }
+    .quote-mark {
+      font-size: 2.2rem;
+      color: var(--gold);
+      opacity: 0.5;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .quote-text {
+      font-size: 0.96rem;
+      font-weight: 400;
+      color: rgba(255,255,255,0.78);
+      line-height: 1.65;
+      font-style: italic;
+      max-width: 320px;
+      text-align: center;
+    }
+
+    .brand-tagline {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.38);
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+    .brand-tagline span { color: var(--gold); opacity: 0.7; }
+
+    /* ---- RIGHT FORM PANEL ---- */
+    .form-panel {
+      width: 45%;
+      min-height: 100vh;
+      background: var(--off-white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 32px;
+      position: relative;
+    }
+
+    .form-panel-inner {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    /* ============================================================
+       SESSION CHECK OVERLAY (keeps existing behaviour)
+    ============================================================ */
+    #sessionCheckOverlay {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(145deg, #0f1930 0%, #1F2D5C 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 8000;
+      transition: opacity 0.3s ease;
+    }
+    #sessionCheckOverlay.fade-out { opacity: 0; pointer-events: none; }
+    .session-check-content { text-align: center; color: var(--white); }
+    .session-check-content p { margin-top: 16px; font-size: 1rem; opacity: 0.8; }
+
+    /* ============================================================
+       LOADING OVERLAY
+    ============================================================ */
+    #loadingOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.92);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 7000;
+      backdrop-filter: blur(3px);
+    }
+    #loadingOverlay.show { display: flex; }
+    .loading-spinner { text-align: center; }
+    .loading-spinner p { margin-top: 16px; color: var(--navy); font-weight: 500; font-size: 0.95rem; }
+
+    /* ============================================================
+       FORM CARD & HEADER
+    ============================================================ */
+    .form-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      animation: cardRise 0.5s 0.15s both;
+    }
+    @keyframes cardRise {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-header {
+      background: var(--navy);
+      padding: 28px 28px 24px;
       text-align: center;
       position: relative;
     }
-    .login-header::after {
+    .form-header::after {
       content: '';
       position: absolute;
       bottom: 0; left: 0; right: 0;
-      height: 4px;
-      background: var(--accent-color);
+      height: 3px;
+      background: var(--gold);
     }
-    .login-logo {
-      width: 80px; height: 80px;
-      background: #fff;
+    .form-header-logo {
+      width: 56px; height: 56px;
+      background: rgba(255,255,255,0.1);
       border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 15px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+      border: 1.5px solid rgba(229,184,27,0.3);
     }
-    .login-logo i { font-size: 40px; color: var(--primary-color); }
-    .login-header h1 { color: #fff; font-size: 1.5rem; font-weight: 600; margin-bottom: 5px; }
-    .login-header p { color: rgba(255,255,255,0.8); font-size: 0.9rem; }
-    .login-body { padding: 30px; }
-    .form-floating { margin-bottom: 20px; }
-    .form-floating > .form-control {
-      border: 2px solid #e9ecef;
+    .form-header h2 {
+      color: var(--white);
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+    .form-header p {
+      color: rgba(255,255,255,0.6);
+      font-size: 0.78rem;
+    }
+
+    .form-body { padding: 28px; }
+    .form-footer {
+      padding: 16px 28px 22px;
+      background: var(--off-white);
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .form-footer p { color: var(--text-muted); font-size: 0.78rem; }
+    .form-footer a { color: var(--navy); font-weight: 500; text-decoration: none; }
+    .form-footer a:hover { text-decoration: underline; }
+
+    /* ============================================================
+       FORM ELEMENTS
+    ============================================================ */
+    .field-group {
+      position: relative;
+      margin-bottom: 18px;
+    }
+    .field-label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .field-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .field-icon {
+      position: absolute;
+      left: 14px;
+      color: #9ca3af;
+      pointer-events: none;
+      transition: color var(--transition);
+    }
+    .field-group:focus-within .field-icon { color: var(--gold); }
+
+    .form-input {
+      width: 100%;
+      height: 50px;
+      padding: 0 14px 0 42px;
+      border: 1.5px solid var(--border);
       border-radius: 10px;
-      height: 58px;
-      padding: 1rem 1rem 0.5rem 2.8rem;
-      font-size: 1rem;
-      transition: all 0.3s ease;
+      font-family: inherit;
+      font-size: 0.94rem;
+      color: var(--text-body);
+      background: var(--white);
+      transition: border-color var(--transition), box-shadow var(--transition);
+      outline: none;
     }
-    .form-floating > .form-control:focus {
-      border-color: var(--primary-color);
-      box-shadow: 0 0 0 4px rgba(26,54,93,0.1);
+    .form-input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(229,184,27,0.15);
     }
-    .form-floating > label { padding-left: 2.8rem; color: #6c757d; }
-    .form-floating .input-icon {
-      position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
-      color: #6c757d; font-size: 1.2rem; z-index: 5;
+    .form-input.is-valid   { border-color: var(--green); }
+    .form-input.is-invalid { border-color: var(--red); }
+    .form-input:disabled   { background: var(--off-white); opacity: 0.7; }
+
+    .pw-toggle {
+      position: absolute;
+      right: 14px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #9ca3af;
+      padding: 4px;
+      line-height: 1;
+      transition: color var(--transition);
     }
-    .form-floating:focus-within .input-icon { color: var(--primary-color); }
-    .password-toggle {
-      position: absolute; right: 15px; top: 50%; transform: translateY(-50%);
-      background: none; border: none; color: #6c757d; cursor: pointer; z-index: 5; padding: 5px;
+    .pw-toggle:hover { color: var(--navy); }
+
+    .field-error {
+      font-size: 0.75rem;
+      color: var(--red);
+      margin-top: 4px;
+      display: none;
     }
-    .password-toggle:hover { color: var(--primary-color); }
-    .btn-login {
-      width: 100%; padding: 14px; font-size: 1.1rem; font-weight: 600;
-      border: none; border-radius: 10px;
-      background: var(--primary-color); color: #fff;
-      cursor: pointer; transition: all 0.3s ease;
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-    }
-    .btn-login:hover:not(:disabled) {
-      background: #2d4a7c; transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(26,54,93,0.3);
-    }
-    .btn-login:disabled { opacity: 0.7; cursor: not-allowed; }
-    .btn-login .spinner-border { width: 20px; height: 20px; border-width: 2px; }
-    .alert {
-      border-radius: 10px; padding: 12px 15px; margin-bottom: 20px;
-      display: flex; align-items: center; gap: 10px; font-size: 0.9rem;
-    }
-    .alert-danger { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; }
-    .login-footer {
-      text-align: center; padding: 20px 30px 30px;
-      background: #f8f9fa; border-top: 1px solid #e9ecef;
-    }
-    .login-footer p { color: #6c757d; font-size: 0.85rem; margin: 0; }
-    .login-footer a { color: var(--primary-color); text-decoration: none; font-weight: 500; }
-    .loading-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(255,255,255,0.9);
-      display: none; align-items: center; justify-content: center; z-index: 9999;
-    }
-    .loading-overlay.show { display: flex; }
-    .loading-spinner { text-align: center; }
-    .loading-spinner .spinner-border { width: 50px; height: 50px; color: var(--primary-color); }
-    .loading-spinner p { margin-top: 15px; color: var(--primary-color); font-weight: 500; }
-    .session-check-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: var(--bg-gradient);
-      display: flex; align-items: center; justify-content: center; z-index: 10000;
-      transition: opacity 0.3s ease;
-    }
-    .session-check-overlay.fade-out { opacity: 0; pointer-events: none; }
-    .session-check-content { text-align: center; color: #fff; }
-    .session-check-content .spinner-border { width: 50px; height: 50px; color: var(--accent-color); }
-    .session-check-content p { margin-top: 15px; font-size: 1rem; opacity: 0.9; }
+    .field-error.show { display: block; }
+
+    /* form options row */
     .form-options {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-    .remember-me { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-    .remember-me input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary-color); }
-    .remember-me label { color: #6c757d; font-size: 0.9rem; cursor: pointer; }
-    .forgot-password { color: var(--primary-color); font-size: 0.9rem; text-decoration: none; font-weight: 500; }
-    .security-info {
-      display: flex; align-items: center; justify-content: center;
-      gap: 8px; margin-top: 15px; color: #6c757d; font-size: 0.8rem;
+    .remember-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      font-size: 0.87rem;
+      color: var(--text-muted);
     }
-    .security-info i { color: var(--success-color); }
-    .form-floating > .form-control.is-valid { border-color: var(--success-color); }
-    .form-floating > .form-control.is-invalid { border-color: var(--error-color); }
-    .validation-feedback { font-size: 0.8rem; margin-top: 4px; display: none; }
-    .validation-feedback.show { display: block; }
-    .validation-feedback.invalid { color: var(--error-color); }
-    .btn-continue {
-      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; padding: 14px; font-size: 1.1rem; font-weight: 600;
-      border: none; border-radius: 10px; background: #28a745; color: #fff;
-      text-decoration: none; margin-top: 20px; cursor: pointer;
+    .remember-label input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--navy);
     }
-    .btn-continue:hover { background: #218838; color: #fff; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(40,167,69,0.3); }
-    .success-meta { color: #6c757d; font-size: 0.85rem; margin: 4px 0 0; }
-    .privacy-notice-card {
-      border-left: 4px solid #5a6f8a; background: #f8f9fb; border-radius: 8px;
-      padding: 18px; margin: 18px 0 10px; text-align: left;
+    .forgot-link {
+      font-size: 0.87rem;
+      color: var(--navy);
+      font-weight: 500;
+      text-decoration: none;
     }
-    .privacy-notice-card h6 { color: #1a365d; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .privacy-notice-card p { font-size: 0.82rem; color: #495057; margin-bottom: 8px; line-height: 1.5; }
-    .privacy-notice-card p:last-of-type { margin-bottom: 0; }
-    .privacy-accepted-line { font-size: 0.82rem; color: #6c757d; margin: 14px 0 6px; }
-    .privacy-accepted-line a { color: #1a365d; }
-    .quick-actions { margin-top: 16px; }
-    .quick-actions .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; font-weight: 600; border-radius: 10px; font-size: 1rem; }
-    .quick-actions .btn + .btn { margin-top: 8px; }
-    .quick-actions .btn-primary { background: var(--primary-color); border-color: var(--primary-color); }
-    .quick-actions .btn-primary:hover:not(:disabled) { background: #2d4a7c; border-color: #2d4a7c; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(26,54,93,0.3); }
-    .quick-actions .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-    .quick-actions .btn-outline-secondary { color: #495057; border-color: #ced4da; }
-    .quick-actions .btn-outline-secondary:hover { background: #f8f9fa; color: #1a365d; border-color: #1a365d; }
-    .quick-actions .btn-outline-danger { color: #dc3545; border-color: #f5c6cb; }
-    .quick-actions .btn-outline-danger:hover { background: #fff5f5; border-color: #dc3545; }
-    .profile-edit-section { margin-top: 16px; text-align: left; }
-    .profile-edit-section .form-label { font-size: 0.82rem; font-weight: 600; color: #495057; margin-bottom: 2px; }
-    .profile-edit-section .form-control { border-radius: 8px; font-size: 0.9rem; }
-    .profile-edit-section .form-control[readonly] { background: #f8f9fa; color: #6c757d; }
-    .profile-edit-section .field-note { font-size: 0.75rem; color: #adb5bd; margin-top: 2px; }
-    .profile-edit-btns { display: flex; gap: 8px; margin-top: 14px; }
-    .profile-edit-btns .btn { flex: 1; border-radius: 8px; font-weight: 600; padding: 10px; }
-    .toast-notification {
-      position: fixed; top: 20px; right: 20px; z-index: 10001;
-      background: #28a745; color: #fff; padding: 12px 20px; border-radius: 8px;
-      font-size: 0.9rem; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      animation: fadeIn 0.3s ease;
+    .forgot-link:hover { text-decoration: underline; }
+
+    /* ============================================================
+       BUTTONS
+    ============================================================ */
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      height: 50px;
+      border: none;
+      border-radius: 10px;
+      background: var(--navy);
+      color: var(--white);
+      font-family: inherit;
+      font-size: 0.97rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
     }
-    .toast-notification.error { background: #dc3545; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
-    .shake { animation: shake 0.4s ease; }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--gold);
+      color: var(--navy);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(229,184,27,0.35);
+    }
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+    .btn-primary:disabled { opacity: 0.65; cursor: not-allowed; }
+
+    .btn-ghost {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      height: 44px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: border-color var(--transition), color var(--transition), background var(--transition);
+    }
+    .btn-ghost:hover:not(:disabled) {
+      border-color: var(--navy);
+      color: var(--navy);
+      background: rgba(31,45,92,0.04);
+    }
+    .btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-danger-ghost {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      height: 44px;
+      border: 1.5px solid #fca5a5;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--red);
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .btn-danger-ghost:hover { background: var(--red-bg); border-color: var(--red); }
+
+    .btn-green {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      height: 50px;
+      border: none;
+      border-radius: 10px;
+      background: var(--green);
+      color: var(--white);
+      font-family: inherit;
+      font-size: 0.97rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+    }
+    .btn-green:hover:not(:disabled) {
+      background: #15803d;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(22,163,74,0.3);
+    }
+    .btn-green:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .btn-stack { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+
+    /* ============================================================
+       SECURITY BADGE
+    ============================================================ */
+    .security-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 14px;
+      color: var(--text-muted);
+      font-size: 0.76rem;
+    }
+    .security-badge svg { color: var(--green); }
+
+    /* ============================================================
+       ERROR ALERT
+    ============================================================ */
+    .alert-error {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      font-size: 0.875rem;
+      color: #991b1b;
+    }
+    .alert-error.show {
+      display: flex;
+      animation: shake 0.4s ease;
+    }
+    .alert-success {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      font-size: 0.875rem;
+      color: #166534;
+    }
+    .alert-success.show { display: flex; }
+
+    /* ============================================================
+       ANIMATIONS
+    ============================================================ */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-8px); }
+      40%       { transform: translateX(8px); }
+      60%       { transform: translateX(-6px); }
+      80%       { transform: translateX(6px); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    .spinner-navy {
+      border-color: rgba(31,45,92,0.25);
+      border-top-color: var(--navy);
+    }
+    .spinner-gold {
+      border-color: rgba(229,184,27,0.25);
+      border-top-color: var(--gold);
+      width: 40px; height: 40px;
+      border-width: 3px;
+    }
+
+    /* ============================================================
+       SUCCESS VIEW
+    ============================================================ */
+    .success-icon-wrap {
+      width: 52px; height: 52px;
+      background: #dcfce7;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+    }
+    .success-name { color: var(--text-body); font-size: 1rem; margin-bottom: 2px; }
+    .success-meta { color: var(--text-muted); font-size: 0.8rem; }
+
+    /* ============================================================
+       PRIVACY CARD
+    ============================================================ */
+    .privacy-card {
+      background: #f8f9fc;
+      border-left: 4px solid var(--gold);
+      border-radius: 10px;
+      padding: 18px;
+      margin: 18px 0 6px;
+      text-align: left;
+    }
+    .privacy-card h6 {
+      color: var(--navy);
+      font-size: 0.88rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .privacy-card p {
+      font-size: 0.8rem;
+      color: #4b5563;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .privacy-card p:last-of-type { margin-bottom: 0; }
+
+    .privacy-accepted-line {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin: 12px 0 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .privacy-accepted-line a {
+      color: var(--navy);
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .consent-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .consent-row input[type="checkbox"] {
+      width: 16px; height: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      accent-color: var(--navy);
+    }
+    .consent-row label { font-size: 0.82rem; color: #4b5563; cursor: pointer; }
+
+    /* ============================================================
+       PROFILE EDIT
+    ============================================================ */
+    .profile-section { margin-top: 4px; text-align: left; }
+    .profile-section h6 {
+      color: var(--navy);
+      font-size: 0.92rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mini-label {
+      display: block;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .mini-input {
+      width: 100%;
+      height: 42px;
+      padding: 0 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      color: var(--text-body);
+      background: var(--white);
+      margin-bottom: 12px;
+      outline: none;
+      transition: border-color var(--transition);
+    }
+    .mini-input:focus { border-color: var(--gold); }
+    .mini-input[readonly] { background: var(--off-white); color: var(--text-muted); }
+    .field-note { font-size: 0.72rem; color: #9ca3af; margin-top: -8px; margin-bottom: 10px; }
+    .profile-btns { display: flex; gap: 8px; margin-top: 6px; }
+    .profile-btns .btn-primary { height: 42px; font-size: 0.88rem; }
+    .profile-btns .btn-ghost   { height: 42px; font-size: 0.88rem; }
+
+    /* ============================================================
+       FORGOT PASSWORD VIEW
+    ============================================================ */
+    .view-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .view-header h5 {
+      color: var(--navy);
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 10px 0 4px;
+    }
+    .view-header p { color: var(--text-muted); font-size: 0.84rem; }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--navy);
+      font-size: 0.84rem;
+      text-decoration: none;
+      font-weight: 500;
+      margin-top: 14px;
+      cursor: pointer;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    /* ============================================================
+       TOAST
+    ============================================================ */
+    #toastNotification {
+      position: fixed;
+      top: 20px; right: 20px;
+      z-index: 10001;
+      background: var(--green);
+      color: var(--white);
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      animation: cardRise 0.3s ease;
+    }
+    #toastNotification.error { background: var(--red); }
+
+    /* ============================================================
+       MOBILE HEADER (< 900px)
+    ============================================================ */
+    .mobile-brand {
+      display: none;
+      background: var(--navy);
+      padding: 16px 20px;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 3px solid var(--gold);
+    }
+    .mobile-brand-text h1 {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: var(--white);
+      line-height: 1.2;
+    }
+    .mobile-brand-text span {
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+    @media (max-width: 900px) {
+      .page-layout  { flex-direction: column; }
+      .brand-panel  { display: none; }
+      .form-panel   { width: 100%; min-height: auto; padding: 24px 16px 40px; }
+      .mobile-brand { display: flex; }
+    }
+
     @media (max-width: 480px) {
-      .login-container { padding: 10px; }
-      .login-header { padding: 25px 20px; }
-      .login-body { padding: 25px 20px; }
-      .login-footer { padding: 15px 20px 25px; }
-      .form-options { flex-direction: column; align-items: flex-start; }
-      .login-header h1 { font-size: 1.3rem; }
+      .form-body   { padding: 22px 18px; }
+      .form-header { padding: 22px 18px 20px; }
+      .form-footer { padding: 14px 18px 20px; }
+      .form-panel  { padding: 16px 10px 36px; }
     }
+
     @media (prefers-reduced-motion: reduce) {
-      .login-card, .shake { animation: none; }
-      * { transition-duration: 0.01ms !important; }
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Session Check Overlay -->
-  <div class="session-check-overlay" id="sessionCheckOverlay">
+  <!-- ============================================================
+       GREETING OVERLAY
+  ============================================================ -->
+  <div id="greetingOverlay" role="status" aria-live="polite">
+    <div class="greeting-inner">
+      <svg class="greeting-icon" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M36 4L8 16v20c0 16.6 11.9 32.1 28 36 16.1-3.9 28-19.4 28-36V16L36 4z" fill="rgba(229,184,27,0.15)" stroke="#E5B81B" stroke-width="2"/>
+        <path d="M25 37l8 8 16-16" stroke="#E5B81B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="greeting-line1" id="greetLine1"></div>
+      <div class="greeting-line2">Welcome to the Internal Audit System</div>
+      <div class="greeting-accent"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SESSION CHECK OVERLAY
+  ============================================================ -->
+  <div id="sessionCheckOverlay">
     <div class="session-check-content">
-      <div class="spinner-border" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <p>Loading...</p>
+      <div class="spinner-gold spinner"></div>
+      <p>Loading&hellip;</p>
     </div>
   </div>
 
-  <!-- Loading Overlay -->
-  <div class="loading-overlay" id="loadingOverlay">
+  <!-- ============================================================
+       LOADING OVERLAY
+  ============================================================ -->
+  <div id="loadingOverlay">
     <div class="loading-spinner">
-      <div class="spinner-border" role="status">
-        <span class="visually-hidden">Please wait...</span>
-      </div>
-      <p id="loadingText">Signing in...</p>
+      <div class="spinner spinner-navy" style="width:44px;height:44px;border-width:3px;"></div>
+      <p id="loadingText">Signing in&hellip;</p>
     </div>
   </div>
 
-  <div class="login-container">
-    <div class="login-card" id="loginCard">
-      <div class="login-header">
-        <div class="login-logo">
-          <i class="bi bi-shield-check"></i>
+  <!-- ============================================================
+       MOBILE HEADER
+  ============================================================ -->
+  <div class="mobile-brand">
+    <svg width="36" height="36" viewBox="0 0 72 72" fill="none">
+      <path d="M36 4L8 16v20c0 16.6 11.9 32.1 28 36 16.1-3.9 28-19.4 28-36V16L36 4z" fill="rgba(229,184,27,0.2)" stroke="#E5B81B" stroke-width="2"/>
+      <path d="M25 37l8 8 16-16" stroke="#E5B81B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="mobile-brand-text">
+      <h1>Hass Petroleum</h1>
+      <span>Internal Audit Management System</span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TWO-COLUMN LAYOUT
+  ============================================================ -->
+  <div class="page-layout">
+
+    <!-- LEFT: BRAND PANEL -->
+    <div class="brand-panel">
+      <div class="brand-content">
+
+        <div class="brand-logo-wrap">
+          <svg class="brand-shield" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M40 5L9 19v22c0 18.5 13.2 35.8 31 40 17.8-4.2 31-21.5 31-40V19L40 5z" fill="rgba(229,184,27,0.12)" stroke="#E5B81B" stroke-width="2"/>
+            <path d="M28 42l10 10 18-18" stroke="#E5B81B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="brand-wordmark">
+            <h1>Hass Petroleum</h1>
+            <span>Internal Audit Management System</span>
+          </div>
         </div>
-        <h1>Hass Petroleum</h1>
-        <p>Internal Audit Management System</p>
+
+        <div class="brand-divider"></div>
+
+        <div class="quote-carousel" id="quoteCarousel" aria-live="polite">
+          <!-- injected by JS -->
+        </div>
+
+        <p class="brand-tagline">Servicing <span>New Frontiers</span></p>
       </div>
+    </div>
 
-      <div class="login-body">
-        <!-- Error Alert -->
-        <div class="alert alert-danger" id="errorAlert" style="display: none;">
-          <i class="bi bi-exclamation-circle-fill"></i>
-          <span id="errorMessage"></span>
-        </div>
+    <!-- RIGHT: FORM PANEL -->
+    <div class="form-panel">
+      <div class="form-panel-inner">
+        <div class="form-card" id="loginCard">
 
-        <!-- ========== LOGIN FORM VIEW ========== -->
-        <div id="loginFormView">
-          <form id="loginForm" onsubmit="handleLogin(event)">
-            <div class="form-floating position-relative">
-              <i class="bi bi-envelope input-icon"></i>
-              <input type="email" class="form-control" id="email" placeholder="Email" required autocomplete="email" onblur="validateEmail(this)">
-              <label for="email">Email Address</label>
-              <div class="validation-feedback" id="emailFeedback"></div>
+          <div class="form-header">
+            <div class="form-header-logo">
+              <svg width="28" height="28" viewBox="0 0 72 72" fill="none">
+                <path d="M36 4L8 16v20c0 16.6 11.9 32.1 28 36 16.1-3.9 28-19.4 28-36V16L36 4z" fill="rgba(229,184,27,0.2)" stroke="#E5B81B" stroke-width="2.5"/>
+                <path d="M25 37l8 8 16-16" stroke="#E5B81B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </div>
-            <div class="form-floating position-relative">
-              <i class="bi bi-lock input-icon"></i>
-              <input type="password" class="form-control" id="password" placeholder="Password" required autocomplete="current-password" minlength="6">
-              <label for="password">Password</label>
-              <button type="button" class="password-toggle" onclick="togglePassword()" aria-label="Toggle password">
-                <i class="bi bi-eye" id="passwordToggleIcon"></i>
+            <h2>Hass Petroleum</h2>
+            <p>Internal Audit Management System</p>
+          </div>
+
+          <div class="form-body">
+
+            <!-- Error Alert -->
+            <div class="alert-error" id="errorAlert">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span id="errorMessage"></span>
+            </div>
+
+            <!-- ======== LOGIN FORM VIEW ======== -->
+            <div id="loginFormView">
+              <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
+
+                <div class="field-group">
+                  <label class="field-label" for="email">Email Address</label>
+                  <div class="field-wrap">
+                    <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,14 22,4"/></svg>
+                    <input type="email" class="form-input" id="email" placeholder="you@hasspetroleum.com"
+                           required autocomplete="email" oninput="this.value=this.value.toLowerCase()" onblur="validateEmail(this)">
+                  </div>
+                  <div class="field-error" id="emailFeedback"></div>
+                </div>
+
+                <div class="field-group">
+                  <label class="field-label" for="password">Password</label>
+                  <div class="field-wrap">
+                    <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    <input type="password" class="form-input" id="password" placeholder="••••••••"
+                           required autocomplete="current-password" minlength="6">
+                    <button type="button" class="pw-toggle" onclick="togglePassword()" aria-label="Toggle password visibility" id="pwToggleBtn">
+                      <svg id="pwIconShow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      <svg id="pwIconHide" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-options">
+                  <label class="remember-label">
+                    <input type="checkbox" id="rememberMe"> Remember me
+                  </label>
+                  <a href="javascript:void(0)" class="forgot-link" onclick="showForgotPassword()">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="btn-primary" id="loginBtn">
+                  <span id="loginBtnText">Sign In</span>
+                  <span id="loginBtnSpinner" style="display:none;">
+                    <span class="spinner" style="width:16px;height:16px;border-width:2px;"></span>
+                    <span id="loginBtnCycleText">Authenticating&hellip;</span>
+                  </span>
+                </button>
+
+                <div class="security-badge">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span>Secure connection</span>
+                </div>
+
+              </form>
+            </div>
+
+            <!-- ======== FORGOT PASSWORD VIEW ======== -->
+            <div id="forgotPasswordView" style="display:none;">
+              <div class="view-header">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1F2D5C" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,14 22,4"/><path d="M16 12l2 2 4-4" stroke="#16a34a" stroke-width="2"/></svg>
+                <h5>Reset Your Password</h5>
+                <p>Enter your email and we'll send you a temporary password.</p>
+              </div>
+
+              <div class="alert-error" id="forgotErrorMsg"></div>
+              <div class="alert-success" id="forgotSuccessMsg"></div>
+
+              <div class="field-group">
+                <label class="field-label" for="forgotEmail">Email Address</label>
+                <div class="field-wrap">
+                  <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,14 22,4"/></svg>
+                  <input type="email" class="form-input" id="forgotEmail" placeholder="you@hasspetroleum.com" autocomplete="email">
+                </div>
+              </div>
+
+              <button type="button" class="btn-primary" id="forgotBtn" onclick="handleForgotPassword()">
+                <span id="forgotBtnText">Send Temporary Password</span>
+                <span id="forgotBtnSpinner" style="display:none;">
+                  <span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Sending&hellip;
+                </span>
               </button>
-            </div>
-            <div class="form-options">
-              <div class="remember-me">
-                <input type="checkbox" id="rememberMe">
-                <label for="rememberMe">Remember me</label>
-              </div>
-              <a href="javascript:void(0)" class="forgot-password" onclick="showForgotPassword()">Forgot password?</a>
-            </div>
-            <button type="submit" class="btn-login" id="loginBtn">
-              <span id="loginBtnText">Sign In</span>
-              <span id="loginBtnSpinner" style="display: none;">
-                <span class="spinner-border spinner-border-sm"></span> Signing in...
-              </span>
-            </button>
-            <div class="security-info">
-              <i class="bi bi-shield-lock-fill"></i>
-              <span>Secure connection</span>
-            </div>
-          </form>
-        </div>
 
-        <!-- ========== FORGOT PASSWORD VIEW ========== -->
-        <div id="forgotPasswordView" style="display: none;">
-          <div style="text-align:center; margin-bottom:20px;">
-            <i class="bi bi-envelope-check" style="font-size:40px; color:#1a365d;"></i>
-            <h5 style="margin-top:10px; color:#1a365d;">Reset Your Password</h5>
-            <p style="color:#6c757d; font-size:14px;">Enter your email and we'll send you a temporary password.</p>
-          </div>
-          <div class="form-floating position-relative" style="margin-bottom:16px;">
-            <i class="bi bi-envelope input-icon"></i>
-            <input type="email" class="form-control" id="forgotEmail" placeholder="Email" required autocomplete="email">
-            <label for="forgotEmail">Email Address</label>
-          </div>
-          <div id="forgotSuccessMsg" style="display:none;" class="alert alert-success py-2" style="font-size:14px;"></div>
-          <div id="forgotErrorMsg" style="display:none;" class="alert alert-danger py-2" style="font-size:14px;"></div>
-          <button type="button" class="btn-login" id="forgotBtn" onclick="handleForgotPassword()" style="margin-bottom:12px;">
-            <span id="forgotBtnText">Send Temporary Password</span>
-            <span id="forgotBtnSpinner" style="display:none;">
-              <span class="spinner-border spinner-border-sm"></span> Sending...
-            </span>
-          </button>
-          <div style="text-align:center;">
-            <a href="javascript:void(0)" onclick="showLoginForm()" style="color:#1a365d; font-size:14px; text-decoration:none;">
-              <i class="bi bi-arrow-left me-1"></i>Back to Sign In
-            </a>
-          </div>
-        </div>
-
-        <!-- ========== SUCCESS VIEW ========== -->
-        <div id="successView" style="display: none; text-align: center; padding: 16px 0;">
-          <!-- Welcome Header -->
-          <div style="margin-bottom: 14px;">
-            <div style="width:50px;height:50px;background:#d4edda;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
-              <i class="bi bi-check-lg" style="font-size:24px;color:#28a745;"></i>
-            </div>
-            <h5 style="color:#28a745;margin-bottom:4px;">Login Successful</h5>
-            <p style="color:#333;margin-bottom:2px;">Welcome back, <strong id="welcomeName"></strong></p>
-            <p class="success-meta" id="userRoleAffiliate"></p>
-            <p class="success-meta" id="userLastLogin"></p>
-          </div>
-
-          <!-- Privacy Notice (pending consent) -->
-          <div id="privacyNoticeSection" style="display: none;">
-            <div class="privacy-notice-card">
-              <h6><i class="bi bi-shield-lock"></i> Data Privacy Notice</h6>
-              <p><strong>What data we collect:</strong> Your name, email, role, department, and affiliate assignment. Your activity within the audit system (work paper actions, action plan updates, login timestamps) is logged for audit trail purposes.</p>
-              <p><strong>How we use it:</strong> Data is used solely for internal audit management, tracking audit observations and action plans, generating compliance reports, and maintaining accountability within the Hass Petroleum audit process.</p>
-              <p><strong>Data protection:</strong> All data is stored in Google Cloud Firestore with encryption at rest and in transit. Access is role-based and restricted to authorized personnel. Passwords are hashed using HMAC-SHA256 and are never stored in plain text.</p>
-              <p><strong>Your rights:</strong> You may request access to your personal data, correction of inaccurate data, or raise concerns with the Head of Internal Audit at any time.</p>
-              <p><strong>Data retention:</strong> Audit records are retained in accordance with Hass Petroleum's records retention policy and applicable regulatory requirements.</p>
-              <div class="form-check mt-3">
-                <input type="checkbox" class="form-check-input" id="privacyConsent" onchange="onConsentCheckboxChange()">
-                <label class="form-check-label" for="privacyConsent" style="font-size:0.85rem;">I have read and understood the Data Privacy Notice</label>
+              <div style="text-align:center;">
+                <a class="back-link" onclick="showLoginForm()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                  Back to Sign In
+                </a>
               </div>
             </div>
-          </div>
 
-          <!-- Privacy Notice (already accepted) -->
-          <div id="privacyAcceptedSection" style="display: none;">
-            <p class="privacy-accepted-line"><i class="bi bi-shield-check" style="color:#28a745;"></i> Data Privacy Notice accepted on <span id="consentDateDisplay"></span>. <a href="javascript:void(0)" onclick="togglePrivacyNoticeView()">View Policy</a></p>
-            <div id="privacyNoticeExpanded" style="display: none;">
-              <div class="privacy-notice-card">
-                <h6><i class="bi bi-shield-lock"></i> Data Privacy Notice</h6>
-                <p><strong>What data we collect:</strong> Your name, email, role, department, and affiliate assignment. Your activity within the audit system is logged for audit trail purposes.</p>
-                <p><strong>How we use it:</strong> Data is used solely for internal audit management, tracking audit observations and action plans, generating compliance reports, and maintaining accountability.</p>
-                <p><strong>Data protection:</strong> All data is stored in Google Cloud Firestore with encryption at rest and in transit. Access is role-based. Passwords are hashed using HMAC-SHA256.</p>
-                <p><strong>Your rights:</strong> You may request access to your personal data, correction of inaccurate data, or raise concerns with the Head of Internal Audit.</p>
-                <p><strong>Data retention:</strong> Audit records are retained per Hass Petroleum's records retention policy and applicable regulatory requirements.</p>
+            <!-- ======== SUCCESS VIEW ======== -->
+            <div id="successView" style="display:none; text-align:center; padding:8px 0;">
+              <div class="success-icon-wrap">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <h5 style="color:var(--green); font-size:1rem; margin-bottom:4px;">Login Successful</h5>
+              <p class="success-name">Welcome back, <strong id="welcomeName"></strong></p>
+              <p class="success-meta" id="userRoleAffiliate" style="margin-top:2px;"></p>
+              <p class="success-meta" id="userLastLogin" style="margin-top:1px;"></p>
+
+              <!-- Privacy Notice (pending) -->
+              <div id="privacyNoticeSection" style="display:none;">
+                <div class="privacy-card">
+                  <h6>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Data Privacy Notice
+                  </h6>
+                  <p><strong>What we collect:</strong> Your name, email, role, department, and affiliate assignment. Your activity within the audit system is logged for audit trail purposes.</p>
+                  <p><strong>How we use it:</strong> Data is used solely for internal audit management, tracking audit observations and action plans, generating compliance reports, and maintaining accountability within the Hass Petroleum audit process.</p>
+                  <p><strong>Data protection:</strong> All data is stored in Google Cloud Firestore with encryption at rest and in transit. Access is role-based and restricted to authorized personnel. Passwords are hashed using HMAC-SHA256.</p>
+                  <p><strong>Your rights:</strong> You may request access to your personal data, correction of inaccurate data, or raise concerns with the Head of Internal Audit at any time.</p>
+                  <p><strong>Data retention:</strong> Audit records are retained in accordance with Hass Petroleum's records retention policy and applicable regulatory requirements.</p>
+                  <div class="consent-row">
+                    <input type="checkbox" id="privacyConsent" onchange="onConsentCheckboxChange()">
+                    <label for="privacyConsent">I have read and understood the Data Privacy Notice</label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Privacy Notice (accepted) -->
+              <div id="privacyAcceptedSection" style="display:none;">
+                <p class="privacy-accepted-line">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Data Privacy Notice accepted on <span id="consentDateDisplay"></span>.
+                  <a onclick="togglePrivacyNoticeView()">View Policy</a>
+                </p>
+                <div id="privacyNoticeExpanded" style="display:none;">
+                  <div class="privacy-card">
+                    <h6>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                      Data Privacy Notice
+                    </h6>
+                    <p><strong>What we collect:</strong> Your name, email, role, department, and affiliate assignment. Your activity within the audit system is logged for audit trail purposes.</p>
+                    <p><strong>How we use it:</strong> Data is used solely for internal audit management, tracking audit observations and action plans, generating compliance reports, and maintaining accountability.</p>
+                    <p><strong>Data protection:</strong> All data is stored in Google Cloud Firestore with encryption at rest and in transit. Access is role-based. Passwords are hashed using HMAC-SHA256.</p>
+                    <p><strong>Your rights:</strong> You may request access to your personal data, correction of inaccurate data, or raise concerns with the Head of Internal Audit.</p>
+                    <p><strong>Data retention:</strong> Audit records are retained per Hass Petroleum's records retention policy and applicable regulatory requirements.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Actions -->
+              <div id="quickActionsSection" class="btn-stack">
+                <button type="button" class="btn-green" id="dashboardBtn" onclick="goToDashboard()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  Go to Dashboard
+                </button>
+                <button type="button" class="btn-ghost" id="editProfileBtn" onclick="showProfileEdit()">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  Edit Profile
+                </button>
+                <button type="button" class="btn-danger-ghost" onclick="handleLogout()">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  Logout
+                </button>
+              </div>
+
+              <!-- Profile Edit -->
+              <div id="profileEditSection" class="profile-section" style="display:none;">
+                <h6>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  Edit Profile
+                </h6>
+                <label class="mini-label">Full Name</label>
+                <input type="text" class="mini-input" id="profileName">
+                <label class="mini-label">Email</label>
+                <input type="text" class="mini-input" id="profileEmail" readonly>
+                <p class="field-note">Contact administrator to change</p>
+                <label class="mini-label">Phone</label>
+                <input type="text" class="mini-input" id="profilePhone">
+                <label class="mini-label">Department</label>
+                <input type="text" class="mini-input" id="profileDept">
+                <label class="mini-label">Role</label>
+                <input type="text" class="mini-input" id="profileRole" readonly>
+                <label class="mini-label">Affiliate</label>
+                <input type="text" class="mini-input" id="profileAffiliate" readonly>
+                <div class="profile-btns">
+                  <button type="button" class="btn-primary" onclick="saveProfile()" style="height:42px;font-size:0.88rem;">Save Changes</button>
+                  <button type="button" class="btn-ghost" onclick="cancelProfileEdit()" style="height:42px;font-size:0.88rem;">Cancel</button>
+                </div>
               </div>
             </div>
+            <!-- end successView -->
+
+          </div><!-- /form-body -->
+
+          <div class="form-footer">
+            <p>Having trouble? <a href="mailto:audit@hasspetroleum.com">audit&#64;hasspetroleum.com</a></p>
           </div>
 
-          <!-- Quick Actions -->
-          <div id="quickActionsSection" class="quick-actions">
-            <button type="button" class="btn btn-primary" id="dashboardBtn" onclick="goToDashboard()">
-              <i class="bi bi-speedometer2"></i> Go to Dashboard
-            </button>
-            <button type="button" class="btn btn-outline-secondary" id="editProfileBtn" onclick="showProfileEdit()">
-              <i class="bi bi-person-gear"></i> Edit Profile
-            </button>
-            <button type="button" class="btn btn-outline-danger" onclick="handleLogout()">
-              <i class="bi bi-box-arrow-right"></i> Logout
-            </button>
-          </div>
-
-          <!-- Profile Edit (hidden by default) -->
-          <div id="profileEditSection" class="profile-edit-section" style="display: none;">
-            <h6 style="color:#1a365d; margin-bottom:14px;"><i class="bi bi-person-gear"></i> Edit Profile</h6>
-            <div class="mb-2">
-              <label class="form-label">Full Name</label>
-              <input type="text" class="form-control" id="profileName">
-            </div>
-            <div class="mb-2">
-              <label class="form-label">Email</label>
-              <input type="text" class="form-control" id="profileEmail" readonly>
-              <div class="field-note">Contact administrator to change</div>
-            </div>
-            <div class="mb-2">
-              <label class="form-label">Phone</label>
-              <input type="text" class="form-control" id="profilePhone">
-            </div>
-            <div class="mb-2">
-              <label class="form-label">Department</label>
-              <input type="text" class="form-control" id="profileDept">
-            </div>
-            <div class="mb-2">
-              <label class="form-label">Role</label>
-              <input type="text" class="form-control" id="profileRole" readonly>
-            </div>
-            <div class="mb-2">
-              <label class="form-label">Affiliate</label>
-              <input type="text" class="form-control" id="profileAffiliate" readonly>
-            </div>
-            <div class="profile-edit-btns">
-              <button type="button" class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
-              <button type="button" class="btn btn-outline-secondary" onclick="cancelProfileEdit()">Cancel</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Toast -->
-        <div class="toast-notification" id="toastNotification"></div>
-
+        </div><!-- /form-card -->
       </div>
+    </div><!-- /form-panel -->
+  </div><!-- /page-layout -->
 
-      <div class="login-footer">
-        <p>Having trouble? Contact audit&#64;hasspetroleum.com</p>
-      </div>
-    </div>
-  </div>
+  <div id="toastNotification"></div>
 
   <script>
-    var APP_URL = '<?= ScriptApp.getService().getUrl() ?>?page=app';
+    var APP_URL  = '<?= ScriptApp.getService().getUrl() ?>?page=app';
     var BASE_URL = '<?= ScriptApp.getService().getUrl() ?>';
     var STORAGE_KEY_EMAIL = 'hass_audit_remembered_email';
 
-    // =============================================
-    // HTTP FALLBACK - Direct POST to web app URL
-    // Used when google.script.run fails (broken Google auth context)
-    // =============================================
+    /* ============================================================
+       HTTP FALLBACK
+    ============================================================ */
     function httpApiCall(action, data) {
       return fetch(BASE_URL, {
         method: 'POST',
         redirect: 'follow',
         body: JSON.stringify({ action: action, data: data || {} })
-      })
-      .then(function(response) {
-        if (!response.ok) throw new Error('Server returned ' + response.status);
-        return response.json();
+      }).then(function(r) {
+        if (!r.ok) throw new Error('Server returned ' + r.status);
+        return r.json();
       });
     }
 
-    // =============================================
-    // SESSION CHECK - no server call
-    // =============================================
+    /* ============================================================
+       GREETING OVERLAY
+    ============================================================ */
+    var GREETINGS = {
+      morning: [
+        "Good morning. The audit record doesn't lie — let's build it.",
+        "Morning. Controls checked, coffee optional.",
+        "Good morning. Another day, another clean audit trail.",
+        "Early start. The best findings go to those who show up first.",
+        "Good morning. Integrity starts before 9."
+      ],
+      afternoon: [
+        "Good afternoon. Mid-session — keep the momentum.",
+        "Afternoon. Half the day gone, findings still outstanding?",
+        "Good afternoon. The work papers won't review themselves.",
+        "Afternoon check-in. How's the evidence looking?",
+        "Good afternoon. Clear eyes, clean controls."
+      ],
+      evening: [
+        "Good evening. Late session — we respect the dedication.",
+        "Evening. The audit never sleeps, but you should soon.",
+        "Good evening. Wrapping up or just getting started?",
+        "Evening commitment noted. Log your findings before you go.",
+        "Good evening. The best auditors review twice."
+      ],
+      night: [
+        "It's late. The findings can wait — you probably can't.",
+        "Night shift auditing. Rare, noted, and respected.",
+        "Still here? Save your work. Get some rest."
+      ]
+    };
+
+    function getTimePeriod() {
+      try {
+        var tz   = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        var now  = new Date();
+        var opts = { timeZone: tz, hour: 'numeric', hour12: false };
+        var hour = parseInt(new Intl.DateTimeFormat('en-US', opts).format(now), 10);
+        if (hour >= 5  && hour < 12) return 'morning';
+        if (hour >= 12 && hour < 17) return 'afternoon';
+        if (hour >= 17 && hour < 21) return 'evening';
+        return 'night';
+      } catch(e) {
+        var h = new Date().getHours();
+        if (h >= 5  && h < 12) return 'morning';
+        if (h >= 12 && h < 17) return 'afternoon';
+        if (h >= 17 && h < 21) return 'evening';
+        return 'night';
+      }
+    }
+
+    function pickRandom(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function runGreetingOverlay() {
+      var period  = getTimePeriod();
+      var pool    = GREETINGS[period];
+      var text    = pickRandom(pool);
+      var overlay = document.getElementById('greetingOverlay');
+      var line1   = document.getElementById('greetLine1');
+
+      line1.textContent = text;
+
+      var isMobile = window.innerWidth < 900;
+      var holdMs   = isMobile ? 1800 : 2500;
+
+      /* fade in */
+      requestAnimationFrame(function() {
+        overlay.classList.add('visible');
+      });
+
+      /* hold then fade out */
+      setTimeout(function() {
+        overlay.classList.add('fading');
+        setTimeout(function() {
+          overlay.style.display = 'none';
+        }, 650);
+      }, holdMs + 400); /* 400ms = fade-in duration */
+    }
+
+    /* ============================================================
+       QUOTE CAROUSEL
+    ============================================================ */
+    var QUOTES = [
+      "The audit trail is only as strong as the evidence behind it.",
+      "Risk managed today is a crisis prevented tomorrow.",
+      "Controls aren't bureaucracy — they're the backbone of trust.",
+      "Every finding is an opportunity to strengthen the system."
+    ];
+
+    function initQuoteCarousel() {
+      var container = document.getElementById('quoteCarousel');
+      if (!container) return;
+
+      QUOTES.forEach(function(q, i) {
+        var div = document.createElement('div');
+        div.className = 'quote-item' + (i === 0 ? ' active' : '');
+        div.innerHTML =
+          '<div class="quote-mark">&ldquo;</div>' +
+          '<p class="quote-text">' + q + '</p>';
+        container.appendChild(div);
+      });
+
+      var idx   = 0;
+      var items = container.querySelectorAll('.quote-item');
+      setInterval(function() {
+        items[idx].classList.remove('active');
+        idx = (idx + 1) % items.length;
+        items[idx].classList.add('active');
+      }, 6000);
+    }
+
+    /* ============================================================
+       SESSION CHECK
+    ============================================================ */
     function checkExistingSession() {
       var token = sessionStorage.getItem('sessionToken');
-      var data = sessionStorage.getItem('loginInitData');
+      var data  = sessionStorage.getItem('loginInitData');
 
       if (token && data) {
         var link = document.createElement('a');
-        link.href = APP_URL;
-        link.target = '_top';
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
+        link.href = APP_URL; link.target = '_top'; link.style.display = 'none';
+        document.body.appendChild(link); link.click();
         setTimeout(function() {
           sessionStorage.removeItem('sessionToken');
           sessionStorage.removeItem('loginInitData');
@@ -464,9 +1326,9 @@
       }, 300);
     }
 
-    // =============================================
-    // REMEMBER ME
-    // =============================================
+    /* ============================================================
+       REMEMBER ME
+    ============================================================ */
     function loadRememberedEmail() {
       var saved = localStorage.getItem(STORAGE_KEY_EMAIL);
       if (saved) {
@@ -476,98 +1338,150 @@
       }
     }
 
-    // =============================================
-    // VALIDATION
-    // =============================================
+    /* ============================================================
+       VALIDATION
+    ============================================================ */
     function validateEmail(input) {
       var val = input.value.trim();
-      var fb = document.getElementById('emailFeedback');
+      var fb  = document.getElementById('emailFeedback');
       if (!val) { input.classList.remove('is-valid','is-invalid'); fb.classList.remove('show'); return false; }
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
         input.classList.remove('is-invalid'); input.classList.add('is-valid');
         fb.classList.remove('show'); return true;
       }
       input.classList.remove('is-valid'); input.classList.add('is-invalid');
-      fb.textContent = 'Please enter a valid email'; fb.classList.add('show','invalid'); return false;
+      fb.textContent = 'Please enter a valid email';
+      fb.classList.add('show'); return false;
     }
 
     function togglePassword() {
-      var pw = document.getElementById('password');
-      var ic = document.getElementById('passwordToggleIcon');
-      if (pw.type === 'password') { pw.type = 'text'; ic.classList.replace('bi-eye','bi-eye-slash'); }
-      else { pw.type = 'password'; ic.classList.replace('bi-eye-slash','bi-eye'); }
+      var pw   = document.getElementById('password');
+      var show = document.getElementById('pwIconShow');
+      var hide = document.getElementById('pwIconHide');
+      if (pw.type === 'password') {
+        pw.type = 'text';
+        show.style.display = 'none';
+        hide.style.display = '';
+      } else {
+        pw.type = 'password';
+        show.style.display = '';
+        hide.style.display = 'none';
+      }
     }
 
-    // =============================================
-    // UI HELPERS
-    // =============================================
+    /* ============================================================
+       UI HELPERS
+    ============================================================ */
     function showError(msg) {
+      var el = document.getElementById('errorAlert');
       document.getElementById('errorMessage').textContent = msg;
-      document.getElementById('errorAlert').style.display = 'flex';
-      var card = document.getElementById('loginCard');
-      card.classList.add('shake');
-      setTimeout(function() { card.classList.remove('shake'); }, 400);
+      el.classList.add('show');
+      el.style.animation = 'none';
+      void el.offsetWidth;
+      el.style.animation = '';
     }
 
-    function hideError() { document.getElementById('errorAlert').style.display = 'none'; }
+    function hideError() {
+      document.getElementById('errorAlert').classList.remove('show');
+    }
+
+    /* button loading cycle */
+    var _cycleTimer = null;
+    var _cycleLabels = ['Authenticating…', 'Loading your workspace…', 'Almost ready…'];
+    function startBtnCycle() {
+      var el = document.getElementById('loginBtnCycleText');
+      var i  = 0;
+      el.textContent = _cycleLabels[0];
+      _cycleTimer = setInterval(function() {
+        i = (i + 1) % _cycleLabels.length;
+        el.textContent = _cycleLabels[i];
+      }, 800);
+    }
+    function stopBtnCycle() {
+      if (_cycleTimer) { clearInterval(_cycleTimer); _cycleTimer = null; }
+    }
 
     function setLoading(on, text) {
-      document.getElementById('loginBtn').disabled = on;
-      document.getElementById('loginBtnText').style.display = on ? 'none' : 'inline';
-      document.getElementById('loginBtnSpinner').style.display = on ? 'inline' : 'none';
+      var btn     = document.getElementById('loginBtn');
+      var btnText = document.getElementById('loginBtnText');
+      var spinner = document.getElementById('loginBtnSpinner');
+      var email   = document.getElementById('email');
+      var pw      = document.getElementById('password');
+
+      btn.disabled    = on;
+      btnText.style.display  = on ? 'none' : '';
+      spinner.style.display  = on ? 'inline-flex' : 'none';
+      email.disabled  = on;
+      pw.disabled     = on;
+
+      if (on) {
+        startBtnCycle();
+      } else {
+        stopBtnCycle();
+      }
+
       if (text) document.getElementById('loadingText').textContent = text;
       var ov = document.getElementById('loadingOverlay');
       if (on) ov.classList.add('show'); else ov.classList.remove('show');
     }
 
     function showForgotPassword() {
-      document.getElementById('loginFormView').style.display = 'none';
+      document.getElementById('loginFormView').style.display   = 'none';
       document.getElementById('forgotPasswordView').style.display = 'block';
       document.getElementById('forgotEmail').value = document.getElementById('email').value || '';
-      document.getElementById('forgotSuccessMsg').style.display = 'none';
-      document.getElementById('forgotErrorMsg').style.display = 'none';
-      document.getElementById('errorAlert').style.display = 'none';
+      hideError();
+      var fe = document.getElementById('forgotErrorMsg');
+      var fs = document.getElementById('forgotSuccessMsg');
+      fe.classList.remove('show'); fe.textContent = '';
+      fs.classList.remove('show'); fs.textContent = '';
       document.getElementById('forgotEmail').focus();
     }
 
     function showLoginForm() {
       document.getElementById('forgotPasswordView').style.display = 'none';
-      document.getElementById('loginFormView').style.display = 'block';
+      document.getElementById('loginFormView').style.display      = 'block';
     }
 
+    /* ============================================================
+       FORGOT PASSWORD
+    ============================================================ */
     function handleForgotPassword() {
       var email = document.getElementById('forgotEmail').value.trim();
+      var errEl = document.getElementById('forgotErrorMsg');
+      var sucEl = document.getElementById('forgotSuccessMsg');
+
+      errEl.classList.remove('show'); errEl.textContent = '';
+      sucEl.classList.remove('show'); sucEl.textContent = '';
+
       if (!email || !email.includes('@')) {
-        document.getElementById('forgotErrorMsg').textContent = 'Please enter a valid email address.';
-        document.getElementById('forgotErrorMsg').style.display = 'block';
+        errEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Please enter a valid email address.';
+        errEl.classList.add('show');
         return;
       }
 
-      document.getElementById('forgotBtnText').style.display = 'none';
-      document.getElementById('forgotBtnSpinner').style.display = 'inline';
+      document.getElementById('forgotBtnText').style.display   = 'none';
+      document.getElementById('forgotBtnSpinner').style.display = 'inline-flex';
       document.getElementById('forgotBtn').disabled = true;
-      document.getElementById('forgotErrorMsg').style.display = 'none';
-      document.getElementById('forgotSuccessMsg').style.display = 'none';
 
       function onForgotSuccess(result) {
-        document.getElementById('forgotBtnText').style.display = 'inline';
+        document.getElementById('forgotBtnText').style.display   = 'inline';
         document.getElementById('forgotBtnSpinner').style.display = 'none';
         document.getElementById('forgotBtn').disabled = false;
         if (result && result.success) {
-          document.getElementById('forgotSuccessMsg').textContent = result.message || 'A temporary password has been sent to your email.';
-          document.getElementById('forgotSuccessMsg').style.display = 'block';
+          sucEl.textContent = result.message || 'A temporary password has been sent to your email.';
+          sucEl.classList.add('show');
         } else {
-          document.getElementById('forgotErrorMsg').textContent = (result && result.error) || 'Something went wrong. Try again.';
-          document.getElementById('forgotErrorMsg').style.display = 'block';
+          errEl.textContent = (result && result.error) || 'Something went wrong. Try again.';
+          errEl.classList.add('show');
         }
       }
 
       function onForgotFinalFailure() {
-        document.getElementById('forgotBtnText').style.display = 'inline';
+        document.getElementById('forgotBtnText').style.display   = 'inline';
         document.getElementById('forgotBtnSpinner').style.display = 'none';
         document.getElementById('forgotBtn').disabled = false;
-        document.getElementById('forgotErrorMsg').textContent = 'Unable to connect to the server. Please contact your administrator.';
-        document.getElementById('forgotErrorMsg').style.display = 'block';
+        errEl.textContent = 'Unable to connect to the server. Please contact your administrator.';
+        errEl.classList.add('show');
       }
 
       var forgotData = { email: email };
@@ -583,12 +1497,12 @@
         .apiCall('forgotPassword', forgotData);
     }
 
-    // =============================================
-    // LOGIN
-    // =============================================
+    /* ============================================================
+       LOGIN
+    ============================================================ */
     function handleLogin(event) {
       event.preventDefault();
-      var email = document.getElementById('email').value.trim();
+      var email    = document.getElementById('email').value.trim();
       var password = document.getElementById('password').value;
       var remember = document.getElementById('rememberMe').checked;
 
@@ -596,16 +1510,15 @@
       if (!password || password.length < 6) { showError('Password must be at least 6 characters.'); return; }
 
       hideError();
-      setLoading(true, 'Signing in...');
+      setLoading(true, 'Signing in…');
       if (remember) localStorage.setItem(STORAGE_KEY_EMAIL, email);
-      else localStorage.removeItem(STORAGE_KEY_EMAIL);
+      else          localStorage.removeItem(STORAGE_KEY_EMAIL);
 
       var loginData = { email: email, password: password };
 
       google.script.run
         .withSuccessHandler(onLoginSuccess)
         .withFailureHandler(function(err) {
-          // google.script.run failed - try direct HTTP POST fallback
           console.warn('google.script.run failed, trying HTTP fallback:', err);
           httpApiCall('login', loginData)
             .then(onLoginSuccess)
@@ -620,55 +1533,43 @@
 
     var CURRENT_POLICY_VERSION = '1.0';
     var currentLoginUser = null;
-    var consentPending = false;
+    var consentPending   = false;
 
     function onLoginSuccess(result) {
       if (result && result.success) {
-        setLoading(true, 'Preparing your session...');
+        setLoading(true, 'Preparing your session…');
 
         if (result.sessionToken) sessionStorage.setItem('sessionToken', result.sessionToken);
-
         currentLoginUser = result.user || {};
 
         sessionStorage.setItem('loginInitData', JSON.stringify({
-          success: true,
-          user: result.user,
-          permissions: result.permissions || {},
-          dropdowns: result.dropdowns || {},
-          config: result.config || {},
+          success:      true,
+          user:         result.user,
+          permissions:  result.permissions  || {},
+          dropdowns:    result.dropdowns    || {},
+          config:       result.config       || {},
           _needsCleanup: result._needsCleanup || false
         }));
 
-        // Check if must change password — let existing flow handle it
         if (currentLoginUser.must_change_password) {
-          document.getElementById('loadingText').textContent = 'Welcome, ' + (currentLoginUser.full_name || '') + '...';
+          document.getElementById('loadingText').textContent = 'Welcome, ' + (currentLoginUser.full_name || '') + '…';
           var a = document.createElement('a');
           a.href = APP_URL; a.target = '_top'; a.style.display = 'none';
           document.body.appendChild(a); a.click();
-          setTimeout(function() {
-            setLoading(false);
-            showSuccessView();
-          }, 3000);
+          setTimeout(function() { setLoading(false); showSuccessView(); }, 3000);
           return;
         }
 
-        // Check consent status
         consentPending = currentLoginUser.privacy_consent_accepted !== 'true' ||
-                         currentLoginUser.privacy_consent_version !== CURRENT_POLICY_VERSION;
+                         currentLoginUser.privacy_consent_version  !== CURRENT_POLICY_VERSION;
 
         if (!consentPending) {
-          // Consent already accepted — auto-redirect after brief success screen
-          document.getElementById('loadingText').textContent = 'Welcome, ' + (currentLoginUser.full_name || '') + '...';
+          document.getElementById('loadingText').textContent = 'Welcome, ' + (currentLoginUser.full_name || '') + '…';
           var a2 = document.createElement('a');
           a2.href = APP_URL; a2.target = '_top'; a2.style.display = 'none';
           document.body.appendChild(a2); a2.click();
-          // Fallback if redirect doesn't work within 3s
-          setTimeout(function() {
-            setLoading(false);
-            showSuccessView();
-          }, 3000);
+          setTimeout(function() { setLoading(false); showSuccessView(); }, 3000);
         } else {
-          // Consent pending — show the success landing page immediately
           setLoading(false);
           showSuccessView();
         }
@@ -680,33 +1581,31 @@
     }
 
     function showSuccessView() {
-      document.getElementById('loginFormView').style.display = 'none';
+      document.getElementById('loginFormView').style.display      = 'none';
       document.getElementById('forgotPasswordView').style.display = 'none';
-      document.getElementById('successView').style.display = 'block';
-      document.querySelector('.login-container').classList.add('expanded');
+      document.getElementById('successView').style.display        = 'block';
 
-      // Populate welcome header
       document.getElementById('welcomeName').textContent = currentLoginUser.full_name || 'User';
-      var roleName = currentLoginUser.role_name || currentLoginUser.role_code || '';
+      var roleName      = currentLoginUser.role_name || currentLoginUser.role_code || '';
       var affiliateCode = currentLoginUser.affiliate_code || '';
       var metaParts = [];
-      if (roleName) metaParts.push('Role: ' + roleName);
+      if (roleName)      metaParts.push('Role: ' + roleName);
       if (affiliateCode) metaParts.push('Affiliate: ' + affiliateCode);
       document.getElementById('userRoleAffiliate').textContent = metaParts.join(' | ');
 
-      // Show privacy notice or accepted line
       if (consentPending) {
-        document.getElementById('privacyNoticeSection').style.display = 'block';
+        document.getElementById('privacyNoticeSection').style.display  = 'block';
         document.getElementById('privacyAcceptedSection').style.display = 'none';
         document.getElementById('dashboardBtn').disabled = true;
       } else {
-        document.getElementById('privacyNoticeSection').style.display = 'none';
+        document.getElementById('privacyNoticeSection').style.display  = 'none';
         document.getElementById('privacyAcceptedSection').style.display = 'block';
         var consentDate = currentLoginUser.privacy_consent_date;
         if (consentDate) {
           try {
             var d = new Date(consentDate);
-            document.getElementById('consentDateDisplay').textContent = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('consentDateDisplay').textContent =
+              d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
           } catch(e) {
             document.getElementById('consentDateDisplay').textContent = consentDate;
           }
@@ -716,8 +1615,7 @@
     }
 
     function onConsentCheckboxChange() {
-      var checked = document.getElementById('privacyConsent').checked;
-      document.getElementById('dashboardBtn').disabled = !checked;
+      document.getElementById('dashboardBtn').disabled = !document.getElementById('privacyConsent').checked;
     }
 
     function goToDashboard() {
@@ -725,7 +1623,8 @@
         if (!document.getElementById('privacyConsent').checked) return;
 
         document.getElementById('dashboardBtn').disabled = true;
-        document.getElementById('dashboardBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Please wait...';
+        document.getElementById('dashboardBtn').innerHTML =
+          '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Please wait…';
 
         var consentData = { version: CURRENT_POLICY_VERSION };
 
@@ -734,7 +1633,7 @@
           .withFailureHandler(function() {
             httpApiCall('acceptPrivacyConsent', consentData)
               .then(function() { navigateToDashboard(); })
-              .catch(function() { navigateToDashboard(); });
+              .catch(function()  { navigateToDashboard(); });
           })
           .apiCall('acceptPrivacyConsent', consentData);
       } else {
@@ -754,37 +1653,33 @@
     }
 
     function showProfileEdit() {
-      document.getElementById('quickActionsSection').style.display = 'none';
-      document.getElementById('profileEditSection').style.display = 'block';
-
-      document.getElementById('profileName').value = currentLoginUser.full_name || '';
-      document.getElementById('profileEmail').value = currentLoginUser.email || '';
-      document.getElementById('profilePhone').value = currentLoginUser.phone || '';
-      document.getElementById('profileDept').value = currentLoginUser.department || '';
-      document.getElementById('profileRole').value = currentLoginUser.role_name || currentLoginUser.role_code || '';
+      document.getElementById('quickActionsSection').style.display  = 'none';
+      document.getElementById('profileEditSection').style.display   = 'block';
+      document.getElementById('profileName').value      = currentLoginUser.full_name    || '';
+      document.getElementById('profileEmail').value     = currentLoginUser.email        || '';
+      document.getElementById('profilePhone').value     = currentLoginUser.phone        || '';
+      document.getElementById('profileDept').value      = currentLoginUser.department   || '';
+      document.getElementById('profileRole').value      = currentLoginUser.role_name    || currentLoginUser.role_code || '';
       document.getElementById('profileAffiliate').value = currentLoginUser.affiliate_code || '';
     }
 
     function cancelProfileEdit() {
-      document.getElementById('profileEditSection').style.display = 'none';
+      document.getElementById('profileEditSection').style.display  = 'none';
       document.getElementById('quickActionsSection').style.display = 'block';
     }
 
     function saveProfile() {
       var profileData = {
-        full_name: document.getElementById('profileName').value.trim(),
-        phone: document.getElementById('profilePhone').value.trim(),
+        full_name:  document.getElementById('profileName').value.trim(),
+        phone:      document.getElementById('profilePhone').value.trim(),
         department: document.getElementById('profileDept').value.trim()
       };
 
-      if (!profileData.full_name) {
-        showToast('Full name is required.', true);
-        return;
-      }
+      if (!profileData.full_name) { showToast('Full name is required.', true); return; }
 
       var saveBtn = document.querySelector('#profileEditSection .btn-primary');
       saveBtn.disabled = true;
-      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+      saveBtn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> Saving…';
 
       google.script.run
         .withSuccessHandler(function(result) { onProfileSaved(result, profileData, saveBtn); })
@@ -805,17 +1700,16 @@
       saveBtn.textContent = 'Save Changes';
 
       if (result && result.success) {
-        currentLoginUser.full_name = profileData.full_name;
-        currentLoginUser.phone = profileData.phone;
+        currentLoginUser.full_name  = profileData.full_name;
+        currentLoginUser.phone      = profileData.phone;
         currentLoginUser.department = profileData.department;
         document.getElementById('welcomeName').textContent = profileData.full_name;
 
-        // Update sessionStorage
         try {
           var stored = JSON.parse(sessionStorage.getItem('loginInitData') || '{}');
           if (stored.user) {
-            stored.user.full_name = profileData.full_name;
-            stored.user.phone = profileData.phone;
+            stored.user.full_name  = profileData.full_name;
+            stored.user.phone      = profileData.phone;
             stored.user.department = profileData.department;
             sessionStorage.setItem('loginInitData', JSON.stringify(stored));
           }
@@ -841,29 +1735,30 @@
         }
       }
 
-      document.getElementById('successView').style.display = 'none';
-      document.getElementById('profileEditSection').style.display = 'none';
+      document.getElementById('successView').style.display        = 'none';
+      document.getElementById('profileEditSection').style.display  = 'none';
       document.getElementById('quickActionsSection').style.display = 'block';
-      document.getElementById('loginFormView').style.display = 'block';
-      document.querySelector('.login-container').classList.remove('expanded');
+      document.getElementById('loginFormView').style.display       = 'block';
       document.getElementById('password').value = '';
       document.getElementById('email').focus();
       currentLoginUser = null;
-      consentPending = false;
+      consentPending   = false;
     }
 
     function showToast(message, isError) {
       var el = document.getElementById('toastNotification');
       el.textContent = message;
-      el.className = 'toast-notification' + (isError ? ' error' : '');
+      el.className   = isError ? 'error' : '';
       el.style.display = 'block';
       setTimeout(function() { el.style.display = 'none'; }, 3000);
     }
 
-    // =============================================
-    // INIT
-    // =============================================
+    /* ============================================================
+       INIT
+    ============================================================ */
     document.addEventListener('DOMContentLoaded', function() {
+      initQuoteCarousel();
+      runGreetingOverlay();
       checkExistingSession();
     });
   </script>
