@@ -1486,41 +1486,33 @@
         .getDashboardHtml(sessionToken);
     }
 
-    function onLoginSuccess(result) {
-      if (result && result.success) {
-        if (result.sessionToken) sessionStorage.setItem('sessionToken', result.sessionToken);
-        currentLoginUser = result.user || {};
+    function onLoginSuccess(response) {
+      if (!response || !response.success) {
+        // Show error on form
+        showError(response ? (response.error || 'Login failed') : 'No response from server');
+        resetLoginButton();
+        return;
+      }
 
-        sessionStorage.setItem('loginInitData', JSON.stringify({
-          success:      true,
-          user:         result.user,
-          permissions:  result.permissions  || {},
-          dropdowns:    result.dropdowns    || {},
-          config:       result.config       || {},
-          _needsCleanup: result._needsCleanup || false
-        }));
+      // Store token — accessible everywhere in this page
+      var token = response.sessionToken || response.session_token || '';
+      window._sessionToken = token;
+      sessionStorage.setItem('_st', token);
 
-        var firstName = (currentLoginUser.full_name || '').split(' ')[0] || '';
-        updateGreetingWithName(firstName);
+      console.log('Login success. Token length:', token.length);
+      console.log('consent_accepted:', response.user ? response.user.privacy_consent_accepted : 'NO USER');
 
-        if (currentLoginUser.must_change_password) {
-          setTimeout(function() {
-            navigateTop(APP_URL);
-          }, 800);
-          return;
-        }
+      if (!token) {
+        showError('Authentication error: no session token returned');
+        resetLoginButton();
+        return;
+      }
 
-        if (currentLoginUser.privacy_consent_accepted === 1) {
-          autoRedirectToDashboard(result.sessionToken);
-        } else {
-          setTimeout(function() {
-            navigateTop(CONSENT_URL);
-          }, 800);
-        }
+      // Check consent — skip if already accepted
+      if (response.user && response.user.privacy_consent_accepted === 1) {
+        autoRedirectToDashboard(token);
       } else {
-        setLoading(false);
-        document.getElementById('password').value = '';
-        showError(result ? result.error : 'Login failed. Please try again.');
+        showConsentPage(token, response.user);
       }
     }
 
