@@ -406,9 +406,15 @@ function routeAction(action, data, user) {
       }
       return { success: true, ...comprehensiveResult };
 
-    case 'getDashboardDataV2':
+    case 'getDashboardDataV2': {
       // Redesigned dashboard — returns all raw data for client-side filtering
+      const allowedRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR,
+                            ROLES.SENIOR_MGMT, ROLES.BOARD_MEMBER];
+      if (!allowedRoles.includes(user.role_code)) {
+        return jsonResponse({ success: false, error: 'Access denied' }, 403);
+      }
       return getDashboardDataV2(data);
+    }
 
     // ========== NOTIFICATIONS ==========
     case 'getNotificationQueueStatus':
@@ -471,7 +477,7 @@ function routeAction(action, data, user) {
       if (user.role_code !== ROLES.SUPER_ADMIN) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
-      return updatePermissions(data.roleCode, data.permissions, user);
+      return updatePermissions(data, user);
 
     case 'getUserStats':
       if (user.role_code !== ROLES.SUPER_ADMIN) {

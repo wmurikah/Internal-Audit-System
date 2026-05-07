@@ -472,7 +472,55 @@ function getPermissions(roleCode) {
   if (!roleCode) return {};
   // Normalize BOARD → BOARD_MEMBER alias (Firestore stores 'BOARD')
   if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
+  try {
+    const rows = tursoQuery_SQL(
+      'SELECT module_code, action_code, is_allowed, scope FROM role_permissions WHERE role_code = ?',
+      [roleCode]
+    );
+    if (rows && rows.length > 0) return buildPermissionsObject_(rows, roleCode);
+  } catch(e) {
+    console.warn('getPermissions DB fallback:', e.message);
+  }
   return ROLE_PERMISSIONS[roleCode] || {};
+}
+
+function getPermissionsFresh(roleCode) {
+  // Read directly from role_permissions Turso table — bypasses cache
+  // Returns same shape as getPermissions()
+  try {
+    const rows = tursoQuery_SQL(
+      'SELECT module_code, action_code, is_allowed, scope FROM role_permissions WHERE role_code = ?',
+      [roleCode]
+    );
+    if (!rows || rows.length === 0) return getPermissions(roleCode); // fallback
+    return buildPermissionsObject_(rows, roleCode);
+  } catch(e) {
+    console.warn('getPermissionsFresh fallback:', e.message);
+    return getPermissions(roleCode);
+  }
+}
+
+function getPermissionsCached(roleCode) {
+  // Cache-first wrapper around getPermissionsFresh
+  const cache = CacheService.getScriptCache();
+  const key = 'perm_fresh_' + roleCode;
+  const cached = cache.get(key);
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+  const perms = getPermissionsFresh(roleCode);
+  cache.put(key, JSON.stringify(perms), CONFIG.CACHE_TTL.PERMISSIONS || 600);
+  return perms;
+}
+
+// Helper to convert DB rows to the permissions object shape
+function buildPermissionsObject_(rows, roleCode) {
+  // Build same shape as the hardcoded ROLE_PERMISSIONS object
+  // so existing callers receive the same structure
+  const perms = {};
+  rows.forEach(r => {
+    if (!perms[r.module_code]) perms[r.module_code] = {};
+    perms[r.module_code][r.action_code] = r.is_allowed === 1;
+  });
+  return perms;
 }
 
 function getRoleName(roleCode) {
@@ -588,4 +636,29 @@ function applyFieldRestrictions(data, roleCode, module) {
     }
   });
   return cleaned;
+}
+
+function seedRolePermissionsToTurso() {
+  // Read ROLE_PERMISSIONS constant and write each entry to role_permissions table
+  const now = new Date().toISOString();
+  let count = 0;
+  Object.keys(ROLE_PERMISSIONS).forEach(roleCode => {
+    Object.keys(ROLE_PERMISSIONS[roleCode]).forEach(moduleCode => {
+      const actions = ROLE_PERMISSIONS[roleCode][moduleCode];
+      Object.keys(actions).forEach(actionCode => {
+        const isAllowed = actions[actionCode] ? 1 : 0;
+        try {
+          tursoQuery_SQL(
+            'INSERT OR REPLACE INTO role_permissions (role_code, module_code, action_code, is_allowed, updated_at) VALUES (?,?,?,?,?)',
+            [roleCode, moduleCode, actionCode, isAllowed, now]
+          );
+          count++;
+        } catch(e) {
+          console.warn('Seed failed for', roleCode, moduleCode, actionCode, ':', e.message);
+        }
+      });
+    });
+  });
+  Logger.log('Seeded ' + count + ' permission rows to role_permissions table');
+  return count;
 }

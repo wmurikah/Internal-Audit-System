@@ -10,14 +10,45 @@ function hashToken_(token) {
 }
 
 const AUTH_CONFIG = {
-  SESSION_DURATION_HOURS: 24,
-  MAX_LOGIN_ATTEMPTS: 5,
-  LOCKOUT_DURATION_MINUTES: 30,
   PBKDF2_ITERATIONS: 1000,  // Keep at 1000 - do NOT change without re-hashing all passwords
-  SALT_LENGTH: 32,
-  TOKEN_LENGTH: 64,
-  TEMP_PASSWORD_LENGTH: 12
+  SALT_LENGTH: 32
 };
+
+const DEFAULT_AUTH_CONFIG = {
+  SESSION_DURATION_HOURS:     24,
+  MAX_LOGIN_ATTEMPTS:         5,
+  LOCKOUT_DURATION_MINUTES:   30,
+  PASSWORD_MIN_LENGTH:        8,
+  TOKEN_LENGTH:               64,
+  TEMP_PASSWORD_LENGTH:       12
+};
+
+function getAuthConfig() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('auth_config');
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+
+  const cfg = Object.assign({}, DEFAULT_AUTH_CONFIG);
+  try {
+    const keys = ['SESSION_TIMEOUT_HOURS','MAX_LOGIN_ATTEMPTS',
+                  'LOCKOUT_DURATION_MINUTES','PASSWORD_MIN_LENGTH'];
+    keys.forEach(k => {
+      const val = tursoGetConfig(k, 'GLOBAL');
+      if (val !== null) {
+        const mapped = {
+          SESSION_TIMEOUT_HOURS:   'SESSION_DURATION_HOURS',
+          MAX_LOGIN_ATTEMPTS:      'MAX_LOGIN_ATTEMPTS',
+          LOCKOUT_DURATION_MINUTES:'LOCKOUT_DURATION_MINUTES',
+          PASSWORD_MIN_LENGTH:     'PASSWORD_MIN_LENGTH'
+        }[k];
+        if (mapped) cfg[mapped] = parseInt(val) || DEFAULT_AUTH_CONFIG[mapped];
+      }
+    });
+  } catch(e) { console.warn('getAuthConfig fallback to defaults:', e.message); }
+
+  cache.put('auth_config', JSON.stringify(cfg), 300); // 5 min cache
+  return cfg;
+}
 
 function login(email, password) {
   const startTime = new Date().getTime();
@@ -431,9 +462,9 @@ function getCurrentUser() {
 
 function createSession(user) {
   const sessionId = generateId('SESSION');
-  const sessionToken = generateSecureToken(AUTH_CONFIG.TOKEN_LENGTH);
+  const sessionToken = generateSecureToken(getAuthConfig().TOKEN_LENGTH);
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + AUTH_CONFIG.SESSION_DURATION_HOURS * 60 * 60 * 1000);
+  const expiresAt = new Date(now.getTime() + getAuthConfig().SESSION_DURATION_HOURS * 60 * 60 * 1000);
 
   const sessionObject = {
     session_id: sessionId,
@@ -557,7 +588,7 @@ function generateTempPassword() {
   chars.push(special.charAt(secureRandom(special.length)));
 
   const allChars = upper + lower + numbers;
-  for (let i = chars.length; i < AUTH_CONFIG.TEMP_PASSWORD_LENGTH; i++) {
+  for (let i = chars.length; i < getAuthConfig().TEMP_PASSWORD_LENGTH; i++) {
     chars.push(allChars.charAt(secureRandom(allChars.length)));
   }
 
@@ -664,8 +695,9 @@ function resetPassword(userId, adminUser) {
 }
 
 function validatePassword(password) {
-  if (!password || password.length < 8) {
-    return { valid: false, error: 'Password must be at least 8 characters' };
+  const minLen = getAuthConfig().PASSWORD_MIN_LENGTH;
+  if (!password || password.length < minLen) {
+    return { valid: false, error: 'Password must be at least ' + minLen + ' characters' };
   }
 
   if (!/[A-Z]/.test(password)) {
@@ -687,9 +719,9 @@ function incrementFailedAttempts(user) {
   var attempts = (parseInt(user.login_attempts) || 0) + 1;
   var updates = { login_attempts: attempts };
 
-  if (attempts >= AUTH_CONFIG.MAX_LOGIN_ATTEMPTS) {
+  if (attempts >= getAuthConfig().MAX_LOGIN_ATTEMPTS) {
     var lockUntil = new Date();
-    lockUntil.setMinutes(lockUntil.getMinutes() + AUTH_CONFIG.LOCKOUT_DURATION_MINUTES);
+    lockUntil.setMinutes(lockUntil.getMinutes() + getAuthConfig().LOCKOUT_DURATION_MINUTES);
     updates.locked_until = lockUntil.toISOString();
     logAuditEvent('ACCOUNT_LOCKED', 'USER', user.user_id, null, { attempts: attempts }, '', user.email);
   }

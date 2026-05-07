@@ -6,10 +6,12 @@
 // Constants
 // ─────────────────────────────────────────────────────────────
 
-var RESPONSE_DEFAULTS = {
-  DEADLINE_DAYS: 14,
-  MAX_ROUNDS: 3
-};
+function getResponseDefaults() {
+  return {
+    DEADLINE_DAYS: parseInt(tursoGetConfig('RESPONSE_DEADLINE_DAYS', 'GLOBAL') || '14'),
+    MAX_ROUNDS:    parseInt(tursoGetConfig('RESPONSE_MAX_ROUNDS',    'GLOBAL') || '3')
+  };
+}
 
 // ─────────────────────────────────────────────────────────────
 // My Findings — list all findings assigned to this auditee
@@ -214,7 +216,7 @@ function getAuditeeResponseData(workPaperId, user) {
     actionPlans: actionPlans,
     files: files,
     canEditResponse: canEditResponse,
-    maxRounds: RESPONSE_DEFAULTS.MAX_ROUNDS,
+    maxRounds: getResponseDefaults().MAX_ROUNDS,
     isSuperAdmin: isSuperAdmin,
     isAuditor: isAuditor
   });
@@ -307,8 +309,8 @@ function submitAuditeeResponse(workPaperId, data, user) {
 
   // Check max rounds
   var currentRound = (wp.response_round || 0) + 1;
-  if (currentRound > RESPONSE_DEFAULTS.MAX_ROUNDS) {
-    throw new Error('Maximum response rounds (' + RESPONSE_DEFAULTS.MAX_ROUNDS + ') exceeded. This observation will be escalated.');
+  if (currentRound > getResponseDefaults().MAX_ROUNDS) {
+    throw new Error('Maximum response rounds (' + getResponseDefaults().MAX_ROUNDS + ') exceeded. This observation will be escalated.');
   }
 
   var now = new Date();
@@ -510,7 +512,7 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
     // 'reject' — or max-rounds auto-escalate
     var currentRound = wp.response_round || 1;
     responseRecordStatus = 'Rejected';
-    newResponseStatus = currentRound >= RESPONSE_DEFAULTS.MAX_ROUNDS ? 'Escalated' : 'Response Rejected';
+    newResponseStatus = currentRound >= getResponseDefaults().MAX_ROUNDS ? 'Escalated' : 'Response Rejected';
   }
 
   // Update response record
@@ -559,7 +561,7 @@ function reviewAuditeeResponse(workPaperId, action, comments, user) {
       comments: comments || '',
       risk_rating: updatedWp.risk_rating || '',
       round_number: updatedWp.response_round || 0,
-      max_rounds: RESPONSE_DEFAULTS.MAX_ROUNDS
+      max_rounds: getResponseDefaults().MAX_ROUNDS
     };
     var rrResponsibles = tursoQuery_SQL(
       'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',

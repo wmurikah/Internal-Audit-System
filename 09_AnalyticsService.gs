@@ -198,8 +198,26 @@ function getUserStats() {
 /**
  * Update role permissions
  */
-function updatePermissions(roleCode, permissions, user) {
-  return { success: false, error: 'Permissions are system-managed and cannot be modified from the UI. Contact the system administrator.' };
+function updatePermissions(permissionData, user) {
+  if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
+    return { success: false, error: 'Only System Owner can modify permissions' };
+  }
+  // permissionData: { role_code, module_code, action_code, is_allowed }
+  const { role_code, module_code, action_code, is_allowed } = permissionData;
+  if (!role_code || !module_code || !action_code) {
+    return { success: false, error: 'role_code, module_code, action_code required' };
+  }
+  tursoQuery_SQL(
+    'INSERT OR REPLACE INTO role_permissions (role_code, module_code, action_code, is_allowed, updated_at) VALUES (?,?,?,?,?)',
+    [role_code, module_code, action_code, is_allowed ? 1 : 0, new Date().toISOString()]
+  );
+  // Invalidate permission caches for this role
+  const cache = CacheService.getScriptCache();
+  cache.remove('perm_' + role_code);
+  cache.remove('perm_fresh_' + role_code);
+  logAuditEvent('UPDATE_PERMISSION', 'CONFIG', 'PERMISSION', null,
+    { role_code, module_code, action_code, is_allowed }, user.user_id, user.email);
+  return { success: true };
 }
 
 /**
