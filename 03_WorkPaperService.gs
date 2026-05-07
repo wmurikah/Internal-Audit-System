@@ -11,6 +11,7 @@ function createWorkPaper(data, user) {
   
   const workPaper = {
     work_paper_id: workPaperId,
+    organization_id: user.organization_id || data.organization_id || 'HASS',
     year: data.year || now.getFullYear(),
     affiliate_code: data.affiliate_code || '',
     audit_area_id: data.audit_area_id || '',
@@ -61,8 +62,7 @@ function createWorkPaper(data, user) {
     response_review_comments: '',
     created_at: now,
     updated_at: now,
-    work_paper_ref: workPaperId,
-    organization_id: user.organization_id || 'HASS'
+    work_paper_ref: workPaperId
   };
 
   // Resolve assigned auditor name
@@ -1352,6 +1352,7 @@ function batchSendToAuditees(workPaperIds, user) {
       var batchDeadlineDays = RESPONSE_DEFAULTS ? RESPONSE_DEFAULTS.DEADLINE_DAYS : 14;
       var batchResponseDeadline = new Date(now.getTime() + batchDeadlineDays * 24 * 60 * 60 * 1000);
       var updates = {
+        organization_id: user.organization_id || wp.organization_id || 'HASS',
         status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
         final_status: STATUS.WORK_PAPER.SENT_TO_AUDITEE,
         sent_to_auditee_date: now,
