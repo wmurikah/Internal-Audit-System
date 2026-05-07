@@ -61,7 +61,8 @@ function createWorkPaper(data, user) {
     response_review_comments: '',
     created_at: now,
     updated_at: now,
-    work_paper_ref: workPaperId
+    work_paper_ref: workPaperId,
+    organization_id: user.organization_id || 'HASS'
   };
 
   // Resolve assigned auditor name
