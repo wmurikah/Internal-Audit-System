@@ -12,6 +12,7 @@ function createWorkPaper(data, user) {
   const workPaper = {
     work_paper_id: workPaperId,
     organization_id: user.organization_id || data.organization_id || 'HASS',
+    created_by:      user.user_id,
     year: data.year || now.getFullYear(),
     affiliate_code: data.affiliate_code || '',
     audit_area_id: data.audit_area_id || '',
