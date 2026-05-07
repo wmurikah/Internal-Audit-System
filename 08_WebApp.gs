@@ -5,6 +5,14 @@ function doGet(e) {
   try {
     const page = e.parameter.page || 'login';
 
+    if (page === 'consent') {
+      return HtmlService.createTemplateFromFile('PrivacyConsent')
+        .evaluate()
+        .setTitle('Data Protection & Privacy — Hass Petroleum Audit System')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    }
+
     if (page !== 'app') {
       return HtmlService.createTemplateFromFile('Login')
         .evaluate()
