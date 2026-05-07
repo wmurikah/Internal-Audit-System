@@ -13,7 +13,7 @@ function doGet(e) {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
-    if (page !== 'app') {
+    if (page !== 'app' && page !== 'dashboard') {
       return HtmlService.createTemplateFromFile('Login')
         .evaluate()
         .setTitle('Hass Petroleum Audit System')
@@ -2278,4 +2278,8 @@ function migrateExistingDriveFiles() {
     moved.ap + ' AP files, ' + moved.exports + ' exports. Skipped: ' + moved.skipped;
   console.log(summary);
   return summary;
+}
+
+function getWebAppUrl() {
+  return ScriptApp.getService().getUrl();
 }

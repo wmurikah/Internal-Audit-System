@@ -1405,21 +1405,40 @@
     }
 
     function autoRedirectToDashboard() {
-      document.body.innerHTML = [
-        '<div style="position:fixed;inset:0;background:#1F2D5C;display:flex;align-items:center;',
-        'justify-content:center;flex-direction:column;gap:16px;">',
-        '<svg width="48" height="48" viewBox="0 0 24 24" fill="none">',
-        '<circle cx="12" cy="12" r="10" stroke="#E5B81B" stroke-width="2"/>',
-        '<path d="M8 12l3 3 5-5" stroke="#E5B81B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
-        '</svg>',
-        '<p style="color:#ffffff;font-family:system-ui;font-size:16px;margin:0;">Loading your workspace</p>',
-        '<div style="width:200px;height:2px;background:rgba(255,255,255,0.2);border-radius:2px;overflow:hidden;">',
-        '<div style="height:100%;background:#E5B81B;animation:progress 1.4s ease-out forwards;border-radius:2px;" id="prog"></div>',
-        '</div></div>',
-        '<style>@keyframes progress{from{width:0%}to{width:100%}}</style>'
-      ].join('');
+      document.body.innerHTML = `
+        <div style="
+          position:fixed; inset:0;
+          background:#1F2D5C;
+          display:flex; align-items:center; justify-content:center;
+          flex-direction:column; gap:16px;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="#E5B81B" stroke-width="2"/>
+            <path d="M8 12l3 3 5-5" stroke="#E5B81B" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p style="color:#ffffff;font-family:system-ui;font-size:16px;margin:0;">
+            Loading your workspace
+          </p>
+          <div style="width:200px;height:2px;background:rgba(255,255,255,0.2);
+                      border-radius:2px;overflow:hidden;">
+            <div style="height:100%;background:#E5B81B;width:0%;
+                        animation:prog 1.4s ease-out forwards;
+                        border-radius:2px;"></div>
+          </div>
+        </div>
+        <style>@keyframes prog{from{width:0%}to{width:100%}}</style>
+      `;
+
       setTimeout(function() {
-        window.top.location.href = APP_URL;
+        google.script.run
+          .withSuccessHandler(function(url) {
+            window.top.location.href = url + '?page=dashboard';
+          })
+          .withFailureHandler(function() {
+            var base = window.top.location.href.split('?')[0];
+            window.top.location.href = base + '?page=dashboard';
+          })
+          .getWebAppUrl();
       }, 1500);
     }
 
