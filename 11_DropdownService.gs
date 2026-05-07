@@ -5,8 +5,8 @@
  * Verify the user has SUPER_ADMIN role. Throws if not.
  */
 function requireSuperAdmin_(user) {
-  if (!user || user.role_code !== 'SUPER_ADMIN') {
-    throw new Error('Permission denied. SUPER_ADMIN role required.');
+  if (!user || (user.role_code !== 'SUPER_ADMIN' && user.role_code !== 'HEAD_OF_AUDIT')) {
+    throw new Error('Permission denied. SUPER_ADMIN or HEAD_OF_AUDIT role required.');
   }
 }
 

@@ -27,8 +27,8 @@
     <li class="nav-item">
       <a class="nav-link" data-bs-toggle="tab" href="#auditLog"><i class="bi bi-journal-text me-1"></i>Audit Log</a>
     </li>
-    <li class="nav-item" id="dropdownsTabNav" style="display:none">
-      <a class="nav-link" data-bs-toggle="tab" href="#dropdownManagement"><i class="bi bi-list-ul me-1"></i>Dropdowns</a>
+    <li class="nav-item" id="referenceDataTabNav" style="display:none">
+      <a class="nav-link" data-bs-toggle="tab" href="#referenceData"><i class="bi bi-database me-1"></i>Reference Data</a>
     </li>
   </ul>
 
@@ -555,129 +555,251 @@
       </div>
     </div>
 
-    <!-- Dropdown Management Tab (SUPER_ADMIN only) -->
-    <div class="tab-pane fade" id="dropdownManagement">
-      <div class="row">
-        <!-- Category Sidebar -->
-        <div class="col-md-3">
-          <div class="list-group" id="ddCategorySidebar">
-            <a href="#" class="list-group-item list-group-item-action active" data-collection="audit_areas" onclick="selectDdCategory(this)">
-              <i class="bi bi-diagram-3 me-2"></i>Audit Areas <span class="badge bg-secondary float-end" id="ddCount_audit_areas">0</span>
-            </a>
-            <a href="#" class="list-group-item list-group-item-action" data-collection="sub_areas" onclick="selectDdCategory(this)">
-              <i class="bi bi-diagram-2 me-2"></i>Sub Areas <span class="badge bg-secondary float-end" id="ddCount_sub_areas">0</span>
-            </a>
-            <a href="#" class="list-group-item list-group-item-action" data-collection="affiliates" onclick="selectDdCategory(this)">
-              <i class="bi bi-building me-2"></i>Affiliates <span class="badge bg-secondary float-end" id="ddCount_affiliates">0</span>
-            </a>
-            <a href="#" class="list-group-item list-group-item-action" data-config-key="DROPDOWN_RISK_RATINGS" onclick="selectDdCategory(this)">
-              <i class="bi bi-exclamation-triangle me-2"></i>Risk Ratings <span class="badge bg-secondary float-end" id="ddCount_DROPDOWN_RISK_RATINGS">0</span>
-            </a>
-            <a href="#" class="list-group-item list-group-item-action" data-config-key="DROPDOWN_CONTROL_CLASSIFICATIONS" onclick="selectDdCategory(this)">
-              <i class="bi bi-shield-check me-2"></i>Control Classifications <span class="badge bg-secondary float-end" id="ddCount_DROPDOWN_CONTROL_CLASSIFICATIONS">0</span>
-            </a>
-            <a href="#" class="list-group-item list-group-item-action" data-config-key="DROPDOWN_CONTROL_TYPES" onclick="selectDdCategory(this)">
-              <i class="bi bi-gear me-2"></i>Control Types <span class="badge bg-secondary float-end" id="ddCount_DROPDOWN_CONTROL_TYPES">0</span>
-            </a>
-            <a href="#" class="list-group-item list-group-item-action" data-config-key="DROPDOWN_CONTROL_FREQUENCIES" onclick="selectDdCategory(this)">
-              <i class="bi bi-clock me-2"></i>Control Frequencies <span class="badge bg-secondary float-end" id="ddCount_DROPDOWN_CONTROL_FREQUENCIES">0</span>
-            </a>
+    <!-- Reference Data Tab (SUPER_ADMIN / HEAD_OF_AUDIT only) -->
+    <div class="tab-pane fade" id="referenceData">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-database me-2"></i>Reference Data Management</h5>
+        <small class="text-muted">Head of Internal Audit only</small>
+      </div>
+
+      <!-- Sub-tabs -->
+      <ul class="nav nav-tabs mb-4" id="refDataSubTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="rdTabAffiliatesBtn" data-bs-toggle="tab" data-bs-target="#rdTabAffiliates" type="button" onclick="rdLoadAffiliates()">
+            <i class="bi bi-building me-1"></i>Affiliates
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="rdTabAreasBtn" data-bs-toggle="tab" data-bs-target="#rdTabAuditAreas" type="button" onclick="rdLoadAuditAreas()">
+            <i class="bi bi-diagram-3 me-1"></i>Audit Areas
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="rdTabSubAreasBtn" data-bs-toggle="tab" data-bs-target="#rdTabSubAreas" type="button" onclick="rdLoadSubAreasPanel()">
+            <i class="bi bi-diagram-2 me-1"></i>Sub Areas
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="rdTabConfigBtn" data-bs-toggle="tab" data-bs-target="#rdTabConfigDropdowns" type="button" onclick="rdLoadConfigDropdowns()">
+            <i class="bi bi-list-ul me-1"></i>Config Dropdowns
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content" id="refDataSubTabContent">
+
+        <!-- ===== TAB 1: AFFILIATES ===== -->
+        <div class="tab-pane fade show active" id="rdTabAffiliates" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">Affiliates <span class="badge bg-secondary ms-2" id="rdAffCount">–</span></h6>
+            <button class="btn btn-sm btn-primary" onclick="rdShowAffForm(null)">
+              <i class="bi bi-plus-lg me-1"></i>Add New
+            </button>
+          </div>
+
+          <!-- Inline add/edit form -->
+          <div id="rdAffFormWrap" class="card mb-3" style="display:none">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+              <span id="rdAffFormTitle">Add New Affiliate</span>
+              <button type="button" class="btn-close btn-sm" onclick="rdHideAffForm()"></button>
+            </div>
+            <div class="card-body">
+              <input type="hidden" id="rdAffEditId">
+              <div class="row g-3">
+                <div class="col-md-3">
+                  <label class="form-label">Affiliate Code <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-sm" id="rdAffCode"
+                         placeholder="e.g. KE001"
+                         oninput="this.value=this.value.toUpperCase().replace(/\s/g,'')">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-sm" id="rdAffName" placeholder="Affiliate Name">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Country</label>
+                  <input type="text" class="form-control form-control-sm" id="rdAffCountry" placeholder="Country">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Region</label>
+                  <input type="text" class="form-control form-control-sm" id="rdAffRegion" placeholder="Region">
+                </div>
+              </div>
+              <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary btn-sm" onclick="rdSaveAffiliate()">
+                  <i class="bi bi-save me-1"></i>Save
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="rdHideAffForm()">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                  <thead>
+                    <tr><th>Code</th><th>Name</th><th>Country</th><th>Region</th><th>Active</th><th>Order</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody id="rdAffTable">
+                    <tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Right Panel -->
-        <div class="col-md-9">
-          <!-- Collection-based panel (audit_areas, sub_areas, affiliates) -->
-          <div id="ddCollectionPanel" style="display:none">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <h5 class="mb-0" id="ddCollectionTitle">Audit Areas</h5>
-              <button class="btn btn-primary btn-sm" onclick="showDdAddModal()"><i class="bi bi-plus-lg me-1"></i>Add New</button>
+        <!-- ===== TAB 2: AUDIT AREAS ===== -->
+        <div class="tab-pane fade" id="rdTabAuditAreas" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">Audit Areas <span class="badge bg-secondary ms-2" id="rdAreaCount">–</span></h6>
+            <button class="btn btn-sm btn-primary" onclick="rdShowAreaForm(null)">
+              <i class="bi bi-plus-lg me-1"></i>Add New
+            </button>
+          </div>
+
+          <!-- Inline add/edit form -->
+          <div id="rdAreaFormWrap" class="card mb-3" style="display:none">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+              <span id="rdAreaFormTitle">Add New Audit Area</span>
+              <button type="button" class="btn-close btn-sm" onclick="rdHideAreaForm()"></button>
             </div>
-            <!-- Sub Areas filter -->
-            <div id="ddSubAreaFilterRow" class="mb-3" style="display:none">
-              <div class="row">
+            <div class="card-body">
+              <input type="hidden" id="rdAreaEditId">
+              <div class="row g-3">
                 <div class="col-md-4">
-                  <select class="form-select form-select-sm" id="ddSubAreaFilterSelect" onchange="filterSubAreaTable()">
-                    <option value="">All Audit Areas</option>
-                  </select>
+                  <label class="form-label">Area Code <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-sm" id="rdAreaCode" placeholder="e.g. FIN">
+                </div>
+                <div class="col-md-8">
+                  <label class="form-label">Area Name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-sm" id="rdAreaName" placeholder="e.g. Finance">
                 </div>
               </div>
-            </div>
-            <div class="card">
-              <div class="card-body p-0">
-                <div class="table-responsive">
-                  <table class="table table-hover table-sm mb-0">
-                    <thead id="ddCollectionThead"><tr></tr></thead>
-                    <tbody id="ddCollectionTbody">
-                      <tr><td colspan="8" class="text-center py-4 text-muted">Select a category</td></tr>
-                    </tbody>
-                  </table>
-                </div>
+              <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary btn-sm" onclick="rdSaveArea()">
+                  <i class="bi bi-save me-1"></i>Save
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="rdHideAreaForm()">Cancel</button>
               </div>
             </div>
           </div>
 
-          <!-- Config-based panel (risk ratings, control types, etc.) -->
-          <div id="ddConfigPanel" style="display:none">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <div>
-                <h5 class="mb-1" id="ddConfigTitle">Risk Ratings</h5>
-                <small class="text-muted">These values appear as dropdown options throughout the system.</small>
+          <div class="card">
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                  <thead>
+                    <tr><th>Code</th><th>Name</th><th>Active</th><th>Order</th><th>Sub Areas</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody id="rdAreaTable">
+                    <tr><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div class="card">
-              <div class="card-body">
-                <div id="ddConfigListContainer"></div>
-                <button class="btn btn-outline-secondary btn-sm mt-2" onclick="ddConfigAddItem()"><i class="bi bi-plus-lg me-1"></i>Add Item</button>
-                <hr>
-                <div class="d-flex align-items-center justify-content-between">
-                  <button class="btn btn-primary" onclick="ddConfigSave()"><i class="bi bi-save me-1"></i>Save Changes</button>
-                  <span id="ddConfigUnsavedBadge" class="badge bg-warning text-dark" style="display:none"><i class="bi bi-exclamation-circle me-1"></i>Unsaved changes</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Initial loading state -->
-          <div id="ddLoadingPanel">
-            <div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="text-muted mt-2">Loading dropdown data...</p></div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Dropdown Item Add/Edit Modal -->
-    <div class="modal fade" id="dropdownItemModal" tabindex="-1">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="ddModalTitle">Add Item</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body" id="ddModalBody"></div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="saveDdItem()"><i class="bi bi-save me-1"></i>Save</button>
+        <!-- ===== TAB 3: SUB AREAS (split panel) ===== -->
+        <div class="tab-pane fade" id="rdTabSubAreas" role="tabpanel">
+          <div class="row" style="min-height:480px">
+            <!-- Left: clickable audit areas list -->
+            <div class="col-md-3">
+              <div class="card h-100">
+                <div class="card-header py-2"><strong><i class="bi bi-diagram-3 me-1"></i>Audit Areas</strong></div>
+                <div class="card-body p-0">
+                  <div class="list-group list-group-flush" id="rdSubAreaParentList">
+                    <div class="text-center py-4 text-muted small"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Right: sub areas for selected area -->
+            <div class="col-md-9">
+              <div id="rdSubAreaRight">
+                <div class="text-center py-5 text-muted">
+                  <i class="bi bi-arrow-left-circle fs-2 d-block mb-2 opacity-50"></i>
+                  <p>Select an audit area on the left to view and manage its sub areas.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Dropdown Delete Confirmation Modal -->
-    <div class="modal fade" id="dropdownDeleteModal" tabindex="-1">
+        <!-- ===== TAB 4: CONFIG-DRIVEN DROPDOWNS ===== -->
+        <div class="tab-pane fade" id="rdTabConfigDropdowns" role="tabpanel">
+          <p class="text-muted small mb-4">
+            These values populate dropdowns throughout the system.
+            Changes take effect immediately on new work papers.
+          </p>
+          <div class="row g-4" id="rdConfigContainer">
+            <div class="col-12 text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</div>
+          </div>
+        </div>
+
+      </div><!-- /tab-content -->
+    </div><!-- /referenceData tab-pane -->
+
+    <!-- Shared delete-confirmation modal (reused by Reference Data tab) -->
+    <div class="modal fade" id="rdDeleteModal" tabindex="-1">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header bg-danger text-white">
             <h5 class="modal-title"><i class="bi bi-trash me-2"></i>Delete Item</h5>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
           </div>
-          <div class="modal-body" id="ddDeleteModalBody">
-            <p>Loading reference information...</p>
-          </div>
-          <div class="modal-footer" id="ddDeleteModalFooter"></div>
+          <div class="modal-body" id="rdDeleteModalBody"><p>Checking references...</p></div>
+          <div class="modal-footer" id="rdDeleteModalFooter"></div>
         </div>
       </div>
     </div>
+
+    <!-- Sub-area add/edit modal (for Reference Data → Sub Areas tab) -->
+    <div class="modal fade" id="rdSubAreaModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="rdSubAreaModalTitle">Add Sub Area</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="rdSubAreaEditId">
+            <input type="hidden" id="rdSubAreaParentId">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Sub Area Code <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="rdSubCode" placeholder="e.g. FIN-01">
+              </div>
+              <div class="col-md-8">
+                <label class="form-label">Sub Area Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="rdSubName" placeholder="e.g. Accounts Payable">
+              </div>
+              <div class="col-12">
+                <label class="form-label">Control Objectives</label>
+                <textarea class="form-control" id="rdSubCtrlObj" rows="2" placeholder="Control objectives..."></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Risk Description</label>
+                <textarea class="form-control" id="rdSubRisk" rows="2" placeholder="Risk description..."></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Test Objective</label>
+                <textarea class="form-control" id="rdSubTestObj" rows="2" placeholder="Test objective..."></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="rdSaveSubArea()">
+              <i class="bi bi-save me-1"></i>Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -705,17 +827,20 @@ function loadSettings(params) {
   loadUsers();
   loadRoles();
 
-  // Show Dropdowns tab for SUPER_ADMIN
-  if (role === 'SUPER_ADMIN') {
-    var dropdownsNav = document.getElementById('dropdownsTabNav');
-    if (dropdownsNav) dropdownsNav.style.display = '';
-    // Load sidebar counts eagerly
-    loadDdCollectionCounts();
-    loadDdConfigCounts();
-    // Init dropdown management when tab is shown
-    var ddTabLink = document.querySelector('a[href="#dropdownManagement"]');
-    if (ddTabLink) {
-      ddTabLink.addEventListener('shown.bs.tab', function() { initDropdownManagement(); });
+  // Show Reference Data tab for SUPER_ADMIN and HEAD_OF_AUDIT
+  var refDataRoles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT'];
+  if (refDataRoles.includes(role)) {
+    var rdNav = document.getElementById('referenceDataTabNav');
+    if (rdNav) rdNav.style.display = '';
+    // Auto-load Affiliates when tab first becomes visible
+    var rdTabBtn = document.getElementById('rdTabAffiliatesBtn');
+    if (rdTabBtn) {
+      var rdTabEl = document.querySelector('[data-bs-target="#referenceData"]');
+      if (rdTabEl) {
+        rdTabEl.addEventListener('shown.bs.tab', function() {
+          rdLoadAffiliates();
+        }, { once: true });
+      }
     }
   }
 
@@ -731,7 +856,7 @@ function loadSettings(params) {
 
   // Auto-switch to requested tab
   if (params && params.tab) {
-    var tabMap = { 'users': 'userManagement', 'access': 'accessControl', 'ai': 'aiConfig', 'notifications': 'notificationConfig', 'config': 'systemConfig', 'backup': 'dataBackup', 'log': 'auditLog', 'dropdowns': 'dropdownManagement' };
+    var tabMap = { 'users': 'userManagement', 'access': 'accessControl', 'ai': 'aiConfig', 'notifications': 'notificationConfig', 'config': 'systemConfig', 'backup': 'dataBackup', 'log': 'auditLog', 'refdata': 'referenceData', 'dropdowns': 'referenceData' };
     var tabId = tabMap[params.tab];
     if (tabId) {
       var tabEl = document.querySelector('a[href="#' + tabId + '"]');
@@ -2594,5 +2719,496 @@ function loadDdCollectionCounts() {
       }
     }).catch(function() {});
   });
+}
+
+// ==================== Reference Data — 4-Tab Management ====================
+// Shared state
+var _rdAffiliates   = [];   // cached affiliates
+var _rdAreas        = [];   // cached audit areas
+var _rdSubAreas     = [];   // cached sub areas (all)
+var _rdSelectedArea = null; // currently selected area for sub-areas tab
+var _rdConfigData   = {};   // keyed by config_key
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function _rdStatusBadge(item) {
+  var active = item.is_active === true || String(item.is_active) === 'true' || item.is_active === 1;
+  return active
+    ? '<span class="badge bg-success">Active</span>'
+    : '<span class="badge bg-secondary">Inactive</span>';
+}
+
+function _rdActionBtns(onEdit, onDeactivate, extraBtn) {
+  return (extraBtn || '') +
+    '<button class="btn btn-xs btn-outline-primary me-1" style="font-size:.75rem;padding:2px 6px" onclick="' + onEdit + '"><i class="bi bi-pencil"></i></button>' +
+    '<button class="btn btn-xs btn-outline-warning" style="font-size:.75rem;padding:2px 6px" onclick="' + onDeactivate + '" title="Deactivate"><i class="bi bi-pause-circle"></i></button>';
+}
+
+// ── TAB 1: AFFILIATES ────────────────────────────────────────────────────────
+
+function rdLoadAffiliates() {
+  document.getElementById('rdAffTable').innerHTML =
+    '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</td></tr>';
+  apiCall('getDropdownItems', { collection: 'affiliates' }).then(function(r) {
+    if (!r.success) { showToast(r.error || 'Error loading affiliates', 'danger'); return; }
+    _rdAffiliates = (r.items || []).sort(function(a,b){ return (parseInt(a.display_order)||999)-(parseInt(b.display_order)||999); });
+    document.getElementById('rdAffCount').textContent = _rdAffiliates.length;
+    _rdRenderAffiliates();
+  }).catch(function(e) { showToast('Error: ' + e.message, 'danger'); });
+}
+
+function _rdRenderAffiliates() {
+  var tbody = document.getElementById('rdAffTable');
+  if (!_rdAffiliates.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No affiliates found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _rdAffiliates.map(function(a, idx) {
+    return '<tr>' +
+      '<td><code>' + escapeHtml(a.affiliate_code||'') + '</code></td>' +
+      '<td>' + escapeHtml(a.affiliate_name||'') + '</td>' +
+      '<td>' + escapeHtml(a.country||'-') + '</td>' +
+      '<td>' + escapeHtml(a.region||'-') + '</td>' +
+      '<td>' + _rdStatusBadge(a) + '</td>' +
+      '<td>' + (a.display_order||'-') + '</td>' +
+      '<td>' + _rdActionBtns(
+        'rdShowAffForm(\'' + escapeHtml(a.affiliate_code) + '\')',
+        'rdDeactivate(\'affiliates\',\'' + escapeHtml(a.affiliate_code) + '\')'
+      ) + '</td></tr>';
+  }).join('');
+}
+
+function rdShowAffForm(code) {
+  var item = code ? _rdAffiliates.find(function(a){ return a.affiliate_code === code; }) : null;
+  document.getElementById('rdAffEditId').value   = code || '';
+  document.getElementById('rdAffCode').value     = item ? item.affiliate_code  : '';
+  document.getElementById('rdAffName').value     = item ? item.affiliate_name  : '';
+  document.getElementById('rdAffCountry').value  = item ? (item.country||'')   : '';
+  document.getElementById('rdAffRegion').value   = item ? (item.region||'')    : '';
+  document.getElementById('rdAffCode').readOnly  = !!item;
+  document.getElementById('rdAffFormTitle').textContent = item ? 'Edit Affiliate: ' + code : 'Add New Affiliate';
+  document.getElementById('rdAffFormWrap').style.display = '';
+  document.getElementById('rdAffCode').focus();
+}
+
+function rdHideAffForm() {
+  document.getElementById('rdAffFormWrap').style.display = 'none';
+}
+
+function rdSaveAffiliate() {
+  var code = document.getElementById('rdAffCode').value.trim().toUpperCase().replace(/\s/g,'');
+  var name = document.getElementById('rdAffName').value.trim();
+  if (!code || !name) { showToast('Code and Name are required', 'warning'); return; }
+
+  var editId = document.getElementById('rdAffEditId').value;
+  var data   = {
+    affiliate_code: code,
+    affiliate_name: name,
+    country: document.getElementById('rdAffCountry').value.trim(),
+    region:  document.getElementById('rdAffRegion').value.trim()
+  };
+
+  showLoading('Saving...');
+  var call = editId
+    ? apiCall('updateDropdownItem', { collection: 'affiliates', docId: editId, data: data })
+    : apiCall('createDropdownItem', { collection: 'affiliates', data: data });
+
+  call.then(function(r) {
+    hideLoading();
+    if (r.success) {
+      showToast(editId ? 'Affiliate updated' : 'Affiliate created', 'success');
+      rdHideAffForm();
+      rdLoadAffiliates();
+    } else {
+      showToast(r.error || 'Error', 'danger');
+    }
+  }).catch(function() { hideLoading(); showToast('Error saving affiliate', 'danger'); });
+}
+
+// ── TAB 2: AUDIT AREAS ───────────────────────────────────────────────────────
+
+function rdLoadAuditAreas() {
+  document.getElementById('rdAreaTable').innerHTML =
+    '<tr><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</td></tr>';
+  // Also ensure sub-areas cache is fresh for sub-area counts
+  apiCall('getDropdownItems', { collection: 'sub_areas' }).then(function(sr) {
+    if (sr.success) _rdSubAreas = sr.items || [];
+  }).catch(function(){});
+  apiCall('getDropdownItems', { collection: 'audit_areas' }).then(function(r) {
+    if (!r.success) { showToast(r.error || 'Error loading areas', 'danger'); return; }
+    _rdAreas = (r.items || []).sort(function(a,b){ return (parseInt(a.display_order)||999)-(parseInt(b.display_order)||999); });
+    document.getElementById('rdAreaCount').textContent = _rdAreas.length;
+    _rdRenderAreas();
+  }).catch(function(e) { showToast('Error: ' + e.message, 'danger'); });
+}
+
+function _rdRenderAreas() {
+  var tbody = document.getElementById('rdAreaTable');
+  if (!_rdAreas.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No audit areas found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _rdAreas.map(function(a) {
+    var subCount = _rdSubAreas.filter(function(s){ return s.area_id === a.area_id; }).length;
+    return '<tr>' +
+      '<td><code>' + escapeHtml(a.area_code||'') + '</code></td>' +
+      '<td>' + escapeHtml(a.area_name||'') + '</td>' +
+      '<td>' + _rdStatusBadge(a) + '</td>' +
+      '<td>' + (a.display_order||'-') + '</td>' +
+      '<td><span class="badge bg-info">' + subCount + '</span></td>' +
+      '<td>' + _rdActionBtns(
+        'rdShowAreaForm(\'' + escapeHtml(a.area_id) + '\')',
+        'rdDeactivate(\'audit_areas\',\'' + escapeHtml(a.area_id) + '\')'
+      ) + '</td></tr>';
+  }).join('');
+}
+
+function rdShowAreaForm(areaId) {
+  var item = areaId ? _rdAreas.find(function(a){ return a.area_id === areaId; }) : null;
+  document.getElementById('rdAreaEditId').value = areaId || '';
+  document.getElementById('rdAreaCode').value   = item ? item.area_code : '';
+  document.getElementById('rdAreaName').value   = item ? item.area_name : '';
+  document.getElementById('rdAreaFormTitle').textContent = item ? 'Edit Audit Area' : 'Add New Audit Area';
+  document.getElementById('rdAreaFormWrap').style.display = '';
+  document.getElementById('rdAreaCode').focus();
+}
+
+function rdHideAreaForm() {
+  document.getElementById('rdAreaFormWrap').style.display = 'none';
+}
+
+function rdSaveArea() {
+  var code = document.getElementById('rdAreaCode').value.trim();
+  var name = document.getElementById('rdAreaName').value.trim();
+  if (!code || !name) { showToast('Code and Name are required', 'warning'); return; }
+
+  var editId = document.getElementById('rdAreaEditId').value;
+  var data   = { area_code: code, area_name: name };
+
+  showLoading('Saving...');
+  var call = editId
+    ? apiCall('updateDropdownItem', { collection: 'audit_areas', docId: editId, data: data })
+    : apiCall('createDropdownItem', { collection: 'audit_areas', data: data });
+
+  call.then(function(r) {
+    hideLoading();
+    if (r.success) {
+      showToast(editId ? 'Audit area updated' : 'Audit area created', 'success');
+      rdHideAreaForm();
+      rdLoadAuditAreas();
+    } else {
+      showToast(r.error || 'Error', 'danger');
+    }
+  }).catch(function() { hideLoading(); showToast('Error saving audit area', 'danger'); });
+}
+
+// ── TAB 3: SUB AREAS (split panel) ──────────────────────────────────────────
+
+function rdLoadSubAreasPanel() {
+  // Load areas for left panel and all sub areas
+  var parentList = document.getElementById('rdSubAreaParentList');
+  parentList.innerHTML = '<div class="text-center py-4 text-muted small"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</div>';
+
+  Promise.all([
+    apiCall('getDropdownItems', { collection: 'audit_areas' }),
+    apiCall('getDropdownItems', { collection: 'sub_areas' })
+  ]).then(function(results) {
+    var areasRes   = results[0];
+    var subRes     = results[1];
+    if (areasRes.success)  _rdAreas    = (areasRes.items  || []).sort(function(a,b){ return (parseInt(a.display_order)||999)-(parseInt(b.display_order)||999); });
+    if (subRes.success)    _rdSubAreas = subRes.items || [];
+
+    if (!_rdAreas.length) {
+      parentList.innerHTML = '<div class="text-center py-4 text-muted small">No audit areas found</div>';
+      return;
+    }
+    parentList.innerHTML = _rdAreas.map(function(a) {
+      var cnt = _rdSubAreas.filter(function(s){ return s.area_id === a.area_id; }).length;
+      return '<a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2 px-3' +
+        (_rdSelectedArea && _rdSelectedArea.area_id === a.area_id ? ' active' : '') + '"' +
+        ' onclick="rdSelectArea(\'' + escapeHtml(a.area_id) + '\');return false;">' +
+        '<span>' + escapeHtml(a.area_name) + '</span>' +
+        '<span class="badge ' + (_rdSelectedArea && _rdSelectedArea.area_id === a.area_id ? 'bg-white text-primary' : 'bg-secondary') + '">' + cnt + '</span>' +
+        '</a>';
+    }).join('');
+
+    // Re-select previously selected area if any
+    if (_rdSelectedArea) rdSelectArea(_rdSelectedArea.area_id);
+  }).catch(function(e) {
+    parentList.innerHTML = '<div class="text-danger small p-3">Error: ' + escapeHtml(e.message) + '</div>';
+  });
+}
+
+function rdSelectArea(areaId) {
+  _rdSelectedArea = _rdAreas.find(function(a){ return a.area_id === areaId; });
+  if (!_rdSelectedArea) return;
+
+  // Update active state in parent list
+  document.querySelectorAll('#rdSubAreaParentList .list-group-item').forEach(function(el) {
+    var isActive = el.getAttribute('onclick') && el.getAttribute('onclick').includes('\'' + areaId + '\'');
+    el.classList.toggle('active', isActive);
+    var badge = el.querySelector('.badge');
+    if (badge) badge.className = 'badge ' + (isActive ? 'bg-white text-primary' : 'bg-secondary');
+  });
+
+  _rdRenderSubAreaRight();
+}
+
+function _rdRenderSubAreaRight() {
+  if (!_rdSelectedArea) return;
+  var area     = _rdSelectedArea;
+  var subs     = _rdSubAreas.filter(function(s){ return s.area_id === area.area_id; })
+    .sort(function(a,b){ return (parseInt(a.display_order)||999)-(parseInt(b.display_order)||999); });
+  var rightDiv = document.getElementById('rdSubAreaRight');
+
+  var tableHtml = '<div class="d-flex justify-content-between align-items-center mb-3">' +
+    '<h6 class="mb-0">' + escapeHtml(area.area_name) + ' — Sub Areas <span class="badge bg-secondary ms-1">' + subs.length + '</span></h6>' +
+    '<button class="btn btn-sm btn-primary" onclick="rdShowSubAreaModal(null)">' +
+    '<i class="bi bi-plus-lg me-1"></i>Add Sub Area</button></div>' +
+    '<div class="card"><div class="card-body p-0"><div class="table-responsive">' +
+    '<table class="table table-hover table-sm mb-0">' +
+    '<thead><tr><th>Code</th><th>Name</th><th>Active</th><th>Order</th><th>Actions</th></tr></thead>' +
+    '<tbody>';
+
+  if (!subs.length) {
+    tableHtml += '<tr><td colspan="5" class="text-center py-4 text-muted">No sub areas for this audit area. Click "Add Sub Area" to create one.</td></tr>';
+  } else {
+    tableHtml += subs.map(function(s) {
+      return '<tr>' +
+        '<td><code>' + escapeHtml(s.sub_area_code||'') + '</code></td>' +
+        '<td>' + escapeHtml(s.sub_area_name||'') + '</td>' +
+        '<td>' + _rdStatusBadge(s) + '</td>' +
+        '<td>' + (s.display_order||'-') + '</td>' +
+        '<td>' + _rdActionBtns(
+          'rdShowSubAreaModal(\'' + escapeHtml(s.sub_area_id) + '\')',
+          'rdDeactivate(\'sub_areas\',\'' + escapeHtml(s.sub_area_id) + '\')'
+        ) + '</td></tr>';
+    }).join('');
+  }
+  tableHtml += '</tbody></table></div></div></div>';
+
+  rightDiv.innerHTML = tableHtml;
+}
+
+function rdShowSubAreaModal(subAreaId) {
+  if (!_rdSelectedArea) { showToast('Select an audit area first', 'warning'); return; }
+  var item = subAreaId ? _rdSubAreas.find(function(s){ return s.sub_area_id === subAreaId; }) : null;
+
+  document.getElementById('rdSubAreaEditId').value  = subAreaId || '';
+  document.getElementById('rdSubAreaParentId').value = _rdSelectedArea.area_id;
+  document.getElementById('rdSubCode').value         = item ? item.sub_area_code        : '';
+  document.getElementById('rdSubName').value         = item ? item.sub_area_name        : '';
+  document.getElementById('rdSubCtrlObj').value      = item ? (item.control_objectives  || '') : '';
+  document.getElementById('rdSubRisk').value         = item ? (item.risk_description    || '') : '';
+  document.getElementById('rdSubTestObj').value      = item ? (item.test_objective      || '') : '';
+  document.getElementById('rdSubAreaModalTitle').textContent = item
+    ? 'Edit Sub Area: ' + item.sub_area_name
+    : 'Add Sub Area to: ' + _rdSelectedArea.area_name;
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('rdSubAreaModal')).show();
+}
+
+function rdSaveSubArea() {
+  var code    = document.getElementById('rdSubCode').value.trim();
+  var name    = document.getElementById('rdSubName').value.trim();
+  var areaId  = document.getElementById('rdSubAreaParentId').value;
+  var editId  = document.getElementById('rdSubAreaEditId').value;
+
+  if (!code || !name) { showToast('Code and Name are required', 'warning'); return; }
+
+  var data = {
+    area_id:            areaId,
+    sub_area_code:      code,
+    sub_area_name:      name,
+    control_objectives: document.getElementById('rdSubCtrlObj').value.trim(),
+    risk_description:   document.getElementById('rdSubRisk').value.trim(),
+    test_objective:     document.getElementById('rdSubTestObj').value.trim()
+  };
+
+  showLoading('Saving...');
+  var call = editId
+    ? apiCall('updateDropdownItem', { collection: 'sub_areas', docId: editId, data: data })
+    : apiCall('createDropdownItem', { collection: 'sub_areas', data: data });
+
+  call.then(function(r) {
+    hideLoading();
+    if (r.success) {
+      showToast(editId ? 'Sub area updated' : 'Sub area created', 'success');
+      bootstrap.Modal.getInstance(document.getElementById('rdSubAreaModal')).hide();
+      // Refresh sub areas and re-render
+      apiCall('getDropdownItems', { collection: 'sub_areas' }).then(function(sr) {
+        if (sr.success) { _rdSubAreas = sr.items || []; _rdRenderSubAreaRight(); rdLoadSubAreasPanel(); }
+      });
+    } else {
+      showToast(r.error || 'Error', 'danger');
+    }
+  }).catch(function() { hideLoading(); showToast('Error saving sub area', 'danger'); });
+}
+
+// ── TAB 4: CONFIG DROPDOWNS ──────────────────────────────────────────────────
+
+var _rdConfigKeys = [
+  { key: 'DROPDOWN_RISK_RATINGS',           label: 'Risk Ratings',            icon: 'bi-exclamation-triangle' },
+  { key: 'DROPDOWN_CONTROL_CLASSIFICATIONS', label: 'Control Classifications', icon: 'bi-shield-check' },
+  { key: 'DROPDOWN_CONTROL_TYPES',          label: 'Control Types',           icon: 'bi-gear' },
+  { key: 'DROPDOWN_CONTROL_FREQUENCIES',    label: 'Control Frequencies',     icon: 'bi-clock' }
+];
+
+function rdLoadConfigDropdowns() {
+  var container = document.getElementById('rdConfigContainer');
+  container.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</div>';
+
+  apiCall('getDropdownItems', { collection: 'config_dropdown' }).then(function(r) {
+    if (!r.success) { container.innerHTML = '<div class="col-12"><div class="alert alert-danger">' + escapeHtml(r.error||'Error') + '</div></div>'; return; }
+    _rdConfigData = {};
+    (r.items||[]).forEach(function(item) { _rdConfigData[item.config_key] = item; });
+    _rdRenderConfigDropdowns();
+  }).catch(function(e) {
+    container.innerHTML = '<div class="col-12"><div class="alert alert-danger">Error: ' + escapeHtml(e.message) + '</div></div>';
+  });
+}
+
+function _rdRenderConfigDropdowns() {
+  var container = document.getElementById('rdConfigContainer');
+  container.innerHTML = _rdConfigKeys.map(function(cfg) {
+    var values = [];
+    if (_rdConfigData[cfg.key]) {
+      try { values = JSON.parse(_rdConfigData[cfg.key].config_value || '[]'); } catch(e) { values = []; }
+    }
+    var rows = values.map(function(v, i) {
+      return '<div class="input-group input-group-sm mb-1 rd-cfg-row" data-cfg="' + escapeHtml(cfg.key) + '" draggable="true">' +
+        '<span class="input-group-text rd-drag-handle" style="cursor:grab"><i class="bi bi-grip-vertical"></i></span>' +
+        '<input type="text" class="form-control rd-cfg-input" value="' + escapeHtml(v) + '">' +
+        '<button class="btn btn-outline-danger" type="button" onclick="rdCfgRemove(this)"><i class="bi bi-x-lg"></i></button>' +
+        '</div>';
+    }).join('');
+
+    return '<div class="col-md-6">' +
+      '<div class="card h-100">' +
+      '<div class="card-header py-2"><i class="bi ' + cfg.icon + ' me-1"></i><strong>' + escapeHtml(cfg.label) + '</strong>' +
+      ' <span class="badge bg-secondary">' + values.length + '</span></div>' +
+      '<div class="card-body">' +
+      '<div class="rd-cfg-list" id="rdCfgList_' + cfg.key + '">' + rows + '</div>' +
+      '<button class="btn btn-outline-secondary btn-sm mt-2" onclick="rdCfgAddRow(\'' + cfg.key + '\')">' +
+      '<i class="bi bi-plus-lg me-1"></i>Add</button>' +
+      '</div>' +
+      '<div class="card-footer bg-white d-flex align-items-center justify-content-between py-2">' +
+      '<button class="btn btn-primary btn-sm" onclick="rdCfgSave(\'' + cfg.key + '\')">' +
+      '<i class="bi bi-save me-1"></i>Save</button>' +
+      '<span class="badge bg-warning text-dark rd-unsaved-badge" id="rdCfgDirty_' + cfg.key + '" style="display:none">' +
+      '<i class="bi bi-exclamation-circle me-1"></i>Unsaved</span>' +
+      '</div>' +
+      '</div></div>';
+  }).join('');
+
+  // Wire up drag-and-drop for each list
+  _rdConfigKeys.forEach(function(cfg) {
+    rdInitCfgDrag('rdCfgList_' + cfg.key);
+  });
+}
+
+function rdCfgAddRow(cfgKey) {
+  var list = document.getElementById('rdCfgList_' + cfgKey);
+  if (!list) return;
+  var row = document.createElement('div');
+  row.className = 'input-group input-group-sm mb-1 rd-cfg-row';
+  row.setAttribute('data-cfg', cfgKey);
+  row.setAttribute('draggable', 'true');
+  row.innerHTML =
+    '<span class="input-group-text rd-drag-handle" style="cursor:grab"><i class="bi bi-grip-vertical"></i></span>' +
+    '<input type="text" class="form-control rd-cfg-input" value="">' +
+    '<button class="btn btn-outline-danger" type="button" onclick="rdCfgRemove(this)"><i class="bi bi-x-lg"></i></button>';
+  list.appendChild(row);
+  rdInitCfgDrag('rdCfgList_' + cfgKey);
+  rdCfgMarkDirty(cfgKey);
+  row.querySelector('input').focus();
+}
+
+function rdCfgRemove(btn) {
+  var row = btn.closest('.rd-cfg-row');
+  var cfgKey = row.getAttribute('data-cfg');
+  var list = document.getElementById('rdCfgList_' + cfgKey);
+  if (list && list.querySelectorAll('.rd-cfg-row').length <= 1) {
+    showToast('At least one value is required', 'warning'); return;
+  }
+  row.remove();
+  rdCfgMarkDirty(cfgKey);
+}
+
+function rdCfgMarkDirty(cfgKey) {
+  var badge = document.getElementById('rdCfgDirty_' + cfgKey);
+  if (badge) badge.style.display = '';
+}
+
+function rdCfgSave(cfgKey) {
+  var list   = document.getElementById('rdCfgList_' + cfgKey);
+  var values = [];
+  if (list) {
+    list.querySelectorAll('.rd-cfg-input').forEach(function(inp) {
+      var v = inp.value.trim();
+      if (v) values.push(v);
+    });
+  }
+  if (!values.length) { showToast('At least one value is required', 'warning'); return; }
+
+  showLoading('Saving...');
+  apiCall('saveConfigDropdown', { configKey: cfgKey, values: values }).then(function(r) {
+    hideLoading();
+    if (r.success) {
+      showToast('Saved successfully', 'success');
+      var badge = document.getElementById('rdCfgDirty_' + cfgKey);
+      if (badge) badge.style.display = 'none';
+    } else {
+      showToast(r.error || 'Error saving', 'danger');
+    }
+  }).catch(function() { hideLoading(); showToast('Error saving', 'danger'); });
+}
+
+function rdInitCfgDrag(listId) {
+  var list = document.getElementById(listId);
+  if (!list) return;
+  var dragged = null;
+
+  list.addEventListener('dragstart', function(e) {
+    var row = e.target.closest('.rd-cfg-row');
+    if (row) { dragged = row; row.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; }
+  });
+  list.addEventListener('dragend', function(e) {
+    var row = e.target.closest('.rd-cfg-row');
+    if (row) row.style.opacity = '1';
+    if (dragged) {
+      var cfgKey = dragged.getAttribute('data-cfg');
+      rdCfgMarkDirty(cfgKey);
+    }
+    dragged = null;
+  });
+  list.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    var target = e.target.closest('.rd-cfg-row');
+    if (target && dragged && target !== dragged) {
+      var rect = target.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) list.insertBefore(dragged, target);
+      else list.insertBefore(dragged, target.nextSibling);
+    }
+  });
+}
+
+// ── SHARED: deactivate ────────────────────────────────────────────────────────
+
+function rdDeactivate(collection, docId) {
+  if (!confirm('Deactivate this item? It will no longer appear in dropdown menus.')) return;
+  showLoading('Deactivating...');
+  apiCall('updateDropdownItem', { collection: collection, docId: docId, data: { is_active: 'false' } }).then(function(r) {
+    hideLoading();
+    if (r.success) {
+      showToast('Item deactivated', 'success');
+      if (collection === 'affiliates')  rdLoadAffiliates();
+      else if (collection === 'audit_areas') rdLoadAuditAreas();
+      else if (collection === 'sub_areas') { rdLoadSubAreasPanel(); }
+    } else {
+      showToast(r.error || 'Error', 'danger');
+    }
+  }).catch(function() { hideLoading(); showToast('Error deactivating', 'danger'); });
 }
 </script>

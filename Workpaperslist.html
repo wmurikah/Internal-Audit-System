@@ -557,6 +557,8 @@ function renderWPTable(data) {
   const tbody = document.getElementById('wpTableBody');
 
   if (!data || data.length === 0) {
+    const _canCreate = ['SUPER_ADMIN','HEAD_OF_AUDIT','SENIOR_AUDITOR','AUDITOR']
+      .includes(window.currentUser && window.currentUser.role_code);
     tbody.innerHTML = `
       <tr>
         <td colspan="9" class="text-center py-5">
@@ -564,9 +566,7 @@ function renderWPTable(data) {
             <div class="empty-icon"><i class="bi bi-folder2-open"></i></div>
             <h5>No work papers found</h5>
             <p>Try adjusting your filters or create a new work paper</p>
-            <button class="btn btn-primary" onclick="navigateTo('work-paper-form')">
-              <i class="bi bi-plus-circle me-2"></i>New Work Paper
-            </button>
+            ${_canCreate ? '<button class="btn btn-primary" onclick="navigateTo(\'work-paper-form\')"><i class="bi bi-plus-circle me-2"></i>New Work Paper</button>' : ''}
           </div>
         </td>
       </tr>
@@ -891,6 +891,14 @@ function deleteWorkPaper(id) {
 }
 
 function initWPFilters() {
+  // Hide create buttons for non-audit roles
+  const canCreateWP = ['SUPER_ADMIN','HEAD_OF_AUDIT','SENIOR_AUDITOR','AUDITOR']
+    .includes(window.currentUser && window.currentUser.role_code);
+  if (!canCreateWP) {
+    const btn = document.getElementById('btnNewWorkPaper');
+    if (btn) btn.style.display = 'none';
+  }
+
   // Populate year dropdown
   const yearSelect = document.getElementById('wpFilterYear');
   const currentYear = new Date().getFullYear();
