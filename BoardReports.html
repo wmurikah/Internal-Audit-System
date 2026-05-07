@@ -444,7 +444,7 @@ function renderBoardReportPreview(workPapers, actionPlans, reportType) {
   // Build filter summary line
   var config = getBoardReportFilters();
   var filterParts = [];
-  if (config.filters.dateFrom && config.filters.dateTo) filterParts.push('Period: ' + config.filters.dateFrom + ' — ' + config.filters.dateTo);
+  if (config.filters.dateFrom && config.filters.dateTo) filterParts.push('Period: ' + config.filters.dateFrom + ' to ' + config.filters.dateTo);
   else if (config.filters.dateFrom) filterParts.push('From: ' + config.filters.dateFrom);
   else if (config.filters.dateTo) filterParts.push('To: ' + config.filters.dateTo);
   filterParts.push('Affiliate: ' + (config.filters.affiliate === 'All' ? 'All' : config.filters.affiliate));
@@ -455,7 +455,7 @@ function renderBoardReportPreview(workPapers, actionPlans, reportType) {
   var html = '<div id="reportPreviewContent">';
   // Report header
   html += '<div style="text-align:center;margin-bottom:20px;">';
-  html += '<h4 style="color:#1a365d;margin-bottom:4px;">Hass Petroleum Group — Internal Audit Report</h4>';
+  html += '<h4 style="color:#1a365d;margin-bottom:4px;">Hass Petroleum Group Internal Audit Report</h4>';
   html += '<h5 style="color:#C9A83E;margin-bottom:4px;">' + (reportLabels[reportType] || 'Report') + '</h5>';
   html += '<p class="text-muted small mb-0">Generated: ' + today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' | ' + filterParts.join(' | ') + '</p>';
   html += '</div>';
@@ -730,7 +730,7 @@ function renderBoardReportPreview(workPapers, actionPlans, reportType) {
     }
 
     // Section 3: At-Risk Items Table
-    html += sectionHeading('At-Risk Items — Due Within 14 Days (' + atRiskItems.length + ')');
+    html += sectionHeading('At-Risk Items Due Within 14 Days (' + atRiskItems.length + ')');
     if (atRiskItems.length === 0) {
       html += '<p class="text-muted">No at-risk action plans found.</p>';
     } else {

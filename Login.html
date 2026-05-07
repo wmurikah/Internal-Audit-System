@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login — Hass Petroleum Audit System</title>
+  <title>Hass Petroleum Audit System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fraunces:ital,wght@1,400&display=swap" rel="stylesheet">
@@ -114,169 +114,11 @@
     }
 
     /* ============================================================
-       TWO-COLUMN LAYOUT
+       SINGLE-CARD CENTERED LAYOUT
     ============================================================ */
-    .page-layout {
-      display: flex;
+    body {
+      background: linear-gradient(145deg, #0f1930 0%, #1F2D5C 50%, #162348 100%);
       min-height: 100vh;
-      opacity: 0;
-      animation: pageFadeIn 0.6s 0.1s forwards;
-    }
-    @keyframes pageFadeIn {
-      to { opacity: 1; }
-    }
-
-    /* ---- LEFT BRAND PANEL ---- */
-    .brand-panel {
-      width: 55%;
-      min-height: 100vh;
-      background:
-        radial-gradient(ellipse at 20% 20%, rgba(229,184,27,0.07) 0%, transparent 55%),
-        radial-gradient(ellipse at 80% 80%, rgba(46,64,128,0.6) 0%, transparent 60%),
-        linear-gradient(160deg, #0f1930 0%, #1F2D5C 40%, #1a2850 70%, #0d1628 100%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      overflow: hidden;
-      padding: 60px 48px;
-    }
-
-    /* animated mesh dots */
-    .brand-panel::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background-image:
-        radial-gradient(circle, rgba(229,184,27,0.12) 1px, transparent 1px);
-      background-size: 40px 40px;
-      animation: meshDrift 24s linear infinite;
-      pointer-events: none;
-    }
-    .brand-panel::after {
-      content: '';
-      position: absolute;
-      top: -120px; right: -120px;
-      width: 480px; height: 480px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(229,184,27,0.06) 0%, transparent 70%);
-      animation: floatOrb 14s ease-in-out infinite;
-      pointer-events: none;
-    }
-    @keyframes meshDrift {
-      0%   { background-position: 0 0; }
-      100% { background-position: 40px 40px; }
-    }
-    @keyframes floatOrb {
-      0%, 100% { transform: translateY(0) scale(1); }
-      50%       { transform: translateY(40px) scale(1.06); }
-    }
-
-    .brand-content {
-      position: relative;
-      z-index: 1;
-      text-align: center;
-      width: 100%;
-      max-width: 420px;
-    }
-
-    .brand-logo-wrap {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      margin-bottom: 36px;
-    }
-    .brand-shield {
-      width: 64px; height: 64px;
-      flex-shrink: 0;
-      filter: drop-shadow(0 4px 16px rgba(229,184,27,0.35));
-    }
-    .brand-wordmark h1 {
-      font-size: 1.55rem;
-      font-weight: 700;
-      color: var(--white);
-      line-height: 1.15;
-      text-align: left;
-    }
-    .brand-wordmark span {
-      font-size: 0.72rem;
-      font-weight: 400;
-      color: rgba(255,255,255,0.55);
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      display: block;
-      margin-top: 2px;
-      text-align: left;
-    }
-
-    .brand-divider {
-      width: 40px; height: 2px;
-      background: var(--gold);
-      border-radius: 1px;
-      margin: 0 auto 36px;
-      opacity: 0.7;
-    }
-
-    /* rotating quotes */
-    .quote-carousel {
-      position: relative;
-      min-height: 100px;
-      margin-bottom: 48px;
-    }
-    .quote-item {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      transition: opacity 0.9s ease;
-    }
-    .quote-item.active { opacity: 1; }
-    .quote-mark {
-      font-size: 2.2rem;
-      color: var(--gold);
-      opacity: 0.5;
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-    .quote-text {
-      font-size: 0.96rem;
-      font-weight: 400;
-      color: rgba(255,255,255,0.78);
-      line-height: 1.65;
-      font-style: italic;
-      max-width: 320px;
-      text-align: center;
-    }
-
-    .brand-tagline {
-      font-size: 0.75rem;
-      font-weight: 500;
-      color: rgba(255,255,255,0.38);
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-    }
-    .brand-tagline span { color: var(--gold); opacity: 0.7; }
-
-    /* ---- RIGHT FORM PANEL ---- */
-    .form-panel {
-      width: 45%;
-      min-height: 100vh;
-      background: var(--off-white);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 32px;
-      position: relative;
-    }
-
-    .form-panel-inner {
-      width: 100%;
-      max-width: 420px;
     }
 
     /* ============================================================
@@ -368,15 +210,38 @@
        FORM CARD & HEADER
     ============================================================ */
     .form-card {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 520px;
       background: var(--white);
       border-radius: var(--radius);
       box-shadow: var(--shadow-card);
       overflow: hidden;
       animation: cardRise 0.5s 0.15s both;
+      z-index: 10;
     }
+
+    .login-page-footer {
+      position: fixed;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: rgba(255,255,255,0.5);
+      font-size: 0.78rem;
+      z-index: 10;
+    }
+    .login-page-footer a {
+      color: rgba(255,255,255,0.72);
+      font-weight: 500;
+      text-decoration: none;
+    }
+    .login-page-footer a:hover { text-decoration: underline; }
     @keyframes cardRise {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translate(-50%, calc(-50% + 20px)); }
+      to   { opacity: 1; transform: translate(-50%, -50%); }
     }
 
     .form-header {
@@ -414,15 +279,6 @@
     }
 
     .form-body { padding: 28px; }
-    .form-footer {
-      padding: 16px 28px 22px;
-      background: var(--off-white);
-      border-top: 1px solid var(--border);
-      text-align: center;
-    }
-    .form-footer p { color: var(--text-muted); font-size: 0.78rem; }
-    .form-footer a { color: var(--navy); font-weight: 500; text-decoration: none; }
-    .form-footer a:hover { text-decoration: underline; }
 
     /* ============================================================
        FORM ELEMENTS
@@ -870,44 +726,34 @@
     #toastNotification.error { background: var(--red); }
 
     /* ============================================================
-       MOBILE HEADER (< 900px)
-    ============================================================ */
-    .mobile-brand {
-      display: none;
-      background: var(--navy);
-      padding: 16px 20px;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 3px solid var(--gold);
-    }
-    .mobile-brand-text h1 {
-      font-size: 0.98rem;
-      font-weight: 700;
-      color: var(--white);
-      line-height: 1.2;
-    }
-    .mobile-brand-text span {
-      font-size: 0.65rem;
-      color: rgba(255,255,255,0.5);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    /* ============================================================
        RESPONSIVE
     ============================================================ */
-    @media (max-width: 900px) {
-      .page-layout  { flex-direction: column; }
-      .brand-panel  { display: none; }
-      .form-panel   { width: 100%; min-height: auto; padding: 24px 16px 40px; }
-      .mobile-brand { display: flex; }
+    @media (max-width: 860px) {
+      .form-card {
+        position: static;
+        transform: none;
+        width: calc(100vw - 40px);
+        margin: 40px auto 0;
+        animation: cardRiseMobile 0.5s 0.15s both;
+      }
+      @keyframes cardRiseMobile {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .login-page-footer {
+        position: static;
+        display: block;
+        text-align: center;
+        padding: 16px 0 40px;
+        color: rgba(255,255,255,0.5);
+        transform: none;
+      }
     }
 
     @media (max-width: 480px) {
       .form-body   { padding: 22px 18px; }
       .form-header { padding: 22px 18px 20px; }
-      .form-footer { padding: 14px 18px 20px; }
-      .form-panel  { padding: 16px 10px 36px; }
+      .form-card   { width: calc(100vw - 32px); margin: 24px auto 0; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -960,52 +806,8 @@
   </div>
 
   <!-- ============================================================
-       MOBILE HEADER
+       SINGLE CENTERED CARD
   ============================================================ -->
-  <div class="mobile-brand">
-    <svg width="36" height="36" viewBox="0 0 72 72" fill="none">
-      <path d="M36 4L8 16v20c0 16.6 11.9 32.1 28 36 16.1-3.9 28-19.4 28-36V16L36 4z" fill="rgba(229,184,27,0.2)" stroke="#E5B81B" stroke-width="2"/>
-      <path d="M25 37l8 8 16-16" stroke="#E5B81B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <div class="mobile-brand-text">
-      <h1>Hass Petroleum</h1>
-      <span>Internal Audit Management System</span>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       TWO-COLUMN LAYOUT
-  ============================================================ -->
-  <div class="page-layout">
-
-    <!-- LEFT: BRAND PANEL -->
-    <div class="brand-panel">
-      <div class="brand-content">
-
-        <div class="brand-logo-wrap">
-          <svg class="brand-shield" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M40 5L9 19v22c0 18.5 13.2 35.8 31 40 17.8-4.2 31-21.5 31-40V19L40 5z" fill="rgba(229,184,27,0.12)" stroke="#E5B81B" stroke-width="2"/>
-            <path d="M28 42l10 10 18-18" stroke="#E5B81B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <div class="brand-wordmark">
-            <h1>Hass Petroleum</h1>
-            <span>Internal Audit Management System</span>
-          </div>
-        </div>
-
-        <div class="brand-divider"></div>
-
-        <div class="quote-carousel" id="quoteCarousel" aria-live="polite">
-          <!-- injected by JS -->
-        </div>
-
-        <p class="brand-tagline">Servicing <span>New Frontiers</span></p>
-      </div>
-    </div>
-
-    <!-- RIGHT: FORM PANEL -->
-    <div class="form-panel">
-      <div class="form-panel-inner">
         <div class="form-card" id="loginCard">
 
           <div class="form-header">
@@ -1164,10 +966,6 @@
 
               <!-- Quick Actions -->
               <div id="quickActionsSection" class="btn-stack">
-                <button type="button" class="btn-green" id="dashboardBtn" onclick="goToDashboard()">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                  Go to Dashboard
-                </button>
                 <button type="button" class="btn-ghost" id="editProfileBtn" onclick="showProfileEdit()">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   Edit Profile
@@ -1207,14 +1005,9 @@
 
           </div><!-- /form-body -->
 
-          <div class="form-footer">
-            <p>Having trouble? <a href="mailto:audit@hasspetroleum.com">audit&#64;hasspetroleum.com</a></p>
-          </div>
-
         </div><!-- /form-card -->
-      </div>
-    </div><!-- /form-panel -->
-  </div><!-- /page-layout -->
+
+  <p class="login-page-footer">Having trouble? <a href="mailto:audit@hasspetroleum.com">audit&#64;hasspetroleum.com</a></p>
 
   <div id="toastNotification"></div>
 
@@ -1244,24 +1037,24 @@
     ============================================================ */
     var GREETINGS = {
       morning: [
-        "Good morning. The audit record doesn't lie — let's build it.",
+        "Good morning. The audit record doesn't lie. Let's build it.",
         "Morning. Controls checked, coffee optional.",
         "Good morning. Another day, another clean audit trail.",
         "Early start. The best findings go to those who show up first."
       ],
       afternoon: [
-        "Good afternoon. Mid-session — keep the momentum.",
+        "Good afternoon. Mid-session. Keep the momentum.",
         "Afternoon. Half the day gone, findings still outstanding?",
         "Good afternoon. The work papers won't review themselves.",
         "Good afternoon. Clear eyes, clean controls."
       ],
       evening: [
-        "Good evening. Late session — we respect the dedication.",
+        "Good evening. Late session. We respect the dedication.",
         "Evening. The audit never sleeps, but you should soon.",
         "Good evening. Wrapping up or just getting started?"
       ],
       night: [
-        "It's late. The findings can wait — you probably can't.",
+        "It's late. The findings can wait. You probably can't.",
         "Still here? Save your work. Get some rest."
       ]
     };
@@ -1321,7 +1114,7 @@
     var QUOTES = [
       "The audit trail is only as strong as the evidence behind it.",
       "Risk managed today is a crisis prevented tomorrow.",
-      "Controls aren't bureaucracy — they're the backbone of trust.",
+      "Controls aren't bureaucracy. They're the backbone of trust.",
       "Every finding is an opportunity to strengthen the system."
     ];
 
@@ -1588,9 +1381,7 @@
         .apiCall('login', loginData);
     }
 
-    var CURRENT_POLICY_VERSION = '1.0';
     var currentLoginUser = null;
-    var consentPending   = false;
 
     function updateGreetingWithName(firstName) {
       if (!firstName) return;
@@ -1613,6 +1404,25 @@
       document.body.appendChild(a); a.click();
     }
 
+    function autoRedirectToDashboard() {
+      document.body.innerHTML = [
+        '<div style="position:fixed;inset:0;background:#1F2D5C;display:flex;align-items:center;',
+        'justify-content:center;flex-direction:column;gap:16px;">',
+        '<svg width="48" height="48" viewBox="0 0 24 24" fill="none">',
+        '<circle cx="12" cy="12" r="10" stroke="#E5B81B" stroke-width="2"/>',
+        '<path d="M8 12l3 3 5-5" stroke="#E5B81B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+        '</svg>',
+        '<p style="color:#ffffff;font-family:system-ui;font-size:16px;margin:0;">Loading your workspace</p>',
+        '<div style="width:200px;height:2px;background:rgba(255,255,255,0.2);border-radius:2px;overflow:hidden;">',
+        '<div style="height:100%;background:#E5B81B;animation:progress 1.4s ease-out forwards;border-radius:2px;" id="prog"></div>',
+        '</div></div>',
+        '<style>@keyframes progress{from{width:0%}to{width:100%}}</style>'
+      ].join('');
+      setTimeout(function() {
+        navigateTop(APP_URL);
+      }, 1500);
+    }
+
     function onLoginSuccess(result) {
       if (result && result.success) {
         if (result.sessionToken) sessionStorage.setItem('sessionToken', result.sessionToken);
@@ -1633,18 +1443,17 @@
         if (currentLoginUser.must_change_password) {
           setTimeout(function() {
             navigateTop(APP_URL);
-            setTimeout(function() { setLoading(false); showSuccessView(); }, 3000);
           }, 800);
           return;
         }
 
-        /* THE CORE FIX: consent is needed only when privacy_consent_accepted !== 1 */
-        consentPending = (currentLoginUser.privacy_consent_accepted !== 1);
-
-        setTimeout(function() {
-          navigateTop(consentPending ? CONSENT_URL : APP_URL);
-          setTimeout(function() { setLoading(false); showSuccessView(); }, 3000);
-        }, 800);
+        if (currentLoginUser.privacy_consent_accepted === 1) {
+          autoRedirectToDashboard();
+        } else {
+          setTimeout(function() {
+            navigateTop(CONSENT_URL);
+          }, 800);
+        }
       } else {
         setLoading(false);
         document.getElementById('password').value = '';
@@ -1658,63 +1467,14 @@
       document.getElementById('successView').style.display        = 'block';
 
       document.getElementById('welcomeName').textContent = currentLoginUser.full_name || 'User';
-      var roleName      = currentLoginUser.role_name || currentLoginUser.role_code || '';
       var affiliateCode = currentLoginUser.affiliate_code || '';
-      var metaParts = [];
-      if (roleName)      metaParts.push('Role: ' + roleName);
-      if (affiliateCode) metaParts.push('Affiliate: ' + affiliateCode);
-      document.getElementById('userRoleAffiliate').textContent = metaParts.join(' | ');
-
-      if (consentPending) {
-        document.getElementById('privacyNoticeSection').style.display  = 'block';
-        document.getElementById('privacyAcceptedSection').style.display = 'none';
-        document.getElementById('dashboardBtn').disabled = true;
-      } else {
-        document.getElementById('privacyNoticeSection').style.display  = 'none';
-        document.getElementById('privacyAcceptedSection').style.display = 'block';
-        var consentDate = currentLoginUser.privacy_consent_date;
-        if (consentDate) {
-          try {
-            var d = new Date(consentDate);
-            document.getElementById('consentDateDisplay').textContent =
-              d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-          } catch(e) {
-            document.getElementById('consentDateDisplay').textContent = consentDate;
-          }
-        }
-        document.getElementById('dashboardBtn').disabled = false;
+      if (affiliateCode) {
+        document.getElementById('userRoleAffiliate').textContent = 'Affiliate: ' + affiliateCode;
       }
-    }
-
-    function onConsentCheckboxChange() {
-      document.getElementById('dashboardBtn').disabled = !document.getElementById('privacyConsent').checked;
     }
 
     function goToDashboard() {
-      if (consentPending) {
-        if (!document.getElementById('privacyConsent').checked) return;
-
-        document.getElementById('dashboardBtn').disabled = true;
-        document.getElementById('dashboardBtn').innerHTML =
-          '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Please wait…';
-
-        var consentData = { version: CURRENT_POLICY_VERSION };
-
-        google.script.run
-          .withSuccessHandler(function() { navigateToDashboard(); })
-          .withFailureHandler(function() {
-            httpApiCall('acceptPrivacyConsent', consentData)
-              .then(function() { navigateToDashboard(); })
-              .catch(function()  { navigateToDashboard(); });
-          })
-          .apiCall('acceptPrivacyConsent', consentData);
-      } else {
-        navigateToDashboard();
-      }
-    }
-
-    function navigateToDashboard() {
-      navigateTop(APP_URL);
+      autoRedirectToDashboard();
     }
 
     function togglePrivacyNoticeView() {
@@ -1812,7 +1572,6 @@
       document.getElementById('password').value = '';
       document.getElementById('email').focus();
       currentLoginUser = null;
-      consentPending   = false;
     }
 
     function showToast(message, isError) {
@@ -1827,7 +1586,6 @@
        INIT
     ============================================================ */
     document.addEventListener('DOMContentLoaded', function() {
-      initQuoteCarousel();
       runGreetingOverlay();
       checkExistingSession();
     });

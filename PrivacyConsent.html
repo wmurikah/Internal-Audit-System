@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Data Protection &amp; Privacy — Hass Petroleum Audit System</title>
+  <title>Data Protection and Privacy. Hass Petroleum Audit System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fraunces:ital,wght@1,400&display=swap" rel="stylesheet">
@@ -91,9 +91,9 @@
       opacity: 0;
     }
 
-    .kp-item:nth-child(1) { animation: kpAnim 1.4s ease 0s   both; }
-    .kp-item:nth-child(2) { animation: kpAnim 1.4s ease 0.9s both; }
-    .kp-item:nth-child(3) { animation: kpAnim 1.4s ease 1.8s both; }
+    .kp-item:nth-child(1) { animation: kpAnim 0.9s ease 0s   both; }
+    .kp-item:nth-child(2) { animation: kpAnim 0.9s ease 0.9s both; }
+    .kp-item:nth-child(3) { animation: kpAnim 0.9s ease 1.8s both; }
 
     @keyframes kpAnim {
       0%   { opacity: 0; transform: translateY(14px); }
@@ -126,24 +126,23 @@
        CONSENT CARD WRAPPER
     ============================================================ */
     #consentCardWrap {
-      position: relative;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) translateY(40px);
       z-index: 100;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 16px;
+      width: 700px;
       opacity: 0;
       pointer-events: none;
     }
     #consentCardWrap.visible {
       opacity: 1;
       pointer-events: all;
-      animation: cardSlideUp 0.55s ease both;
+      animation: cardSlideUp 0.4s ease-out both;
     }
     @keyframes cardSlideUp {
-      from { opacity: 0; transform: translateY(40px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translate(-50%, calc(-50% + 40px)); }
+      to   { opacity: 1; transform: translate(-50%, -50%); }
     }
 
     /* ============================================================
@@ -154,8 +153,21 @@
       border-radius: var(--radius);
       box-shadow: var(--shadow-card);
       width: 100%;
-      max-width: 720px;
       overflow: hidden;
+    }
+
+    @media (max-width: 760px) {
+      #consentCardWrap {
+        position: static;
+        transform: none;
+        width: calc(100vw - 40px);
+        margin: 40px auto;
+        opacity: 1;
+        pointer-events: all;
+      }
+      #consentCardWrap.visible {
+        animation: none;
+      }
     }
 
     /* ---- CARD HEADER ---- */
@@ -195,17 +207,16 @@
     }
 
     .cc-subtitle {
-      font-size: 0.78rem;
+      font-size: 13px;
       font-weight: 500;
       color: var(--gold);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
 
     /* ---- CARD CONTENT ---- */
     .cc-content {
       padding: 36px 48px;
-      max-height: 400px;
+      max-height: 420px;
       overflow-y: auto;
       overscroll-behavior: contain;
     }
@@ -350,7 +361,7 @@
             <path d="M12 8v4l3 3"/>
           </svg>
         </div>
-        <p class="kp-text">You control your personal information — request export or deletion anytime</p>
+        <p class="kp-text">You can request export or deletion of your personal data at any time.</p>
       </div>
 
       <div class="kp-item">
@@ -380,7 +391,7 @@
           </svg>
         </div>
         <h1>Data Protection &amp; Privacy</h1>
-        <p class="cc-subtitle">One-time consent &mdash; you will not see this again</p>
+        <p class="cc-subtitle">You will only see this once.</p>
       </div>
 
       <!-- CONTENT -->
@@ -388,7 +399,7 @@
 
         <div class="cc-section">
           <h3>What we collect</h3>
-          <p>Your name, email address, role, department, and affiliate assignment. Your activity within the audit system — including work paper actions, findings reviewed, and login events — is logged for audit trail and accountability purposes.</p>
+          <p>Your name, email address, role, department, and affiliate assignment. Your activity within the audit system, including work paper actions, findings reviewed, and login events, is logged for audit trail and accountability purposes.</p>
         </div>
 
         <div class="cc-section">
@@ -417,7 +428,7 @@
         </label>
 
         <button class="cc-agree-btn" id="agreeBtn" onclick="acceptConsent()" disabled>
-          I Agree &mdash; Continue to System
+          I Agree
         </button>
 
         <div class="cc-logout-wrap">
@@ -469,11 +480,11 @@
       var consentData  = { version: CURRENT_POLICY_VERSION, sessionToken: sessionToken };
 
       google.script.run
-        .withSuccessHandler(function() { navigateToDashboard(); })
+        .withSuccessHandler(function() { autoRedirectToDashboard(); })
         .withFailureHandler(function() {
           httpApiCall('acceptPrivacyConsent', consentData)
-            .then(function()  { navigateToDashboard(); })
-            .catch(function() { navigateToDashboard(); });
+            .then(function()  { autoRedirectToDashboard(); })
+            .catch(function() { autoRedirectToDashboard(); });
         })
         .apiCall('acceptPrivacyConsent', consentData);
     }
@@ -482,6 +493,25 @@
       var a = document.createElement('a');
       a.href = APP_URL; a.target = '_top'; a.style.display = 'none';
       document.body.appendChild(a); a.click();
+    }
+
+    function autoRedirectToDashboard() {
+      document.body.innerHTML = [
+        '<div style="position:fixed;inset:0;background:#1F2D5C;display:flex;align-items:center;',
+        'justify-content:center;flex-direction:column;gap:16px;">',
+        '<svg width="48" height="48" viewBox="0 0 24 24" fill="none">',
+        '<circle cx="12" cy="12" r="10" stroke="#E5B81B" stroke-width="2"/>',
+        '<path d="M8 12l3 3 5-5" stroke="#E5B81B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+        '</svg>',
+        '<p style="color:#ffffff;font-family:system-ui;font-size:16px;margin:0;">Loading your workspace</p>',
+        '<div style="width:200px;height:2px;background:rgba(255,255,255,0.2);border-radius:2px;overflow:hidden;">',
+        '<div style="height:100%;background:#E5B81B;animation:progress 1.4s ease-out forwards;border-radius:2px;"></div>',
+        '</div></div>',
+        '<style>@keyframes progress{from{width:0%}to{width:100%}}</style>'
+      ].join('');
+      setTimeout(function() {
+        navigateToDashboard();
+      }, 1500);
     }
 
     /* ============================================================
@@ -527,7 +557,7 @@
         }
       } catch(e) {}
 
-      /* Key-points animation ends at ~3.2s; then slide the card in */
+      /* Key-points animation ends at ~2.7s; then slide the card in */
       setTimeout(function() {
         var kp = document.getElementById('keyPointsOverlay');
         kp.style.transition = 'opacity 0.3s ease';
@@ -536,7 +566,7 @@
           kp.style.display = 'none';
           document.getElementById('consentCardWrap').classList.add('visible');
         }, 300);
-      }, 3200);
+      }, 2700);
     });
   </script>
 </body>

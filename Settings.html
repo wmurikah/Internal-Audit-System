@@ -299,8 +299,8 @@
           <table class="table table-sm mb-0">
             <thead><tr><th>Notification</th><th>Schedule</th></tr></thead>
             <tbody>
-              <tr><td>Overdue Reminders</td><td><span class="badge bg-primary">Weekly &mdash; Monday 10:30 AM EAT</span></td></tr>
-              <tr><td>Upcoming Due Reminders</td><td><span class="badge bg-primary">Weekly &mdash; Monday 10:30 AM EAT</span></td></tr>
+              <tr><td>Overdue Reminders</td><td><span class="badge bg-primary">Weekly, Monday 10:30 AM EAT</span></td></tr>
+              <tr><td>Upcoming Due Reminders</td><td><span class="badge bg-primary">Weekly, Monday 10:30 AM EAT</span></td></tr>
               <tr><td>Biweekly Summary</td><td><span class="badge bg-info">Every Other Monday 11:00 AM EAT</span></td></tr>
               <tr><td>Email Queue Processor</td><td><span class="badge bg-secondary">Every 10 minutes</span></td></tr>
               <tr><td>Daily Maintenance</td><td><span class="badge bg-secondary">Daily 9:00 AM EAT</span></td></tr>
@@ -970,7 +970,7 @@ function _acBadge(access) {
 function _acCheck(val) {
   return (val === true || val === 'true' || val === 1)
     ? '<span style="color:#198754;font-weight:bold;">&#10003;</span>'
-    : '<span style="color:#adb5bd;">&mdash;</span>';
+    : '<span style="color:#adb5bd;">N/A</span>';
 }
 
 function _acSectionHeader(num, title) {
@@ -988,7 +988,7 @@ function renderFullAccessControlDashboard(data) {
 
   // ===== Section 1: Header Banner =====
   html += '<div class="mb-5">';
-  html += '<div class="alert alert-info d-flex align-items-center mb-4"><i class="bi bi-lock me-2"></i><div><strong>Role Access Reference</strong> &mdash; This is a read-only governance reference. All permissions are hardcoded in the system codebase. Contact the system administrator for changes.</div></div>';
+  html += '<div class="alert alert-info d-flex align-items-center mb-4"><i class="bi bi-lock me-2"></i><div><strong>Role Access Reference.</strong> This is a read-only governance reference. All permissions are hardcoded in the system codebase. Contact the system administrator for changes.</div></div>';
   html += '</div>';
 
   // ===== Section 2: Role Overview Table =====
@@ -1055,7 +1055,7 @@ function renderFullAccessControlDashboard(data) {
   stageKeys.forEach(function(sk) {
     var info = AC_STAGE_LABELS[sk] || {label: sk, subtitle: ''};
     html += '<div class="card mb-3"><div class="card-header py-2"><strong>' + escapeHtml(info.label) + '</strong>';
-    if (info.subtitle) html += ' <span class="text-muted small">&mdash; ' + escapeHtml(info.subtitle) + '</span>';
+    if (info.subtitle) html += ' <span class="text-muted small">, ' + escapeHtml(info.subtitle) + '</span>';
     html += '</div><div class="card-body p-0">';
     html += '<table class="table table-bordered table-sm mb-0">';
     html += '<thead class="table-light"><tr><th>Role</th><th>Access Level</th><th>Permitted Actions</th></tr></thead><tbody>';
@@ -1106,7 +1106,7 @@ function renderFullAccessControlDashboard(data) {
     html += '</tbody></table></div></div></div></div>';
   });
   html += '</div>';
-  html += '<p class="text-muted small">* Auditee Response has granular permissions &mdash; see Section 5 below for full detail.</p>';
+  html += '<p class="text-muted small">* Auditee Response has granular permissions. See Section 5 below for full detail.</p>';
   html += '</div>';
 
   // ===== Section 6: Auditee Response Permissions Detail =====
@@ -1168,7 +1168,7 @@ function renderFullAccessControlDashboard(data) {
       } else if (v === 'S') {
         html += '<td class="text-center"><span style="color:#d4a017;font-weight:bold;">&#9733;</span></td>';
       } else {
-        html += '<td class="text-center"><span style="color:#adb5bd;">&mdash;</span></td>';
+        html += '<td class="text-center"><span style="color:#adb5bd;">N/A</span></td>';
       }
     });
     html += '<td class="small text-muted">' + escapeHtml(row.notes) + '</td>';
@@ -1179,7 +1179,7 @@ function renderFullAccessControlDashboard(data) {
   html += '<div class="small text-muted mt-2">';
   html += '<span style="color:#198754;font-weight:bold;">&#10003;</span> = Role-based: ALL users with this role receive the notification automatically &nbsp;&nbsp;';
   html += '<span style="color:#d4a017;font-weight:bold;">&#9733;</span> = Assignment-based: User receives this notification only if specifically assigned (e.g., as preparer, owner, or responsible party) &nbsp;&nbsp;';
-  html += '<span style="color:#adb5bd;">&mdash;</span> = This role never receives this notification<br>';
+  html += '<span style="color:#adb5bd;">N/A</span> = This role never receives this notification<br>';
   html += 'CC recipients are configured per work paper and may include any role.';
   html += '</div></div>';
 
@@ -1250,7 +1250,7 @@ function renderFullAccessControlDashboard(data) {
     html += '</tr>';
   });
   html += '</tbody></table></div>';
-  html += '<div class="small text-muted mt-2"><span style="display:inline-block;width:14px;height:14px;background:#e8f4fd;border:1px solid #ccc;vertical-align:middle;margin-right:4px;"></span> Auditee roles (Path 2) &mdash; access observations and action plans via dedicated auditee interface</div>';
+  html += '<div class="small text-muted mt-2"><span style="display:inline-block;width:14px;height:14px;background:#e8f4fd;border:1px solid #ccc;vertical-align:middle;margin-right:4px;"></span> Auditee roles (Path 2): access observations and action plans via dedicated auditee interface</div>';
   html += '</div>';
 
   // ===== Section 10: Legend & Methodology =====
@@ -1283,7 +1283,7 @@ function renderFullAccessControlDashboard(data) {
   html += '<div class="small">';
   html += '<p class="mb-1"><span style="color:#198754;font-weight:bold;">&#10003;</span> = Permitted / Receives notification (role-based)</p>';
   html += '<p class="mb-1"><span style="color:#d4a017;font-weight:bold;">&#9733;</span> = Assignment-based (only if user is specifically assigned)</p>';
-  html += '<p class="mb-1"><span style="color:#adb5bd;">&mdash;</span> = Not permitted / Does not receive</p>';
+  html += '<p class="mb-1"><span style="color:#adb5bd;">N/A</span> = Not permitted / Does not receive</p>';
   html += '<p class="mb-3"><strong>C</strong> = Create | <strong>R</strong> = Read | <strong>U</strong> = Update | <strong>D</strong> = Delete | <strong>A</strong> = Approve | <strong>E</strong> = Export</p>';
   html += '<p class="mb-1 text-muted"><strong>Source:</strong> ROLE_PERMISSIONS and ROLE_WORKFLOW_ACCESS constants in 02_Config.gs</p>';
   html += '<p class="mb-1 text-muted"><strong>Notification logic:</strong> 05_NotificationService.gs, 10_AuditeeService.gs, 04_ActionPlanService.gs</p>';
@@ -1502,7 +1502,7 @@ function loadOutlookConfig() {
     const badge = document.getElementById('outlookStatus');
 
     if (r.configured) {
-      badge.textContent = 'Configured — Outlook sending active';
+      badge.textContent = 'Configured. Outlook sending active';
       badge.className = 'badge bg-success';
     } else {
       badge.textContent = 'Not Configured (using Gmail fallback)';
