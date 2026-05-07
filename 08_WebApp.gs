@@ -2283,3 +2283,30 @@ function migrateExistingDriveFiles() {
 function getWebAppUrl() {
   return ScriptApp.getService().getUrl();
 }
+
+/**
+ * Fetch the AuditorPortal HTML for the authenticated session.
+ * Called from Login.html after login to avoid sandbox navigation restrictions.
+ * Uses document.open/write/close on the client instead of window.top.location.href.
+ */
+function getDashboardHtml(sessionToken) {
+  if (!sessionToken) {
+    throw new Error('No session token provided');
+  }
+
+  const session = getSessionByToken(sessionToken);
+  if (!session) {
+    throw new Error('Session invalid or expired — please log in again');
+  }
+
+  const user = getUserByIdCached(session.user_id);
+  if (!user || !isActive(user.is_active)) {
+    throw new Error('User account not found or inactive');
+  }
+
+  const initData = getInitDataOptimized(user);
+  const template = HtmlService.createTemplateFromFile('AuditorPortal');
+  template.inlineInitData = initData ? JSON.stringify(initData) : 'null';
+
+  return template.evaluate().getContent();
+}
