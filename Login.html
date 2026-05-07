@@ -1404,42 +1404,86 @@
       document.body.appendChild(a); a.click();
     }
 
-    function autoRedirectToDashboard() {
-      document.body.innerHTML = `
-        <div style="
-          position:fixed; inset:0;
-          background:#1F2D5C;
-          display:flex; align-items:center; justify-content:center;
-          flex-direction:column; gap:16px;">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="#E5B81B" stroke-width="2"/>
-            <path d="M8 12l3 3 5-5" stroke="#E5B81B" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <p style="color:#ffffff;font-family:system-ui;font-size:16px;margin:0;">
-            Loading your workspace
-          </p>
-          <div style="width:200px;height:2px;background:rgba(255,255,255,0.2);
-                      border-radius:2px;overflow:hidden;">
-            <div style="height:100%;background:#E5B81B;width:0%;
-                        animation:prog 1.4s ease-out forwards;
-                        border-radius:2px;"></div>
-          </div>
-        </div>
-        <style>@keyframes prog{from{width:0%}to{width:100%}}</style>
-      `;
+    function autoRedirectToDashboard(sessionToken) {
+      // Replace the entire page with a loading screen immediately (synchronous — preserves user activation).
+      // Then fetch the dashboard HTML from the server and write it directly into the document.
+      // This bypasses Chrome's sandbox navigation restriction on 'allow-top-navigation-by-user-activation'
+      // which blocks window.top.location.href when called from async callbacks.
+      document.body.innerHTML =
+        '<div id="loadScreen" style="' +
+          'position:fixed;inset:0;background:#1F2D5C;' +
+          'display:flex;align-items:center;justify-content:center;' +
+          'flex-direction:column;gap:16px;font-family:system-ui;">' +
+          '<svg width="48" height="48" viewBox="0 0 24 24" fill="none">' +
+            '<circle cx="12" cy="12" r="10" stroke="#E5B81B" stroke-width="2"/>' +
+            '<path d="M8 12l3 3 5-5" stroke="#E5B81B" stroke-width="2"' +
+                  ' stroke-linecap="round" stroke-linejoin="round"/>' +
+          '</svg>' +
+          '<p style="color:#fff;font-size:16px;margin:0;" id="loadMsg">Loading your workspace</p>' +
+          '<div style="width:240px;height:2px;background:rgba(255,255,255,0.15);' +
+                      'border-radius:2px;overflow:hidden;">' +
+            '<div id="loadBar" style="height:100%;background:#E5B81B;width:0%;' +
+                        'transition:width 0.3s ease;border-radius:2px;"></div>' +
+          '</div>' +
+        '</div>';
 
-      setTimeout(function() {
-        google.script.run
-          .withSuccessHandler(function(url) {
-            window.top.location.href = url + '?page=dashboard';
-          })
-          .withFailureHandler(function() {
-            var base = window.top.location.href.split('?')[0];
-            window.top.location.href = base + '?page=dashboard';
-          })
-          .getWebAppUrl();
-      }, 1500);
+      var pct = 0;
+      var bar = document.getElementById('loadBar');
+      var msg = document.getElementById('loadMsg');
+      var ticker = setInterval(function() {
+        pct = Math.min(pct + (pct < 70 ? 8 : 1), 92);
+        if (bar) bar.style.width = pct + '%';
+      }, 150);
+
+      var messages = ['Authenticating session', 'Loading your workspace', 'Preparing your dashboard'];
+      var msgIdx = 0;
+      var msgTimer = setInterval(function() {
+        msgIdx = (msgIdx + 1) % messages.length;
+        if (msg) msg.textContent = messages[msgIdx];
+      }, 900);
+
+      google.script.run
+        .withSuccessHandler(function(html) {
+          clearInterval(ticker);
+          clearInterval(msgTimer);
+          if (!html || html.length < 1000) {
+            document.body.innerHTML =
+              '<div style="position:fixed;inset:0;background:#1F2D5C;' +
+                'display:flex;align-items:center;justify-content:center;' +
+                'flex-direction:column;gap:16px;font-family:system-ui;">' +
+                '<p style="color:#E5B81B;font-size:16px;">Dashboard failed to load. Please refresh.</p>' +
+                '<button onclick="window.location.reload()" ' +
+                  'style="background:#E5B81B;color:#1F2D5C;border:none;' +
+                         'padding:12px 32px;border-radius:8px;' +
+                         'font-weight:600;cursor:pointer;font-size:15px;">Refresh</button>' +
+              '</div>';
+            return;
+          }
+          if (bar) bar.style.width = '100%';
+          setTimeout(function() {
+            document.open();
+            document.write(html);
+            document.close();
+          }, 200);
+        })
+        .withFailureHandler(function(err) {
+          clearInterval(ticker);
+          clearInterval(msgTimer);
+          console.error('Dashboard load failed:', err);
+          var errMsg = (err && err.message) ? err.message : String(err);
+          document.body.innerHTML =
+            '<div style="position:fixed;inset:0;background:#1F2D5C;' +
+              'display:flex;align-items:center;justify-content:center;' +
+              'flex-direction:column;gap:16px;font-family:system-ui;">' +
+              '<p style="color:#ff6b6b;font-size:15px;text-align:center;' +
+                        'max-width:360px;padding:0 24px;">Session error: ' + errMsg + '</p>' +
+              '<button onclick="window.location.reload()" ' +
+                'style="background:#E5B81B;color:#1F2D5C;border:none;' +
+                       'padding:12px 32px;border-radius:8px;' +
+                       'font-weight:600;cursor:pointer;">Back to Login</button>' +
+            '</div>';
+        })
+        .getDashboardHtml(sessionToken);
     }
 
     function onLoginSuccess(result) {
@@ -1467,7 +1511,7 @@
         }
 
         if (currentLoginUser.privacy_consent_accepted === 1) {
-          autoRedirectToDashboard();
+          autoRedirectToDashboard(result.sessionToken);
         } else {
           setTimeout(function() {
             navigateTop(CONSENT_URL);
@@ -1493,7 +1537,7 @@
     }
 
     function goToDashboard() {
-      autoRedirectToDashboard();
+      autoRedirectToDashboard(sessionStorage.getItem('sessionToken'));
     }
 
     function togglePrivacyNoticeView() {
