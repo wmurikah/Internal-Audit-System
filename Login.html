@@ -1419,7 +1419,7 @@
         '<style>@keyframes progress{from{width:0%}to{width:100%}}</style>'
       ].join('');
       setTimeout(function() {
-        navigateTop(APP_URL);
+        window.top.location.href = APP_URL;
       }, 1500);
     }
 
