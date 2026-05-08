@@ -375,6 +375,21 @@ function validateSession(sessionToken) {
     return { valid: false, error: 'User not found or inactive' };
   }
 
+  // Extend session on every valid call (sliding window expiry)
+  try {
+    const newExpiry = new Date(Date.now() +
+      getAuthConfig().SESSION_DURATION_HOURS * 60 * 60 * 1000);
+    tursoUpdate('20_Sessions', session.session_id, {
+      last_activity_at: new Date().toISOString(),
+      expires_at: newExpiry.toISOString()
+    });
+    // Evict the stale cache entry so the next look-up sees the updated expiry
+    const cache = CacheService.getScriptCache();
+    cache.remove('session_' + sessionToken.substring(0, 16));
+  } catch(e) {
+    console.warn('Session extension failed (non-fatal):', e.message);
+  }
+
   console.log('Session validation took:', new Date().getTime() - startTime, 'ms');
 
   return sanitizeForClient({

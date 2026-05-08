@@ -476,7 +476,7 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span>&nbsp; Please wait&hellip;';
 
-      var sessionToken = sessionStorage.getItem('sessionToken') || '';
+      var sessionToken = sessionStorage.getItem('hass_audit_token') || '';
       var consentData  = { version: CURRENT_POLICY_VERSION, sessionToken: sessionToken };
 
       google.script.run
@@ -489,13 +489,8 @@
         .apiCall('acceptPrivacyConsent', consentData);
     }
 
-    function navigateToDashboard() {
-      var a = document.createElement('a');
-      a.href = APP_URL; a.target = '_top'; a.style.display = 'none';
-      document.body.appendChild(a); a.click();
-    }
-
     function autoRedirectToDashboard() {
+      var token = sessionStorage.getItem('hass_audit_token') || '';
       document.body.innerHTML = [
         '<div style="position:fixed;inset:0;background:#1F2D5C;display:flex;align-items:center;',
         'justify-content:center;flex-direction:column;gap:16px;">',
@@ -509,17 +504,21 @@
         '</div></div>',
         '<style>@keyframes progress{from{width:0%}to{width:100%}}</style>'
       ].join('');
-      setTimeout(function() {
-        navigateToDashboard();
-      }, 1500);
+      google.script.run
+        .withSuccessHandler(function(html) {
+          if (html && html.length > 1000) { document.open(); document.write(html); document.close(); }
+          else { window.location.reload(); }
+        })
+        .withFailureHandler(function() { window.location.reload(); })
+        .getDashboardHtml(token);
     }
 
     /* ============================================================
        LOG OUT INSTEAD
     ============================================================ */
     function logoutInstead() {
-      var token = sessionStorage.getItem('sessionToken');
-      sessionStorage.removeItem('sessionToken');
+      var token = sessionStorage.getItem('hass_audit_token') || '';
+      sessionStorage.removeItem('hass_audit_token');
       sessionStorage.removeItem('loginInitData');
 
       if (token) {
@@ -530,21 +529,31 @@
         }
       }
 
-      var a = document.createElement('a');
-      a.href = BASE_URL; a.target = '_top'; a.style.display = 'none';
-      document.body.appendChild(a); a.click();
+      google.script.run
+        .withSuccessHandler(function(html) {
+          if (html && html.length > 1000) { document.open(); document.write(html); document.close(); }
+          else { window.location.reload(); }
+        })
+        .withFailureHandler(function() { window.location.reload(); })
+        .getLoginHtml();
     }
 
     /* ============================================================
        INIT — guard against direct navigation, show card after animation
     ============================================================ */
     document.addEventListener('DOMContentLoaded', function() {
-      var sessionToken = sessionStorage.getItem('sessionToken');
+      var sessionToken = sessionStorage.getItem('hass_audit_token');
       var initRaw      = sessionStorage.getItem('loginInitData');
 
       /* Redirect to login if no session */
       if (!sessionToken || !initRaw) {
-        window.top.location.href = BASE_URL;
+        google.script.run
+          .withSuccessHandler(function(html) {
+            if (html && html.length > 1000) { document.open(); document.write(html); document.close(); }
+            else { window.location.reload(); }
+          })
+          .withFailureHandler(function() { window.location.reload(); })
+          .getLoginHtml();
         return;
       }
 

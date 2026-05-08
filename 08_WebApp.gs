@@ -2285,6 +2285,14 @@ function getWebAppUrl() {
 }
 
 /**
+ * Return the Login page HTML so the dashboard can swap itself out via
+ * document.open/write/close without triggering sandbox navigation restrictions.
+ */
+function getLoginHtml() {
+  return HtmlService.createTemplateFromFile('Login').evaluate().getContent();
+}
+
+/**
  * Fetch the AuditorPortal HTML for the authenticated session.
  * Called from Login.html after login to avoid sandbox navigation restrictions.
  * Uses document.open/write/close on the client instead of window.top.location.href.
