@@ -348,11 +348,18 @@ function initApp() {
   // TIER 3: API fallback (first visit ever, or all caches empty)
   // This is the slow path - should rarely happen
   // -----------------------------------------------
+  const sessionToken = sessionStorage.getItem('hass_audit_token') || window._hass_token || '';
+
+  // Guard: no token at all → redirect immediately, no point making a doomed API call
+  if (!sessionToken) {
+    console.warn('TIER 3: No session token found — redirecting to login');
+    redirectToLogin('No session token');
+    return;
+  }
+
   console.log('TIER 3: No cache - falling back to API call');
   showLoading('Loading...');
-  
-  const sessionToken = sessionStorage.getItem('sessionToken') || '';
-  
+
   google.script.run
     .withSuccessHandler(function(result) {
       hideLoading();
@@ -371,7 +378,8 @@ function initApp() {
     .withFailureHandler(function(error) {
       hideLoading();
       console.error('Init error:', error);
-      showToast('Connection error. Please refresh.', 'danger');
+      // Do NOT redirect on network error — show retry prompt
+      showSessionError('Connection error. Please refresh the page.');
     })
     .apiCall('getInitDataLight', { sessionToken: sessionToken });
 }
@@ -419,7 +427,7 @@ function applyInitData(result) {
   if (!window.__beforeUnloadRegistered) {
     window.__beforeUnloadRegistered = true;
     window.addEventListener('beforeunload', function() {
-      var token = sessionStorage.getItem('sessionToken');
+      var token = sessionStorage.getItem('hass_audit_token');
       if (token) {
         // Use sendBeacon for reliable fire-and-forget on tab close
         var baseUrl = window.__BASE_URL__ || window.location.pathname.replace(/\/exec.*/, '/exec');
@@ -458,8 +466,8 @@ function scheduleBackgroundLoads() {
   // Show pending findings banner for auditees after 1.5s
   setTimeout(checkAndShowPendingFindings, 1500);
 
-  // Permission-specific fast refresh every 15s
-  setInterval(refreshPermissionsQuick, 15000);
+  // Permission refresh every 10 minutes (validates session server-side — keep interval long)
+  setInterval(refreshPermissionsQuick, 600000);
 
   // Periodic refresh every 15s (dropdowns, sidebar counts)
   setInterval(refreshBackgroundData, 15000);
@@ -662,7 +670,7 @@ function refreshPermissionsQuick() {
 
 // Silent refresh: update cached data without blocking UI
 function silentRefreshInitData() {
-  const sessionToken = sessionStorage.getItem('sessionToken') || '';
+  const sessionToken = sessionStorage.getItem('hass_audit_token') || '';
 
   google.script.run
     .withSuccessHandler(function(result) {
@@ -697,10 +705,21 @@ function silentRefreshInitData() {
 
 function handleAuthFailure() {
   LocalStore.clear();
-  sessionStorage.removeItem('sessionToken');
+  sessionStorage.removeItem('hass_audit_token');
   sessionStorage.removeItem('passwordChangedInSession');
   sessionStorage.clear();
-  redirectToLogin();
+  redirectToLogin('Auth failure');
+}
+
+function showSessionError(msg) {
+  hideLoading();
+  var existing = document.getElementById('_sessionErrorBanner');
+  if (existing) return;
+  var banner = document.createElement('div');
+  banner.id = '_sessionErrorBanner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;text-align:center;padding:14px 24px;font-size:0.95rem;font-weight:500;';
+  banner.innerHTML = msg + ' <button onclick="window.location.reload()" style="margin-left:16px;background:#fff;color:#dc2626;border:none;border-radius:6px;padding:4px 14px;cursor:pointer;font-weight:600;">Refresh</button>';
+  document.body.insertAdjacentElement('afterbegin', banner);
 }
 
 // Legacy alias
@@ -1086,7 +1105,7 @@ function apiCall(action, data) {
 
   var promise = new Promise(function(resolve) {
     var requestData = Object.assign({}, data || {}, {
-      sessionToken: sessionStorage.getItem('sessionToken') || ''
+      sessionToken: sessionStorage.getItem('hass_audit_token') || window._hass_token || ''
     });
 
     google.script.run
@@ -1095,7 +1114,7 @@ function apiCall(action, data) {
         if (result === null || result === undefined) {
           resolve({ success: false, error: 'No response from server' });
         } else if (result.requireLogin) {
-          sessionStorage.removeItem('sessionToken');
+          sessionStorage.removeItem('hass_audit_token');
           redirectToLogin();
         } else {
           resolve(result);
@@ -1320,15 +1339,14 @@ function populateMultiSelect(id, items, valueField, textField) {
 }
 
 // Auth functions
-// PATCHED: Use GAS sandbox-safe anchor redirect instead of window.top.location.reload()
 function handleLogout() {
   if (!confirm('Are you sure you want to sign out?')) return;
 
-  const token = sessionStorage.getItem('sessionToken') || '';
+  const token = sessionStorage.getItem('hass_audit_token') || window._hass_token || '';
 
   // Clear all caches and redirect immediately for fast UX
   LocalStore.clear();
-  sessionStorage.removeItem('sessionToken');
+  sessionStorage.removeItem('hass_audit_token');
   sessionStorage.clear();
 
   // Fire-and-forget logout call; do not block redirect
@@ -1340,15 +1358,31 @@ function handleLogout() {
   redirectToLogin();
 }
 
-function redirectToLogin() {
-  var baseUrl = window.__BASE_URL__ || window.location.pathname.replace(/\/exec.*/, '/exec');
-  // Explicitly navigate to login page
-  var loginUrl = baseUrl + (baseUrl.indexOf('?') === -1 ? '?page=login' : '&page=login');
-  var a = document.createElement('a');
-  a.href = loginUrl;
-  a.target = '_top';
-  document.body.appendChild(a);
-  a.click();
+var _redirectingToLogin = false;
+
+function redirectToLogin(reason) {
+  if (_redirectingToLogin) return; // prevent double-fire from concurrent background calls
+  _redirectingToLogin = true;
+
+  console.warn('Redirecting to login:', reason || '(no reason given)');
+  sessionStorage.removeItem('hass_audit_token');
+  LocalStore.clear();
+
+  google.script.run
+    .withSuccessHandler(function(html) {
+      if (html && html.length > 1000) {
+        document.open();
+        document.write(html);
+        document.close();
+      } else {
+        window.location.reload();
+      }
+    })
+    .withFailureHandler(function() {
+      // Last resort — full page reload sends browser back to the GAS exec URL
+      window.location.reload();
+    })
+    .getLoginHtml();
 }
 
 function showChangePassword() {
@@ -1608,7 +1642,7 @@ function uploadFile() {
         hideLoading();
         showToast('Upload error: ' + (error?.message || 'Unknown error'), 'danger');
       })
-      .uploadFileToDrive(file.name, file.type, base64, null, sessionStorage.getItem('sessionToken') || '');
+      .uploadFileToDrive(file.name, file.type, base64, null, sessionStorage.getItem('hass_audit_token') || '');
   };
 
   reader.onerror = function() {
@@ -1892,7 +1926,7 @@ function resetInactivityTimer() {
   _inactivityTimer = setTimeout(function() {
     console.log('Session timed out due to inactivity');
     LocalStore.clear();
-    sessionStorage.removeItem('sessionToken');
+    sessionStorage.removeItem('hass_audit_token');
     sessionStorage.clear();
     redirectToLogin();
   }, INACTIVITY_TIMEOUT_MS);

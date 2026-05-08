@@ -1144,7 +1144,7 @@
        SESSION CHECK
     ============================================================ */
     function checkExistingSession() {
-      var token = sessionStorage.getItem('sessionToken');
+      var token = sessionStorage.getItem('hass_audit_token');
       var data  = sessionStorage.getItem('loginInitData');
 
       if (token && data) {
@@ -1152,14 +1152,14 @@
         link.href = APP_URL; link.target = '_top'; link.style.display = 'none';
         document.body.appendChild(link); link.click();
         setTimeout(function() {
-          sessionStorage.removeItem('sessionToken');
+          sessionStorage.removeItem('hass_audit_token');
           sessionStorage.removeItem('loginInitData');
           hideSessionCheck();
         }, 2000);
         return;
       }
 
-      if (token) sessionStorage.removeItem('sessionToken');
+      if (token) sessionStorage.removeItem('hass_audit_token');
       hideSessionCheck();
     }
 
@@ -1496,8 +1496,8 @@
 
       // Store token — accessible everywhere in this page
       var token = response.sessionToken || response.session_token || '';
-      window._sessionToken = token;
-      sessionStorage.setItem('_st', token);
+      window._hass_token = token;
+      sessionStorage.setItem('hass_audit_token', token);
 
       console.log('Login success. Token length:', token.length);
       console.log('consent_accepted:', response.user ? response.user.privacy_consent_accepted : 'NO USER');
@@ -1529,7 +1529,7 @@
     }
 
     function goToDashboard() {
-      autoRedirectToDashboard(sessionStorage.getItem('sessionToken'));
+      autoRedirectToDashboard(sessionStorage.getItem('hass_audit_token') || window._hass_token || '');
     }
 
     function togglePrivacyNoticeView() {
@@ -1608,8 +1608,8 @@
     }
 
     function handleLogout() {
-      var token = sessionStorage.getItem('sessionToken');
-      sessionStorage.removeItem('sessionToken');
+      var token = sessionStorage.getItem('hass_audit_token') || window._hass_token || '';
+      sessionStorage.removeItem('hass_audit_token');
       sessionStorage.removeItem('loginInitData');
 
       if (token) {
