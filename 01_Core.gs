@@ -662,3 +662,22 @@ function seedRolePermissionsToTurso() {
   Logger.log('Seeded ' + count + ' permission rows to role_permissions table');
   return count;
 }
+
+function seedTestAuditee() {
+  const now  = new Date().toISOString();
+  const salt = generateSalt();
+  const hash = hashPassword('Auditee@2026!', salt);
+  const userId = generateId('USR');
+  tursoQuery_SQL(
+    `INSERT OR IGNORE INTO users
+     (user_id, organization_id, email, full_name, first_name, last_name,
+      role_code, password_hash, password_salt, password_algo,
+      is_active, email_verified, must_change_password,
+      privacy_consent_accepted, login_attempts, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,1,1,1,1,0,?,?)`,
+    [userId, 'HASS', 'test.auditee@hasspetroleum.com',
+     'Test Auditee', 'Test', 'Auditee', 'JUNIOR_STAFF',
+     hash, salt, 'pbkdf2-hmac-sha256-1000-b64', now, now]
+  );
+  Logger.log('Auditee created: ' + userId);
+}
