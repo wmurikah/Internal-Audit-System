@@ -388,7 +388,7 @@ function routeAction(action, data, user) {
     case 'createUser':
     case 'updateUser':
     case 'deactivateUser':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       if (action === 'getUsers') return getUsers(data.filters, user);
@@ -487,25 +487,25 @@ function routeAction(action, data, user) {
 
     // ========== SETTINGS (SUPER_ADMIN ONLY) ==========
     case 'getAccessControlDashboardData':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, data: getAccessControlDashboardData() };
 
     case 'getPermissions':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, permissions: getPermissionsCached(data.roleCode) };
 
     case 'updatePermissions':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return updatePermissions(data, user);
 
     case 'getUserStats':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, stats: getUserStats() };
@@ -523,7 +523,7 @@ function routeAction(action, data, user) {
       return saveSystemConfigValues(data.config, user);
 
     case 'getAuditLog':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, logs: getAuditLogs(data.action, data.page, data.pageSize), total: getAuditLogCount(data.action) };
