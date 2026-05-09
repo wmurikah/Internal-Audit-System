@@ -695,7 +695,7 @@ function getUsersDropdown() {
 function getAuditorsDropdown() {
   const allUsers = getUsersDropdown();
   const auditorRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.JUNIOR_STAFF, ROLES.AUDITOR, 'SUPER_ADMIN', 'SENIOR_AUDITOR', 'JUNIOR_STAFF', 'AUDITOR'];
-  return allUsers.filter(u => auditorRoles.includes(u.roleCode));
+  return allUsers.filter(u => auditorRoles.includes(u.role_code || u.roleCode));
 }
 
 function getAuditeesDropdown() {
@@ -704,7 +704,7 @@ function getAuditeesDropdown() {
     'JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT',
     ROLES.JUNIOR_STAFF, ROLES.UNIT_MANAGER, ROLES.SENIOR_MGMT
   ];
-  const auditees = allUsers.filter(u => auditeeRoles.includes(u.roleCode));
+  const auditees = allUsers.filter(u => auditeeRoles.includes(u.role_code || u.roleCode));
   return auditees.length > 0 ? auditees : allUsers;
 }
 
