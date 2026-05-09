@@ -196,13 +196,58 @@ function getUserStats() {
 }
 
 /**
- * Update role permissions
+ * Fetch live permission matrix from role_permissions table.
+ * Called directly via google.script.run — validates token itself.
  */
-function updatePermissions(permissionData, user) {
-  if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
-    return { success: false, error: 'Only System Owner can modify permissions' };
+function getPermissionMatrix(token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var user = getUserByIdCached(session.user_id);
+  if (!user || user.role_code !== 'SUPER_ADMIN') throw new Error('Access denied');
+
+  var rows = tursoQuery_SQL(
+    'SELECT role_code, module_code, action_code, is_allowed, scope FROM role_permissions ORDER BY module_code, role_code',
+    []
+  );
+  var roles = tursoQuery_SQL(
+    'SELECT role_code, role_name, role_level FROM roles WHERE is_active=1 ORDER BY role_level DESC',
+    []
+  );
+
+  // Enrich roles with descriptions from ROLE_WORKFLOW_ACCESS constant
+  roles = roles.map(function(role) {
+    var wf = (typeof ROLE_WORKFLOW_ACCESS !== 'undefined' && ROLE_WORKFLOW_ACCESS[role.role_code]) || {};
+    return {
+      role_code:        role.role_code,
+      role_name:        role.role_name,
+      role_level:       role.role_level,
+      role_description: wf.role_description || '',
+      access_path:      wf.access_path || ''
+    };
+  });
+
+  return sanitizeForClient({ permissions: rows, roles: roles });
+}
+
+/**
+ * Update a single permission toggle.
+ * Accepts either a session token string (direct google.script.run call)
+ * or a validated user object (routed through the apiCall dispatcher).
+ */
+function updatePermissions(permissionData, tokenOrUser) {
+  var user;
+  if (typeof tokenOrUser === 'string') {
+    var session = getSessionByToken(tokenOrUser);
+    if (!session) throw new Error('SESSION_EXPIRED');
+    user = getUserByIdCached(session.user_id);
+    if (!user || user.role_code !== ROLES.SUPER_ADMIN) throw new Error('Access denied');
+  } else {
+    user = tokenOrUser;
+    if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
+      return { success: false, error: 'Only System Owner can modify permissions' };
+    }
   }
-  // permissionData: { role_code, module_code, action_code, is_allowed }
+
   const { role_code, module_code, action_code, is_allowed } = permissionData;
   if (!role_code || !module_code || !action_code) {
     return { success: false, error: 'role_code, module_code, action_code required' };
@@ -211,12 +256,39 @@ function updatePermissions(permissionData, user) {
     'INSERT OR REPLACE INTO role_permissions (role_code, module_code, action_code, is_allowed, updated_at) VALUES (?,?,?,?,?)',
     [role_code, module_code, action_code, is_allowed ? 1 : 0, new Date().toISOString()]
   );
-  // Invalidate permission caches for this role
   const cache = CacheService.getScriptCache();
   cache.remove('perm_' + role_code);
   cache.remove('perm_fresh_' + role_code);
   logAuditEvent('UPDATE_PERMISSION', 'CONFIG', 'PERMISSION', null,
     { role_code, module_code, action_code, is_allowed }, user.user_id, user.email);
+  return { success: true };
+}
+
+/**
+ * Update scope for all action_codes of a (role, module) pair.
+ * Called directly via google.script.run with a session token.
+ */
+function updatePermissionScope(data, token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var user = getUserByIdCached(session.user_id);
+  if (!user || user.role_code !== ROLES.SUPER_ADMIN) throw new Error('Access denied');
+
+  const { role_code, module_code, scope } = data;
+  if (!role_code || !module_code || !scope) throw new Error('role_code, module_code, scope required');
+
+  var validScopes = ['ALL', 'OWN', 'DEPARTMENT', 'AFFILIATE'];
+  if (validScopes.indexOf(scope) === -1) throw new Error('Invalid scope value: ' + scope);
+
+  tursoQuery_SQL(
+    'UPDATE role_permissions SET scope = ?, updated_at = ? WHERE role_code = ? AND module_code = ?',
+    [scope, new Date().toISOString(), role_code, module_code]
+  );
+  const cache = CacheService.getScriptCache();
+  cache.remove('perm_' + role_code);
+  cache.remove('perm_fresh_' + role_code);
+  logAuditEvent('UPDATE_PERMISSION_SCOPE', 'CONFIG', 'PERMISSION', null,
+    { role_code, module_code, scope }, user.user_id, user.email);
   return { success: true };
 }
 
