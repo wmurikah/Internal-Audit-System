@@ -442,12 +442,13 @@ function submitAuditeeResponse(workPaperId, data, user) {
       management_response_preview: mgmtResponse.substring(0, 200)
     };
     var respAuditors = getUsersDropdown().filter(function(u) {
-      return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(u.roleCode) >= 0;
+      var roleCode = u.role_code || u.roleCode;
+      return [ROLES.SENIOR_AUDITOR, ROLES.SUPER_ADMIN].indexOf(roleCode) >= 0;
     });
     respAuditors.forEach(function(auditor) {
       queueNotification({
         type: NOTIFICATION_TYPES.RESPONSE_SUBMITTED,
-        recipient_user_id: auditor.id,
+        recipient_user_id: auditor.user_id || auditor.id,
         data: respSubmitData
       });
     });
