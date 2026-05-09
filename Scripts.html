@@ -6,6 +6,7 @@ window.currentWorkPaper = null;
 window.currentActionPlan = null;
 let currentPage = 'reports';
 let pageParams = {};
+const LAST_MODULE_KEY = 'hpias_last_module';
 
 // Loading state tracker
 window.loadingState = {
@@ -418,6 +419,17 @@ function applyInitData(result) {
 
   // Setup navigation
   setupNavigation(result.permissions);
+  try {
+    if (!window.location.hash) {
+      const savedModuleRaw = localStorage.getItem(LAST_MODULE_KEY);
+      if (savedModuleRaw) {
+        const savedModule = JSON.parse(savedModuleRaw);
+        if (savedModule && savedModule.page) {
+          window.location.hash = '#' + savedModule.page;
+        }
+      }
+    }
+  } catch (e) {}
   handleHashChange();
   window.addEventListener('hashchange', handleHashChange);
 
@@ -995,6 +1007,13 @@ function navigateTo(page, params, updateHash = true) {
 
   currentPage = page;
   pageParams = params;
+  try {
+    localStorage.setItem(LAST_MODULE_KEY, JSON.stringify({
+      page: currentPage,
+      params: pageParams,
+      saved_at: new Date().toISOString()
+    }));
+  } catch (e) {}
 
   // Hide all pages
   document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
@@ -1365,6 +1384,14 @@ function redirectToLogin(reason) {
   _redirectingToLogin = true;
 
   console.warn('Redirecting to login:', reason || '(no reason given)');
+  try {
+    const displayName = (window.currentUser && (window.currentUser.full_name || window.currentUser.first_name)) || '';
+    sessionStorage.setItem('hpias_reauth_context', JSON.stringify({
+      reason: reason || 'session_expired',
+      display_name: displayName,
+      last_module: currentPage || 'audit-workbench'
+    }));
+  } catch (e) {}
   sessionStorage.removeItem('hass_audit_token');
   LocalStore.clear();
 
@@ -1916,19 +1943,16 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-// INACTIVITY TIMEOUT - Auto-redirect to login after 5 minutes
+// INACTIVITY TIMEOUT - Auto-redirect to login after 3 minutes
 // ============================================================
-var INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+var INACTIVITY_TIMEOUT_MS = 3 * 60 * 1000;
 var _inactivityTimer = null;
 
 function resetInactivityTimer() {
   if (_inactivityTimer) clearTimeout(_inactivityTimer);
   _inactivityTimer = setTimeout(function() {
     console.log('Session timed out due to inactivity');
-    LocalStore.clear();
-    sessionStorage.removeItem('hass_audit_token');
-    sessionStorage.clear();
-    redirectToLogin();
+    redirectToLogin('inactivity_timeout');
   }, INACTIVITY_TIMEOUT_MS);
 }
 

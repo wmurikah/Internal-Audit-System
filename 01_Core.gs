@@ -77,7 +77,9 @@ function getSheetData(sheetName, skipCache) {
   if (!rows || rows.length === 0) return [[], []];
   const headers = Object.keys(rows[0]);
   const data    = rows.map(r => headers.map(h => r[h]));
-  const result  = [headers, data];
+  // Backward-compatible matrix format expected by legacy callers:
+  // [headers, row1, row2, ...] (NOT [headers, [row1,row2,...]]).
+  const result  = [headers].concat(data);
   _sheetDataCache[sheetName] = result;
   return result;
 }
