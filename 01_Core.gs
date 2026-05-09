@@ -19,7 +19,6 @@ const CONFIG = {
   }
 };
 
-/** Legacy stub — returns null. All data now comes from Firestore. */
 function getSheet(sheetName) {
   return null;
 }
@@ -59,15 +58,6 @@ function _sheetNameToSchemaKey(sheetName) {
   return _schemaKeyMap[sheetName] || null;
 }
 
-/**
- * Get all values from a collection. Firestore is the source of truth.
- * Returns data in array-of-arrays format: [[headers], [row1], [row2], ...]
- * for backward compatibility with existing callers.
- *
- * For Firestore-backed collections: reads only from Firestore. No Sheet fallback.
- * For non-Firestore collections (no mapping in FIRESTORE_DOC_ID_FIELD): reads from Sheet.
- * For write-heavy paths, pass skipCache = true.
- */
 function getSheetData(sheetName, skipCache) {
   if (!skipCache && _sheetDataCache[sheetName]) {
     return _sheetDataCache[sheetName];
