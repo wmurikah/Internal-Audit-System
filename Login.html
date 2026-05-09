@@ -1037,25 +1037,23 @@
     ============================================================ */
     var GREETINGS = {
       morning: [
-        "Good morning. The audit record doesn't lie. Let's build it.",
-        "Morning. Controls checked, coffee optional.",
-        "Good morning. Another day, another clean audit trail.",
-        "Early start. The best findings go to those who show up first."
+        "Good morning. Welcome back to your audit workspace.",
+        "Good morning. Ready when you are.",
+        "Good morning. Let’s continue your review."
       ],
       afternoon: [
-        "Good afternoon. Mid-session. Keep the momentum.",
-        "Afternoon. Half the day gone, findings still outstanding?",
-        "Good afternoon. The work papers won't review themselves.",
-        "Good afternoon. Clear eyes, clean controls."
+        "Good afternoon. Welcome back.",
+        "Good afternoon. Your workspace is ready.",
+        "Good afternoon. Let’s continue where you left off."
       ],
       evening: [
-        "Good evening. Late session. We respect the dedication.",
-        "Evening. The audit never sleeps, but you should soon.",
-        "Good evening. Wrapping up or just getting started?"
+        "Good evening. Welcome back to the audit system.",
+        "Good evening. Your workspace is ready.",
+        "Good evening. Let’s pick up your progress."
       ],
       night: [
-        "It's late. The findings can wait. You probably can't.",
-        "Still here? Save your work. Get some rest."
+        "Welcome back. Your workspace is available.",
+        "Welcome back. Continue at your pace."
       ]
     };
 
@@ -1168,6 +1166,16 @@
       el.classList.add('fade-out');
       setTimeout(function() {
         el.style.display = 'none';
+        try {
+          var ctx = JSON.parse(sessionStorage.getItem('hpias_reauth_context') || 'null');
+          if (ctx && ctx.display_name) {
+            var firstName = String(ctx.display_name).trim().split(' ')[0];
+            if (firstName) {
+              var line1 = document.getElementById('greetLine1');
+              if (line1) line1.textContent = 'Welcome back, ' + firstName + '. Please sign in to continue.';
+            }
+          }
+        } catch(e) {}
         loadRememberedEmail();
         var emailEl = document.getElementById('email');
         if (emailEl) emailEl.focus();
@@ -1498,6 +1506,11 @@
       var token = response.sessionToken || response.session_token || '';
       window._hass_token = token;
       sessionStorage.setItem('hass_audit_token', token);
+      try {
+        if (response.user && response.user.full_name) {
+          updateGreetingWithName(response.user.full_name.split(' ')[0]);
+        }
+      } catch (e) {}
 
       console.log('Login success. Token length:', token.length);
       console.log('consent_accepted:', response.user ? response.user.privacy_consent_accepted : 'NO USER');
