@@ -1,0 +1,63 @@
+"trigger_name","table_name","definition"
+"trg_ap_fts_ad","action_plans","CREATE TRIGGER trg_ap_fts_ad AFTER DELETE ON action_plans BEGIN
+    DELETE FROM action_plans_fts WHERE action_plan_id = OLD.action_plan_id;
+END"
+"trg_ap_fts_ai","action_plans","CREATE TRIGGER trg_ap_fts_ai AFTER INSERT ON action_plans BEGIN
+    INSERT INTO action_plans_fts(action_plan_id, action_description, implementation_notes)
+    VALUES (NEW.action_plan_id, NEW.action_description, NEW.implementation_notes);
+END"
+"trg_ap_fts_au","action_plans","CREATE TRIGGER trg_ap_fts_au AFTER UPDATE ON action_plans BEGIN
+    DELETE FROM action_plans_fts WHERE action_plan_id = OLD.action_plan_id;
+    INSERT INTO action_plans_fts(action_plan_id, action_description, implementation_notes)
+    VALUES (NEW.action_plan_id, NEW.action_description, NEW.implementation_notes);
+END"
+"trg_ap_touch","action_plans","CREATE TRIGGER trg_ap_touch
+AFTER UPDATE ON action_plans
+FOR EACH ROW WHEN OLD.row_version = NEW.row_version
+BEGIN
+    UPDATE action_plans SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                            row_version = OLD.row_version + 1
+    WHERE action_plan_id = NEW.action_plan_id;
+END"
+"trg_audit_log_no_delete","audit_log","CREATE TRIGGER trg_audit_log_no_delete
+BEFORE DELETE ON audit_log
+BEGIN
+    SELECT RAISE(ABORT, 'audit_log is append-only');
+END"
+"trg_audit_log_no_update","audit_log","CREATE TRIGGER trg_audit_log_no_update
+BEFORE UPDATE ON audit_log
+BEGIN
+    SELECT RAISE(ABORT, 'audit_log is append-only');
+END"
+"trg_users_touch","users","CREATE TRIGGER trg_users_touch
+AFTER UPDATE ON users
+FOR EACH ROW WHEN OLD.row_version = NEW.row_version
+BEGIN
+    UPDATE users SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                     row_version = OLD.row_version + 1
+    WHERE user_id = NEW.user_id;
+END"
+"trg_wp_fts_ad","work_papers","CREATE TRIGGER trg_wp_fts_ad AFTER DELETE ON work_papers BEGIN
+    DELETE FROM work_papers_fts WHERE work_paper_id = OLD.work_paper_id;
+END"
+"trg_wp_fts_ai","work_papers","CREATE TRIGGER trg_wp_fts_ai AFTER INSERT ON work_papers BEGIN
+    INSERT INTO work_papers_fts(work_paper_id, observation_title, observation_description,
+        risk_summary, recommendation, management_response)
+    VALUES (NEW.work_paper_id, NEW.observation_title, NEW.observation_description,
+        NEW.risk_summary, NEW.recommendation, NEW.management_response);
+END"
+"trg_wp_fts_au","work_papers","CREATE TRIGGER trg_wp_fts_au AFTER UPDATE ON work_papers BEGIN
+    DELETE FROM work_papers_fts WHERE work_paper_id = OLD.work_paper_id;
+    INSERT INTO work_papers_fts(work_paper_id, observation_title, observation_description,
+        risk_summary, recommendation, management_response)
+    VALUES (NEW.work_paper_id, NEW.observation_title, NEW.observation_description,
+        NEW.risk_summary, NEW.recommendation, NEW.management_response);
+END"
+"trg_wp_touch","work_papers","CREATE TRIGGER trg_wp_touch
+AFTER UPDATE ON work_papers
+FOR EACH ROW WHEN OLD.row_version = NEW.row_version
+BEGIN
+    UPDATE work_papers SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                           row_version = OLD.row_version + 1
+    WHERE work_paper_id = NEW.work_paper_id;
+END"

@@ -1,0 +1,23 @@
+"view_name","definition"
+"v_active_users","CREATE VIEW v_active_users AS
+SELECT * FROM users WHERE deleted_at IS NULL AND is_active = 1"
+"v_open_action_plans","CREATE VIEW v_open_action_plans AS
+SELECT ap.*, wp.observation_title, wp.affiliate_code AS wp_affiliate_code
+  FROM action_plans ap
+  JOIN work_papers  wp ON wp.work_paper_id = ap.work_paper_id
+ WHERE ap.deleted_at IS NULL
+   AND ap.status NOT IN ('Verified','Closed','Not Implemented','Rejected')"
+"v_overdue_action_plans","CREATE VIEW v_overdue_action_plans AS
+SELECT * FROM v_open_action_plans
+ WHERE due_date < strftime('%Y-%m-%dT%H:%M:%fZ','now')"
+"v_user_findings","CREATE VIEW v_user_findings AS
+SELECT wpr.user_id, wp.*
+  FROM work_paper_responsibles wpr
+  JOIN work_papers wp ON wp.work_paper_id = wpr.work_paper_id
+ WHERE wp.deleted_at IS NULL
+   AND wp.status IN ('Sent to Auditee','Approved')"
+"v_work_papers_pending_response","CREATE VIEW v_work_papers_pending_response AS
+SELECT * FROM work_papers
+ WHERE deleted_at IS NULL
+   AND status = 'Sent to Auditee'
+   AND response_status IN ('Pending Response','Draft Response')"
