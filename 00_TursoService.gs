@@ -145,6 +145,8 @@ const TABLES_WITHOUT_DELETED_AT = {
 // Primary-key column per table. null = composite — callers must use tursoQuery_SQL.
 // Assumption: affiliates PK is affiliate_code even though the full natural key
 // may include organization_id; use tursoQuery_SQL for multi-tenant affiliate lookups.
+const TABLES_WITHOUT_UPDATED_AT = { audit_log: true, notification_queue: true };
+
 const TURSO_PK = {
   'users':                   'user_id',
   'affiliates':              'affiliate_code',
@@ -217,10 +219,19 @@ function tursoGetAll(sheetName) {
     if (!TABLES_WITHOUT_DELETED_AT[table]) sql += ' WHERE deleted_at IS NULL';
     sql += ' ORDER BY created_at DESC';
 
-    const results = tursoExecute_(readOnly_([
-      { type: 'execute', stmt: { sql: sql } }
-    ]));
-    return parseRows_(results[0].response.result);
+    try {
+      const results = tursoExecute_(readOnly_([
+        { type: 'execute', stmt: { sql: sql } }
+      ]));
+      return parseRows_(results[0].response.result);
+    } catch (inner) {
+      if (String(inner.message || '').indexOf('no such column: deleted_at') >= 0 || String(inner.message || '').indexOf('no such column: created_at') >= 0) {
+        const fallbackSql = 'SELECT * FROM ' + table;
+        const fb = tursoExecute_(readOnly_([{ type: 'execute', stmt: { sql: fallbackSql } }]));
+        return parseRows_(fb[0].response.result);
+      }
+      throw inner;
+    }
   } catch (e) {
     throw new Error('[TursoService.tursoGetAll] ' + e.message);
   }
@@ -268,7 +279,7 @@ function tursoSet(sheetName, docId, data) {
     const table = resolveTable_(sheetName);
     const now   = new Date().toISOString();
     const row   = Object.assign({}, data);
-    if (!row.updated_at) row.updated_at = now;
+    if (!row.updated_at && !TABLES_WITHOUT_UPDATED_AT[table]) row.updated_at = now;
 
     const cols         = Object.keys(row);
     const placeholders = cols.map(function() { return '?'; }).join(', ');
@@ -297,7 +308,7 @@ function tursoUpdate(sheetName, docId, updates) {
 
     const now  = new Date().toISOString();
     const row  = Object.assign({}, updates);
-    if (!row.updated_at) row.updated_at = now;
+    if (!row.updated_at && !TABLES_WITHOUT_UPDATED_AT[table]) row.updated_at = now;
 
     const cols       = Object.keys(row);
     const setClauses = cols.map(function(c) { return c + ' = ?'; }).join(', ');
@@ -364,7 +375,7 @@ function tursoBatchWrite(writes) {
       if (w.operation === 'update') {
         if (!pk) throw new Error('Table ' + table + ' has a composite PK — cannot batch update');
         const row        = Object.assign({}, w.data);
-        if (!row.updated_at) row.updated_at = now;
+        if (!row.updated_at && !TABLES_WITHOUT_UPDATED_AT[table]) row.updated_at = now;
         const cols       = Object.keys(row);
         const setClauses = cols.map(function(c) { return c + ' = ?'; }).join(', ');
         const args       = cols.map(function(c) { return toArg_(row[c]); });
@@ -380,7 +391,7 @@ function tursoBatchWrite(writes) {
 
       // 'set' (default)
       const row          = Object.assign({}, w.data);
-      if (!row.updated_at) row.updated_at = now;
+      if (!row.updated_at && !TABLES_WITHOUT_UPDATED_AT[table]) row.updated_at = now;
       const cols         = Object.keys(row);
       const placeholders = cols.map(function() { return '?'; }).join(', ');
       const args         = cols.map(function(c) { return toArg_(row[c]); });

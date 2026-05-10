@@ -1,5 +1,13 @@
 // 03_WorkPaperService.gs - Work Paper CRUD, Requirements, Files, Revisions, Workflow
 
+
+function toWritableWorkPaperRow(wp) {
+  var row = Object.assign({}, wp || {});
+  delete row.responsible_ids; // junction table-backed field
+  delete row.cc_recipients; // junction table-backed field
+  return row;
+}
+
 function createWorkPaper(data, user) {
   if (!user) throw new Error('User required');
   if (!canUserPerform(user, 'create', 'WORK_PAPER', null)) {
@@ -53,7 +61,7 @@ function createWorkPaper(data, user) {
     sent_to_auditee_date: '',
     assigned_auditor_id: data.assigned_auditor_id || '',
     assigned_auditor_name: data.assigned_auditor_name || '',
-    response_status: '',
+    response_status: null,
     response_deadline: '',
     response_round: 0,
     response_submitted_by: '',
@@ -74,7 +82,7 @@ function createWorkPaper(data, user) {
     }
   }
 
-  tursoSet('09_WorkPapers', workPaperId, workPaper);
+  tursoSet('09_WorkPapers', workPaperId, toWritableWorkPaperRow(workPaper));
 
   const responsibleIds = (data.responsible_ids || '').split(',').filter(Boolean);
   const ccList = (data.cc_recipients || '').split(',').filter(Boolean);
@@ -276,7 +284,7 @@ function updateWorkPaper(workPaperId, data, user) {
   // Apply updates to existing
   const updated = { ...existing, ...updates };
 
-  tursoSet('09_WorkPapers', workPaperId, updated);
+  tursoSet('09_WorkPapers', workPaperId, toWritableWorkPaperRow(updated));
 
   // Log audit event
   logAuditEvent('UPDATE', 'WORK_PAPER', workPaperId, existing, updated, user.user_id, user.email);
@@ -537,6 +545,15 @@ function submitWorkPaper(workPaperId, user) {
   ]);
 
   var requiredFields = (user.role_code === ROLES.SUPER_ADMIN) ? basicRequired : auditorRequired;
+  var autoFill = (user.role_code !== ROLES.SUPER_ADMIN);
+  if (autoFill) {
+    if (!workPaper.sub_area_id) workPaper.sub_area_id = 'GENERAL';
+    if (!workPaper.audit_period_from) workPaper.audit_period_from = formatDate(new Date(), 'YYYY-MM-DD');
+    if (!workPaper.audit_period_to) workPaper.audit_period_to = formatDate(new Date(), 'YYYY-MM-DD');
+    ['risk_summary','risk_description','test_objective','control_objectives','testing_steps','control_classification','control_type','control_frequency'].forEach(function(f){
+      if (!workPaper[f] || String(workPaper[f]).trim() === '') workPaper[f] = 'N/A';
+    });
+  }
   const missing = requiredFields.filter(f => !workPaper[f] || String(workPaper[f]).trim() === '');
   if (missing.length > 0) {
     throw new Error('Missing required fields: ' + missing.join(', '));
@@ -563,7 +580,7 @@ function submitWorkPaper(workPaperId, user) {
   const updated = { ...workPaper, ...updates };
 
   // Critical: update the work paper first
-  tursoSet('09_WorkPapers', workPaperId, updated);
+  tursoSet('09_WorkPapers', workPaperId, toWritableWorkPaperRow(updated));
 
   // Batch secondary writes (revision + audit log) in one HTTP call
   try {
@@ -791,7 +808,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   
   const updated = { ...workPaper, ...updates };
 
-  tursoSet('09_WorkPapers', workPaperId, updated);
+  tursoSet('09_WorkPapers', workPaperId, toWritableWorkPaperRow(updated));
 
   // Add revision history
   addWorkPaperRevision(workPaperId, revisionAction, comments, user, workPaper.status, updates.status);
@@ -840,7 +857,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
 
   // ── AUTO-QUEUE: On approval, automatically send to auditee if ready ──
-  if (action === 'approve' && updated.responsible_ids) {
+  if (action === 'approve' && workPaper.responsible_ids) {
     try {
       var autoSendResult = sendToAuditee(workPaperId, user);
       if (autoSendResult && autoSendResult.success) {
@@ -908,7 +925,7 @@ function sendToAuditee(workPaperId, user) {
 
   const updated = { ...workPaper, ...updates };
 
-  tursoSet('09_WorkPapers', workPaperId, updated);
+  tursoSet('09_WorkPapers', workPaperId, toWritableWorkPaperRow(updated));
 
   // Verify critical fields were persisted
   var verification = tursoGet('09_WorkPapers', workPaperId);
@@ -1367,7 +1384,7 @@ function batchSendToAuditees(workPaperIds, user) {
       for (var key in wp) { updated[key] = wp[key]; }
       for (var key in updates) { updated[key] = updates[key]; }
 
-      tursoSet('09_WorkPapers', wp.work_paper_id, updated);
+      tursoSet('09_WorkPapers', wp.work_paper_id, toWritableWorkPaperRow(updated));
 
       // Add revision history
       addWorkPaperRevision(wp.work_paper_id, 'Sent to Auditee', 'Batch sent to auditee', user,
