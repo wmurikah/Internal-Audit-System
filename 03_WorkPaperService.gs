@@ -53,7 +53,7 @@ function createWorkPaper(data, user) {
     sent_to_auditee_date: '',
     assigned_auditor_id: data.assigned_auditor_id || '',
     assigned_auditor_name: data.assigned_auditor_name || '',
-    response_status: '',
+    response_status: null,
     response_deadline: '',
     response_round: 0,
     response_submitted_by: '',
@@ -840,7 +840,7 @@ function reviewWorkPaper(workPaperId, action, comments, user) {
   logAuditEvent('REVIEW', 'WORK_PAPER', workPaperId, workPaper, updated, user.user_id, user.email);
 
   // ── AUTO-QUEUE: On approval, automatically send to auditee if ready ──
-  if (action === 'approve' && updated.responsible_ids) {
+  if (action === 'approve' && workPaper.responsible_ids) {
     try {
       var autoSendResult = sendToAuditee(workPaperId, user);
       if (autoSendResult && autoSendResult.success) {

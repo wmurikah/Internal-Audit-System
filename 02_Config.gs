@@ -974,8 +974,10 @@ function canUserPerform(user, action, entityType, entity) {
     if (entityType === 'WORK_PAPER' && (action === 'update' || action === 'delete')) {
       const permissions = getUserPermissions(roleCode);
       if (!permissions.canApproveWorkPaper) {
-        if (entity.prepared_by_id !== user.user_id) {
-          console.log('Ownership check failed: user', user.user_id, 'vs prepared_by', entity.prepared_by_id);
+        var isPreparer = entity.prepared_by_id === user.user_id;
+        var isAssignedAuditor = entity.assigned_auditor_id && entity.assigned_auditor_id === user.user_id;
+        if (!isPreparer && !isAssignedAuditor) {
+          console.log('Ownership check failed: user', user.user_id, 'vs prepared_by', entity.prepared_by_id, 'and assigned_auditor', entity.assigned_auditor_id);
           return false;
         }
       }
