@@ -64,7 +64,7 @@ function getSheetData(sheetName, skipCache) {
   }
 
   const rows = tursoGetAll(sheetName);
-  if (!rows || rows.length === 0) return [[], []];
+  if (!rows || rows.length === 0) return [[]];
   const headers = Object.keys(rows[0]);
   const data    = rows.map(r => headers.map(h => r[h]));
   // Backward-compatible matrix format expected by legacy callers:
@@ -72,6 +72,10 @@ function getSheetData(sheetName, skipCache) {
   const result  = [headers].concat(data);
   _sheetDataCache[sheetName] = result;
   return result;
+}
+
+function isSuperAdminRole(roleCode) {
+  return roleCode === ROLES.SUPER_ADMIN || roleCode === 'HEAD_OF_AUDIT';
 }
 
 /** Invalidate in-memory cache for a sheet after writes */

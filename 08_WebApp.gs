@@ -511,13 +511,13 @@ function routeAction(action, data, user) {
       return { success: true, stats: getUserStats() };
 
     case 'getSystemConfig':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, config: getSystemConfigValues() };
 
     case 'saveSystemConfig':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return saveSystemConfigValues(data.config, user);
