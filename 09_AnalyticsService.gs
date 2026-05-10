@@ -203,7 +203,7 @@ function getPermissionMatrix(token) {
   var session = getSessionByToken(token);
   if (!session) throw new Error('SESSION_EXPIRED');
   var user = getUserByIdCached(session.user_id);
-  if (!user || !isSuperAdminRole(user.role_code)) throw new Error('Access denied');
+  if (!user || (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR)) throw new Error('Access denied');
 
   var rows = tursoQuery_SQL(
     'SELECT role_code, module_code, action_code, is_allowed, scope FROM role_permissions ORDER BY module_code, role_code',
@@ -240,10 +240,10 @@ function updatePermissions(permissionData, tokenOrUser) {
     var session = getSessionByToken(tokenOrUser);
     if (!session) throw new Error('SESSION_EXPIRED');
     user = getUserByIdCached(session.user_id);
-    if (!user || !isSuperAdminRole(user.role_code)) throw new Error('Access denied');
+    if (!user || (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR)) throw new Error('Access denied');
   } else {
     user = tokenOrUser;
-    if (!user || !isSuperAdminRole(user.role_code)) {
+    if (!user || (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR)) {
       return { success: false, error: 'Only authorized audit administrators can modify permissions' };
     }
   }
@@ -272,7 +272,7 @@ function updatePermissionScope(data, token) {
   var session = getSessionByToken(token);
   if (!session) throw new Error('SESSION_EXPIRED');
   var user = getUserByIdCached(session.user_id);
-  if (!user || !isSuperAdminRole(user.role_code)) throw new Error('Access denied');
+  if (!user || (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR)) throw new Error('Access denied');
 
   const { role_code, module_code, scope } = data;
   if (!role_code || !module_code || !scope) throw new Error('role_code, module_code, scope required');
