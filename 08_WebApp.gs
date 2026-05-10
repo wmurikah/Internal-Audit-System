@@ -1202,7 +1202,7 @@ function getInitDataOptimized(user) {
       role_name: '',
       affiliate_code: user.affiliate_code || '',
       department: user.department || '',
-      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+      must_change_password: user.must_change_password === 1 || user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
     },
     dropdowns: {},
     config: {
@@ -1303,7 +1303,7 @@ function getInitDataLight(user) {
       role_name: '',
       affiliate_code: user.affiliate_code || '',
       department: user.department || '',
-      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+      must_change_password: user.must_change_password === 1 || user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
     },
     dropdowns: {}, // Empty - will be loaded in background
     config: {
