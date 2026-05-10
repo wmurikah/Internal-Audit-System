@@ -657,7 +657,7 @@ function resetPassword(userId, adminUser) {
     return { success: false, error: 'Admin user required' };
   }
 
-  if (adminUser.role_code !== ROLES.SUPER_ADMIN && adminUser.role_code !== ROLES.SENIOR_AUDITOR) {
+  if (adminUser.role_code !== ROLES.SUPER_ADMIN) {
     return { success: false, error: 'Permission denied' };
   }
 
@@ -867,7 +867,7 @@ function updateUser(userId, userData, adminUser) {
   }
 
   const isSelf = adminUser.user_id === userId;
-  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SENIOR_AUDITOR;
+  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN;
 
   if (!isSelf && !isAdmin) {
     return { success: false, error: 'Permission denied' };
@@ -1034,7 +1034,7 @@ function getUsers(filters, adminUser) {
     return { success: false, error: 'Admin user required' };
   }
 
-  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN || adminUser.role_code === ROLES.SENIOR_AUDITOR;
+  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN;
   if (!isAdmin) {
     return { success: false, error: 'Permission denied' };
   }
