@@ -544,6 +544,15 @@ function submitWorkPaper(workPaperId, user) {
   ]);
 
   var requiredFields = (user.role_code === ROLES.SUPER_ADMIN) ? basicRequired : auditorRequired;
+  var autoFill = (user.role_code !== ROLES.SUPER_ADMIN);
+  if (autoFill) {
+    if (!workPaper.sub_area_id) workPaper.sub_area_id = 'GENERAL';
+    if (!workPaper.audit_period_from) workPaper.audit_period_from = formatDate(new Date(), 'YYYY-MM-DD');
+    if (!workPaper.audit_period_to) workPaper.audit_period_to = formatDate(new Date(), 'YYYY-MM-DD');
+    ['risk_summary','risk_description','test_objective','control_objectives','testing_steps','control_classification','control_type','control_frequency'].forEach(function(f){
+      if (!workPaper[f] || String(workPaper[f]).trim() === '') workPaper[f] = 'N/A';
+    });
+  }
   const missing = requiredFields.filter(f => !workPaper[f] || String(workPaper[f]).trim() === '');
   if (missing.length > 0) {
     throw new Error('Missing required fields: ' + missing.join(', '));

@@ -219,10 +219,19 @@ function tursoGetAll(sheetName) {
     if (!TABLES_WITHOUT_DELETED_AT[table]) sql += ' WHERE deleted_at IS NULL';
     sql += ' ORDER BY created_at DESC';
 
-    const results = tursoExecute_(readOnly_([
-      { type: 'execute', stmt: { sql: sql } }
-    ]));
-    return parseRows_(results[0].response.result);
+    try {
+      const results = tursoExecute_(readOnly_([
+        { type: 'execute', stmt: { sql: sql } }
+      ]));
+      return parseRows_(results[0].response.result);
+    } catch (inner) {
+      if (String(inner.message || '').indexOf('no such column: deleted_at') >= 0) {
+        const fallbackSql = 'SELECT * FROM ' + table + ' ORDER BY created_at DESC';
+        const fb = tursoExecute_(readOnly_([{ type: 'execute', stmt: { sql: fallbackSql } }]));
+        return parseRows_(fb[0].response.result);
+      }
+      throw inner;
+    }
   } catch (e) {
     throw new Error('[TursoService.tursoGetAll] ' + e.message);
   }
