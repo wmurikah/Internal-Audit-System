@@ -827,7 +827,7 @@ function loadSettings(params) {
   loadUsers();
   loadRoles();
 
-  // Show Reference Data tab for SUPER_ADMIN and HEAD_OF_AUDIT
+  // Show Reference Data tab for Super Admin / Head of Audit alias
   var refDataRoles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT'];
   if (refDataRoles.includes(role)) {
     var rdNav = document.getElementById('referenceDataTabNav');
