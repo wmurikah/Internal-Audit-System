@@ -225,8 +225,8 @@ function tursoGetAll(sheetName) {
       ]));
       return parseRows_(results[0].response.result);
     } catch (inner) {
-      if (String(inner.message || '').indexOf('no such column: deleted_at') >= 0 || String(inner.message || '').indexOf('no such column: created_at') >= 0) {
-        const fallbackSql = 'SELECT * FROM ' + table;
+      if (String(inner.message || '').indexOf('no such column: deleted_at') >= 0) {
+        const fallbackSql = 'SELECT * FROM ' + table + ' ORDER BY created_at DESC';
         const fb = tursoExecute_(readOnly_([{ type: 'execute', stmt: { sql: fallbackSql } }]));
         return parseRows_(fb[0].response.result);
       }

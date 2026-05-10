@@ -66,7 +66,7 @@ function createActionPlan(data, user) {
   
   const actionPlan = {
     action_plan_id: actionPlanId,
-    organization_id: data.organization_id || workPaper.organization_id || workPaper.affiliate_code || user.organization_id || 'HASS',
+    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
     work_paper_id: data.work_paper_id,
     action_number: nextNum,
     action_description: sanitizeInput(data.action_description || ''),
@@ -644,7 +644,7 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
     var implParentWp = updated.work_paper_id ? getWorkPaperById(updated.work_paper_id) : null;
     var implData = {
       action_plan_id: actionPlanId,
-    organization_id: workPaper.organization_id || user.organization_id || 'HASS',
+    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
       action_description: updated.action_description || '',
       implementer_name: user.full_name || '',
       implementation_notes: updated.implementation_notes || '',
@@ -739,7 +739,7 @@ function verifyImplementation(actionPlanId, action, comments, user) {
     var verifyActionText = action === 'approve' ? 'Verified' : action === 'reject' ? 'Rejected' : 'Returned for Revision';
     var verifyData = {
       action_plan_id: actionPlanId,
-    organization_id: workPaper.organization_id || user.organization_id || 'HASS',
+    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
       action_description: updated.action_description || '',
       verifier_name: user.full_name || '',
       action: verifyActionText,
@@ -815,7 +815,7 @@ function hoaReview(actionPlanId, action, comments, user) {
     var hoaActionText = action === 'approve' ? 'Approved' : 'Rejected';
     var hoaReviewData = {
       action_plan_id: actionPlanId,
-    organization_id: workPaper.organization_id || user.organization_id || 'HASS',
+    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
       action_description: updated.action_description || '',
       hoa_action: hoaActionText,
       comments: comments || '',
@@ -951,7 +951,7 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
     var delegParentWp = updated.work_paper_id ? getWorkPaperById(updated.work_paper_id) : null;
     var delegData = {
       action_plan_id: actionPlanId,
-    organization_id: workPaper.organization_id || user.organization_id || 'HASS',
+    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
       action_description: updated.action_description || '',
       delegator_name: user.full_name || '',
       delegation_notes: updated.delegation_notes || '',
@@ -1064,7 +1064,7 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
   const history = {
     history_id: historyId,
     action_plan_id: actionPlanId,
-    organization_id: workPaper.organization_id || user.organization_id || 'HASS',
+    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
     event_type: eventType || 'STATUS_CHANGE',
     previous_status: previousStatus || '',
     new_status: newStatus || '',
