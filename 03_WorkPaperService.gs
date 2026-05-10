@@ -4,7 +4,6 @@
 function toWritableWorkPaperRow(wp) {
   var row = Object.assign({}, wp || {});
   delete row.responsible_ids; // junction table-backed field
-  delete row.cc_recipients; // junction table-backed field
   return row;
 }
 
