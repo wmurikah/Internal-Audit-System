@@ -53,7 +53,7 @@ function createWorkPaper(data, user) {
     sent_to_auditee_date: '',
     assigned_auditor_id: data.assigned_auditor_id || '',
     assigned_auditor_name: data.assigned_auditor_name || '',
-    response_status: '',
+    response_status: null,
     response_deadline: '',
     response_round: 0,
     response_submitted_by: '',
