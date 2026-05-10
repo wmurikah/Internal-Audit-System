@@ -217,18 +217,14 @@ function routeAction(action, data, user) {
       }
       
     case 'createWorkPaper': {
-      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
-      if (!auditRoles.includes(user.role_code)) {
-        return jsonResponse({ success: false, error: 'Access denied' }, 403);
-      }
+      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+      if (!auditRoles.includes(user.role_code)) return { success: false, error: 'Access denied' };
       return createWorkPaper(data, user);
     }
 
     case 'updateWorkPaper': {
-      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
-      if (!auditRoles.includes(user.role_code)) {
-        return jsonResponse({ success: false, error: 'Access denied' }, 403);
-      }
+      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+      if (!auditRoles.includes(user.role_code)) return { success: false, error: 'Access denied' };
       return updateWorkPaper(data.workPaperId, data, user);
     }
 
@@ -236,10 +232,8 @@ function routeAction(action, data, user) {
       return deleteWorkPaper(data.workPaperId, user);
 
     case 'submitWorkPaper': {
-      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
-      if (!auditRoles.includes(user.role_code)) {
-        return jsonResponse({ success: false, error: 'Access denied' }, 403);
-      }
+      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+      if (!auditRoles.includes(user.role_code)) return { success: false, error: 'Access denied' };
       return submitWorkPaper(data.workPaperId, user);
     }
 
@@ -247,18 +241,14 @@ function routeAction(action, data, user) {
       return getAutoPopulateData(data.auditAreaId, data.subAreaId, data.affiliateCode);
 
     case 'requestWorkPaperChange': {
-      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
-      if (!auditRoles.includes(user.role_code)) {
-        return jsonResponse({ success: false, error: 'Access denied' }, 403);
-      }
+      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+      if (!auditRoles.includes(user.role_code)) return { success: false, error: 'Access denied' };
       return requestWorkPaperChange(data, user);
     }
 
     case 'reviewWorkPaper': {
-      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
-      if (!auditRoles.includes(user.role_code)) {
-        return jsonResponse({ success: false, error: 'Access denied' }, 403);
-      }
+      const auditRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
+      if (!auditRoles.includes(user.role_code)) return { success: false, error: 'Access denied' };
       return reviewWorkPaper(data.workPaperId, data.action, data.comments, user);
     }
       
@@ -388,7 +378,7 @@ function routeAction(action, data, user) {
     case 'createUser':
     case 'updateUser':
     case 'deactivateUser':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       if (action === 'getUsers') return getUsers(data.filters, user);
@@ -487,43 +477,43 @@ function routeAction(action, data, user) {
 
     // ========== SETTINGS (SUPER_ADMIN ONLY) ==========
     case 'getAccessControlDashboardData':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, data: getAccessControlDashboardData() };
 
     case 'getPermissions':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, permissions: getPermissionsCached(data.roleCode) };
 
     case 'updatePermissions':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return updatePermissions(data, user);
 
     case 'getUserStats':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, stats: getUserStats() };
 
     case 'getSystemConfig':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, config: getSystemConfigValues() };
 
     case 'saveSystemConfig':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return saveSystemConfigValues(data.config, user);
 
     case 'getAuditLog':
-      if (user.role_code !== ROLES.SUPER_ADMIN) {
+      if (!isSuperAdminRole(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
       return { success: true, logs: getAuditLogs(data.action, data.page, data.pageSize), total: getAuditLogCount(data.action) };
@@ -695,14 +685,14 @@ function routeAction(action, data, user) {
       }
       return clearAllCaches();
 
-    // ========== DROPDOWN MANAGEMENT (SUPER_ADMIN / HEAD_OF_AUDIT only) ==========
+    // ========== DROPDOWN MANAGEMENT (SUPER_ADMIN / HEAD_OF_AUDIT alias only) ==========
     case 'getDropdownItems':
     case 'createDropdownItem':
     case 'updateDropdownItem':
     case 'deleteDropdownItem':
     case 'updateDropdownOrder':
     case 'saveConfigDropdown': {
-      const refDataRoles = [ROLES.SUPER_ADMIN, ROLES.HEAD_OF_AUDIT];
+      const refDataRoles = [ROLES.SUPER_ADMIN, 'HEAD_OF_AUDIT'];
       if (!refDataRoles.includes(user.role_code)) {
         return { success: false, error: 'Access restricted to Head of Internal Audit only' };
       }
@@ -1202,7 +1192,7 @@ function getInitDataOptimized(user) {
       role_name: '',
       affiliate_code: user.affiliate_code || '',
       department: user.department || '',
-      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+      must_change_password: user.must_change_password === 1 || user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
     },
     dropdowns: {},
     config: {
@@ -1303,7 +1293,7 @@ function getInitDataLight(user) {
       role_name: '',
       affiliate_code: user.affiliate_code || '',
       department: user.department || '',
-      must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+      must_change_password: user.must_change_password === 1 || user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
     },
     dropdowns: {}, // Empty - will be loaded in background
     config: {

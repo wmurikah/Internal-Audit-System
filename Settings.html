@@ -827,7 +827,7 @@ function loadSettings(params) {
   loadUsers();
   loadRoles();
 
-  // Show Reference Data tab for SUPER_ADMIN and HEAD_OF_AUDIT
+  // Show Reference Data tab for Super Admin / Head of Audit alias
   var refDataRoles = ['SUPER_ADMIN', 'HEAD_OF_AUDIT'];
   if (refDataRoles.includes(role)) {
     var rdNav = document.getElementById('referenceDataTabNav');
@@ -1048,7 +1048,7 @@ var PM_ROLE_DISPLAY = {
 };
 
 function loadAccessControlDashboard() {
-  if (window.currentUser && window.currentUser.role_code !== 'SUPER_ADMIN') return;
+  if (window.currentUser && !['SUPER_ADMIN', 'HEAD_OF_AUDIT'].includes(window.currentUser.role_code)) return;
 
   if (_permMatrixData) {
     renderPermissionMatrix(_permMatrixData);
@@ -1077,6 +1077,7 @@ function renderPermissionMatrix(data) {
   // Build lookup: permMap[module][role][action] = { is_allowed, scope }
   var permMap   = {};
   var moduleSet = [];
+  var moduleActionCatalog = {};
   permRows.forEach(function(row) {
     if (!permMap[row.module_code]) {
       permMap[row.module_code] = {};
@@ -1089,6 +1090,8 @@ function renderPermissionMatrix(data) {
       is_allowed: (row.is_allowed == 1 || row.is_allowed === true),
       scope: row.scope || 'ALL'
     };
+    if (!moduleActionCatalog[row.module_code]) moduleActionCatalog[row.module_code] = {};
+    moduleActionCatalog[row.module_code][row.action_code] = true;
   });
 
   // Sort modules by predefined order; append any extras
@@ -1132,7 +1135,10 @@ function renderPermissionMatrix(data) {
 
     roles.forEach(function(role) {
       var cellPerms   = (permMap[mod] && permMap[mod][role.role_code]) || {};
-      var actionCodes = Object.keys(cellPerms);
+      var actionCodes = Object.keys(moduleActionCatalog[mod] || {});
+      if (actionCodes.length === 0) {
+        actionCodes = ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'];
+      }
 
       // Scope badge: scope of first allowed action
       var cellScope  = null;
@@ -1152,7 +1158,7 @@ function renderPermissionMatrix(data) {
         // Toggle switches
         html += '<div class="d-flex flex-wrap gap-1 mb-1">';
         actionCodes.forEach(function(ac) {
-          var p   = cellPerms[ac];
+          var p   = cellPerms[ac] || { is_allowed: false, scope: 'ALL' };
           var tid = 'pt_' + mod + '_' + role.role_code + '_' + ac;
           var lbl = PM_ACTION_LABELS[ac] || ac;
           var ttl = PM_ACTION_TITLES[ac] || ac;
