@@ -94,7 +94,7 @@ function createActionPlan(data, user) {
     updated_by: user.user_id,
     created_by_role: user.role_code || '',
     auditee_proposed: false,
-    response_id: data.response_id || '',
+    response_id: data.response_id || null,
     audit_area_id: workPaper ? (workPaper.audit_area_id || '') : '',
     affiliate_code: workPaper ? (workPaper.affiliate_code || '') : ''
   };
@@ -196,7 +196,7 @@ function createActionPlansBatch(workPaperId, plansData, user) {
       updated_by: user.user_id,
       created_by_role: user.role_code || '',
       auditee_proposed: data.auditee_proposed || false,
-      response_id: data.response_id || '',
+      response_id: data.response_id || null,
       audit_area_id: workPaper ? (workPaper.audit_area_id || '') : '',
       affiliate_code: workPaper ? (workPaper.affiliate_code || '') : ''
     };
