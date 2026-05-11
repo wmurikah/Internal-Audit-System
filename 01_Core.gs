@@ -659,6 +659,19 @@ function seedRolePermissionsToTurso() {
   return count;
 }
 
+function keepWarm() {
+  try {
+    var url = 'https://script.google.com/macros/s/AKfycbx301LxL--m-lCv52quMpgfS8lLZ26k7YBNuEauLb_cb_3dKVm8AWknrfTWGnW7i1eu/exec';
+    UrlFetchApp.fetch(url, {
+      method: 'get',
+      muteHttpExceptions: true,
+      followRedirects: false
+    });
+  } catch(e) {
+    // Silent fail — keep-warm is best effort
+  }
+}
+
 function seedTestAuditee() {
   const now  = new Date().toISOString();
   const salt = generateSalt();
