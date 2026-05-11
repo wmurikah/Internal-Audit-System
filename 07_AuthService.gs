@@ -809,9 +809,12 @@ function createUser(userData, adminUser) {
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
 
+  // Ensure organization_id is always a valid tenant key for FK-backed schemas.
+  const organizationId = userData.organization_id || adminUser.organization_id || 'HASS';
+
   const user = {
     user_id: userId,
-    organization_id: userData.organization_id || '',
+    organization_id: organizationId,
     email: userData.email.toLowerCase().trim(),
     password_hash: hash,
     password_salt: salt,
