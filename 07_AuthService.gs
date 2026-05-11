@@ -782,6 +782,18 @@ function createUser(userData, adminUser) {
     return { success: false, error: 'Email, full name, and role are required' };
   }
 
+  // Validate FK-backed references before insert to avoid opaque SQLite FK errors.
+  if (!getRoleName(userData.role_code)) {
+    return { success: false, error: 'Invalid role selected: ' + userData.role_code };
+  }
+
+  if (userData.affiliate_code) {
+    const affiliate = tursoGet('06_Affiliates', userData.affiliate_code);
+    if (!affiliate || !isActive(affiliate.is_active)) {
+      return { success: false, error: 'Invalid or inactive affiliate selected: ' + userData.affiliate_code };
+    }
+  }
+
   const existing = getUserByEmailCached(userData.email);
   if (existing) {
     return { success: false, error: 'User with this email already exists' };
