@@ -18,12 +18,6 @@ UPDATE sub_areas
 SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
 WHERE created_at IS NULL OR TRIM(created_at) = '';
 
-
--- Backfill AP history updated_at used by write path.
-UPDATE action_plan_history
-SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-WHERE updated_at IS NULL OR TRIM(updated_at) = '';
-
 -- Normalize legacy empty FK values.
 UPDATE action_plans
 SET response_id = NULL

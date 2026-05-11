@@ -8,9 +8,6 @@ FROM pragma_table_info('notification_queue') WHERE name = 'organization_id';
 SELECT 'action_plan_history.organization_id' AS check_name, COUNT(*) AS present
 FROM pragma_table_info('action_plan_history') WHERE name = 'organization_id';
 
-SELECT 'action_plan_history.updated_at' AS check_name, COUNT(*) AS present
-FROM pragma_table_info('action_plan_history') WHERE name = 'updated_at';
-
 SELECT 'users.created_at' AS check_name, COUNT(*) AS present
 FROM pragma_table_info('users') WHERE name = 'created_at';
 

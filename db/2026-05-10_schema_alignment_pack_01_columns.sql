@@ -4,7 +4,6 @@ BEGIN;
 ALTER TABLE work_papers ADD COLUMN cc_recipients TEXT;
 ALTER TABLE notification_queue ADD COLUMN organization_id TEXT;
 ALTER TABLE action_plan_history ADD COLUMN organization_id TEXT;
-ALTER TABLE action_plan_history ADD COLUMN updated_at TEXT;
 
 -- Legacy tables read via tursoGetAll (ordered by created_at + soft-delete filter).
 ALTER TABLE users ADD COLUMN created_at TEXT;
