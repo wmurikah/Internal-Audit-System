@@ -945,7 +945,7 @@ function showAddUser() {
   document.getElementById('userForm').reset();
   document.getElementById('userModalLabel').textContent = 'Add User';
   populateDropdown('userFormRole', window.appDropdowns?.roles || [], 'code', 'name', 'Select Role');
-  populateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
+  populateAffiliateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || []);
   bootstrap.Modal.getOrCreateInstance(document.getElementById('userFormModal')).show();
 }
 
@@ -957,11 +957,21 @@ function editUser(id) {
   document.getElementById('userFormName').value = user.full_name || '';
   document.getElementById('userFormEmail').value = user.email || '';
   populateDropdown('userFormRole', window.appDropdowns?.roles || [], 'code', 'name', 'Select Role');
-  populateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
+  populateAffiliateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || []);
   document.getElementById('userFormRole').value = user.role_code || '';
   document.getElementById('userFormAffiliate').value = user.affiliate_code || '';
   document.getElementById('userModalLabel').textContent = 'Edit User';
   bootstrap.Modal.getOrCreateInstance(document.getElementById('userFormModal')).show();
+}
+
+function populateAffiliateDropdown(elementId, affiliates) {
+  const normalized = (affiliates || []).map(a => {
+    const code = a.code || a.affiliate_code || a.value || '';
+    const name = a.name || a.affiliate_name || a.display || code;
+    return { code: code, label: code && name ? `${code}: ${name}` : (code || name) };
+  }).filter(a => a.code);
+
+  populateDropdown(elementId, normalized, 'code', 'label', 'Select Affiliate');
 }
 
 function saveUser() {
