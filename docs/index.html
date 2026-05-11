@@ -7,17 +7,79 @@
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #1F2D5C; }
-    .frame-wrap { position: fixed; top: -45px; left: 0; right: 0; bottom: 0; }
+
+    /* Loading screen — shows instantly from Cloudflare */
+    #loader {
+      position: fixed; inset: 0; background: #1F2D5C;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 20px; z-index: 10;
+      transition: opacity 0.4s ease;
+    }
+    #loader svg { opacity: 0.9; }
+    #loader p {
+      color: #ffffff; font-family: system-ui, sans-serif;
+      font-size: 15px; letter-spacing: 0.05em; opacity: 0.8;
+    }
+    .bar-wrap {
+      width: 200px; height: 2px;
+      background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden;
+    }
+    .bar {
+      height: 100%; width: 30%; background: #E5B81B;
+      border-radius: 2px;
+      animation: sweep 1.6s ease-in-out infinite;
+    }
+    @keyframes sweep {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(400%); }
+    }
+
+    /* iframe — hidden until ready */
+    .frame-wrap {
+      position: fixed; top: -45px; left: 0; right: 0; bottom: 0;
+      opacity: 0; transition: opacity 0.4s ease;
+    }
     iframe { width: 100%; height: calc(100% + 45px); border: none; display: block; }
   </style>
 </head>
 <body>
-  <div class="frame-wrap">
+
+  <div id="loader">
+    <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+            stroke="#E5B81B" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M9 12l2 2 4-4" stroke="#E5B81B" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <p>HASS PETROLEUM INTERNAL AUDIT</p>
+    <div class="bar-wrap"><div class="bar"></div></div>
+  </div>
+
+  <div class="frame-wrap" id="frame">
     <iframe
+      id="gasFrame"
       src="https://script.google.com/macros/s/AKfycbx301LxL--m-lCv52quMpgfS8lLZ26k7YBNuEauLb_cb_3dKVm8AWknrfTWGnW7i1eu/exec"
       allowfullscreen
       allow="clipboard-read; clipboard-write"
     ></iframe>
   </div>
+
+  <script>
+    // Hide loader and show iframe once GAS has loaded
+    document.getElementById('gasFrame').addEventListener('load', function() {
+      var loader = document.getElementById('loader');
+      var frame  = document.getElementById('frame');
+      loader.style.opacity = '0';
+      frame.style.opacity  = '1';
+      setTimeout(function() { loader.style.display = 'none'; }, 400);
+    });
+
+    // Safety fallback — hide loader after 15s regardless
+    setTimeout(function() {
+      document.getElementById('loader').style.display = 'none';
+      document.getElementById('frame').style.opacity = '1';
+    }, 15000);
+  </script>
+
 </body>
 </html>
