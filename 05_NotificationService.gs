@@ -101,6 +101,7 @@ function queueNotification(params) {
 
     var mainRow = {
       notification_id:      notificationId,
+      organization_id:      params.organization_id || params.organizationId || (params.data && params.data.organization_id) || 'HASS',
       batch_type:           params.batch_type || params.notificationType || params.type,
       priority:             params.priority || 'normal',
       recipient_user_id:    params.recipient_user_id,
