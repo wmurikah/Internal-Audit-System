@@ -1436,40 +1436,33 @@ function runScheduledMaintenance() {
  * Setup all time-based triggers
  */
 function setupAllTriggers() {
-  // Only delete triggers for known handler functions - preserve any custom triggers
-  const knownHandlers = ['processEmailQueue', 'dailyMaintenance', 'sendWeeklySummary', 'warmAllCaches', 'runIncrementalBackup'];
-  const triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(trigger => {
-    if (knownHandlers.includes(trigger.getHandlerFunction())) {
-      ScriptApp.deleteTrigger(trigger);
-    }
+  // Delete all existing project triggers first to avoid duplicates
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    ScriptApp.deleteTrigger(t);
   });
-  
+
+  // 1. Email queue — every 10 minutes (CRITICAL)
   ScriptApp.newTrigger('processEmailQueue')
-    .timeBased()
-    .everyMinutes(10)
-    .create();
-  
-  ScriptApp.newTrigger('dailyMaintenance')
-    .timeBased()
-    .atHour(6)
-    .everyDays(1)
-    .create();
-  
+    .timeBased().everyMinutes(10).create();
+
+  // 2. Daily maintenance — 6 AM daily
+  ScriptApp.newTrigger('runScheduledMaintenance')
+    .timeBased().everyDays(1).atHour(6).create();
+
+  // 3. Weekly summary — Monday 8 AM
   ScriptApp.newTrigger('sendWeeklySummary')
-    .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.MONDAY)
-    .atHour(8)
-    .create();
-  
+    .timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
+
+  // 4. Cache warming — every 6 hours
   ScriptApp.newTrigger('warmAllCaches')
-    .timeBased()
-    .everyHours(6)
-    .create();
-  
-  console.log('All triggers configured successfully');
-  
-  return { success: true, message: 'Triggers configured' };
+    .timeBased().everyHours(6).create();
+
+  // 5. Keep warm — every 5 minutes
+  ScriptApp.newTrigger('keepWarm')
+    .timeBased().everyMinutes(5).create();
+
+  console.log('All 5 triggers created');
+  return { success: true, message: '5 triggers created' };
 }
 
 /**

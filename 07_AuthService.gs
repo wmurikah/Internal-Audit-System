@@ -1156,28 +1156,42 @@ function invalidateUserSessions(userId) {
 }
 
 function getUsers(filters, adminUser) {
-  if (!adminUser) return { success: false, error: 'Admin required' };
+  if (!adminUser) {
+    return { success: false, error: 'Admin user required' };
+  }
+  var isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN ||
+                adminUser.role_code === ROLES.SENIOR_AUDITOR;
+  if (!isAdmin) {
+    return { success: false, error: 'Permission denied' };
+  }
+
   filters = filters || {};
   var rows = tursoQuery_SQL(
-    'SELECT user_id,email,full_name,role_code,affiliate_code,' +
-    'department_id,is_active,last_login,created_at,phone ' +
+    'SELECT user_id, email, full_name, role_code, affiliate_code, ' +
+    'department_id, is_active, last_login, login_attempts, ' +
+    'locked_until, must_change_password, created_at ' +
     'FROM users WHERE deleted_at IS NULL ORDER BY full_name',
     []
   );
-  if (!rows) rows = [];
-  // Strip sensitive fields (password_hash/salt not selected, but guard anyway)
-  rows = rows.map(function(r) {
-    delete r.password_hash;
-    delete r.password_salt;
-    return r;
-  });
-  // Apply filters client-side
+
+  // Apply filters
   if (filters.role_code) {
-    rows = rows.filter(function(r) { return r.role_code === filters.role_code; });
+    rows = rows.filter(function(r) {
+      return r.role_code === filters.role_code;
+    });
   }
   if (filters.is_active !== undefined) {
+    var wantActive = (filters.is_active === true ||
+                      filters.is_active === 1 ||
+                      filters.is_active === '1');
     rows = rows.filter(function(r) {
-      return (r.is_active === 1 || r.is_active === true) === (filters.is_active === true || filters.is_active === 1);
+      var active = (r.is_active === 1 || r.is_active === true);
+      return active === wantActive;
+    });
+  }
+  if (filters.affiliate_code) {
+    rows = rows.filter(function(r) {
+      return r.affiliate_code === filters.affiliate_code;
     });
   }
   if (filters.search) {
@@ -1187,7 +1201,12 @@ function getUsers(filters, adminUser) {
              (r.email || '').toLowerCase().includes(s);
     });
   }
-  return sanitizeForClient({ success: true, users: rows, total: rows.length });
+
+  return sanitizeForClient({
+    success: true,
+    users:   rows,
+    total:   rows.length
+  });
 }
 
 
