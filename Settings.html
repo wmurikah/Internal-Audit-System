@@ -1784,7 +1784,7 @@ function renderEmailTemplates() {
     <tr>
       <td><code class="small">${escapeHtml(t.template_code || '-')}</code></td>
       <td class="small">${escapeHtml(t.subject_template || '-')}</td>
-      <td><span class="badge ${t.is_active === false || t.is_active === 'false' ? 'bg-secondary' : 'bg-success'}">${t.is_active === false || t.is_active === 'false' ? 'Inactive' : 'Active'}</span></td>
+      <td><span class="badge ${ddIsActive(t.is_active) ? 'bg-success' : 'bg-secondary'}">${ddIsActive(t.is_active) ? 'Active' : 'Inactive'}</span></td>
       <td>
         <button class="btn btn-sm btn-outline-primary" onclick="editEmailTemplate(${idx})">
           <i class="bi bi-pencil me-1"></i>Edit
@@ -1817,7 +1817,7 @@ function editEmailTemplate(idx) {
           <small class="text-muted">Use <code>{{variable}}</code> for dynamic content. Common: {{work_paper_id}}, {{observation_title}}, {{status}}, {{submitter_name}}</small>
         </div>
         <div class="mb-3 form-check">
-          <input type="checkbox" class="form-check-input" id="editTplActive" ${t.is_active !== false && t.is_active !== 'false' ? 'checked' : ''}>
+          <input type="checkbox" class="form-check-input" id="editTplActive" ${ddIsActive(t.is_active) ? 'checked' : ''}>
           <label class="form-check-label" for="editTplActive">Active</label>
         </div>
         <button class="btn btn-primary" onclick="saveEmailTemplate('${escapeHtml(t.template_code)}')">
@@ -2100,6 +2100,9 @@ function loadDdCollection(collection) {
   });
 }
 
+// Normalize is_active from Turso (returns integer 1/0, not boolean)
+var ddIsActive = function(val) { return val === 1 || val === true || val === '1' || val === 'true'; };
+
 function loadAuditAreasForFilter() {
   apiCall('getDropdownItems', { collection: 'audit_areas' }).then(function(r) {
     if (r.success && r.items) {
@@ -2109,7 +2112,7 @@ function loadAuditAreasForFilter() {
       var sel = document.getElementById('ddSubAreaFilterSelect');
       sel.innerHTML = '<option value="">All Audit Areas</option>';
       ddAuditAreasCache.forEach(function(a) {
-        if (a.is_active === true || String(a.is_active) === 'true') {
+        if (ddIsActive(a.is_active)) {
           sel.innerHTML += '<option value="' + escapeHtml(a.area_id) + '">' + escapeHtml(a.area_name) + '</option>';
         }
       });
@@ -2146,7 +2149,7 @@ function renderDdCollectionTable(collection) {
   }
 
   tbody.innerHTML = ddCollectionData.map(function(item) {
-    var isActive = item.is_active === true || String(item.is_active) === 'true';
+    var isActive = ddIsActive(item.is_active);
     var statusBadge = isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>';
     var docId = item.area_id || item.sub_area_id || item.affiliate_code || '';
 
@@ -2227,13 +2230,13 @@ function renderDdModalFields(collection, item) {
     html += ddField('text', 'ddAreaCode', 'Area Code *', item ? item.area_code : '', 'e.g., HR', true);
     html += ddField('text', 'ddAreaName', 'Area Name *', item ? item.area_name : '', 'e.g., Human Resources', true);
     html += ddField('textarea', 'ddAreaDesc', 'Description', item ? item.description : '', '', false, 2);
-    html += ddCheckbox('ddAreaActive', 'Active', item ? (item.is_active === true || String(item.is_active) === 'true') : true);
+    html += ddCheckbox('ddAreaActive', 'Active', item ? ddIsActive(item.is_active) : true);
   } else if (collection === 'sub_areas') {
     // Parent audit area dropdown
     html += '<div class="mb-3"><label class="form-label">Parent Audit Area *</label><select class="form-select" id="ddSubAreaParent" required>';
     html += '<option value="">Select Audit Area</option>';
     ddAuditAreasCache.forEach(function(a) {
-      if (a.is_active === true || String(a.is_active) === 'true') {
+      if (ddIsActive(a.is_active)) {
         var sel = item && item.area_id === a.area_id ? ' selected' : '';
         html += '<option value="' + escapeHtml(a.area_id) + '"' + sel + '>' + escapeHtml(a.area_name) + '</option>';
       }
@@ -2245,7 +2248,7 @@ function renderDdModalFields(collection, item) {
     html += ddField('textarea', 'ddSubAreaRisk', 'Risk Description', item ? item.risk_description : '', '', false, 3);
     html += ddField('textarea', 'ddSubAreaTestObj', 'Test Objective', item ? item.test_objective : '', '', false, 3);
     html += ddField('textarea', 'ddSubAreaTestSteps', 'Testing Steps', item ? item.testing_steps : '', '', false, 3);
-    html += ddCheckbox('ddSubAreaActive', 'Active', item ? (item.is_active === true || String(item.is_active) === 'true') : true);
+    html += ddCheckbox('ddSubAreaActive', 'Active', item ? ddIsActive(item.is_active) : true);
   } else if (collection === 'affiliates') {
     var isEdit = !!item;
     html += '<div class="mb-3"><label class="form-label">Affiliate Code *</label>';
@@ -2255,7 +2258,7 @@ function renderDdModalFields(collection, item) {
     html += ddField('text', 'ddAffName', 'Affiliate Name *', item ? item.affiliate_name : '', '', true);
     html += ddField('text', 'ddAffCountry', 'Country', item ? item.country : '', '');
     html += ddField('text', 'ddAffRegion', 'Region', item ? item.region : '', '');
-    html += ddCheckbox('ddAffActive', 'Active', item ? (item.is_active === true || String(item.is_active) === 'true') : true);
+    html += ddCheckbox('ddAffActive', 'Active', item ? ddIsActive(item.is_active) : true);
   }
 
   body.innerHTML = html;

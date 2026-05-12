@@ -468,6 +468,15 @@
 
     window.__INIT_DATA__ = <?!= inlineInitData ?>;
     window.__BASE_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    // Restore session token from URL-injected value (localStorage-based page reload)
+    (function() {
+      var urlToken = <?!= urlSessionToken ?>;
+      if (urlToken && typeof urlToken === 'string' && urlToken.length > 10) {
+        if (!sessionStorage.getItem('hass_audit_token')) {
+          sessionStorage.setItem('hass_audit_token', urlToken);
+        }
+      }
+    })();
   </script>
 
   <!-- Scripts -->

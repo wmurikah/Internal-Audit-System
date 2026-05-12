@@ -92,6 +92,16 @@ function login(email, password) {
   const session = createSession(user);
   console.log('Session created:', new Date().getTime() - startTime, 'ms');
 
+  // Update last_login synchronously so it is never "Never" even if postLoginCleanup is skipped
+  try {
+    tursoUpdate('05_Users', user.user_id, {
+      last_login: new Date().toISOString()
+    });
+    invalidateUserCache(user.email, user.user_id);
+  } catch(e) {
+    console.warn('last_login update failed (non-fatal):', e);
+  }
+
   prewarmUserCache(user);
 
   const cache = CacheService.getScriptCache();
@@ -1048,62 +1058,38 @@ function invalidateUserSessions(userId) {
 }
 
 function getUsers(filters, adminUser) {
-  if (!adminUser) {
-    return { success: false, error: 'Admin user required' };
-  }
-
-  const isAdmin = adminUser.role_code === ROLES.SUPER_ADMIN;
-  if (!isAdmin) {
-    return { success: false, error: 'Permission denied' };
-  }
-
+  if (!adminUser) return { success: false, error: 'Admin required' };
   filters = filters || {};
-
-  var data = getSheetData(SHEETS.USERS);
-  if (!data || data.length < 2) {
-    return sanitizeForClient({ success: true, users: [], total: 0 });
+  var rows = tursoQuery_SQL(
+    'SELECT user_id,email,full_name,role_code,affiliate_code,' +
+    'department_id,is_active,last_login,created_at,phone ' +
+    'FROM users WHERE deleted_at IS NULL ORDER BY full_name',
+    []
+  );
+  if (!rows) rows = [];
+  // Strip sensitive fields (password_hash/salt not selected, but guard anyway)
+  rows = rows.map(function(r) {
+    delete r.password_hash;
+    delete r.password_salt;
+    return r;
+  });
+  // Apply filters client-side
+  if (filters.role_code) {
+    rows = rows.filter(function(r) { return r.role_code === filters.role_code; });
   }
-  var headers = data[0];
-
-  const colMap = {};
-  headers.forEach((h, i) => colMap[h] = i);
-
-  let users = [];
-
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row[colMap['user_id']]) continue;
-
-    let match = true;
-
-    if (filters.role_code && row[colMap['role_code']] !== filters.role_code) match = false;
-    if (filters.is_active !== undefined) {
-      const rowActive = isActive(row[colMap['is_active']]);
-      if (rowActive !== filters.is_active) match = false;
-    }
-    if (filters.affiliate_code && row[colMap['affiliate_code']] !== filters.affiliate_code) match = false;
-
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      const name = String(row[colMap['full_name']] || '').toLowerCase();
-      const email = String(row[colMap['email']] || '').toLowerCase();
-      if (!name.includes(searchLower) && !email.includes(searchLower)) {
-        match = false;
-      }
-    }
-
-    if (match) {
-      const user = rowToObject(headers, row);
-      delete user.password_hash;
-      delete user.password_salt;
-      user._rowIndex = i + 1;
-      users.push(user);
-    }
+  if (filters.is_active !== undefined) {
+    rows = rows.filter(function(r) {
+      return (r.is_active === 1 || r.is_active === true) === (filters.is_active === true || filters.is_active === 1);
+    });
   }
-
-  users.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
-
-  return sanitizeForClient({ success: true, users: users, total: users.length });
+  if (filters.search) {
+    var s = filters.search.toLowerCase();
+    rows = rows.filter(function(r) {
+      return (r.full_name || '').toLowerCase().includes(s) ||
+             (r.email || '').toLowerCase().includes(s);
+    });
+  }
+  return sanitizeForClient({ success: true, users: rows, total: rows.length });
 }
 
 

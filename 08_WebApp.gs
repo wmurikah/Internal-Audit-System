@@ -22,51 +22,73 @@ function doGet(e) {
     }
 
     // =========================================================
-    // SERVE APP PAGE
-    // Data comes from: sessionStorage (post-login) or localStorage (repeat visit)
-    // SSR is only a bonus if Google session + cache are both available
+    // SERVE APP PAGE — accessible to ALL authenticated roles
+    // Data comes from: URL token (localStorage reload), sessionStorage (post-login),
+    // SSR (Google-authed), or API fallback (first visit)
     // =========================================================
     const template = HtmlService.createTemplateFromFile('AuditorPortal');
-    
-    // Lightweight SSR attempt - ONLY reads from cache, never computes
+
     let inlineData = null;
-    try {
-      const cache = CacheService.getScriptCache();
-      const user = getCurrentUser(); // Fast if Google-authed, null otherwise
-      
-      if (user && isActive(user.is_active)) {
-        const roleName = cache.get('role_name_' + user.role_code) || user.role_code;
-        const cachedPerm = cache.get('perm_' + user.role_code);
-        const cachedDropdowns = cache.get('dropdown_data_all');
-        
-        // Only build SSR data if permissions are already cached
-        if (cachedPerm) {
-          inlineData = {
-            success: true,
-            user: {
-              user_id: user.user_id,
-              email: user.email,
-              full_name: user.full_name,
-              role_code: user.role_code,
-              role_name: roleName,
-              affiliate_code: user.affiliate_code || '',
-              department: user.department || '',
-              must_change_password: user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
-            },
-            permissions: JSON.parse(cachedPerm),
-            dropdowns: cachedDropdowns ? JSON.parse(cachedDropdowns) : {},
-            config: {
-              systemName: 'Hass Petroleum Internal Audit System',
-              currentYear: new Date().getFullYear()
-            }
-          };
+
+    // Priority 1: token provided in URL query string (localStorage-based reload)
+    const urlToken = e.parameter.token || '';
+    if (urlToken) {
+      try {
+        const session = getSessionByToken(urlToken);
+        if (session) {
+          const tokenUser = getUserByIdCached(session.user_id);
+          if (tokenUser && isActive(tokenUser.is_active)) {
+            inlineData = getInitDataOptimized(tokenUser);
+            // Bake the token into the template so client can restore sessionStorage
+            template.urlSessionToken = JSON.stringify(urlToken);
+          }
         }
+      } catch (tokenErr) {
+        console.warn('URL token SSR failed (non-fatal):', tokenErr.message);
       }
-    } catch (ssrError) {
-      // Non-fatal - client will use sessionStorage or API fallback
-      console.error('SSR skip:', ssrError.message);
     }
 
+    // Priority 2: lightweight SSR from Google session + cache (fast path)
+    if (!inlineData) {
+      try {
+        const cache = CacheService.getScriptCache();
+        const user = getCurrentUser(); // Fast if Google-authed, null otherwise
+
+        if (user && isActive(user.is_active)) {
+          const roleName = cache.get('role_name_' + user.role_code) || user.role_code;
+          const cachedPerm = cache.get('perm_' + user.role_code);
+          const cachedDropdowns = cache.get('dropdown_data_all');
+
+          if (cachedPerm) {
+            inlineData = {
+              success: true,
+              user: {
+                user_id: user.user_id,
+                email: user.email,
+                full_name: user.full_name,
+                role_code: user.role_code,
+                role_name: roleName,
+                affiliate_code: user.affiliate_code || '',
+                department: user.department || '',
+                must_change_password: user.must_change_password === 1 || user.must_change_password === true || user.must_change_password === 'true' || user.must_change_password === 'TRUE'
+              },
+              permissions: JSON.parse(cachedPerm),
+              dropdowns: cachedDropdowns ? JSON.parse(cachedDropdowns) : {},
+              config: {
+                systemName: 'Hass Petroleum Internal Audit System',
+                currentYear: new Date().getFullYear()
+              }
+            };
+          }
+        }
+      } catch (ssrError) {
+        console.error('SSR skip:', ssrError.message);
+      }
+    }
+
+    if (!template.urlSessionToken) {
+      template.urlSessionToken = 'null';
+    }
     template.inlineInitData = inlineData ? JSON.stringify(inlineData) : 'null';
 
     return template
@@ -2320,4 +2342,38 @@ function getDashboardHtml(sessionToken) {
   template.inlineInitData = initData ? JSON.stringify(initData) : 'null';
 
   return template.evaluate().getContent();
+}
+
+/**
+ * One-time data migration: seed HPG affiliate and correct session timeout.
+ * Run once from the Apps Script editor after deployment.
+ */
+function runAuthMigration2026May12() {
+  // BUG 4: ensure HPG affiliate exists
+  tursoQuery_SQL(
+    'INSERT OR IGNORE INTO affiliates ' +
+    '(affiliate_code, organization_id, affiliate_name, country, region, is_active, display_order) ' +
+    "VALUES ('HPG', 'HASS', 'Hass Petroleum Group', 'KE', 'Group', 1, 10)",
+    []
+  );
+  console.log('HPG affiliate seeded (INSERT OR IGNORE)');
+
+  // BUG 6: set session timeout to 8 hours
+  tursoQuery_SQL(
+    "UPDATE config SET config_value='8', updated_at=? WHERE config_key='SESSION_TIMEOUT_HOURS'",
+    [new Date().toISOString()]
+  );
+  tursoQuery_SQL(
+    'INSERT OR IGNORE INTO config (config_key, config_value, description, organization_id, updated_at) ' +
+    "VALUES ('SESSION_TIMEOUT_HOURS', '8', 'Session duration in hours', 'GLOBAL', ?)",
+    [new Date().toISOString()]
+  );
+  console.log('SESSION_TIMEOUT_HOURS set to 8');
+
+  // Flush auth config cache so next login picks up the new timeout
+  try { CacheService.getScriptCache().remove('auth_config'); } catch(e) {}
+  try { Cache.remove('config_all'); } catch(e) {}
+
+  console.log('Auth migration 2026-05-12 complete');
+  return { success: true };
 }

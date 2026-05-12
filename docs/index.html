@@ -65,12 +65,47 @@
   </div>
 
   <script>
+    var GAS_URL = 'https://script.google.com/macros/s/AKfycbx301LxL--m-lCv52quMpgfS8lLZ26k7YBNuEauLb_cb_3dKVm8AWknrfTWGnW7i1eu/exec';
+    var frame   = document.getElementById('gasFrame');
+
+    // On load: if a valid token exists in localStorage, go straight to dashboard
+    (function checkExistingSession() {
+      var stored = localStorage.getItem('hass_audit_token');
+      var expiry  = localStorage.getItem('hass_audit_expiry');
+      if (stored && expiry && new Date().getTime() < parseInt(expiry, 10)) {
+        frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(stored);
+        return;
+      }
+      // No valid token — default iframe src (login page) loads as-is
+    })();
+
+    // Listen for postMessages from the iframe (login success / logout)
+    window.addEventListener('message', function(event) {
+      var data = event.data;
+      if (!data || typeof data !== 'object') return;
+
+      if (data.type === 'HASS_LOGIN_SUCCESS' && data.token) {
+        // Store token in localStorage with 24-hour expiry
+        var expiry = new Date().getTime() + (24 * 60 * 60 * 1000);
+        localStorage.setItem('hass_audit_token', data.token);
+        localStorage.setItem('hass_audit_expiry', expiry.toString());
+        // Navigate iframe to dashboard (token baked into URL for SSR)
+        frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(data.token);
+      }
+
+      if (data.type === 'HASS_LOGOUT') {
+        localStorage.removeItem('hass_audit_token');
+        localStorage.removeItem('hass_audit_expiry');
+        frame.src = GAS_URL;
+      }
+    });
+
     // Hide loader and show iframe once GAS has loaded
-    document.getElementById('gasFrame').addEventListener('load', function() {
+    frame.addEventListener('load', function() {
       var loader = document.getElementById('loader');
-      var frame  = document.getElementById('frame');
+      var frameWrap = document.getElementById('frame');
       loader.style.opacity = '0';
-      frame.style.opacity  = '1';
+      frameWrap.style.opacity = '1';
       setTimeout(function() { loader.style.display = 'none'; }, 400);
     });
 
