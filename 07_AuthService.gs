@@ -711,10 +711,26 @@ function resetPassword(userId, adminUser) {
     reason: 'admin_reset'
   });
 
-  const emailResult = sendEmail(user.email, 'Password Reset. Hass Petroleum Audit System', resetPlain, resetHtml, null, 'Internal Audit Notification', getSenderEmail());
-  if (!emailResult.success) {
-    console.error('Failed to send password reset email:', emailResult.error);
-  }
+  tursoQuery_SQL(
+    'INSERT INTO notification_queue ' +
+    '(notification_id, organization_id, recipient_user_id, ' +
+    'recipient_email, batch_type, subject, body_html, body_text, ' +
+    'status, priority, created_at) ' +
+    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    [
+      generateId('NOTIF'),
+      user.organization_id || 'HASS',
+      user.user_id,
+      user.email,
+      'PASSWORD_RESET',
+      'Password Reset - Hass Petroleum Audit System',
+      resetHtml,
+      resetPlain,
+      'pending',
+      'normal',
+      new Date().toISOString()
+    ]
+  );
 
   logAuditEvent('RESET_PASSWORD', 'USER', userId, null, null, adminUser.user_id, adminUser.email);
 
@@ -874,10 +890,26 @@ function createUser(userData, adminUser) {
     'Please log in and change your password immediately.\n\n' +
     loginUrl + '\n\nBest regards,\nInternal Audit Department';
 
-  var emailResult = sendEmail(user.email, welcomeSubject, welcomePlain, welcomeHtml, null, 'Hass Audit', getSenderEmail());
-  if (!emailResult.success) {
-    console.error('Failed to send welcome email:', emailResult.error);
-  }
+  tursoQuery_SQL(
+    'INSERT INTO notification_queue ' +
+    '(notification_id, organization_id, recipient_user_id, ' +
+    'recipient_email, batch_type, subject, body_html, body_text, ' +
+    'status, priority, created_at) ' +
+    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    [
+      generateId('NOTIF'),
+      user.organization_id || 'HASS',
+      user.user_id,
+      user.email,
+      'WELCOME',
+      welcomeSubject,
+      welcomeHtml,
+      welcomePlain,
+      'pending',
+      'normal',
+      new Date().toISOString()
+    ]
+  );
 
   logAuditEvent('CREATE', 'USER', userId, null, user, adminUser.user_id, adminUser.email);
 
@@ -1036,10 +1068,26 @@ function forgotPassword(email) {
     reason: 'forgot'
   });
 
-  const emailResult = sendEmail(user.email, 'Password Reset. Hass Petroleum Audit System', forgotPlain, forgotHtml, null, 'Internal Audit Notification', getSenderEmail());
-  if (!emailResult.success) {
-    console.error('Failed to send forgot password email:', emailResult.error);
-  }
+  tursoQuery_SQL(
+    'INSERT INTO notification_queue ' +
+    '(notification_id, organization_id, recipient_user_id, ' +
+    'recipient_email, batch_type, subject, body_html, body_text, ' +
+    'status, priority, created_at) ' +
+    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    [
+      generateId('NOTIF'),
+      user.organization_id || 'HASS',
+      user.user_id,
+      user.email,
+      'FORGOT_PASSWORD',
+      'Password Reset - Hass Petroleum Audit System',
+      forgotHtml,
+      forgotPlain,
+      'pending',
+      'normal',
+      new Date().toISOString()
+    ]
+  );
 
   logAuditEvent('FORGOT_PASSWORD', 'USER', user.user_id, null, null, user.user_id, user.email);
 
