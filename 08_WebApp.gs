@@ -2340,6 +2340,7 @@ function getDashboardHtml(sessionToken) {
   const initData = getInitDataOptimized(user);
   const template = HtmlService.createTemplateFromFile('AuditorPortal');
   template.inlineInitData = initData ? JSON.stringify(initData) : 'null';
+  template.urlSessionToken = JSON.stringify(sessionToken);
 
   return template.evaluate().getContent();
 }
