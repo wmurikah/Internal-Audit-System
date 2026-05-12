@@ -901,11 +901,15 @@ function renderUsers() {
   const search = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
   const role = document.getElementById('userFilterRole')?.value;
   const status = document.getElementById('userFilterStatus')?.value;
+  const isActiveUser = (u) => u && (u.is_active === true || u.is_active === 1 || String(u.is_active).toLowerCase() === 'true' || String(u.is_active) === '1');
 
   let filtered = usersData.filter(u => {
     if (search && !u.full_name?.toLowerCase().includes(search) && !u.email?.toLowerCase().includes(search)) return false;
     if (role && u.role_code !== role) return false;
-    if (status !== '' && String(u.is_active) !== status) return false;
+    if (status !== '') {
+      const wantActive = status === 'true';
+      if (isActiveUser(u) !== wantActive) return false;
+    }
     return true;
   });
 
@@ -921,15 +925,15 @@ function renderUsers() {
       <td>${escapeHtml(u.email || '-')}</td>
       <td><span class="badge bg-secondary">${escapeHtml((window.appDropdowns?.roles || []).find(r => r.code === u.role_code)?.name || u.role_code || '-')}</span></td>
       <td>${u.affiliate_code || '-'}</td>
-      <td><span class="badge ${(u.is_active === true || String(u.is_active) === 'true') ? 'bg-success' : 'bg-secondary'}">${(u.is_active === true || String(u.is_active) === 'true') ? 'Active' : 'Inactive'}</span></td>
-      <td class="small text-muted">${u.last_login ? formatDate(u.last_login) : 'Never'}</td>
+      <td><span class="badge ${isActiveUser(u) ? 'bg-success' : 'bg-secondary'}">${isActiveUser(u) ? 'Active' : 'Inactive'}</span></td>
+      <td class="small text-muted">${(u.last_login || u.last_login_at) ? formatDate(u.last_login || u.last_login_at) : 'Never'}</td>
       <td>
         <div class="dropdown">
           <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="javascript:void(0)" onclick="editUser('${u.user_id}')"><i class="bi bi-pencil me-2"></i>Edit</a></li>
             <li><a class="dropdown-item" href="javascript:void(0)" onclick="resetUserPassword('${u.user_id}')"><i class="bi bi-key me-2"></i>Reset Password</a></li>
-            ${(u.is_active === true || String(u.is_active) === 'true') ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger" href="javascript:void(0)" onclick="deactivateUser('${u.user_id}')"><i class="bi bi-person-x me-2"></i>Deactivate</a></li>` : ''}
+            ${isActiveUser(u) ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger" href="javascript:void(0)" onclick="deactivateUser('${u.user_id}')"><i class="bi bi-person-x me-2"></i>Deactivate</a></li>` : ''}
           </ul>
         </div>
       </td>
@@ -945,7 +949,7 @@ function showAddUser() {
   document.getElementById('userForm').reset();
   document.getElementById('userModalLabel').textContent = 'Add User';
   populateDropdown('userFormRole', window.appDropdowns?.roles || [], 'code', 'name', 'Select Role');
-  populateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
+  populateAffiliateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || []);
   bootstrap.Modal.getOrCreateInstance(document.getElementById('userFormModal')).show();
 }
 
@@ -957,11 +961,21 @@ function editUser(id) {
   document.getElementById('userFormName').value = user.full_name || '';
   document.getElementById('userFormEmail').value = user.email || '';
   populateDropdown('userFormRole', window.appDropdowns?.roles || [], 'code', 'name', 'Select Role');
-  populateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
+  populateAffiliateDropdown('userFormAffiliate', window.appDropdowns?.affiliates || []);
   document.getElementById('userFormRole').value = user.role_code || '';
   document.getElementById('userFormAffiliate').value = user.affiliate_code || '';
   document.getElementById('userModalLabel').textContent = 'Edit User';
   bootstrap.Modal.getOrCreateInstance(document.getElementById('userFormModal')).show();
+}
+
+function populateAffiliateDropdown(elementId, affiliates) {
+  const normalized = (affiliates || []).map(a => {
+    const code = a.code || a.affiliate_code || a.value || '';
+    const name = a.name || a.affiliate_name || a.display || code;
+    return { code: code, label: code && name ? `${code}: ${name}` : (code || name) };
+  }).filter(a => a.code);
+
+  populateDropdown(elementId, normalized, 'code', 'label', 'Select Affiliate');
 }
 
 function saveUser() {

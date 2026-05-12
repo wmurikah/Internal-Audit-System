@@ -433,25 +433,8 @@ function applyInitData(result) {
   handleHashChange();
   window.addEventListener('hashchange', handleHashChange);
 
-  // Invalidate the server-side session when the tab/browser is closed.
-  // sessionStorage auto-clears the token on the client side,
-  // but we also need to tell the server so the session row is marked invalid.
-  if (!window.__beforeUnloadRegistered) {
-    window.__beforeUnloadRegistered = true;
-    window.addEventListener('beforeunload', function() {
-      var token = sessionStorage.getItem('hass_audit_token');
-      if (token) {
-        // Use sendBeacon for reliable fire-and-forget on tab close
-        var baseUrl = window.__BASE_URL__ || window.location.pathname.replace(/\/exec.*/, '/exec');
-        try {
-          navigator.sendBeacon(
-            baseUrl,
-            JSON.stringify({ action: 'logout', data: { sessionToken: token } })
-          );
-        } catch(e) { /* best-effort */ }
-      }
-    });
-  }
+  // IMPORTANT: Do not force-logout on page reload/navigation.
+  // Session validity should be controlled by server expiry + inactivity timer.
 
   // PATCHED: Block dashboard until password is changed
   // Skip if password was already changed in this session (prevents race condition loop)
@@ -1943,9 +1926,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-// INACTIVITY TIMEOUT - Auto-redirect to login after 3 minutes
+// INACTIVITY TIMEOUT - Auto-redirect to login after 5 minutes
 // ============================================================
-var INACTIVITY_TIMEOUT_MS = 3 * 60 * 1000;
+var INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 var _inactivityTimer = null;
 
 function resetInactivityTimer() {

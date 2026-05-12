@@ -161,7 +161,8 @@ function postLoginCleanup(data) {
         tursoUpdate('05_Users', user.user_id, {
           login_attempts: 0,
           locked_until: null,
-          last_login: new Date().toISOString()
+          last_login: new Date().toISOString(),
+          last_login_at: new Date().toISOString()
         });
         invalidateUserCache(userEmail, user.user_id);
       }
@@ -254,7 +255,8 @@ function prewarmUserCache(user) {
 function updateLastLoginAsync(user) {
   try {
     tursoUpdate('05_Users', user.user_id, {
-      last_login: new Date().toISOString()
+      last_login: new Date().toISOString(),
+      last_login_at: new Date().toISOString()
     });
     invalidateUserCache(user.email, user.user_id);
   } catch (e) {
@@ -764,7 +766,8 @@ function resetFailedAttempts(user) {
 
 function updateLastLogin(user) {
   tursoUpdate('05_Users', user.user_id, {
-    last_login: new Date().toISOString()
+    last_login: new Date().toISOString(),
+    last_login_at: new Date().toISOString()
   });
   invalidateUserCache(user.email, user.user_id);
 }
@@ -782,6 +785,18 @@ function createUser(userData, adminUser) {
     return { success: false, error: 'Email, full name, and role are required' };
   }
 
+  // Validate FK-backed references before insert to avoid opaque SQLite FK errors.
+  if (!getRoleName(userData.role_code)) {
+    return { success: false, error: 'Invalid role selected: ' + userData.role_code };
+  }
+
+  if (userData.affiliate_code) {
+    const affiliate = tursoGet('06_Affiliates', userData.affiliate_code);
+    if (!affiliate || !isActive(affiliate.is_active)) {
+      return { success: false, error: 'Invalid or inactive affiliate selected: ' + userData.affiliate_code };
+    }
+  }
+
   const existing = getUserByEmailCached(userData.email);
   if (existing) {
     return { success: false, error: 'User with this email already exists' };
@@ -797,9 +812,12 @@ function createUser(userData, adminUser) {
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
 
+  // Ensure organization_id is always a valid tenant key for FK-backed schemas.
+  const organizationId = userData.organization_id || adminUser.organization_id || 'HASS';
+
   const user = {
     user_id: userId,
-    organization_id: userData.organization_id || '',
+    organization_id: organizationId,
     email: userData.email.toLowerCase().trim(),
     password_hash: hash,
     password_salt: salt,
