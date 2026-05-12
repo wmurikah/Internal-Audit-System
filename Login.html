@@ -1527,11 +1527,30 @@
 
     function onLoginSuccess(response) {
       if (!response || !response.success) {
-        // Show error on form
-        showError(response ? (response.error || 'Login failed') : 'No response from server');
+        var msg = response
+          ? (response.error || 'Login failed. Check your email and password.')
+          : 'No response from server. Please try again.';
+
+        var errorMap = {
+          'Account is locked':         'Your account is locked. Contact the system administrator.',
+          'Account is inactive':       'Your account is inactive. Contact the system administrator.',
+          'Invalid email':             'Email address not found.',
+          'Invalid email or password': 'Incorrect email or password. Please try again.',
+          'Access denied':             'Account not found. Contact the system administrator.'
+        };
+
+        var friendlyMsg = msg;
+        Object.keys(errorMap).forEach(function(key) {
+          if (msg.indexOf(key) !== -1) friendlyMsg = errorMap[key];
+        });
+
+        showError(friendlyMsg);
         resetLoginButton();
         return;
       }
+
+      // Clear any previous error on successful login
+      hideError();
 
       // Store token — accessible everywhere in this page
       var token = response.sessionToken || response.session_token || '';

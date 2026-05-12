@@ -993,28 +993,74 @@ function saveUser() {
     hideLoading();
     bootstrap.Modal.getInstance(document.getElementById('userFormModal')).hide();
     if (r.success) {
-      showToast(id ? 'User updated' : 'User created', 'success');
-      if (r.tempPassword) showToast('Temp password: ' + r.tempPassword, 'info', 10000);
+      if (!id && r.tempPassword) {
+        showTempPasswordModal(
+          'User Created Successfully',
+          r.userName || data.full_name,
+          r.tempPassword,
+          data.email
+        );
+      } else {
+        showToast(id ? 'User updated' : 'User created', 'success');
+      }
       loadUsers();
     } else showToast(r.error || 'Error', 'danger');
   }).catch(() => { hideLoading(); showToast('Error saving user', 'danger'); });
 }
 
 function resetUserPassword(id) {
-  if (!confirm('Reset password for this user? They will be logged out and receive a temporary password by email.')) return;
+  var targetUser = usersData.find(function(u) { return u.user_id === id; });
+  var userName = targetUser ? targetUser.full_name : 'this user';
+  if (!confirm('Reset password for ' + userName + '?')) return;
   showLoading('Resetting...');
-  apiCall('resetPassword', { userId: id }).then(r => {
+  apiCall('resetUserPasswordAdmin', { userId: id }).then(function(r) {
     hideLoading();
     if (r.success) {
-      showToast('Password reset successfully. Temporary password sent to their email.', 'success', 8000);
-      // If admin just reset their own password, force logout
-      if (window.currentUser && window.currentUser.user_id === id) {
-        showToast('You reset your own password. Logging out...', 'warning', 3000);
-        setTimeout(function() { handleLogout(); }, 2000);
-      }
+      showTempPasswordModal(
+        'Password Reset',
+        r.userName || userName,
+        r.tempPassword,
+        r.userEmail || ''
+      );
+    } else {
+      showToast(r.error || 'Error resetting password', 'danger');
     }
-    else showToast(r.error || 'Error', 'danger');
-  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+  }).catch(function() { hideLoading(); showToast('Error resetting password', 'danger'); });
+}
+
+function showTempPasswordModal(title, userName, tempPassword, userEmail) {
+  var modalEl = document.getElementById('tempPasswordModal');
+  if (!modalEl) return;
+  document.getElementById('tempPasswordModalTitle').textContent = title;
+  var body =
+    '<p><strong>' + escapeHtml(userName) + '</strong>' +
+    (userEmail ? ' &mdash; ' + escapeHtml(userEmail) : '') + '</p>' +
+    '<p style="margin-top:12px;">Temporary password:</p>' +
+    '<div style="background:#f3f4f6;padding:12px;border-radius:6px;margin:8px 0;' +
+         'display:flex;align-items:center;gap:12px;">' +
+    '<span style="font-family:monospace;font-size:16px;letter-spacing:0.1em;' +
+          'font-weight:bold;flex:1;" id="tmpPwdDisplay">' + escapeHtml(tempPassword) + '</span>' +
+    '<button class="btn btn-sm" style="background:#1F2D5C;color:#fff;border:none;' +
+            'padding:6px 12px;border-radius:4px;cursor:pointer;font-size:13px;white-space:nowrap;" ' +
+            'id="copyTempPwdBtn">Copy</button>' +
+    '</div>' +
+    '<p style="color:#6b7280;font-size:13px;margin-top:8px;">' +
+    'Share this password with the user directly. ' +
+    'They will be required to change it on first login.</p>';
+  document.getElementById('tempPasswordModalBody').innerHTML = body;
+  var btn = document.getElementById('copyTempPwdBtn');
+  if (btn) {
+    btn.addEventListener('click', function() {
+      navigator.clipboard.writeText(tempPassword).then(function() {
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+      }).catch(function() {
+        btn.textContent = 'Error';
+        setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+      });
+    });
+  }
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
 
 function deactivateUser(id) {
