@@ -114,8 +114,32 @@
     }
 
     /* ============================================================
+       GAS BANNER SUPPRESSION
+    ============================================================ */
+    body > div#docs-editor-container,
+    body > div[style*="background-color: rgb(255, 255, 224)"],
+    body > div[style*="background-color:#ffe0"],
+    body > div[style*="background: rgb(255, 255, 224)"],
+    body > div[style*="background:#ffe"],
+    body > div.apps-script-banner,
+    #docs-notice {
+      display: none !important;
+      height: 0 !important;
+      overflow: hidden !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      visibility: hidden !important;
+      position: absolute !important;
+      top: -9999px !important;
+    }
+
+    /* ============================================================
        SINGLE-CARD CENTERED LAYOUT
     ============================================================ */
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
     body {
       background: linear-gradient(145deg, #0f1930 0%, #1F2D5C 50%, #162348 100%);
       min-height: 100vh;
@@ -215,12 +239,14 @@
       left: 50%;
       transform: translate(-50%, -50%);
       width: 520px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      overflow-x: hidden;
       background: var(--white);
       border-radius: var(--radius);
       box-shadow: var(--shadow-card);
-      overflow: hidden;
       animation: cardRise 0.5s 0.15s both;
-      z-index: 10;
+      z-index: 7900;
     }
 
     .login-page-footer {
@@ -729,10 +755,20 @@
        RESPONSIVE
     ============================================================ */
     @media (max-width: 860px) {
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        overflow-y: auto;
+        padding-bottom: 40px;
+      }
       .form-card {
-        position: static;
+        position: relative;
+        top: auto;
+        left: auto;
         transform: none;
         width: calc(100vw - 40px);
+        max-height: none;
         margin: 40px auto 0;
         animation: cardRiseMobile 0.5s 0.15s both;
       }
@@ -741,7 +777,7 @@
         to   { opacity: 1; transform: translateY(0); }
       }
       .login-page-footer {
-        position: static;
+        position: relative;
         display: block;
         text-align: center;
         padding: 16px 0 40px;
@@ -954,6 +990,10 @@
                 <button type="button" class="btn-primary" id="consentAgreeBtn" onclick="acceptAndContinue()" disabled>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                   Accept &amp; Continue
+                </button>
+                <button type="button" class="btn-danger-ghost" onclick="handleLogout()" style="margin-top:10px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  Cancel / Logout
                 </button>
               </div>
 
@@ -1820,14 +1860,6 @@
       document.body.classList.remove('is-loading');
     }
 
-    function setLoading(isLoading) {
-      if (isLoading) {
-        document.body.classList.add('is-loading');
-      } else {
-        document.body.classList.remove('is-loading');
-      }
-    }
-
     function setButtonLoading(btn, isLoading) {
       if (!btn) return;
       if (isLoading) {
@@ -1844,12 +1876,12 @@
     }
 
     function runAction(action, data, token, onSuccess, onError, btn) {
-      setLoading(true);
+      document.body.classList.add('is-loading');
       if (btn) setButtonLoading(btn, true);
       var payload = data || {};
       if (token) payload.sessionToken = token;
       function done() {
-        setLoading(false);
+        document.body.classList.remove('is-loading');
         if (btn) setButtonLoading(btn, false);
       }
       try {

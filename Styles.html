@@ -113,9 +113,12 @@
   body > div#docs-editor-container,
   body > div[style*="background-color: rgb(255, 255, 224)"],
   body > div[style*="background-color:#ffe0"],
+  body > div[style*="background: rgb(255, 255, 224)"],
+  body > div[style*="background:#ffe"],
   body > div.apps-script-banner,
   #docs-notice,
-  body > div:first-child:not(.app-container):not(.loading-overlay):not(#forcePasswordOverlay):not(#toastContainer):not(.sidebar-overlay) {
+  body > div:first-child:not(.app-container):not(.loading-overlay):not(#forcePasswordOverlay):not(#toastContainer):not(.sidebar-overlay),
+  body > div:nth-child(2):not(.app-container):not(.loading-overlay):not(#forcePasswordOverlay):not(#toastContainer):not(.sidebar-overlay)[style*="background"] {
     display: none !important;
     height: 0 !important;
     overflow: hidden !important;
@@ -124,6 +127,11 @@
     visibility: hidden !important;
     position: absolute !important;
     top: -9999px !important;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   * {
@@ -200,6 +208,8 @@
   .app-container {
     display: flex;
     min-height: 100vh;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
   }
 
   /* Sidebar */
@@ -208,7 +218,7 @@
     background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
     color: #fff;
     position: fixed;
-    top: 0;
+    top: 0 !important;
     left: 0;
     bottom: 0;
     display: flex;
@@ -216,6 +226,7 @@
     z-index: 1000;
     transition: transform 0.3s ease;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
   }
 
   /* Main content */
@@ -233,6 +244,7 @@
     align-items: center;
     gap: 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
   }
 
   .sidebar-logo {
@@ -279,6 +291,7 @@
     gap: 12px;
     background: rgba(255, 255, 255, 0.05);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
   }
 
   .user-avatar {
@@ -494,6 +507,7 @@
   .sidebar-footer {
     padding: 12px 16px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
   }
 
   /* Main Content */
