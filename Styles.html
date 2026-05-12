@@ -12,7 +12,7 @@
     --info-color: #3b82f6;
     
     /* Layout */
-    --sidebar-width: clamp(220px, 18vw, 280px);
+    --sidebar-width: 220px;
     --sidebar-collapsed-width: 70px;
     --topbar-height: 60px;
     --border-radius: 12px;
@@ -310,33 +310,87 @@
     opacity: 0.7;
   }
 
-  /* Sidebar Navigation */
+  /* ── Sidebar Navigation ── */
   .sidebar-nav {
     flex: 1;
-    padding: 15px 0;
+    padding: 8px 0;
     overflow-y: auto;
+    list-style: none;
+    margin: 0;
+  }
+
+  /* Thin separator between top-level nav blocks */
+  .sidebar-nav > .nav-group + .nav-item,
+  .sidebar-nav > .nav-item + .nav-group,
+  .sidebar-nav > .nav-group + .nav-group {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+
+  /* ── Group header ── */
+  .nav-group {
     list-style: none;
   }
 
-  .sidebar-nav .nav-section {
-    padding: 15px 20px 8px;
-    font-size: var(--font-size-nav-section);
+  .nav-group-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.42);
+    padding: 7px 16px 4px;
+    font-size: 10px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    opacity: 0.5;
-    margin-top: 5px;
+    letter-spacing: 0.9px;
+    cursor: pointer;
+    text-align: left;
+    transition: color 0.15s ease;
   }
 
+  .nav-group-header:hover {
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  .nav-group-header > span {
+    flex: 1;
+  }
+
+  .nav-group-chevron {
+    font-size: 9px;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  /* ── Group items container ── */
+  .nav-group-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+  }
+
+  .nav-group-items.show {
+    max-height: 600px;
+  }
+
+  /* ── Nav links ── */
   .sidebar-nav .nav-link {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 20px;
-    color: rgba(255, 255, 255, 0.8);
+    gap: 10px;
+    padding: 9px 16px 9px 20px;
+    color: rgba(255, 255, 255, 0.78);
     text-decoration: none;
-    transition: var(--transition);
+    transition: background 0.15s ease, color 0.15s ease;
     position: relative;
-    font-size: var(--font-size-nav);
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
   }
 
   .sidebar-nav .nav-link:hover {
@@ -345,7 +399,7 @@
   }
 
   .sidebar-nav .nav-link.active {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.13);
     color: #fff;
   }
 
@@ -355,22 +409,32 @@
     left: 0;
     top: 0;
     bottom: 0;
-    width: 4px;
+    width: 3px;
     background: var(--accent-color);
+    border-radius: 0 2px 2px 0;
   }
 
-  .sidebar-nav .nav-link i {
-    font-size: var(--font-size-icon-lg);
-    width: 22px;
+  .sidebar-nav .nav-link i:first-child {
+    font-size: 15px;
+    width: 18px;
     text-align: center;
+    flex-shrink: 0;
   }
 
   .sidebar-nav .nav-link .badge {
     margin-left: auto;
-    font-size: var(--font-size-badge);
+    font-size: 10px;
+    padding: 2px 5px;
+    line-height: 1.3;
+    flex-shrink: 0;
   }
 
-  /* Submenu Styles */
+  /* Group item links — indented from group header */
+  .nav-group-items > li > .nav-link {
+    padding-left: 28px;
+  }
+
+  /* ── Submenu (Work Papers / Action Plans sub-items) ── */
   .nav-has-submenu {
     position: relative;
   }
@@ -381,8 +445,10 @@
 
   .submenu-icon {
     margin-left: auto;
-    font-size: var(--font-size-sm);
-    transition: transform 0.3s ease;
+    font-size: 11px;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    opacity: 0.55;
   }
 
   .submenu-icon.rotate {
@@ -395,8 +461,8 @@
     margin: 0;
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.3s ease;
-    background: rgba(0, 0, 0, 0.15);
+    transition: max-height 0.25s ease;
+    background: rgba(0, 0, 0, 0.12);
   }
 
   .nav-submenu.show {
@@ -407,29 +473,27 @@
     padding: 0;
   }
 
+  /* Sub-items: 13px, deeper indent */
   .nav-submenu .nav-link {
-    padding: 10px 20px 10px 52px;
-    font-size: var(--font-size-nav-sm);
+    padding: 7px 16px 7px 46px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.62);
   }
 
-  .nav-submenu .nav-link i {
-    font-size: var(--font-size-icon-sm);
+  .nav-submenu .nav-link:hover {
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.07);
   }
 
-  /* Sidebar Footer */
+  .nav-submenu .nav-link i:first-child {
+    font-size: 12px;
+    width: 15px;
+  }
+
+  /* ── Sidebar Footer ── */
   .sidebar-footer {
-    padding: 15px 20px;
+    padding: 12px 16px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .sidebar-footer-info {
-    text-align: center;
-    margin-bottom: 10px;
-  }
-
-  .sidebar-footer-info small {
-    opacity: 0.6;
-    font-size: var(--font-size-xs);
   }
 
   /* Main Content */
@@ -1301,24 +1365,83 @@
 
   /* Responsive */
   @media (max-width: 991.98px) {
+    /* Icon-only strip — sidebar stays visible but narrow */
     .sidebar {
-      transform: translateX(-100%);
+      width: 54px;
+      overflow: hidden;
     }
 
     .sidebar.show {
-      transform: translateX(0);
+      width: 220px;
+      overflow: visible;
     }
 
-    .sidebar-toggle {
-      display: block;
-    }
-
+    /* Reserve space for icon strip */
     .main-content {
-      margin-left: 0;
+      margin-left: 54px;
     }
 
     .menu-toggle {
       display: block;
+    }
+
+    /* X close button: only when sidebar is expanded */
+    .sidebar-toggle {
+      display: none;
+    }
+    .sidebar.show .sidebar-toggle {
+      display: block;
+    }
+
+    /* Icon-only mode: hide text, badges, group headers, submenus */
+    .sidebar:not(.show) .sidebar-brand,
+    .sidebar:not(.show) .user-info,
+    .sidebar:not(.show) .nav-link > span,
+    .sidebar:not(.show) .nav-link .badge,
+    .sidebar:not(.show) .submenu-icon,
+    .sidebar:not(.show) .nav-submenu,
+    .sidebar:not(.show) .nav-group-header,
+    .sidebar:not(.show) .sidebar-footer > .btn > span {
+      display: none;
+    }
+
+    /* Force group item lists open in icon mode */
+    .sidebar:not(.show) .nav-group-items {
+      max-height: 600px !important;
+    }
+
+    /* Centre icons in icon mode */
+    .sidebar:not(.show) .sidebar-nav .nav-link {
+      padding: 10px 0;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .sidebar:not(.show) .nav-group-items > li > .nav-link {
+      padding-left: 0;
+    }
+
+    .sidebar:not(.show) .sidebar-user {
+      padding: 10px 0;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .sidebar:not(.show) .sidebar-header {
+      padding: 12px 4px;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .sidebar:not(.show) .sidebar-footer {
+      padding: 10px 0;
+      display: flex;
+      justify-content: center;
+    }
+
+    .sidebar:not(.show) .sidebar-footer .btn {
+      padding: 8px;
+      width: auto !important;
     }
   }
 
@@ -1854,9 +1977,9 @@
   .stat-card { padding: clamp(12px, 1.2vw, 20px); }
   .stat-icon { width: clamp(40px, 4vw, 60px); height: clamp(40px, 4vw, 60px); }
 
-  /* Sidebar responsive width */
-  .sidebar { width: var(--sidebar-width); }
-  .main-content { margin-left: var(--sidebar-width); }
+  /* Sidebar — fixed 220px on all desktop sizes */
+  .sidebar { width: 220px; }
+  .main-content { margin-left: 220px; }
 
   /* Gap and spacing scaling */
   .row.g-3 > * { padding: clamp(6px, 0.5vw, 12px); }
@@ -1871,16 +1994,10 @@
     .stat-card { padding: clamp(10px, 1vw, 16px); }
   }
 
-  /* Standard desktop scaling */
-  @media (max-width: 1280px) {
-    .sidebar { width: clamp(200px, 16vw, 260px); }
-    .main-content { margin-left: clamp(200px, 16vw, 260px); }
-  }
+  /* Standard desktop scaling — sidebar locked to 220px, no change needed */
 
   /* Tablet landscape */
   @media (max-width: 1024px) {
-    .sidebar { width: clamp(180px, 15vw, 240px); }
-    .main-content { margin-left: clamp(180px, 15vw, 240px); }
     .table-responsive { max-height: calc(100vh - 260px); }
   }
 
