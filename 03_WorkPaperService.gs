@@ -611,10 +611,10 @@ function submitWorkPaper(workPaperId, user) {
       entity_id: workPaperId,
       old_data: JSON.stringify(workPaper),
       new_data: JSON.stringify(updated),
-      user_id: user.user_id || '',
-      user_email: user.email || '',
-      timestamp: new Date().toISOString(),
-      ip_address: ''
+      actor_user_id: user.user_id || '',
+      actor_email: user.email || '',
+      occurred_at: new Date().toISOString(),
+      actor_ip: ''
     };
 
     tursoBatchWrite([

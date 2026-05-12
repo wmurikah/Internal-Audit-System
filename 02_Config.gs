@@ -92,8 +92,9 @@ const SCHEMAS = {
     'user_id', 'user_name', 'changed_at'
   ],
   AUDIT_LOG: [
-    'log_id', 'action', 'entity_type', 'entity_id', 'old_data', 'new_data',
-    'user_id', 'user_email', 'timestamp', 'ip_address'
+    'log_id', 'organization_id', 'occurred_at', 'actor_user_id', 'actor_email',
+    'actor_role', 'actor_ip', 'action', 'entity_type', 'entity_id',
+    'old_data', 'new_data', 'severity', 'success', 'module_code'
   ],
   SESSIONS: [
     'session_id', 'user_id', 'session_token_hash', 'created_at', 'expires_at',

@@ -1630,10 +1630,10 @@ function renderAuditLog(logs, total) {
 
   tbody.innerHTML = logs.map(log => `
     <tr>
-      <td class="text-nowrap small">${formatDate(log.timestamp)}</td>
+      <td class="text-nowrap small">${formatDate(log.occurred_at)}</td>
       <td><span class="badge bg-${getActionBadgeColor(log.action)}">${log.action}</span></td>
       <td>${log.entity_type} ${log.entity_id ? '<br><small>' + log.entity_id + '</small>' : ''}</td>
-      <td>${escapeHtml(log.user_email || '-')}</td>
+      <td>${escapeHtml(log.actor_email || '-')}</td>
       <td><button class="btn btn-sm btn-outline-secondary" onclick="viewLogDetails('${log.log_id}')"><i class="bi bi-eye"></i></button></td>
     </tr>
   `).join('');
