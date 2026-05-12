@@ -420,6 +420,9 @@ function routeAction(action, data, user) {
       if (action === 'createUser') return createUser(data, user);
       if (action === 'updateUser') return updateUser(data.userId, data, user);
       return deactivateUser(data.userId, user);
+
+    case 'resetUserPasswordAdmin':
+      return resetUserPasswordAdmin(data.userId, data.sessionToken);
       
     // ========== REPORTS ==========
     case 'getAuditSummaryReport':

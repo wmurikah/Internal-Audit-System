@@ -881,7 +881,7 @@ function createUser(userData, adminUser) {
 
   logAuditEvent('CREATE', 'USER', userId, null, user, adminUser.user_id, adminUser.email);
 
-  return sanitizeForClient({ success: true, userId: userId, tempPassword: tempPassword });
+  return sanitizeForClient({ success: true, userId: userId, userName: user.full_name, tempPassword: tempPassword });
 }
 
 function updateUser(userId, userData, adminUser) {
@@ -1092,5 +1092,44 @@ function getUsers(filters, adminUser) {
   return sanitizeForClient({ success: true, users: rows, total: rows.length });
 }
 
+
+function resetUserPasswordAdmin(userId, token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var admin = getUserByIdCached(session.user_id);
+  if (!admin || admin.role_code !== ROLES.SUPER_ADMIN) {
+    throw new Error('Only Head of Audit can reset passwords');
+  }
+  if (admin.user_id === userId) {
+    throw new Error('Use Change Password for your own password');
+  }
+  var user = getUserByIdCached(userId);
+  if (!user) throw new Error('User not found');
+
+  var tempPassword = generateTempPassword();
+  var salt = generateSalt();
+  var hash = hashPassword(tempPassword, salt);
+  var now  = new Date().toISOString();
+
+  tursoUpdate('05_Users', userId, {
+    password_hash:        hash,
+    password_salt:        salt,
+    must_change_password: 1,
+    login_attempts:       0,
+    locked_until:         null,
+    updated_at:           now
+  });
+  invalidateUserCache(user.email, userId);
+  invalidateUserSessions(userId);
+  logAuditEvent('ADMIN_PASSWORD_RESET', 'USER', userId,
+    null, null, admin.user_id, admin.email);
+
+  return {
+    success:      true,
+    tempPassword: tempPassword,
+    userName:     user.full_name,
+    userEmail:    user.email
+  };
+}
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)
