@@ -95,7 +95,9 @@ function login(email, password) {
   // Update last_login synchronously so it is never "Never" even if postLoginCleanup is skipped
   try {
     tursoUpdate('05_Users', user.user_id, {
-      last_login: new Date().toISOString()
+      last_login:     new Date().toISOString(),
+      login_attempts: 0,
+      locked_until:   null
     });
     invalidateUserCache(user.email, user.user_id);
   } catch(e) {
@@ -1008,9 +1010,11 @@ function deactivateUser(userId, adminUser) {
     return { success: false, error: 'User not found' };
   }
 
+  var now = new Date().toISOString();
+
   tursoUpdate('05_Users', userId, {
     is_active: 0,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
     updated_by: adminUser.user_id
   });
 
@@ -1018,9 +1022,55 @@ function deactivateUser(userId, adminUser) {
   invalidateUserCache(user.email, user.user_id);
   invalidateDropdownCache();
 
+  // STEP A — Flag orphaned work papers
+  tursoQuery_SQL(
+    "UPDATE work_papers " +
+    "SET notes = COALESCE(notes,'') || ' [Assigned auditor deactivated on ' || ? || ']', " +
+    "updated_at = ? " +
+    "WHERE deleted_at IS NULL " +
+    "AND (assigned_auditor_id = ? OR prepared_by_id = ?) " +
+    "AND status NOT IN ('Approved','Sent to Auditee')",
+    [now, now, userId, userId]
+  );
+
+  // STEP B — Flag orphaned action plans
+  tursoQuery_SQL(
+    "UPDATE action_plans SET updated_at = ? " +
+    "WHERE deleted_at IS NULL " +
+    "AND action_plan_id IN (" +
+    "  SELECT action_plan_id FROM action_plan_owners " +
+    "  WHERE user_id = ? AND is_current = 1" +
+    ") " +
+    "AND status NOT IN ('Verified','Closed','Not Implemented')",
+    [now, userId]
+  );
+
   logAuditEvent('DEACTIVATE', 'USER', userId, user, null, adminUser.user_id, adminUser.email);
 
-  return { success: true };
+  // STEP C — Count orphaned items so SUPER_ADMIN knows what needs manual reassignment
+  var orphanedWPs = tursoQuery_SQL(
+    "SELECT COUNT(*) as cnt FROM work_papers " +
+    "WHERE deleted_at IS NULL " +
+    "AND (assigned_auditor_id = ? OR prepared_by_id = ?) " +
+    "AND status NOT IN ('Approved','Sent to Auditee')",
+    [userId, userId]
+  )[0];
+
+  var orphanedAPs = tursoQuery_SQL(
+    "SELECT COUNT(*) as cnt FROM action_plans ap " +
+    "INNER JOIN action_plan_owners apo ON ap.action_plan_id = apo.action_plan_id " +
+    "WHERE ap.deleted_at IS NULL AND apo.user_id = ? " +
+    "AND apo.is_current = 1 " +
+    "AND ap.status NOT IN ('Verified','Closed','Not Implemented')",
+    [userId]
+  )[0];
+
+  return {
+    success: true,
+    orphanedWorkPapers: orphanedWPs ? orphanedWPs.cnt : 0,
+    orphanedActionPlans: orphanedAPs ? orphanedAPs.cnt : 0,
+    message: 'User deactivated. Review orphaned items in Audit Workbench.'
+  };
 }
 
 function forgotPassword(email) {
@@ -1178,6 +1228,29 @@ function resetUserPasswordAdmin(userId, token) {
     userName:     user.full_name,
     userEmail:    user.email
   };
+}
+
+function unlockUser(userId, token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var admin = getUserByIdCached(session.user_id);
+  if (!admin || admin.role_code !== ROLES.SUPER_ADMIN) {
+    throw new Error('Only Head of Audit can unlock accounts');
+  }
+  var user = getUserByIdCached(userId);
+  if (!user) throw new Error('User not found');
+
+  tursoUpdate('05_Users', userId, {
+    locked_until:   null,
+    login_attempts: 0,
+    updated_at:     new Date().toISOString()
+  });
+  invalidateUserCache(user.email, userId);
+
+  logAuditEvent('UNLOCK_ACCOUNT', 'USER', userId,
+    null, null, admin.user_id, admin.email);
+
+  return { success: true };
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)

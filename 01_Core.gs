@@ -5,7 +5,7 @@ const CONFIG = {
   CACHE_TTL: {
     CONFIG: 3600,        // 1 hour - rarely changes
     DROPDOWNS: 1800,     // 30 min - affiliates, areas, users list
-    PERMISSIONS: 600,    // 10 min - actual TTL sourced from config at runtime via getConfigInt
+    PERMISSIONS: 600,    // 10 min (600s) - runtime override via PERMISSION_CACHE_TTL_SECONDS config key
     SESSION: 300,        // 5 min - session validation
     USER_BY_EMAIL: 300   // 5 min - email to user mapping
   },

@@ -949,11 +949,22 @@ function getInitData(sessionToken) {
   return { success: false, requireLogin: true };
 }
 
-/**
- * Returns true for all authenticated users — dashboard is a shell; data is role-filtered.
- */
-function canViewDashboard() {
-  return true;
+function canViewDashboard(user) {
+  if (!user) return false;
+  if (user.role_code === ROLES.SUPER_ADMIN) return true;
+  return checkPermission(user.role_code, 'REPORT', 'view');
+}
+
+function canViewAIAssist(user) {
+  if (!user) return false;
+  if (user.role_code === ROLES.SUPER_ADMIN) return true;
+  return checkPermission(user.role_code, 'AI_ASSIST', 'view');
+}
+
+function canViewAuditWorkbench(user) {
+  if (!user) return false;
+  if (user.role_code === ROLES.SUPER_ADMIN) return true;
+  return checkPermission(user.role_code, 'WORK_PAPERS', 'view');
 }
 
 /**
@@ -1424,178 +1435,221 @@ function getComprehensiveReportData(filters) {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * getDashboardDataV2(params)
+ * getDashboardDataV2(params, callerUser)
  *
- * Returns observations and action plans with computed fields.
- * Data is filtered by role:
- *  - SUPER_ADMIN / SENIOR_AUDITOR / AUDITOR: full data
- *  - JUNIOR_STAFF / UNIT_MANAGER / SENIOR_MGMT: affiliate-scoped action plans + responses
- *  - BOARD_MEMBER / EXTERNAL_AUDITOR: approved/sent work papers only
+ * Returns observations and action plans with computed fields, scoped by role:
+ *  - SUPER_ADMIN / SENIOR_AUDITOR / AUDITOR: full data via getFullDashboardData_
+ *  - SENIOR_MGMT / UNIT_MANAGER / BOARD_MEMBER / EXTERNAL_AUDITOR: management view
+ *  - JUNIOR_STAFF / AUDITEE: own action plans + sent observations only
  */
 function getDashboardDataV2(params, callerUser) {
   try {
+    if (!callerUser) return { success: false, error: 'Auth required' };
+
     params = params || {};
-    var startTime = new Date().getTime();
 
-    // Determine role for data filtering
-    var roleCode = callerUser ? (callerUser.role_code || '') : '';
-    var userId   = callerUser ? (callerUser.user_id   || '') : '';
-    var affiliateCode = callerUser ? (callerUser.affiliate_code || '') : '';
+    var isSuperOrSenior = callerUser.role_code === ROLES.SUPER_ADMIN ||
+                          callerUser.role_code === ROLES.SENIOR_AUDITOR;
+    var isAuditTeam     = isSuperOrSenior ||
+                          callerUser.role_code === ROLES.AUDITOR;
+    var isManagement    = callerUser.role_code === ROLES.SENIOR_MGMT ||
+                          callerUser.role_code === ROLES.UNIT_MANAGER ||
+                          callerUser.role_code === ROLES.BOARD_MEMBER ||
+                          callerUser.role_code === ROLES.EXTERNAL_AUDITOR;
+    var isAuditee       = callerUser.role_code === ROLES.JUNIOR_STAFF ||
+                          callerUser.role_code === ROLES.AUDITEE;
 
-    // Role-based filter flags
-    var fullAuditAccess  = (roleCode === ROLES.SUPER_ADMIN || roleCode === ROLES.SENIOR_AUDITOR || roleCode === ROLES.AUDITOR);
-    var affiliateScoped  = (roleCode === ROLES.JUNIOR_STAFF || roleCode === ROLES.UNIT_MANAGER || roleCode === ROLES.SENIOR_MGMT);
-    var readOnlyApproved = (roleCode === ROLES.BOARD_MEMBER || roleCode === ROLES.EXTERNAL_AUDITOR);
+    if (isAuditTeam)    return getFullDashboardData_(callerUser, isSuperOrSenior);
+    if (isManagement)   return getManagementDashboardData_(callerUser);
+    if (isAuditee)      return getAuditeeDashboardData_(callerUser);
 
-    // ── Fetch work papers — apply role filter ──
-    var workPapers;
-    if (readOnlyApproved) {
-      // Board/External: only Approved or Sent to Auditee
-      workPapers = getWorkPapers({ status: 'Approved' }, null)
-        .concat(getWorkPapers({ status: 'Sent to Auditee' }, null));
-    } else {
-      workPapers = getWorkPapers({}, null);
-    }
-
-    // ── Fetch action plans — apply role filter ──
-    var actionPlans;
-    if (affiliateScoped && userId) {
-      // Auditee roles: only their own action plans
-      actionPlans = getActionPlans({ owner_id: userId }, callerUser);
-    } else {
-      actionPlans = getActionPlans({}, null);
-    }
-
-    // ── Build lookup: work_paper_id → action plans[] ──
-    var apByWp = {};
-    actionPlans.forEach(function(ap) {
-      var wpId = ap.work_paper_id;
-      if (!apByWp[wpId]) apByWp[wpId] = [];
-      apByWp[wpId].push(ap);
-    });
-
-    // ── Build area lookup for enrichment ──
-    var areaLookup = {};
-    try {
-      var areaData = tursoGetAll('07_AuditAreas');
-      areaData.forEach(function(area) {
-        if (area.area_id) areaLookup[area.area_id] = area.area_name || area.area_code || area.area_id;
-        if (area.area_code && !areaLookup[area.area_code]) areaLookup[area.area_code] = area.area_name || area.area_code;
-      });
-    } catch (e) { console.warn('getDashboardDataV2: area lookup failed:', e.message); }
-
-    // ── Build WP lookup for AP enrichment ──
-    var wpLookup = {};
-    workPapers.forEach(function(wp) { wpLookup[wp.work_paper_id] = wp; });
-
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-    var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
-
-    // ── Compute per-observation fields ──
-    var observations = workPapers.map(function(wp) {
-      // Enrich with area name
-      if (!wp.audit_area_name && wp.audit_area_id && areaLookup[wp.audit_area_id]) {
-        wp.audit_area_name = areaLookup[wp.audit_area_id];
-      }
-
-      var linkedAPs = apByWp[wp.work_paper_id] || [];
-      wp.action_plan_count = linkedAPs.length;
-      wp.overdue_ap_count = linkedAPs.filter(function(ap) {
-        if (closedStatuses.indexOf(ap.status) !== -1) return false;
-        if (!ap.due_date) return false;
-        var due = new Date(ap.due_date);
-        due.setHours(0, 0, 0, 0);
-        return due < today;
-      }).length;
-
-      return wp;
-    });
-
-    // ── Compute per-action-plan fields ──
-    var enrichedAPs = actionPlans.map(function(ap) {
-      // days_overdue: only for active (non-closed) APs past due
-      if (closedStatuses.indexOf(ap.status) === -1 && ap.due_date) {
-        var due = new Date(ap.due_date);
-        due.setHours(0, 0, 0, 0);
-        ap.days_overdue = Math.max(0, Math.floor((today - due) / 86400000));
-      } else {
-        ap.days_overdue = 0;
-      }
-
-      // Enrich with parent WP's affiliate_code and audit_area for client filtering
-      var parentWP = wpLookup[ap.work_paper_id];
-      if (parentWP) {
-        // FIX-4: Normalize affiliate — APs may have affiliate_id instead of affiliate_code
-        ap.affiliate_code = ap.affiliate_code || ap.affiliate_id || parentWP.affiliate_code || '';
-        ap.audit_area_id = ap.audit_area_id || parentWP.audit_area_id || '';
-        ap.audit_area_name = ap.audit_area_name || parentWP.audit_area_name || '';
-        ap.risk_rating = ap.risk_rating || parentWP.risk_rating || '';
-      } else {
-        // No parent WP found — normalize from AP's own fields
-        ap.affiliate_code = ap.affiliate_code || ap.affiliate_id || '';
-        ap.audit_area_id = ap.audit_area_id || '';
-        ap.audit_area_name = ap.audit_area_name || '';
-      }
-
-      return ap;
-    });
-
-    // ── Extract metadata ──
-    var affiliateSet = {};
-    var auditAreaSet = {};
-    var yearSet = {};
-    var earliestDate = null;
-
-    observations.forEach(function(wp) {
-      if (wp.affiliate_code) affiliateSet[wp.affiliate_code] = true;
-      var areaName = wp.audit_area_name || wp.audit_area_id;
-      if (areaName) auditAreaSet[areaName] = true;
-
-      var d = wp.created_at ? new Date(wp.created_at) : null;
-      if (d && !isNaN(d.getTime())) {
-        yearSet[d.getFullYear()] = true;
-        if (!earliestDate || d < earliestDate) earliestDate = d;
-      }
-    });
-
-    enrichedAPs.forEach(function(ap) {
-      if (ap.affiliate_code) affiliateSet[ap.affiliate_code] = true;
-
-      // FIX-3: Fallback chain for APs with empty created_at (61% of seed data)
-      var dateStr = ap.created_at || ap.updated_at || ap.due_date;
-      var d = dateStr ? new Date(dateStr) : null;
-      if (d && !isNaN(d.getTime())) {
-        yearSet[d.getFullYear()] = true;
-        if (!earliestDate || d < earliestDate) earliestDate = d;
-      }
-    });
-
-    var affiliates = Object.keys(affiliateSet).sort();
-    var auditAreas = Object.keys(auditAreaSet).sort();
-    var years = Object.keys(yearSet).map(Number).sort(function(a, b) { return a - b; });
-
-    console.log('getDashboardDataV2 completed in', new Date().getTime() - startTime, 'ms',
-      '— observations:', observations.length, ', actionPlans:', enrichedAPs.length);
-
-    return sanitizeForClient({
-      success: true,
-      observations: observations,
-      actionPlans: enrichedAPs,
-      meta: {
-        affiliates: affiliates,
-        auditAreas: auditAreas,
-        years: years,
-        earliestDate: earliestDate ? earliestDate.toISOString() : null,
-        totalObservations: observations.length,
-        totalActionPlans: enrichedAPs.length
-      }
-    });
+    return { success: false, error: 'Access denied' };
 
   } catch (e) {
     console.error('getDashboardDataV2 error:', e);
     return { success: false, error: 'Failed to load dashboard data: ' + e.message };
   }
+}
+
+/**
+ * Full dashboard data for audit team (SUPER_ADMIN, SENIOR_AUDITOR, AUDITOR).
+ */
+function getFullDashboardData_(callerUser, isAdmin) {
+  var startTime = new Date().getTime();
+
+  var workPapers  = getWorkPapers({}, null);
+  var actionPlans = getActionPlans({}, null);
+
+  var result = buildDashboardPayload_(workPapers, actionPlans, callerUser);
+
+  console.log('getFullDashboardData_ completed in', new Date().getTime() - startTime, 'ms',
+    '— observations:', result.observations.length, ', actionPlans:', result.actionPlans.length);
+
+  return sanitizeForClient(result);
+}
+
+/**
+ * Management/Board view: approved/sent work papers + visible action plan counts only.
+ * No work-in-progress or draft observations.
+ */
+function getManagementDashboardData_(callerUser) {
+  var startTime = new Date().getTime();
+
+  var workPapers = getWorkPapers({ status: 'Approved' }, null)
+    .concat(getWorkPapers({ status: 'Sent to Auditee' }, null));
+
+  // Visible action plans: closed/verified statuses only for read-only roles
+  var actionPlans;
+  var readOnlyRoles = [ROLES.BOARD_MEMBER, ROLES.EXTERNAL_AUDITOR];
+  if (readOnlyRoles.indexOf(callerUser.role_code) >= 0) {
+    actionPlans = getActionPlans({}, null).filter(function(ap) {
+      return ['Implemented', 'Verified', 'Closed'].indexOf(ap.status) >= 0;
+    });
+  } else {
+    actionPlans = getActionPlans({}, null);
+  }
+
+  var result = buildDashboardPayload_(workPapers, actionPlans, callerUser);
+
+  console.log('getManagementDashboardData_ completed in', new Date().getTime() - startTime, 'ms');
+
+  return sanitizeForClient(result);
+}
+
+/**
+ * Auditee view: own action plans + observations sent to this user only.
+ */
+function getAuditeeDashboardData_(callerUser) {
+  var startTime = new Date().getTime();
+  var userId = callerUser.user_id || '';
+
+  // Only observations sent to this auditee (Sent to Auditee status, responsible_ids includes user)
+  var allWPs = getWorkPapers({ status: 'Sent to Auditee' }, null);
+  var workPapers = allWPs.filter(function(wp) {
+    var responsible = String(wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); });
+    return responsible.indexOf(userId) >= 0;
+  });
+
+  // Only action plans owned by this user
+  var actionPlans = userId ? getActionPlans({ owner_id: userId }, callerUser) : [];
+
+  var result = buildDashboardPayload_(workPapers, actionPlans, callerUser);
+
+  console.log('getAuditeeDashboardData_ completed in', new Date().getTime() - startTime, 'ms');
+
+  return sanitizeForClient(result);
+}
+
+/**
+ * Shared payload builder: enriches work papers and action plans, computes metadata.
+ */
+function buildDashboardPayload_(workPapers, actionPlans, callerUser) {
+  // ── Build area lookup for enrichment ──
+  var areaLookup = {};
+  try {
+    var areaData = tursoGetAll('07_AuditAreas');
+    areaData.forEach(function(area) {
+      if (area.area_id) areaLookup[area.area_id] = area.area_name || area.area_code || area.area_id;
+      if (area.area_code && !areaLookup[area.area_code]) areaLookup[area.area_code] = area.area_name || area.area_code;
+    });
+  } catch (e) { console.warn('buildDashboardPayload_: area lookup failed:', e.message); }
+
+  // ── Build lookup: work_paper_id → action plans[] ──
+  var apByWp = {};
+  actionPlans.forEach(function(ap) {
+    var wpId = ap.work_paper_id;
+    if (!apByWp[wpId]) apByWp[wpId] = [];
+    apByWp[wpId].push(ap);
+  });
+
+  // ── Build WP lookup for AP enrichment ──
+  var wpLookup = {};
+  workPapers.forEach(function(wp) { wpLookup[wp.work_paper_id] = wp; });
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var closedStatuses = ['Implemented', 'Verified', 'Not Implemented', 'Closed', 'Rejected'];
+
+  // ── Compute per-observation fields ──
+  var observations = workPapers.map(function(wp) {
+    if (!wp.audit_area_name && wp.audit_area_id && areaLookup[wp.audit_area_id]) {
+      wp.audit_area_name = areaLookup[wp.audit_area_id];
+    }
+    var linkedAPs = apByWp[wp.work_paper_id] || [];
+    wp.action_plan_count = linkedAPs.length;
+    wp.overdue_ap_count = linkedAPs.filter(function(ap) {
+      if (closedStatuses.indexOf(ap.status) !== -1) return false;
+      if (!ap.due_date) return false;
+      var due = new Date(ap.due_date);
+      due.setHours(0, 0, 0, 0);
+      return due < today;
+    }).length;
+    return wp;
+  });
+
+  // ── Compute per-action-plan fields ──
+  var enrichedAPs = actionPlans.map(function(ap) {
+    if (closedStatuses.indexOf(ap.status) === -1 && ap.due_date) {
+      var due = new Date(ap.due_date);
+      due.setHours(0, 0, 0, 0);
+      ap.days_overdue = Math.max(0, Math.floor((today - due) / 86400000));
+    } else {
+      ap.days_overdue = 0;
+    }
+    var parentWP = wpLookup[ap.work_paper_id];
+    if (parentWP) {
+      ap.affiliate_code  = ap.affiliate_code  || ap.affiliate_id || parentWP.affiliate_code  || '';
+      ap.audit_area_id   = ap.audit_area_id   || parentWP.audit_area_id   || '';
+      ap.audit_area_name = ap.audit_area_name || parentWP.audit_area_name || '';
+      ap.risk_rating     = ap.risk_rating     || parentWP.risk_rating     || '';
+    } else {
+      ap.affiliate_code  = ap.affiliate_code  || ap.affiliate_id || '';
+      ap.audit_area_id   = ap.audit_area_id   || '';
+      ap.audit_area_name = ap.audit_area_name || '';
+    }
+    return ap;
+  });
+
+  // ── Extract metadata ──
+  var affiliateSet = {};
+  var auditAreaSet = {};
+  var yearSet = {};
+  var earliestDate = null;
+
+  observations.forEach(function(wp) {
+    if (wp.affiliate_code) affiliateSet[wp.affiliate_code] = true;
+    var areaName = wp.audit_area_name || wp.audit_area_id;
+    if (areaName) auditAreaSet[areaName] = true;
+    var d = wp.created_at ? new Date(wp.created_at) : null;
+    if (d && !isNaN(d.getTime())) {
+      yearSet[d.getFullYear()] = true;
+      if (!earliestDate || d < earliestDate) earliestDate = d;
+    }
+  });
+
+  enrichedAPs.forEach(function(ap) {
+    if (ap.affiliate_code) affiliateSet[ap.affiliate_code] = true;
+    var dateStr = ap.created_at || ap.updated_at || ap.due_date;
+    var d = dateStr ? new Date(dateStr) : null;
+    if (d && !isNaN(d.getTime())) {
+      yearSet[d.getFullYear()] = true;
+      if (!earliestDate || d < earliestDate) earliestDate = d;
+    }
+  });
+
+  return {
+    success: true,
+    observations: observations,
+    actionPlans: enrichedAPs,
+    meta: {
+      affiliates:        Object.keys(affiliateSet).sort(),
+      auditAreas:        Object.keys(auditAreaSet).sort(),
+      years:             Object.keys(yearSet).map(Number).sort(function(a, b) { return a - b; }),
+      earliestDate:      earliestDate ? earliestDate.toISOString() : null,
+      totalObservations: observations.length,
+      totalActionPlans:  enrichedAPs.length
+    }
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
