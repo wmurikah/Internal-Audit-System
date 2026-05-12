@@ -161,7 +161,8 @@ function postLoginCleanup(data) {
         tursoUpdate('05_Users', user.user_id, {
           login_attempts: 0,
           locked_until: null,
-          last_login: new Date().toISOString()
+          last_login: new Date().toISOString(),
+          last_login_at: new Date().toISOString()
         });
         invalidateUserCache(userEmail, user.user_id);
       }
@@ -254,7 +255,8 @@ function prewarmUserCache(user) {
 function updateLastLoginAsync(user) {
   try {
     tursoUpdate('05_Users', user.user_id, {
-      last_login: new Date().toISOString()
+      last_login: new Date().toISOString(),
+      last_login_at: new Date().toISOString()
     });
     invalidateUserCache(user.email, user.user_id);
   } catch (e) {
@@ -764,7 +766,8 @@ function resetFailedAttempts(user) {
 
 function updateLastLogin(user) {
   tursoUpdate('05_Users', user.user_id, {
-    last_login: new Date().toISOString()
+    last_login: new Date().toISOString(),
+    last_login_at: new Date().toISOString()
   });
   invalidateUserCache(user.email, user.user_id);
 }
