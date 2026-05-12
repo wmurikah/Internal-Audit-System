@@ -5,45 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hass Petroleum Internal Audit System</title>
   <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #1F2D5C; }
-
-    /* Loading screen — shows instantly from Cloudflare */
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#1F2D5C; }
     #loader {
-      position: fixed; inset: 0; background: #1F2D5C;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 20px; z-index: 10;
-      transition: opacity 0.4s ease;
+      position:fixed; inset:0; background:#1F2D5C;
+      display:flex; align-items:center; justify-content:center;
+      flex-direction:column; gap:20px; z-index:10;
+      transition:opacity 0.5s ease;
     }
-    #loader svg { opacity: 0.9; }
     #loader p {
-      color: #ffffff; font-family: system-ui, sans-serif;
-      font-size: 15px; letter-spacing: 0.05em; opacity: 0.8;
+      color:#fff; font-family:system-ui,sans-serif;
+      font-size:15px; letter-spacing:0.05em; opacity:0.8;
     }
-    .bar-wrap {
-      width: 200px; height: 2px;
-      background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden;
-    }
-    .bar {
-      height: 100%; width: 30%; background: #E5B81B;
-      border-radius: 2px;
-      animation: sweep 1.6s ease-in-out infinite;
-    }
-    @keyframes sweep {
-      0%   { transform: translateX(-100%); }
-      100% { transform: translateX(400%); }
-    }
-
-    /* iframe — hidden until ready */
-    .frame-wrap {
-      position: fixed; top: -45px; left: 0; right: 0; bottom: 0;
-      opacity: 0; transition: opacity 0.4s ease;
-    }
-    iframe { width: 100%; height: calc(100% + 45px); border: none; display: block; }
+    .bar-wrap { width:200px; height:2px; background:rgba(255,255,255,0.15); border-radius:2px; overflow:hidden; }
+    .bar { height:100%; width:30%; background:#E5B81B; border-radius:2px; animation:sweep 1.6s ease-in-out infinite; }
+    @keyframes sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+    .frame-wrap { position:fixed; top:-45px; left:0; right:0; bottom:0; }
+    iframe { width:100%; height:calc(100% + 45px); border:none; display:block; }
   </style>
 </head>
 <body>
-
   <div id="loader">
     <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
       <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
@@ -55,66 +36,61 @@
     <div class="bar-wrap"><div class="bar"></div></div>
   </div>
 
-  <div class="frame-wrap" id="frame">
-    <iframe
-      id="gasFrame"
-      src="https://script.google.com/macros/s/AKfycbx301LxL--m-lCv52quMpgfS8lLZ26k7YBNuEauLb_cb_3dKVm8AWknrfTWGnW7i1eu/exec"
-      allowfullscreen
-      allow="clipboard-read; clipboard-write"
-    ></iframe>
+  <div class="frame-wrap">
+    <iframe id="gasFrame" allowfullscreen allow="clipboard-read; clipboard-write"></iframe>
   </div>
 
   <script>
     var GAS_URL = 'https://script.google.com/macros/s/AKfycbx301LxL--m-lCv52quMpgfS8lLZ26k7YBNuEauLb_cb_3dKVm8AWknrfTWGnW7i1eu/exec';
-    var frame   = document.getElementById('gasFrame');
+    var frame  = document.getElementById('gasFrame');
+    var loader = document.getElementById('loader');
 
-    // On load: if a valid token exists in localStorage, go straight to dashboard
-    (function checkExistingSession() {
-      var stored = localStorage.getItem('hass_audit_token');
-      var expiry  = localStorage.getItem('hass_audit_expiry');
-      if (stored && expiry && new Date().getTime() < parseInt(expiry, 10)) {
-        frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(stored);
-        return;
+    // Hide loader once iframe loads
+    frame.addEventListener('load', function() {
+      loader.style.opacity = '0';
+      setTimeout(function(){ loader.style.display = 'none'; }, 500);
+    });
+
+    // On reload: check localStorage for a valid unexpired token
+    // If found, go straight to dashboard — no login needed
+    function checkStoredSession() {
+      var token  = localStorage.getItem('hass_token');
+      var expiry = localStorage.getItem('hass_expiry');
+      if (token && expiry && Date.now() < parseInt(expiry)) {
+        frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(token);
+      } else {
+        // No valid token — load login page
+        frame.src = GAS_URL;
       }
-      // No valid token — default iframe src (login page) loads as-is
-    })();
+    }
+    checkStoredSession();
 
-    // Listen for postMessages from the iframe (login success / logout)
+    // Listen for messages from the GAS iframe
     window.addEventListener('message', function(event) {
-      var data = event.data;
-      if (!data || typeof data !== 'object') return;
+      var d = event.data;
+      if (!d || typeof d !== 'object') return;
 
-      if (data.type === 'HASS_LOGIN_SUCCESS' && data.token) {
-        // Store token in localStorage with 24-hour expiry
-        var expiry = new Date().getTime() + (24 * 60 * 60 * 1000);
-        localStorage.setItem('hass_audit_token', data.token);
-        localStorage.setItem('hass_audit_expiry', expiry.toString());
-        // Navigate iframe to dashboard (token baked into URL for SSR)
-        frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(data.token);
+      if (d.type === 'HASS_LOGIN_SUCCESS') {
+        // Store token with 8-hour expiry
+        var expiry = Date.now() + (8 * 60 * 60 * 1000);
+        localStorage.setItem('hass_token',  d.token);
+        localStorage.setItem('hass_expiry', expiry.toString());
+        loader.style.opacity = '1';
+        loader.style.display = 'flex';
+        frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(d.token);
       }
 
-      if (data.type === 'HASS_LOGOUT') {
-        localStorage.removeItem('hass_audit_token');
-        localStorage.removeItem('hass_audit_expiry');
+      if (d.type === 'HASS_LOGOUT') {
+        localStorage.removeItem('hass_token');
+        localStorage.removeItem('hass_expiry');
         frame.src = GAS_URL;
       }
     });
 
-    // Hide loader and show iframe once GAS has loaded
-    frame.addEventListener('load', function() {
-      var loader = document.getElementById('loader');
-      var frameWrap = document.getElementById('frame');
-      loader.style.opacity = '0';
-      frameWrap.style.opacity = '1';
-      setTimeout(function() { loader.style.display = 'none'; }, 400);
-    });
-
-    // Safety fallback — hide loader after 15s regardless
-    setTimeout(function() {
-      document.getElementById('loader').style.display = 'none';
-      document.getElementById('frame').style.opacity = '1';
-    }, 15000);
+    // Safety: hide loader after 20s
+    setTimeout(function(){
+      loader.style.display = 'none';
+    }, 20000);
   </script>
-
 </body>
 </html>
