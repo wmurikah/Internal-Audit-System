@@ -749,8 +749,9 @@ function evaluateAuditeeResponse(workPaperId, managementResponse, actionPlanIds,
     var jsonMatch = aiResponse.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     var parsed = JSON.parse(jsonMatch[0]);
+    var threshold = getConfigInt('AI_REJECTION_THRESHOLD', 50);
     return {
-      autoReject: parsed.adequate === false && (parsed.score || 0) < 50,
+      autoReject: parsed.adequate === false && (parsed.score || 0) < threshold,
       feedback: parsed.feedback || 'Response does not adequately address the audit observation.',
       score: parsed.score || 0
     };

@@ -201,8 +201,9 @@ function getOutlookAccessToken() {
     var result = JSON.parse(response.getContentText());
 
     if (code === 200 && result.access_token) {
-      // Cache for 50 minutes (token valid for 60 min)
-      cache.put('outlook_access_token', result.access_token, 3000);
+      // Cache for OUTLOOK_TOKEN_CACHE_SECONDS (token valid for 60 min)
+      var tokenCacheSecs = getConfigInt('OUTLOOK_TOKEN_CACHE_SECONDS', 3000);
+      cache.put('outlook_access_token', result.access_token, tokenCacheSecs);
 
       // If Microsoft returned a new refresh token, store it
       if (result.refresh_token) {
@@ -444,7 +445,8 @@ function sendStaleAssignmentReminders() {
   if (!wpRows || wpRows.length === 0) { console.log('sendStaleAssignmentReminders: No WP data'); return 0; }
 
   var now = new Date();
-  var threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  var staleDays = getConfigInt('STALE_REMINDER_DAYS', 3);
+  var threeDaysAgo = new Date(now.getTime() - staleDays * 24 * 60 * 60 * 1000);
 
   // Collect stale assignments
   var staleWPs = [];
@@ -590,7 +592,8 @@ function processEmailQueue() {
   // Acquire lock to prevent concurrent trigger runs from sending duplicates
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000); // Wait up to 10 seconds
+    var lockWaitMs = getConfigInt('EMAIL_LOCK_WAIT_MS', 10000);
+    lock.waitLock(lockWaitMs);
   } catch (e) {
     console.log('Email queue already being processed by another instance');
     return { sent: 0, failed: 0, skipped: true };
@@ -605,6 +608,7 @@ function processEmailQueue() {
 
     const now = new Date();
     const fromName = 'Internal Audit Notification';
+    var batchSize = getConfigInt('EMAIL_BATCH_SIZE', 50);
 
     let sentCount = 0;
     let failedCount = 0;
@@ -653,7 +657,7 @@ function processEmailQueue() {
         console.error('Failed to send email to', recipientEmail + ':', e.message);
       }
 
-      if (sentCount >= 50) {
+      if (sentCount >= batchSize) {
         console.log('Batch limit reached, will continue in next run');
         break;
       }

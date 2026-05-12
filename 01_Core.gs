@@ -5,7 +5,7 @@ const CONFIG = {
   CACHE_TTL: {
     CONFIG: 3600,        // 1 hour - rarely changes
     DROPDOWNS: 1800,     // 30 min - affiliates, areas, users list
-    PERMISSIONS: 10,     // 10 sec - keep access control changes near-real-time
+    PERMISSIONS: 600,    // 10 min - actual TTL sourced from config at runtime via getConfigInt
     SESSION: 300,        // 5 min - session validation
     USER_BY_EMAIL: 300   // 5 min - email to user mapping
   },
@@ -208,6 +208,19 @@ const DB = {
 };
 
 // All writes go directly through tursoSet / tursoUpdate / tursoDelete.
+
+function getConfigInt(key, fallback) {
+  try {
+    var val = tursoGetConfig(key, 'GLOBAL');
+    if (val !== null && val !== undefined) {
+      var n = parseInt(val);
+      if (!isNaN(n)) return n;
+    }
+  } catch(e) {
+    console.warn('getConfigInt fallback for ' + key, e.message);
+  }
+  return fallback;
+}
 
 function getConfig(key) {
   const allConfig = getAllConfig();
@@ -522,7 +535,8 @@ function getPermissionsCached(roleCode) {
     try { return JSON.parse(cached); } catch(e) {}
   }
   var perms = getPermissionsFresh(roleCode);
-  cache.put(key, JSON.stringify(perms), 600);
+  var permTtl = getConfigInt('PERMISSION_CACHE_TTL_SECONDS', 600);
+  cache.put(key, JSON.stringify(perms), permTtl);
   return perms;
 }
 

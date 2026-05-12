@@ -973,8 +973,9 @@ function sendToAuditee(workPaperId, user) {
         return u ? u.full_name : id;
       }).join(', ');
 
-      // Default due date: 30 days from now
-      var defaultDue = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      // Default due date: AP_DEFAULT_DUE_DATE_DAYS from now
+      var defaultDueDays = getConfigInt('AP_DEFAULT_DUE_DATE_DAYS', 30);
+      var defaultDue = new Date(now.getTime() + defaultDueDays * 24 * 60 * 60 * 1000);
 
       createActionPlan({
         work_paper_id: workPaperId,

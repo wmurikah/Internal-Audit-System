@@ -25,13 +25,14 @@ function createActionPlan(data, user) {
     throw new Error('Missing required fields: ' + apMissing.join(', '));
   }
 
-  // Validate due date: must not be more than 6 months from today
+  // Validate due date: must not be more than AP_MAX_DUE_DATE_MONTHS from today
   if (data.due_date) {
+    var maxMonths = getConfigInt('AP_MAX_DUE_DATE_MONTHS', 6);
     var dueDateCheck = new Date(data.due_date);
     var maxDueDate = new Date();
-    maxDueDate.setMonth(maxDueDate.getMonth() + 6);
+    maxDueDate.setMonth(maxDueDate.getMonth() + maxMonths);
     if (dueDateCheck > maxDueDate) {
-      throw new Error('Due date cannot be more than 6 months from today. Maximum allowed: ' +
+      throw new Error('Due date cannot be more than ' + maxMonths + ' months from today. Maximum allowed: ' +
         maxDueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
     }
   }
@@ -135,14 +136,15 @@ function createActionPlansBatch(workPaperId, plansData, user) {
     throw new Error('Action plans can only be created after work paper is sent to auditee');
   }
 
-  // Validate all due dates: must not be more than 6 months from today
+  // Validate all due dates: must not be more than AP_MAX_DUE_DATE_MONTHS from today
+  var maxMonths = getConfigInt('AP_MAX_DUE_DATE_MONTHS', 6);
   var maxDueDateBatch = new Date();
-  maxDueDateBatch.setMonth(maxDueDateBatch.getMonth() + 6);
+  maxDueDateBatch.setMonth(maxDueDateBatch.getMonth() + maxMonths);
   plansData.forEach(function(pd, idx) {
     if (pd.due_date) {
       var dd = new Date(pd.due_date);
       if (dd > maxDueDateBatch) {
-        throw new Error('Action plan #' + (idx + 1) + ': Due date cannot be more than 6 months from today.');
+        throw new Error('Action plan #' + (idx + 1) + ': Due date cannot be more than ' + maxMonths + ' months from today.');
       }
     }
   });
@@ -311,13 +313,14 @@ function updateActionPlan(actionPlanId, data, user) {
     }
   }
 
-  // Validate due date if being updated: must not be more than 6 months from today
+  // Validate due date if being updated: must not be more than AP_MAX_DUE_DATE_MONTHS from today
   if (data.due_date) {
+    var maxMonths = getConfigInt('AP_MAX_DUE_DATE_MONTHS', 6);
     var dueDateCheck = new Date(data.due_date);
     var maxDueDate = new Date();
-    maxDueDate.setMonth(maxDueDate.getMonth() + 6);
+    maxDueDate.setMonth(maxDueDate.getMonth() + maxMonths);
     if (dueDateCheck > maxDueDate) {
-      throw new Error('Due date cannot be more than 6 months from today. Maximum allowed: ' +
+      throw new Error('Due date cannot be more than ' + maxMonths + ' months from today. Maximum allowed: ' +
         maxDueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
     }
   }
