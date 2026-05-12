@@ -209,6 +209,16 @@ const DB = {
 
 // All writes go directly through tursoSet / tursoUpdate / tursoDelete.
 
+function getSystemUrl() {
+  try {
+    var url = tursoGetConfig('SYSTEM_URL', 'GLOBAL');
+    if (url && url.length > 0) return url;
+  } catch(e) {
+    console.warn('getSystemUrl fallback to GAS URL:', e.message);
+  }
+  return ScriptApp.getService().getUrl();
+}
+
 function getConfigInt(key, fallback) {
   try {
     var val = tursoGetConfig(key, 'GLOBAL');
