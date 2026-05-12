@@ -1697,7 +1697,7 @@ function renderAuditLogPagination(totalPages) {
 
   for (let i = 1; i <= Math.min(totalPages, 10); i++) {
     html += `<li class="page-item ${i === auditLogPage ? 'active' : ''}">
-      <a class="page-link" href="#" onclick="goToLogPage(${i})">${i}</a>
+      <a class="page-link" href="javascript:void(0)" onclick="goToLogPage(${i})">${i}</a>
     </li>`;
   }
 

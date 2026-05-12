@@ -421,6 +421,12 @@ function routeAction(action, data, user) {
       if (action === 'updateUser') return updateUser(data.userId, data, user);
       return deactivateUser(data.userId, user);
 
+    case 'unlockUser':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Head of Internal Audit can unlock accounts' };
+      }
+      return unlockUser(data.userId, data.sessionToken);
+
     case 'resetUserPasswordAdmin':
       return resetUserPasswordAdmin(data.userId, data.sessionToken);
       
@@ -460,16 +466,14 @@ function routeAction(action, data, user) {
       return { success: true, ...comprehensiveResult };
 
     case 'getDashboardDataV2': {
-      // Redesigned dashboard — returns all raw data for client-side filtering
-      // Keep dashboard accessible to all authenticated roles (role-based scoping
-      // is handled within dashboard data functions and client filtering).
+      // Redesigned dashboard — returns role-scoped data per caller role.
       const allowedRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR,
                             ROLES.SENIOR_MGMT, ROLES.BOARD_MEMBER, ROLES.UNIT_MANAGER,
                             ROLES.JUNIOR_STAFF, ROLES.EXTERNAL_AUDITOR];
       if (!allowedRoles.includes(user.role_code)) {
         return { success: false, error: 'Access denied' };
       }
-      return getDashboardDataV2(data);
+      return getDashboardDataV2(data, user);
     }
 
     // ========== NOTIFICATIONS ==========

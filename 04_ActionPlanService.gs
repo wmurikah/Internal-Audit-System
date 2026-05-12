@@ -859,13 +859,24 @@ function hoaReview(actionPlanId, action, comments, user) {
 function updateOverdueStatuses() {
   var now = new Date().toISOString();
 
+  // Promote Not Due → Pending when due date has arrived today (not yet past)
   tursoQuery_SQL(
-    "UPDATE action_plans SET status='Overdue', updated_at=? WHERE status IN ('Not Due','Pending','In Progress') AND due_date < ? AND deleted_at IS NULL",
-    [now, now]
+    "UPDATE action_plans " +
+    "SET status = 'Pending', updated_at = ? " +
+    "WHERE status = 'Not Due' " +
+    "AND date(due_date) <= date(?) " +
+    "AND date(due_date) >= date(?) " +
+    "AND deleted_at IS NULL",
+    [now, now, now]
   );
 
+  // Promote to Overdue when due date is in the past
   tursoQuery_SQL(
-    "UPDATE action_plans SET status='Pending', updated_at=? WHERE status='Not Due' AND due_date >= ? AND deleted_at IS NULL",
+    "UPDATE action_plans " +
+    "SET status = 'Overdue', updated_at = ? " +
+    "WHERE status IN ('Not Due', 'Pending', 'In Progress') " +
+    "AND date(due_date) < date(?) " +
+    "AND deleted_at IS NULL",
     [now, now]
   );
 
