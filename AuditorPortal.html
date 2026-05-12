@@ -85,7 +85,8 @@
       </div>
 
       <ul class="sidebar-nav">
-        <!-- Overview Section - Reports as primary landing page -->
+
+        <!-- ── Dashboard (standalone) ── -->
         <li class="nav-item" id="navReports">
           <a href="#reports" class="nav-link active" data-page="reports">
             <i class="bi bi-speedometer2"></i>
@@ -93,101 +94,137 @@
           </a>
         </li>
 
-        <!-- Audit Management Section -->
-        <li class="nav-item nav-section" id="navAuditMgmtSection">Audit Management</li>
+        <!-- ── Audit Work group ── -->
+        <li class="nav-group" id="navGroupAuditWork">
+          <button class="nav-group-header" onclick="toggleNavGroup(this, 'auditWorkItems')">
+            <span>Audit Work</span>
+            <i class="bi bi-chevron-down nav-group-chevron"></i>
+          </button>
+          <ul class="nav-group-items show" id="auditWorkItems">
 
-        <!-- Audit Workbench (formerly Dashboard) - Auditors only -->
-        <li class="nav-item nav-has-submenu" id="navAuditWorkbench">
-          <a href="#audit-workbench" class="nav-link nav-submenu-toggle" data-page="audit-workbench">
-            <i class="bi bi-speedometer2"></i>
-            <span>Audit Workbench</span>
-          </a>
-        </li>
+            <!-- Audit Workbench -->
+            <li class="nav-item" id="navAuditWorkbench">
+              <a href="#audit-workbench" class="nav-link" data-page="audit-workbench">
+                <i class="bi bi-speedometer2"></i>
+                <span>Audit Workbench</span>
+              </a>
+            </li>
 
+            <!-- Work Papers (click to expand sub-items) -->
+            <li class="nav-item nav-has-submenu" id="navWorkPapersMenu">
+              <a href="#" class="nav-link nav-submenu-toggle" onclick="toggleSubmenu(event, 'wpSubmenu')">
+                <i class="bi bi-folder2-open"></i>
+                <span>Work Papers</span>
+                <i class="bi bi-chevron-down submenu-icon"></i>
+              </a>
+              <ul class="nav-submenu" id="wpSubmenu">
+                <li id="navWPList">
+                  <a href="#work-papers" class="nav-link" data-page="work-papers" onclick="navigateTo('work-papers')">
+                    <i class="bi bi-list-ul"></i><span>All Work Papers</span>
+                    <span class="badge bg-warning text-dark ms-auto" id="pendingAssignmentsCount" style="display:none;">0</span>
+                    <span class="badge bg-primary ms-auto" id="wpListCount" style="display:none;">0</span>
+                  </a>
+                </li>
+                <li id="navMyWorkPapers">
+                  <a href="#work-papers" class="nav-link" data-page="work-papers-mine" onclick="navigateTo('work-papers', {mine: true})">
+                    <i class="bi bi-person-badge"></i><span>My Work Papers</span>
+                  </a>
+                </li>
+                <li id="navPendingReview">
+                  <a href="#work-papers" class="nav-link" data-page="work-papers-pending" onclick="navigateTo('work-papers', {status: 'Submitted'})">
+                    <i class="bi bi-clock-history"></i><span>Pending Review</span>
+                    <span class="badge bg-info ms-auto" id="pendingReviewCount" style="display:none;">0</span>
+                  </a>
+                </li>
+                <li id="navNewWorkPaper">
+                  <a href="#work-paper-form" class="nav-link" data-page="work-paper-form" onclick="navigateTo('work-paper-form')">
+                    <i class="bi bi-file-earmark-plus"></i><span>New Work Paper</span>
+                  </a>
+                </li>
+              </ul>
+            </li>
 
+            <!-- Action Plans (click to expand sub-items) -->
+            <li class="nav-item nav-has-submenu" id="navActionPlansMenu">
+              <a href="#" class="nav-link nav-submenu-toggle" onclick="toggleSubmenu(event, 'apSubmenu')">
+                <i class="bi bi-list-check"></i>
+                <span>Action Plans</span>
+                <i class="bi bi-chevron-down submenu-icon"></i>
+              </a>
+              <ul class="nav-submenu" id="apSubmenu">
+                <li>
+                  <a href="#action-plans" class="nav-link" data-page="action-plans" onclick="navigateTo('action-plans')">
+                    <i class="bi bi-list-ul"></i><span>All Action Plans</span>
+                  </a>
+                </li>
+                <li id="navMyActionPlans">
+                  <a href="#action-plans" class="nav-link" data-page="action-plans-mine" onclick="navigateTo('action-plans', {mine: true})">
+                    <i class="bi bi-person-badge"></i><span>My Action Plans</span>
+                    <span class="badge bg-info text-dark ms-auto" id="actionPlansCount" style="display:none;">0</span>
+                  </a>
+                </li>
+                <li id="navOverdueItem">
+                  <a href="#action-plans-overdue" class="nav-link" data-page="action-plans-overdue" onclick="navigateTo('action-plans-overdue')">
+                    <i class="bi bi-exclamation-triangle text-danger"></i><span>Overdue</span>
+                    <span class="badge bg-danger ms-auto" id="overdueCount" style="display:none;">0</span>
+                  </a>
+                </li>
+              </ul>
+            </li>
 
-        <!-- Work Papers with Submenu -->
-        <li class="nav-item nav-has-submenu" id="navWorkPapersMenu">
-          <a href="#" class="nav-link nav-submenu-toggle" onclick="toggleSubmenu(event, 'wpSubmenu')">
-            <i class="bi bi-folder2-open"></i>
-            <span>Work Papers</span>
-            <i class="bi bi-chevron-down submenu-icon rotate"></i>
-          </a>
-          <ul class="nav-submenu show" id="wpSubmenu">
-            <li id="navWPList"><a href="#work-papers" class="nav-link" data-page="work-papers" onclick="navigateTo('work-papers')">
-              <i class="bi bi-list-ul"></i><span>All Work Papers</span>
-              <span class="badge bg-warning text-dark ms-auto" id="pendingAssignmentsCount" title="Assigned but not started" style="display:none;">0</span>
-              <span class="badge bg-primary ms-auto" id="wpListCount" style="display:none;">0</span>
-            </a></li>
-            <li id="navMyWorkPapers"><a href="#work-papers" class="nav-link" data-page="work-papers-mine" onclick="navigateTo('work-papers', {mine: true})">
-              <i class="bi bi-person-badge"></i><span>My Work Papers</span>
-            </a></li>
-            <li id="navPendingReview"><a href="#work-papers" class="nav-link" data-page="work-papers-pending" onclick="navigateTo('work-papers', {status: 'Submitted'})">
-              <i class="bi bi-clock-history"></i><span>Pending Review</span>
-              <span class="badge bg-info ms-auto" id="pendingReviewCount">0</span>
-            </a></li>
-            <li id="navNewWorkPaper"><a href="#work-paper-form" class="nav-link" data-page="work-paper-form" onclick="navigateTo('work-paper-form')">
-              <i class="bi bi-file-earmark-plus"></i><span>New Work Paper</span>
-            </a></li>
-            <li id="navSendQueue"><a href="#send-queue" class="nav-link" data-page="send-queue" onclick="navigateTo('send-queue')">
-              <i class="bi bi-send-check"></i><span>Send Queue</span>
-              <span class="badge bg-success ms-auto" id="sendQueueCount" style="display:none;">0</span>
-            </a></li>
-            <li id="navResponsesReview"><a href="#responses-to-review" class="nav-link" data-page="responses-to-review" onclick="navigateTo('responses-to-review')">
-              <i class="bi bi-chat-left-dots"></i><span>Responses to Review</span>
-              <span class="badge bg-warning text-dark ms-auto" id="responsesReviewCount" style="display:none;">0</span>
-            </a></li>
+            <!-- Send Queue -->
+            <li class="nav-item" id="navSendQueue">
+              <a href="#send-queue" class="nav-link" data-page="send-queue" onclick="navigateTo('send-queue')">
+                <i class="bi bi-send-check"></i><span>Send Queue</span>
+                <span class="badge bg-success ms-auto" id="sendQueueCount" style="display:none;">0</span>
+              </a>
+            </li>
+
+            <!-- Responses to Review -->
+            <li class="nav-item" id="navResponsesReview">
+              <a href="#responses-to-review" class="nav-link" data-page="responses-to-review" onclick="navigateTo('responses-to-review')">
+                <i class="bi bi-chat-left-dots"></i><span>Responses to Review</span>
+                <span class="badge bg-warning text-dark ms-auto" id="responsesReviewCount" style="display:none;">0</span>
+              </a>
+            </li>
+
           </ul>
         </li>
 
-        <!-- Action Plans with Submenu -->
-        <li class="nav-item nav-has-submenu">
-          <a href="#" class="nav-link nav-submenu-toggle" onclick="toggleSubmenu(event, 'apSubmenu')">
-            <i class="bi bi-list-check"></i>
-            <span>Action Plans</span>
-            <i class="bi bi-chevron-down submenu-icon rotate"></i>
-          </a>
-          <ul class="nav-submenu show" id="apSubmenu">
-            <li><a href="#action-plans" class="nav-link" data-page="action-plans" onclick="navigateTo('action-plans')">
-              <i class="bi bi-list-ul"></i><span>All Action Plans</span>
-            </a></li>
-            <li id="navMyActionPlans"><a href="#action-plans" class="nav-link" data-page="action-plans-mine" onclick="navigateTo('action-plans', {mine: true})">
-              <i class="bi bi-person-badge"></i><span>My Action Plans</span>
-              <span class="badge bg-info text-dark ms-auto" id="actionPlansCount" style="display:none;">0</span>
-            </a></li>
-            <li id="navOverdueItem"><a href="#action-plans-overdue" class="nav-link" data-page="action-plans-overdue" onclick="navigateTo('action-plans-overdue')">
-              <i class="bi bi-exclamation-triangle text-danger"></i><span>Overdue</span>
-              <span class="badge bg-danger ms-auto" id="overdueCount">0</span>
-            </a></li>
+        <!-- ── Observations group ── -->
+        <li class="nav-group" id="navGroupObservations">
+          <button class="nav-group-header" onclick="toggleNavGroup(this, 'observationsItems')">
+            <span>Observations</span>
+            <i class="bi bi-chevron-down nav-group-chevron"></i>
+          </button>
+          <ul class="nav-group-items show" id="observationsItems">
+
+            <!-- My Observations -->
+            <li class="nav-item" id="navAuditeeMenu">
+              <a href="#auditee-findings" class="nav-link" data-page="auditee-findings-mine" onclick="navigateTo('auditee-findings', {mine: true})">
+                <i class="bi bi-clipboard-check"></i><span>My Observations</span>
+                <span class="badge bg-warning text-dark ms-auto" id="myObservationsCount" style="display:none;">0</span>
+              </a>
+            </li>
+
+            <!-- All Observations -->
+            <li class="nav-item">
+              <a href="#auditee-findings" class="nav-link" data-page="auditee-findings" onclick="navigateTo('auditee-findings')">
+                <i class="bi bi-list-ul"></i><span>All Observations</span>
+              </a>
+            </li>
+
+            <!-- Audit Reports -->
+            <li class="nav-item" id="navBoardReports">
+              <a href="#board-reports" class="nav-link" data-page="board-reports" onclick="navigateTo('board-reports')">
+                <i class="bi bi-file-earmark-word"></i><span>Audit Reports</span>
+              </a>
+            </li>
+
           </ul>
         </li>
 
-        <!-- Auditee Section -->
-        <li class="nav-item nav-section" id="navAuditeeSection">Auditee</li>
-        <li class="nav-item nav-has-submenu" id="navAuditeeMenu">
-          <a href="#" class="nav-link nav-submenu-toggle" onclick="toggleSubmenu(event, 'auditeeSubmenu')">
-            <i class="bi bi-clipboard-check"></i>
-            <span>My Observations</span>
-            <i class="bi bi-chevron-down submenu-icon rotate"></i>
-          </a>
-          <ul class="nav-submenu show" id="auditeeSubmenu">
-            <li><a href="#auditee-findings" class="nav-link" data-page="auditee-findings" onclick="navigateTo('auditee-findings')">
-              <i class="bi bi-list-ul"></i><span>All Observations</span>
-              <span class="badge bg-warning text-dark ms-auto" id="myObservationsCount" style="display:none;">0</span>
-            </a></li>
-          </ul>
-        </li>
-
-        <!-- Board Reports Section (OBSERVER + SUPER_ADMIN only) -->
-        <li class="nav-item" id="navBoardReports">
-          <a href="#board-reports" class="nav-link" data-page="board-reports" onclick="navigateTo('board-reports')">
-            <i class="bi bi-file-earmark-word"></i>
-            <span>Audit Reports</span>
-          </a>
-        </li>
-
-        <!-- Insights Section -->
-        <li class="nav-item nav-section" id="navInsightsSection">Insights</li>
+        <!-- ── AI Assist (standalone) ── -->
         <li class="nav-item" id="navAnalytics">
           <a href="#analytics" class="nav-link" data-page="analytics">
             <i class="bi bi-robot"></i>
@@ -195,28 +232,40 @@
           </a>
         </li>
 
-        <!-- Administration Section (Admin Only) -->
-        <li class="nav-item nav-section" id="navAdminSection">Administration</li>
-        <li class="nav-item" id="navUsers">
-          <a href="#settings" class="nav-link" data-page="settings" onclick="navigateTo('settings', {tab: 'users'})">
-            <i class="bi bi-people"></i>
-            <span>User Management</span>
-          </a>
+        <!-- ── Administration group (collapsed by default) ── -->
+        <li class="nav-group" id="navGroupAdmin">
+          <button class="nav-group-header" onclick="toggleNavGroup(this, 'adminItems')">
+            <span>Administration</span>
+            <i class="bi bi-chevron-down nav-group-chevron" style="transform:rotate(-90deg)"></i>
+          </button>
+          <ul class="nav-group-items" id="adminItems">
+
+            <li class="nav-item" id="navUsers">
+              <a href="#settings" class="nav-link" data-page="settings" onclick="navigateTo('settings', {tab: 'users'})">
+                <i class="bi bi-people"></i><span>User Management</span>
+              </a>
+            </li>
+
+            <li class="nav-item" id="navSettings">
+              <a href="#settings" class="nav-link" data-page="settings">
+                <i class="bi bi-gear"></i><span>System Settings</span>
+              </a>
+            </li>
+
+          </ul>
         </li>
-        <li class="nav-item" id="navSettings">
-          <a href="#settings" class="nav-link" data-page="settings">
-            <i class="bi bi-gear"></i>
-            <span>System Settings</span>
-          </a>
-        </li>
+
+        <!-- Legacy section stubs — IDs kept for JS role-visibility compatibility -->
+        <li id="navAuditMgmtSection" style="display:none!important;height:0;overflow:hidden;padding:0;margin:0;"></li>
+        <li id="navAuditeeSection"   style="display:none!important;height:0;overflow:hidden;padding:0;margin:0;"></li>
+        <li id="navInsightsSection"  style="display:none!important;height:0;overflow:hidden;padding:0;margin:0;"></li>
+        <li id="navAdminSection"     style="display:none!important;height:0;overflow:hidden;padding:0;margin:0;"></li>
+
       </ul>
 
       <div class="sidebar-footer">
-        <div class="sidebar-footer-info">
-          <small class="text-muted">v4.0 | Session Active</small>
-        </div>
         <button class="btn btn-outline-light btn-sm w-100" onclick="handleLogout()">
-          <i class="bi bi-box-arrow-left me-2"></i>Sign Out
+          <i class="bi bi-box-arrow-left"></i><span class="ms-2">Sign Out</span>
         </button>
       </div>
     </nav>
@@ -484,7 +533,17 @@
   <?!= include('Scripts'); ?>
 
   <script>
-  // Enhanced Navigation Functions
+  // ── Group collapse/expand ──
+  function toggleNavGroup(btn, groupId) {
+    const group = document.getElementById(groupId);
+    const chevron = btn.querySelector('.nav-group-chevron');
+    const isNowOpen = group.classList.toggle('show');
+    if (chevron) {
+      chevron.style.transform = isNowOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+    }
+  }
+
+  // ── Submenu collapse/expand ──
   function toggleSubmenu(event, submenuId) {
     event.preventDefault();
     event.stopPropagation();
@@ -493,24 +552,31 @@
     const toggle = event.currentTarget;
     const icon = toggle.querySelector('.submenu-icon');
 
-    // Close other submenus
-    document.querySelectorAll('.nav-submenu.show').forEach(sm => {
-      if (sm.id !== submenuId) {
-        sm.classList.remove('show');
-        sm.previousElementSibling?.querySelector('.submenu-icon')?.classList.remove('rotate');
-      }
-    });
-
     submenu.classList.toggle('show');
     icon?.classList.toggle('rotate');
   }
 
-  // Auto-open submenu for current page
+  // ── Auto-open group + submenu for current page ──
   function openSubmenuForPage(page) {
     const wpPages = ['work-papers', 'work-papers-mine', 'work-papers-pending', 'work-paper-form', 'work-paper-view'];
     const apPages = ['action-plans', 'action-plans-mine', 'action-plans-overdue', 'action-plan-view'];
+    const auditWorkPages = [...wpPages, ...apPages, 'audit-workbench', 'send-queue', 'responses-to-review'];
+    const observationsPages = ['auditee-findings', 'auditee-response', 'board-reports'];
+    const adminPages = ['settings'];
 
-    const auditeePages = ['auditee-findings', 'auditee-response'];
+    function openGroup(groupId, btnSelector) {
+      const group = document.getElementById(groupId);
+      if (group && !group.classList.contains('show')) {
+        group.classList.add('show');
+        const btn = group.previousElementSibling;
+        const chevron = btn?.querySelector('.nav-group-chevron');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+      }
+    }
+
+    if (auditWorkPages.includes(page)) openGroup('auditWorkItems');
+    if (observationsPages.includes(page)) openGroup('observationsItems');
+    if (adminPages.includes(page)) openGroup('adminItems');
 
     if (wpPages.includes(page)) {
       document.getElementById('wpSubmenu')?.classList.add('show');
@@ -518,9 +584,6 @@
     } else if (apPages.includes(page)) {
       document.getElementById('apSubmenu')?.classList.add('show');
       document.querySelector('[onclick*="apSubmenu"] .submenu-icon')?.classList.add('rotate');
-    } else if (auditeePages.includes(page)) {
-      document.getElementById('auditeeSubmenu')?.classList.add('show');
-      document.querySelector('[onclick*="auditeeSubmenu"] .submenu-icon')?.classList.add('rotate');
     }
   }
 
