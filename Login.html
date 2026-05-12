@@ -1450,6 +1450,11 @@
         if (msg) msg.textContent = messages[msgIdx];
       }, 900);
 
+      // Notify parent frame (docs/index.html) to persist token in localStorage
+      try {
+        window.parent.postMessage({ type: 'HASS_LOGIN_SUCCESS', token: sessionToken }, '*');
+      } catch(e) {}
+
       google.script.run
         .withSuccessHandler(function(html) {
           clearInterval(ticker);

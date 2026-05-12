@@ -461,8 +461,8 @@ function scheduleBackgroundLoads() {
   // Show pending findings banner for auditees after 1.5s
   setTimeout(checkAndShowPendingFindings, 1500);
 
-  // Permission refresh every 10 minutes (validates session server-side — keep interval long)
-  setInterval(refreshPermissionsQuick, 600000);
+  // Permission refresh every 30 minutes (validates session server-side — keep interval long)
+  setInterval(refreshPermissionsQuick, 1800000);
 
   // Periodic refresh every 15s (dropdowns, sidebar counts)
   setInterval(refreshBackgroundData, 15000);
@@ -1378,6 +1378,9 @@ function redirectToLogin(reason) {
   sessionStorage.removeItem('hass_audit_token');
   LocalStore.clear();
 
+  // Notify parent frame (docs/index.html) to clear localStorage token
+  try { window.parent.postMessage({ type: 'HASS_LOGOUT' }, '*'); } catch(e) {}
+
   google.script.run
     .withSuccessHandler(function(html) {
       if (html && html.length > 1000) {
@@ -1926,9 +1929,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-// INACTIVITY TIMEOUT - Auto-redirect to login after 5 minutes
+// INACTIVITY TIMEOUT - Auto-redirect to login after 8 hours
 // ============================================================
-var INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+var INACTIVITY_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 var _inactivityTimer = null;
 
 function resetInactivityTimer() {
