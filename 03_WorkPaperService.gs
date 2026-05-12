@@ -909,7 +909,7 @@ function sendToAuditee(workPaperId, user) {
   const now = new Date();
 
   // Calculate response deadline: configurable per WP or default 14 days
-  var deadlineDays = RESPONSE_DEFAULTS ? RESPONSE_DEFAULTS.DEADLINE_DAYS : 14;
+  var deadlineDays = getResponseDefaults().DEADLINE_DAYS;
   var responseDeadline = new Date(now.getTime() + deadlineDays * 24 * 60 * 60 * 1000);
 
   const updates = {
@@ -1367,7 +1367,7 @@ function batchSendToAuditees(workPaperIds, user) {
       }
 
       // Update status to Sent to Auditee
-      var batchDeadlineDays = RESPONSE_DEFAULTS ? RESPONSE_DEFAULTS.DEADLINE_DAYS : 14;
+      var batchDeadlineDays = getResponseDefaults().DEADLINE_DAYS;
       var batchResponseDeadline = new Date(now.getTime() + batchDeadlineDays * 24 * 60 * 60 * 1000);
       var updates = {
         organization_id: user.organization_id || wp.organization_id || 'HASS',

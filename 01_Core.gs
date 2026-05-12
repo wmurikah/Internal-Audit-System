@@ -451,66 +451,15 @@ function logAudit(action, entityType, entityId, oldData, newData, user) {
 }
 
 function checkPermission(roleCode, module, action) {
-  // Normalize BOARD → BOARD_MEMBER alias (Firestore stores 'BOARD')
-  if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
-  const permissions = getPermissions(roleCode);
-  // SUPER_ADMIN bypass: _superAdmin flag means all permissions granted
-  if (permissions._superAdmin) return true;
-  let modulePerm = permissions[module];
-
-  // Backward-compatible module aliases to prevent false denials when one module
-  // is configured but an equivalent legacy/new module key is checked.
-  if (!modulePerm) {
-    const moduleAliases = {
-      'DASHBOARD': ['REPORT'],
-      'REPORT': ['DASHBOARD']
-    };
-    const aliases = moduleAliases[module] || [];
-    for (var i = 0; i < aliases.length; i++) {
-      if (permissions[aliases[i]]) {
-        modulePerm = permissions[aliases[i]];
-        break;
-      }
-    }
-  }
-  
-  if (!modulePerm) return false;
-  
-  const actionMap = {
-    'create': 'can_create',
-    'read': 'can_read',
-    'update': 'can_update',
-    'delete': 'can_delete',
-    'approve': 'can_approve',
-    'export': 'can_export'
-  };
-  
-  const permKey = actionMap[action];
-  return permKey ? modulePerm[permKey] === true : false;
+  if (roleCode === ROLES.SUPER_ADMIN) return true;
+  var perms = getPermissionsCached(roleCode);
+  if (perms._superAdmin) return true;
+  return !!(perms[module] && perms[module][action]);
 }
 
 function getPermissions(roleCode) {
-  if (!roleCode) return {};
-  // Normalize BOARD → BOARD_MEMBER alias
-  if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
   if (roleCode === ROLES.SUPER_ADMIN) return { _superAdmin: true };
-
-  // Try DB first
-  try {
-    var rows = tursoQuery_SQL(
-      'SELECT module_code, action_code, is_allowed ' +
-      'FROM role_permissions WHERE role_code = ?',
-      [roleCode]
-    );
-    if (rows && rows.length > 0) {
-      return buildPermissionsFromRows_(rows);
-    }
-  } catch(e) {
-    console.warn('getPermissions DB fallback for ' + roleCode, e.message);
-  }
-
-  // Fallback to hardcoded constant
-  return ROLE_PERMISSIONS[roleCode] || {};
+  return getPermissionsCached(roleCode);
 }
 
 function buildPermissionsFromRows_(rows) {
@@ -828,15 +777,11 @@ function seedRolePermissionsToTurso() {
 
 function keepWarm() {
   try {
-    var url = 'https://script.google.com/macros/s/AKfycbx301LxL--m-lCv52quMpgfS8lLZ26k7YBNuEauLb_cb_3dKVm8AWknrfTWGnW7i1eu/exec';
-    UrlFetchApp.fetch(url, {
-      method: 'get',
-      muteHttpExceptions: true,
-      followRedirects: false
-    });
-  } catch(e) {
-    // Silent fail — keep-warm is best effort
-  }
+    UrlFetchApp.fetch(
+      ScriptApp.getService().getUrl(),
+      { method: 'get', muteHttpExceptions: true, followRedirects: false }
+    );
+  } catch(e) {}
 }
 
 function seedTestAuditee() {

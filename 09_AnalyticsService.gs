@@ -236,39 +236,26 @@ function getPermissionMatrix(token) {
 
 /**
  * Update a single permission toggle.
- * Accepts either a session token string (direct google.script.run call)
- * or a validated user object (routed through the apiCall dispatcher).
+ * Receives a validated user object from the apiCall dispatcher.
  */
-function updatePermissions(permData, tokenOrUser) {
-  var user;
-  if (typeof tokenOrUser === 'string') {
-    var session = getSessionByToken(tokenOrUser);
-    if (!session) throw new Error('SESSION_EXPIRED');
-    user = getUserByIdCached(session.user_id);
-  } else {
-    user = tokenOrUser;
-  }
+function updatePermissions(permData, user) {
   if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
     return { success: false, error: 'Only Head of Audit can modify permissions' };
   }
-
-  var now = new Date().toISOString();
+  if (!permData.role_code || !permData.module_code || !permData.action_code) {
+    return { success: false, error: 'role_code, module_code, action_code required' };
+  }
   tursoQuery_SQL(
     'INSERT OR REPLACE INTO role_permissions ' +
-    '(role_code,module_code,action_code,is_allowed,updated_at) ' +
+    '(role_code, module_code, action_code, is_allowed, updated_at) ' +
     'VALUES (?,?,?,?,?)',
     [permData.role_code, permData.module_code,
-     permData.action_code, permData.is_allowed ? 1 : 0, now]
+     permData.action_code, permData.is_allowed ? 1 : 0, new Date().toISOString()]
   );
-
-  // Invalidate permission cache for this role
-  var cache = CacheService.getScriptCache();
-  cache.remove('perm_db_' + permData.role_code);
-  cache.remove('perm_fresh_' + permData.role_code);
-  cache.remove('perm_' + permData.role_code);
-
-  logAuditEvent('UPDATE_PERMISSION', 'CONFIG', 'PERMISSION', null,
-    permData, user.user_id, user.email);
+  // Invalidate cache for this role immediately
+  CacheService.getScriptCache().remove('perm_db_' + permData.role_code);
+  logAuditEvent('UPDATE_PERMISSION', 'CONFIG', 'PERMISSION',
+    null, permData, user.user_id, user.email);
   return { success: true };
 }
 
