@@ -281,8 +281,33 @@ const LocalStore = {
   }
 };
 
+function applyViewportSafeTopOffset() {
+  try {
+    var vv = window.visualViewport;
+    var safeTop = 0;
+
+    if (vv && typeof vv.offsetTop === 'number') {
+      safeTop = Math.max(0, Math.round(vv.offsetTop));
+    }
+
+    document.documentElement.style.setProperty('--app-safe-top', safeTop + 'px');
+  } catch (e) {
+    // Fail-safe: do nothing and keep CSS default
+  }
+}
+
 // Initialization
-document.addEventListener('DOMContentLoaded', initApp);
+document.addEventListener('DOMContentLoaded', function() {
+  applyViewportSafeTopOffset();
+  initApp();
+});
+
+window.addEventListener('resize', applyViewportSafeTopOffset, { passive: true });
+window.addEventListener('orientationchange', applyViewportSafeTopOffset, { passive: true });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', applyViewportSafeTopOffset, { passive: true });
+  window.visualViewport.addEventListener('scroll', applyViewportSafeTopOffset, { passive: true });
+}
 
 function initApp() {
   const t0 = performance.now();
@@ -1931,6 +1956,7 @@ function collapseSidebar() {
 
 // Initialize sidebar state on page load
 document.addEventListener('DOMContentLoaded', function() {
+  applyViewportSafeTopOffset();
   // Small delay to ensure DOM is ready
   setTimeout(initSidebarState, 100);
 });
