@@ -431,6 +431,8 @@ function checkPermission(roleCode, module, action) {
   // Normalize BOARD → BOARD_MEMBER alias (Firestore stores 'BOARD')
   if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
   const permissions = getPermissions(roleCode);
+  // SUPER_ADMIN bypass: _superAdmin flag means all permissions granted
+  if (permissions._superAdmin) return true;
   let modulePerm = permissions[module];
 
   // Backward-compatible module aliases to prevent false denials when one module
@@ -466,55 +468,70 @@ function checkPermission(roleCode, module, action) {
 
 function getPermissions(roleCode) {
   if (!roleCode) return {};
-  // Normalize BOARD → BOARD_MEMBER alias (Firestore stores 'BOARD')
+  // Normalize BOARD → BOARD_MEMBER alias
   if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
+  if (roleCode === ROLES.SUPER_ADMIN) return { _superAdmin: true };
+
+  // Try DB first
   try {
-    const rows = tursoQuery_SQL(
-      'SELECT module_code, action_code, is_allowed, scope FROM role_permissions WHERE role_code = ?',
+    var rows = tursoQuery_SQL(
+      'SELECT module_code, action_code, is_allowed ' +
+      'FROM role_permissions WHERE role_code = ?',
       [roleCode]
     );
-    if (rows && rows.length > 0) return buildPermissionsObject_(rows, roleCode);
+    if (rows && rows.length > 0) {
+      return buildPermissionsFromRows_(rows);
+    }
   } catch(e) {
-    console.warn('getPermissions DB fallback:', e.message);
+    console.warn('getPermissions DB fallback for ' + roleCode, e.message);
   }
+
+  // Fallback to hardcoded constant
   return ROLE_PERMISSIONS[roleCode] || {};
 }
 
-function getPermissionsFresh(roleCode) {
-  // Read directly from role_permissions Turso table — bypasses cache
-  // Returns same shape as getPermissions()
-  try {
-    const rows = tursoQuery_SQL(
-      'SELECT module_code, action_code, is_allowed, scope FROM role_permissions WHERE role_code = ?',
-      [roleCode]
-    );
-    if (!rows || rows.length === 0) return getPermissions(roleCode); // fallback
-    return buildPermissionsObject_(rows, roleCode);
-  } catch(e) {
-    console.warn('getPermissionsFresh fallback:', e.message);
-    return getPermissions(roleCode);
-  }
-}
-
-function getPermissionsCached(roleCode) {
-  // Cache-first wrapper around getPermissionsFresh
-  const cache = CacheService.getScriptCache();
-  const key = 'perm_fresh_' + roleCode;
-  const cached = cache.get(key);
-  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
-  const perms = getPermissionsFresh(roleCode);
-  cache.put(key, JSON.stringify(perms), CONFIG.CACHE_TTL.PERMISSIONS || 600);
+function buildPermissionsFromRows_(rows) {
+  var perms = {};
+  rows.forEach(function(r) {
+    if (!perms[r.module_code]) perms[r.module_code] = {};
+    perms[r.module_code][r.action_code] = (r.is_allowed === 1 || r.is_allowed === true);
+  });
   return perms;
 }
 
-// Helper to convert DB rows to the permissions object shape
+function getPermissionsFresh(roleCode) {
+  if (!roleCode) return {};
+  if (roleCode === 'BOARD') roleCode = 'BOARD_MEMBER';
+  if (roleCode === ROLES.SUPER_ADMIN) return { _superAdmin: true };
+  try {
+    var rows = tursoQuery_SQL(
+      'SELECT module_code, action_code, is_allowed ' +
+      'FROM role_permissions WHERE role_code = ?',
+      [roleCode]
+    );
+    if (rows && rows.length > 0) return buildPermissionsFromRows_(rows);
+  } catch(e) {}
+  return ROLE_PERMISSIONS[roleCode] || {};
+}
+
+function getPermissionsCached(roleCode) {
+  var cache = CacheService.getScriptCache();
+  var key = 'perm_db_' + roleCode;
+  var cached = cache.get(key);
+  if (cached) {
+    try { return JSON.parse(cached); } catch(e) {}
+  }
+  var perms = getPermissionsFresh(roleCode);
+  cache.put(key, JSON.stringify(perms), 600);
+  return perms;
+}
+
+// Helper to convert DB rows to the permissions object shape (legacy callers)
 function buildPermissionsObject_(rows, roleCode) {
-  // Build same shape as the hardcoded ROLE_PERMISSIONS object
-  // so existing callers receive the same structure
-  const perms = {};
-  rows.forEach(r => {
+  var perms = {};
+  rows.forEach(function(r) {
     if (!perms[r.module_code]) perms[r.module_code] = {};
-    perms[r.module_code][r.action_code] = r.is_allowed === 1;
+    perms[r.module_code][r.action_code] = (r.is_allowed === 1 || r.is_allowed === true);
   });
   return perms;
 }
@@ -632,6 +649,132 @@ function applyFieldRestrictions(data, roleCode, module) {
     }
   });
   return cleaned;
+}
+
+function seedRolePermissionsIfEmpty() {
+  try {
+    var countRows = tursoQuery_SQL('SELECT COUNT(*) as cnt FROM role_permissions', []);
+    var count = countRows && countRows.length > 0 ? countRows[0] : null;
+    if (count && (count.cnt > 0)) return;
+  } catch(e) {
+    console.warn('seedRolePermissionsIfEmpty: count query failed, attempting seed anyway:', e.message);
+  }
+
+  var matrix = {
+    WORK_PAPERS: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:1},
+      SENIOR_AUDITOR:   {view:1,create:1,update:1,delete:0,approve:1,export:1},
+      AUDITOR:          {view:1,create:1,update:1,delete:0,approve:0,export:1},
+      JUNIOR_STAFF:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:1,create:0,update:0,delete:0,approve:0,export:1},
+      UNIT_MANAGER:     {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      BOARD_MEMBER:     {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      EXTERNAL_AUDITOR: {view:1,create:0,update:0,delete:0,approve:0,export:0}
+    },
+    ACTION_PLANS: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:1},
+      SENIOR_AUDITOR:   {view:1,create:1,update:1,delete:1,approve:1,export:1},
+      AUDITOR:          {view:1,create:1,update:1,delete:0,approve:1,export:1},
+      JUNIOR_STAFF:     {view:1,create:0,update:1,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:1,create:0,update:0,delete:0,approve:0,export:1},
+      UNIT_MANAGER:     {view:1,create:0,update:1,delete:0,approve:0,export:0},
+      BOARD_MEMBER:     {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      EXTERNAL_AUDITOR: {view:1,create:0,update:0,delete:0,approve:0,export:0}
+    },
+    AUDITEE_RESPONSE: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:1},
+      SENIOR_AUDITOR:   {view:1,create:1,update:1,delete:0,approve:1,export:1},
+      AUDITOR:          {view:1,create:1,update:1,delete:0,approve:1,export:1},
+      JUNIOR_STAFF:     {view:1,create:1,update:1,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:1,create:1,update:1,delete:0,approve:0,export:0},
+      UNIT_MANAGER:     {view:1,create:1,update:1,delete:0,approve:0,export:0},
+      BOARD_MEMBER:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      EXTERNAL_AUDITOR: {view:0,create:0,update:0,delete:0,approve:0,export:0}
+    },
+    USERS: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:1},
+      SENIOR_AUDITOR:   {view:1,create:1,update:1,delete:0,approve:0,export:0},
+      AUDITOR:          {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      JUNIOR_STAFF:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      UNIT_MANAGER:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      BOARD_MEMBER:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      EXTERNAL_AUDITOR: {view:0,create:0,update:0,delete:0,approve:0,export:0}
+    },
+    REPORT: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:1},
+      SENIOR_AUDITOR:   {view:1,create:1,update:1,delete:0,approve:0,export:1},
+      AUDITOR:          {view:1,create:0,update:0,delete:0,approve:0,export:1},
+      JUNIOR_STAFF:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:1,create:0,update:0,delete:0,approve:0,export:1},
+      UNIT_MANAGER:     {view:1,create:0,update:0,delete:0,approve:0,export:1},
+      BOARD_MEMBER:     {view:1,create:0,update:0,delete:0,approve:0,export:1},
+      EXTERNAL_AUDITOR: {view:1,create:0,update:0,delete:0,approve:0,export:0}
+    },
+    CONFIG: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:1},
+      SENIOR_AUDITOR:   {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      AUDITOR:          {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      JUNIOR_STAFF:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      UNIT_MANAGER:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      BOARD_MEMBER:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      EXTERNAL_AUDITOR: {view:0,create:0,update:0,delete:0,approve:0,export:0}
+    },
+    NOTIFICATIONS: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:0},
+      SENIOR_AUDITOR:   {view:1,create:1,update:0,delete:0,approve:0,export:0},
+      AUDITOR:          {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      JUNIOR_STAFF:     {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      UNIT_MANAGER:     {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      BOARD_MEMBER:     {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      EXTERNAL_AUDITOR: {view:1,create:0,update:0,delete:0,approve:0,export:0}
+    },
+    FILES: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:1},
+      SENIOR_AUDITOR:   {view:1,create:1,update:1,delete:1,approve:0,export:1},
+      AUDITOR:          {view:1,create:1,update:1,delete:0,approve:0,export:1},
+      JUNIOR_STAFF:     {view:1,create:1,update:0,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      UNIT_MANAGER:     {view:1,create:0,update:0,delete:0,approve:0,export:0},
+      BOARD_MEMBER:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      EXTERNAL_AUDITOR: {view:1,create:0,update:0,delete:0,approve:0,export:0}
+    },
+    AI_ASSIST: {
+      SUPER_ADMIN:      {view:1,create:1,update:1,delete:1,approve:1,export:0},
+      SENIOR_AUDITOR:   {view:1,create:1,update:0,delete:0,approve:0,export:0},
+      AUDITOR:          {view:1,create:1,update:0,delete:0,approve:0,export:0},
+      JUNIOR_STAFF:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      SENIOR_MGMT:      {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      UNIT_MANAGER:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      BOARD_MEMBER:     {view:0,create:0,update:0,delete:0,approve:0,export:0},
+      EXTERNAL_AUDITOR: {view:0,create:0,update:0,delete:0,approve:0,export:0}
+    }
+  };
+
+  var now = new Date().toISOString();
+  var actions = ['view','create','update','delete','approve','export'];
+  var seeded = 0;
+  Object.keys(matrix).forEach(function(moduleCode) {
+    Object.keys(matrix[moduleCode]).forEach(function(roleCode) {
+      actions.forEach(function(action) {
+        var allowed = matrix[moduleCode][roleCode][action] || 0;
+        try {
+          tursoQuery_SQL(
+            'INSERT OR REPLACE INTO role_permissions ' +
+            '(role_code,module_code,action_code,is_allowed,updated_at) ' +
+            'VALUES (?,?,?,?,?)',
+            [roleCode, moduleCode, action, allowed, now]
+          );
+          seeded++;
+        } catch(e) {
+          console.warn('seedRolePermissionsIfEmpty: insert failed for', roleCode, moduleCode, action, e.message);
+        }
+      });
+    });
+  });
+  console.log('seedRolePermissionsIfEmpty: seeded ' + seeded + ' permission rows to Turso');
 }
 
 function seedRolePermissionsToTurso() {

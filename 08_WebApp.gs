@@ -3,6 +3,9 @@
 // Handle GET requests - serve HTML pages (login page shown first)
 function doGet(e) {
   try {
+    // Seed role_permissions table on first execution if empty
+    try { seedRolePermissionsIfEmpty(); } catch(_) {}
+
     const page = e.parameter.page || 'login';
 
     if (page === 'consent') {

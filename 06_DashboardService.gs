@@ -950,8 +950,16 @@ function getInitData(sessionToken) {
 }
 
 /**
+ * Returns true for all authenticated users — dashboard is a shell; data is role-filtered.
+ */
+function canViewDashboard() {
+  return true;
+}
+
+/**
  * Get permissions for a role - READS FROM DATABASE
- * Maps database CRUD permissions to UI feature flags
+ * Maps database CRUD permissions to UI feature flags.
+ * Handles both old naming (WORK_PAPER / can_read) and new naming (WORK_PAPERS / view).
  */
 function getUserPermissions(roleCode) {
   // Default permissions - all false
@@ -977,19 +985,19 @@ function getUserPermissions(roleCode) {
     canEditUser: false,
     canDeleteUser: false,
 
-    // Reports (legacy REPORT module - kept for backward compat)
+    // Reports
     canViewReports: false,
     canExportData: false,
 
-    // Dashboard module (page visibility + export)
-    canViewDashboard: false,
+    // Dashboard - visible to ALL roles (shell frame is always served)
+    canViewDashboard: true,
     canExportDashboard: false,
 
-    // AI Assist module (page visibility + generate insights)
+    // AI Assist
     canViewAIAssist: false,
     canGenerateAIInsights: false,
 
-    // Audit Workbench module (page + quick stats visibility)
+    // Audit Workbench
     canViewAuditWorkbench: false,
 
     // Settings/Config
@@ -997,66 +1005,62 @@ function getUserPermissions(roleCode) {
     canManageRoles: false
   };
 
-  // Load permissions fresh from database (bypass cache for accurate permissions)
+  // SUPER_ADMIN: all permissions true
+  if (roleCode === ROLES.SUPER_ADMIN) {
+    Object.keys(permissions).forEach(function(k) { permissions[k] = true; });
+    return permissions;
+  }
+
+  // Load permissions from database (with fallback to hardcoded constant)
   const dbPermissions = getPermissionsFresh(roleCode);
 
-  // Map database permissions to UI feature flags
-  // WORK_PAPER module
-  if (dbPermissions.WORK_PAPER) {
-    permissions.canCreateWorkPaper = dbPermissions.WORK_PAPER.can_create === true;
-    permissions.canViewWorkPapers = dbPermissions.WORK_PAPER.can_read === true;
-    permissions.canEditWorkPaper = dbPermissions.WORK_PAPER.can_update === true;
-    permissions.canDeleteWorkPaper = dbPermissions.WORK_PAPER.can_delete === true;
-    permissions.canApproveWorkPaper = dbPermissions.WORK_PAPER.can_approve === true;
-    // Review permission = approve permission for work papers
-    permissions.canReviewWorkPaper = dbPermissions.WORK_PAPER.can_approve === true;
+  // Helper: read a flag from DB using new names (view/create/...) or old names (can_read/can_create/...)
+  function dbFlag(moduleNew, moduleOld, actionNew, actionOld) {
+    var mod = dbPermissions[moduleNew] || dbPermissions[moduleOld] || null;
+    if (!mod) return false;
+    var val = (actionNew && mod[actionNew] !== undefined) ? mod[actionNew] : mod[actionOld];
+    return val === true || val === 1;
   }
 
-  // ACTION_PLAN module
-  if (dbPermissions.ACTION_PLAN) {
-    permissions.canCreateActionPlan = dbPermissions.ACTION_PLAN.can_create === true;
-    permissions.canViewActionPlans = dbPermissions.ACTION_PLAN.can_read === true;
-    permissions.canEditActionPlan = dbPermissions.ACTION_PLAN.can_update === true;
-    permissions.canDeleteActionPlan = dbPermissions.ACTION_PLAN.can_delete === true;
-    permissions.canVerifyActionPlan = dbPermissions.ACTION_PLAN.can_approve === true;
-  }
+  // WORK_PAPERS module (new: WORK_PAPERS/view, old: WORK_PAPER/can_read)
+  permissions.canCreateWorkPaper  = dbFlag('WORK_PAPERS', 'WORK_PAPER', 'create',  'can_create');
+  permissions.canViewWorkPapers   = dbFlag('WORK_PAPERS', 'WORK_PAPER', 'view',    'can_read');
+  permissions.canEditWorkPaper    = dbFlag('WORK_PAPERS', 'WORK_PAPER', 'update',  'can_update');
+  permissions.canDeleteWorkPaper  = dbFlag('WORK_PAPERS', 'WORK_PAPER', 'delete',  'can_delete');
+  permissions.canApproveWorkPaper = dbFlag('WORK_PAPERS', 'WORK_PAPER', 'approve', 'can_approve');
+  permissions.canReviewWorkPaper  = permissions.canApproveWorkPaper;
 
-  // USER module
-  if (dbPermissions.USER) {
-    permissions.canManageUsers = dbPermissions.USER.can_read === true;
-    permissions.canCreateUser = dbPermissions.USER.can_create === true;
-    permissions.canEditUser = dbPermissions.USER.can_update === true;
-    permissions.canDeleteUser = dbPermissions.USER.can_delete === true;
-  }
+  // ACTION_PLANS module
+  permissions.canCreateActionPlan = dbFlag('ACTION_PLANS', 'ACTION_PLAN', 'create',  'can_create');
+  permissions.canViewActionPlans  = dbFlag('ACTION_PLANS', 'ACTION_PLAN', 'view',    'can_read');
+  permissions.canEditActionPlan   = dbFlag('ACTION_PLANS', 'ACTION_PLAN', 'update',  'can_update');
+  permissions.canDeleteActionPlan = dbFlag('ACTION_PLANS', 'ACTION_PLAN', 'delete',  'can_delete');
+  permissions.canVerifyActionPlan = dbFlag('ACTION_PLANS', 'ACTION_PLAN', 'approve', 'can_approve');
 
-  // REPORT module (legacy - maps to canViewReports for backward compat)
-  if (dbPermissions.REPORT) {
-    permissions.canViewReports = dbPermissions.REPORT.can_read === true;
-    permissions.canExportData = dbPermissions.REPORT.can_export === true;
-  }
+  // USERS module
+  permissions.canManageUsers = dbFlag('USERS', 'USER', 'view',   'can_read');
+  permissions.canCreateUser  = dbFlag('USERS', 'USER', 'create', 'can_create');
+  permissions.canEditUser    = dbFlag('USERS', 'USER', 'update', 'can_update');
+  permissions.canDeleteUser  = dbFlag('USERS', 'USER', 'delete', 'can_delete');
 
-  // DASHBOARD module - visible to ALL users; export controlled by DB permissions
-  permissions.canViewDashboard = true;
-  if (dbPermissions.DASHBOARD) {
-    permissions.canExportDashboard = dbPermissions.DASHBOARD.can_export === true;
-  } else if (dbPermissions.REPORT) {
-    permissions.canExportDashboard = dbPermissions.REPORT.can_export === true;
-  }
+  // REPORT module
+  permissions.canViewReports   = dbFlag('REPORT', 'REPORT', 'view',   'can_read');
+  permissions.canExportData    = dbFlag('REPORT', 'REPORT', 'export', 'can_export');
+  permissions.canExportDashboard = dbFlag('REPORT', 'DASHBOARD', 'export', 'can_export');
 
-  // AI_ASSIST module is visible to all users by request; create controls generation
-  permissions.canViewAIAssist = true;
-  if (dbPermissions.AI_ASSIST) {
-    permissions.canGenerateAIInsights = dbPermissions.AI_ASSIST.can_create === true;
-  }
+  // AI_ASSIST module
+  permissions.canViewAIAssist       = dbFlag('AI_ASSIST', 'AI_ASSIST', 'view',   'can_read');
+  permissions.canGenerateAIInsights = dbFlag('AI_ASSIST', 'AI_ASSIST', 'create', 'can_create');
 
-  // AUDIT_WORKBENCH visibility is granted to all users by request
-  permissions.canViewAuditWorkbench = true;
+  // Audit Workbench — visible to all auditor roles
+  permissions.canViewAuditWorkbench = permissions.canViewWorkPapers || permissions.canViewActionPlans;
 
   // CONFIG module
-  if (dbPermissions.CONFIG) {
-    permissions.canManageSettings = dbPermissions.CONFIG.can_update === true;
-    permissions.canManageRoles = dbPermissions.CONFIG.can_update === true;
-  }
+  permissions.canManageSettings = dbFlag('CONFIG', 'CONFIG', 'update', 'can_update');
+  permissions.canManageRoles    = permissions.canManageSettings;
+
+  // Dashboard always visible (it's a shell — data is role-filtered)
+  permissions.canViewDashboard = true;
 
   console.log('getUserPermissions for role', roleCode, '- loaded from database');
 
@@ -1422,23 +1426,45 @@ function getComprehensiveReportData(filters) {
 /**
  * getDashboardDataV2(params)
  *
- * Returns ALL raw observations and action plans in one response,
- * with computed fields and metadata for client-side filtering.
- * This is the single data source for the redesigned 3-tab dashboard.
- *
- * No role-based filtering — returns ALL data (SUPER_ADMIN level).
- * Role filtering is handled elsewhere.
+ * Returns observations and action plans with computed fields.
+ * Data is filtered by role:
+ *  - SUPER_ADMIN / SENIOR_AUDITOR / AUDITOR: full data
+ *  - JUNIOR_STAFF / UNIT_MANAGER / SENIOR_MGMT: affiliate-scoped action plans + responses
+ *  - BOARD_MEMBER / EXTERNAL_AUDITOR: approved/sent work papers only
  */
-function getDashboardDataV2(params) {
+function getDashboardDataV2(params, callerUser) {
   try {
     params = params || {};
     var startTime = new Date().getTime();
 
-    // ── Fetch all work papers (observations) ──
-    var workPapers = getWorkPapers({}, null);
+    // Determine role for data filtering
+    var roleCode = callerUser ? (callerUser.role_code || '') : '';
+    var userId   = callerUser ? (callerUser.user_id   || '') : '';
+    var affiliateCode = callerUser ? (callerUser.affiliate_code || '') : '';
 
-    // ── Fetch all action plans ──
-    var actionPlans = getActionPlans({}, null);
+    // Role-based filter flags
+    var fullAuditAccess  = (roleCode === ROLES.SUPER_ADMIN || roleCode === ROLES.SENIOR_AUDITOR || roleCode === ROLES.AUDITOR);
+    var affiliateScoped  = (roleCode === ROLES.JUNIOR_STAFF || roleCode === ROLES.UNIT_MANAGER || roleCode === ROLES.SENIOR_MGMT);
+    var readOnlyApproved = (roleCode === ROLES.BOARD_MEMBER || roleCode === ROLES.EXTERNAL_AUDITOR);
+
+    // ── Fetch work papers — apply role filter ──
+    var workPapers;
+    if (readOnlyApproved) {
+      // Board/External: only Approved or Sent to Auditee
+      workPapers = getWorkPapers({ status: 'Approved' }, null)
+        .concat(getWorkPapers({ status: 'Sent to Auditee' }, null));
+    } else {
+      workPapers = getWorkPapers({}, null);
+    }
+
+    // ── Fetch action plans — apply role filter ──
+    var actionPlans;
+    if (affiliateScoped && userId) {
+      // Auditee roles: only their own action plans
+      actionPlans = getActionPlans({ owner_id: userId }, callerUser);
+    } else {
+      actionPlans = getActionPlans({}, null);
+    }
 
     // ── Build lookup: work_paper_id → action plans[] ──
     var apByWp = {};

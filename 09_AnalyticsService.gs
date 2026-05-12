@@ -203,14 +203,20 @@ function getPermissionMatrix(token) {
   var session = getSessionByToken(token);
   if (!session) throw new Error('SESSION_EXPIRED');
   var user = getUserByIdCached(session.user_id);
-  if (!user || (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR)) throw new Error('Access denied');
+  if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
+    throw new Error('Access denied');
+  }
+
+  seedRolePermissionsIfEmpty();
 
   var rows = tursoQuery_SQL(
-    'SELECT role_code, module_code, action_code, is_allowed, scope FROM role_permissions ORDER BY module_code, role_code',
+    'SELECT role_code, module_code, action_code, is_allowed ' +
+    'FROM role_permissions ORDER BY module_code, role_code, action_code',
     []
   );
   var roles = tursoQuery_SQL(
-    'SELECT role_code, role_name, role_level FROM roles WHERE is_active=1 ORDER BY role_level DESC',
+    'SELECT role_code, role_name FROM roles ' +
+    'WHERE is_active=1 ORDER BY role_level DESC',
     []
   );
 
@@ -220,7 +226,6 @@ function getPermissionMatrix(token) {
     return {
       role_code:        role.role_code,
       role_name:        role.role_name,
-      role_level:       role.role_level,
       role_description: wf.role_description || '',
       access_path:      wf.access_path || ''
     };
@@ -234,33 +239,36 @@ function getPermissionMatrix(token) {
  * Accepts either a session token string (direct google.script.run call)
  * or a validated user object (routed through the apiCall dispatcher).
  */
-function updatePermissions(permissionData, tokenOrUser) {
+function updatePermissions(permData, tokenOrUser) {
   var user;
   if (typeof tokenOrUser === 'string') {
     var session = getSessionByToken(tokenOrUser);
     if (!session) throw new Error('SESSION_EXPIRED');
     user = getUserByIdCached(session.user_id);
-    if (!user || (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR)) throw new Error('Access denied');
   } else {
     user = tokenOrUser;
-    if (!user || (user.role_code !== ROLES.SUPER_ADMIN && user.role_code !== ROLES.SENIOR_AUDITOR)) {
-      return { success: false, error: 'Only authorized audit administrators can modify permissions' };
-    }
+  }
+  if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
+    return { success: false, error: 'Only Head of Audit can modify permissions' };
   }
 
-  const { role_code, module_code, action_code, is_allowed } = permissionData;
-  if (!role_code || !module_code || !action_code) {
-    return { success: false, error: 'role_code, module_code, action_code required' };
-  }
+  var now = new Date().toISOString();
   tursoQuery_SQL(
-    'INSERT OR REPLACE INTO role_permissions (role_code, module_code, action_code, is_allowed, updated_at) VALUES (?,?,?,?,?)',
-    [role_code, module_code, action_code, is_allowed ? 1 : 0, new Date().toISOString()]
+    'INSERT OR REPLACE INTO role_permissions ' +
+    '(role_code,module_code,action_code,is_allowed,updated_at) ' +
+    'VALUES (?,?,?,?,?)',
+    [permData.role_code, permData.module_code,
+     permData.action_code, permData.is_allowed ? 1 : 0, now]
   );
-  const cache = CacheService.getScriptCache();
-  cache.remove('perm_' + role_code);
-  cache.remove('perm_fresh_' + role_code);
+
+  // Invalidate permission cache for this role
+  var cache = CacheService.getScriptCache();
+  cache.remove('perm_db_' + permData.role_code);
+  cache.remove('perm_fresh_' + permData.role_code);
+  cache.remove('perm_' + permData.role_code);
+
   logAuditEvent('UPDATE_PERMISSION', 'CONFIG', 'PERMISSION', null,
-    { role_code, module_code, action_code, is_allowed }, user.user_id, user.email);
+    permData, user.user_id, user.email);
   return { success: true };
 }
 
