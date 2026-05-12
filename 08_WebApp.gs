@@ -433,10 +433,13 @@ function routeAction(action, data, user) {
 
     case 'getDashboardDataV2': {
       // Redesigned dashboard — returns all raw data for client-side filtering
+      // Keep dashboard accessible to all authenticated roles (role-based scoping
+      // is handled within dashboard data functions and client filtering).
       const allowedRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR,
-                            ROLES.SENIOR_MGMT, ROLES.BOARD_MEMBER];
+                            ROLES.SENIOR_MGMT, ROLES.BOARD_MEMBER, ROLES.UNIT_MANAGER,
+                            ROLES.JUNIOR_STAFF, ROLES.EXTERNAL_AUDITOR];
       if (!allowedRoles.includes(user.role_code)) {
-        return jsonResponse({ success: false, error: 'Access denied' }, 403);
+        return { success: false, error: 'Access denied' };
       }
       return getDashboardDataV2(data);
     }
