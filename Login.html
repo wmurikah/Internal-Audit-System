@@ -949,6 +949,14 @@
               <p class="success-meta" id="userRoleAffiliate" style="margin-top:2px;"></p>
               <p class="success-meta" id="userLastLogin" style="margin-top:1px;"></p>
 
+              <!-- Consent Actions (shown while consent is pending) -->
+              <div id="consentActionsSection" style="display:none; margin-top:16px;">
+                <button type="button" class="btn-primary" id="consentAgreeBtn" onclick="acceptAndContinue()" disabled>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  Accept &amp; Continue
+                </button>
+              </div>
+
               <!-- Privacy Notice (pending) -->
               <div id="privacyNoticeSection" style="display:none;">
                 <div class="privacy-card">
@@ -1571,6 +1579,15 @@
         return;
       }
 
+      // Always reset button — navigation happens async
+      resetLoginButton();
+
+      // must_change_password: let the dashboard handle it via modal on load
+      if (response.user && response.user.must_change_password) {
+        autoRedirectToDashboard(token);
+        return;
+      }
+
       // Check consent — skip if already accepted
       if (response.user && response.user.privacy_consent_accepted === 1) {
         autoRedirectToDashboard(token);
@@ -1593,6 +1610,89 @@
 
     function goToDashboard() {
       autoRedirectToDashboard(sessionStorage.getItem('hass_audit_token') || window._hass_token || '');
+    }
+
+    /* ============================================================
+       CONSENT PAGE
+    ============================================================ */
+    function showConsentPage(token, user) {
+      currentLoginUser = user || {};
+      window._consentToken = token;
+
+      // Button already reset by onLoginSuccess; reset again defensively
+      resetLoginButton();
+
+      document.getElementById('loginFormView').style.display      = 'none';
+      document.getElementById('forgotPasswordView').style.display = 'none';
+      document.getElementById('successView').style.display        = 'block';
+
+      document.getElementById('welcomeName').textContent = (user && user.full_name) || 'User';
+      if (user && user.affiliate_code) {
+        document.getElementById('userRoleAffiliate').textContent = 'Affiliate: ' + user.affiliate_code;
+      }
+
+      document.getElementById('privacyNoticeSection').style.display   = 'block';
+      document.getElementById('privacyAcceptedSection').style.display = 'none';
+      document.getElementById('quickActionsSection').style.display    = 'none';
+      document.getElementById('consentActionsSection').style.display  = 'block';
+
+      var agreeBtn = document.getElementById('consentAgreeBtn');
+      if (agreeBtn) agreeBtn.disabled = true;
+      var checkbox = document.getElementById('privacyConsent');
+      if (checkbox) checkbox.checked = false;
+    }
+
+    function onConsentCheckboxChange() {
+      var checked  = document.getElementById('privacyConsent').checked;
+      var agreeBtn = document.getElementById('consentAgreeBtn');
+      if (agreeBtn) agreeBtn.disabled = !checked;
+    }
+
+    function acceptAndContinue() {
+      var token    = window._consentToken || sessionStorage.getItem('hass_audit_token') || window._hass_token || '';
+      var agreeBtn = document.getElementById('consentAgreeBtn');
+      if (agreeBtn) {
+        agreeBtn.disabled  = true;
+        agreeBtn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> Processing…';
+      }
+
+      var payload = { sessionToken: token };
+
+      function restoreAgreeBtn() {
+        if (agreeBtn) {
+          agreeBtn.disabled  = false;
+          agreeBtn.innerHTML =
+            '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
+            '<polyline points="20 6 9 17 4 12"/></svg> Accept &amp; Continue';
+        }
+      }
+
+      function onAccepted(result) {
+        if (result && result.success) {
+          try {
+            window.parent.postMessage({ type: 'HASS_LOGIN_SUCCESS', token: token }, '*');
+          } catch(e) {}
+          autoRedirectToDashboard(token);
+        } else {
+          restoreAgreeBtn();
+          showError((result && result.error) || 'Failed to record consent. Please try again.');
+        }
+      }
+
+      function onFailed() {
+        restoreAgreeBtn();
+        showError('Unable to connect. Please try again.');
+      }
+
+      google.script.run
+        .withSuccessHandler(onAccepted)
+        .withFailureHandler(function(err) {
+          console.warn('google.script.run failed for acceptPrivacyConsent, trying HTTP fallback:', err);
+          httpApiCall('acceptPrivacyConsent', payload)
+            .then(onAccepted)
+            .catch(onFailed);
+        })
+        .apiCall('acceptPrivacyConsent', payload);
     }
 
     function togglePrivacyNoticeView() {
