@@ -694,7 +694,7 @@ function resetPassword(userId, adminUser) {
 
   invalidateUserSessions(userId);
 
-  const loginUrl = ScriptApp.getService().getUrl();
+  const loginUrl = getSystemUrl();
 
   var resetPlain = 'Dear ' + (user.first_name || user.full_name.split(' ')[0]) + ',\n\n' +
     'Your password has been reset by an administrator.\n\n' +
@@ -852,7 +852,7 @@ function createUser(userData, adminUser) {
   tursoSet('05_Users', userId, user);
   invalidateDropdownCache();
 
-  const loginUrl = ScriptApp.getService().getUrl();
+  const loginUrl = getSystemUrl();
 
   var roleName = '';
   try { roleName = getRoleName(user.role_code) || user.role_code; } catch(e) { roleName = user.role_code; }
@@ -1019,7 +1019,7 @@ function forgotPassword(email) {
   invalidateUserCache(user.email, user.user_id);
   invalidateUserSessions(user.user_id);
 
-  const loginUrl = ScriptApp.getService().getUrl();
+  const loginUrl = getSystemUrl();
 
   var forgotPlain = 'Dear ' + (user.first_name || user.full_name.split(' ')[0]) + ',\n\n' +
     'A password reset was requested for your account.\n\n' +

@@ -492,7 +492,7 @@ function sendStaleAssignmentReminders() {
   });
 
   var loginUrl = '';
-  try { loginUrl = ScriptApp.getService().getUrl(); } catch (e) {}
+  try { loginUrl = getSystemUrl(); } catch (e) {}
 
   var notificationCount = 0;
   staleWPs.forEach(function(wp) {
@@ -668,28 +668,6 @@ function processEmailQueue() {
   } finally {
     lock.releaseLock();
   }
-}
-
-/**
- * Get the current web-app URL for embedding in emails.
- * Uses the deployed web-app URL (ends with /exec) so recipients
- * land on the login page, NOT a Google Drive file-open page.
- * Falls back to a config value if ScriptApp is unavailable (e.g. in triggers).
- */
-function getSystemUrl() {
-  // 1. Try the live deployed web-app URL
-  try {
-    var url = ScriptApp.getService().getUrl();
-    if (url) return url;
-  } catch (e) { /* ignore - may fail in certain trigger contexts */ }
-
-  // 2. Fallback: read from script properties (set once via Settings or manually)
-  try {
-    var stored = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL');
-    if (stored) return stored;
-  } catch (e) { /* ignore */ }
-
-  return '';
 }
 
 /**
@@ -1448,7 +1426,7 @@ function sendUpcomingDueReminders() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  var loginUrl = ScriptApp.getService().getUrl();
+  var loginUrl = getSystemUrl();
 
   // Collect action plans due within 14 days that are not yet closed
   var upcoming = [];
@@ -1929,7 +1907,7 @@ function sendBiweeklySummary() {
   var apCounts = getActionPlanCounts({}, null);
 
   // Build professional HTML summary with tables
-  var loginUrl = ScriptApp.getService().getUrl();
+  var loginUrl = getSystemUrl();
 
   // Work Paper status rows
   var wpHeaders = ['Status', 'Count'];

@@ -1684,6 +1684,23 @@
     /* ============================================================
        LOADING STATE HELPERS
     ============================================================ */
+    function resetLoginButton() {
+      var btn     = document.getElementById('loginBtn');
+      var btnText = document.getElementById('loginBtnText');
+      var spinner = document.getElementById('loginBtnSpinner');
+      var email   = document.getElementById('email');
+      var pw      = document.getElementById('password');
+      var ov      = document.getElementById('loadingOverlay');
+      if (btn)     { btn.disabled = false; }
+      if (email)   { email.disabled = false; }
+      if (pw)      { pw.disabled = false; }
+      if (btnText) { btnText.style.display = ''; }
+      if (spinner) { spinner.style.display = 'none'; }
+      if (ov)      { ov.classList.remove('show'); }
+      stopBtnCycle();
+      document.body.classList.remove('is-loading');
+    }
+
     function setLoading(isLoading) {
       if (isLoading) {
         document.body.classList.add('is-loading');
