@@ -218,12 +218,43 @@
   </div>
 </div>
 
+<style>
+/* ── Global loading cursor ── */
+body.is-loading,
+body.is-loading * {
+  cursor: wait !important;
+  pointer-events: none;
+}
+
+/* ── Button loading state ── */
+.btn-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+.btn-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 16px; height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.btn-loading.btn-light::after { border-top-color: #E5B81B; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+</style>
+
 <script>
 // Audit Workbench functions (formerly Dashboard)
 let dashboardCharts = {};
 
 function loadAuditWorkbench() {
   showLoading('Loading audit workbench...');
+  showTableSkeleton('recentActivityTable', 4, 5);
 
   apiCall('getDashboardData', {})
     .then(data => {
@@ -702,7 +733,7 @@ function _renderPendingBatchBadge(count, assignments, changes) {
 
 async function _sendBatchNotificationsFromDashboard() {
   var btn = document.getElementById('batchSendNowDashBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  setButtonLoading(btn, true);
 
   try {
     var result = await apiCall('sendBatchedAssignmentNotifications', {});
@@ -712,17 +743,77 @@ async function _sendBatchNotificationsFromDashboard() {
       if (result.changes) msg += ', ' + result.changes + ' update(s)';
       if (result.assignments || result.changes) msg += ')';
       showToast(msg, 'success');
-
-      // Remove the badge
       var badge = document.getElementById('pendingBatchAlert');
       if (badge) badge.remove();
     } else {
       showToast(result?.error || 'Failed to send', 'danger');
-      if (btn) { btn.disabled = false; btn.textContent = 'Send Now'; }
+      setButtonLoading(btn, false);
     }
   } catch (e) {
     showToast('Error: ' + e.message, 'danger');
-    if (btn) { btn.disabled = false; btn.textContent = 'Send Now'; }
+    setButtonLoading(btn, false);
   }
+}
+
+// ── Global loading helpers ──
+function setLoading(isLoading) {
+  if (isLoading) {
+    document.body.classList.add('is-loading');
+  } else {
+    document.body.classList.remove('is-loading');
+  }
+}
+
+function setButtonLoading(btn, isLoading) {
+  if (!btn) return;
+  if (isLoading) {
+    btn.dataset.originalText = btn.innerHTML;
+    btn.classList.add('btn-loading');
+    btn.disabled = true;
+  } else {
+    btn.classList.remove('btn-loading');
+    btn.disabled = false;
+    if (btn.dataset.originalText) {
+      btn.innerHTML = btn.dataset.originalText;
+    }
+  }
+}
+
+function runAction(action, data, token, onSuccess, onError, btn) {
+  setLoading(true);
+  if (btn) setButtonLoading(btn, true);
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      setLoading(false);
+      if (btn) setButtonLoading(btn, false);
+      if (onSuccess) onSuccess(result);
+    })
+    .withFailureHandler(function(err) {
+      setLoading(false);
+      if (btn) setButtonLoading(btn, false);
+      var msg = err && err.message ? err.message : String(err);
+      if (msg.includes('SESSION_EXPIRED') || msg.includes('401')) {
+        if (typeof redirectToLogin === 'function') redirectToLogin('Session expired');
+      } else {
+        if (onError) onError(err);
+        else if (typeof showToast === 'function') showToast('Error: ' + msg, 'error');
+      }
+    })
+    .apiCall(action, data, token);
+}
+
+function showTableSkeleton(tableBodyId, cols, rows) {
+  var tbody = document.getElementById(tableBodyId);
+  if (!tbody) return;
+  var html = '';
+  for (var i = 0; i < (rows || 5); i++) {
+    html += '<tr>';
+    for (var j = 0; j < cols; j++) {
+      html += '<td><div style="height:14px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;"></div></td>';
+    }
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
 }
 </script>

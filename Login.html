@@ -759,6 +759,32 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
+  /* ── Global loading cursor ── */
+  body.is-loading,
+  body.is-loading * {
+    cursor: wait !important;
+    pointer-events: none;
+  }
+  /* ── Button loading state ── */
+  .btn-loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+  }
+  .btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 16px; height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  .btn-loading.btn-light::after { border-top-color: #E5B81B; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
   </style>
 </head>
 <body>
@@ -1653,6 +1679,74 @@
       el.className   = isError ? 'error' : '';
       el.style.display = 'block';
       setTimeout(function() { el.style.display = 'none'; }, 3000);
+    }
+
+    /* ============================================================
+       LOADING STATE HELPERS
+    ============================================================ */
+    function setLoading(isLoading) {
+      if (isLoading) {
+        document.body.classList.add('is-loading');
+      } else {
+        document.body.classList.remove('is-loading');
+      }
+    }
+
+    function setButtonLoading(btn, isLoading) {
+      if (!btn) return;
+      if (isLoading) {
+        btn.dataset.originalText = btn.innerHTML;
+        btn.classList.add('btn-loading');
+        btn.disabled = true;
+      } else {
+        if (btn.dataset.originalText !== undefined) {
+          btn.innerHTML = btn.dataset.originalText;
+        }
+        btn.classList.remove('btn-loading');
+        btn.disabled = false;
+      }
+    }
+
+    function runAction(action, data, token, onSuccess, onError, btn) {
+      setLoading(true);
+      if (btn) setButtonLoading(btn, true);
+      var payload = data || {};
+      if (token) payload.sessionToken = token;
+      function done() {
+        setLoading(false);
+        if (btn) setButtonLoading(btn, false);
+      }
+      try {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            done();
+            if (onSuccess) onSuccess(result);
+          })
+          .withFailureHandler(function(err) {
+            done();
+            if (onError) onError(err);
+          })
+          .apiCall(action, payload);
+      } catch(e) {
+        done();
+        if (onError) onError(e);
+      }
+    }
+
+    function showTableSkeleton(tableBodyId, cols, rows) {
+      var tbody = document.getElementById(tableBodyId);
+      if (!tbody) return;
+      var html = '';
+      var shimmerStyle = 'background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);' +
+        'background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;height:16px;display:block;';
+      for (var r = 0; r < (rows || 5); r++) {
+        html += '<tr>';
+        for (var c = 0; c < (cols || 4); c++) {
+          html += '<td><span style="' + shimmerStyle + '">&nbsp;</span></td>';
+        }
+        html += '</tr>';
+      }
+      tbody.innerHTML = html;
     }
 
     /* ============================================================

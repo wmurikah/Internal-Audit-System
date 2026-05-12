@@ -1030,39 +1030,56 @@ function deactivateUser(id) {
 // ==================== Access Control — Live Permission Matrix ====================
 
 var _permMatrixData = null;
+var _lastSavedTime  = null;
 
-var PM_SCOPE_CYCLE  = ['ALL', 'OWN', 'DEPARTMENT', 'AFFILIATE'];
-var PM_SCOPE_COLORS = { ALL: '#198754', OWN: '#fd7e14', DEPARTMENT: '#0d6efd', AFFILIATE: '#6f42c1' };
+var PM_MODULE_DISPLAY = {
+  WORK_PAPERS:      'Work Papers',
+  ACTION_PLANS:     'Action Plans',
+  AUDITEE_RESPONSE: 'Auditee Responses',
+  USERS:            'User Management',
+  REPORT:           'Reports',
+  CONFIG:           'System Config',
+  NOTIFICATIONS:    'Notifications',
+  FILES:            'Files & Evidence',
+  AI_ASSIST:        'AI Assist',
+  // legacy module names from old seed
+  WORK_PAPER:       'Work Papers',
+  ACTION_PLAN:      'Action Plans',
+  USER:             'User Management',
+  AUDIT_WORKBENCH:  'Audit Workbench',
+  DASHBOARD:        'Dashboard',
+  BACKUP:           'Backup',
+  AUDIT_LOG:        'Audit Log'
+};
 
-var PM_ACTION_LABELS = {
-  can_create: 'C', can_read: 'R', can_update: 'U', can_delete: 'D', can_approve: 'A', can_export: 'E',
-  can_read_observation: 'R.o', can_write_mgmt_response: 'Wrt', can_create_action_plan: 'C.ap',
-  can_update_action_plan: 'U.ap', can_delegate: 'Del', can_view_rounds: 'Rnd'
+var PM_ACTION_DISPLAY = {
+  view:    'View',
+  create:  'Create',
+  update:  'Edit',
+  delete:  'Delete',
+  approve: 'Approve',
+  export:  'Export',
+  // legacy can_* names
+  can_read:   'View',
+  can_create: 'Create',
+  can_update: 'Edit',
+  can_delete: 'Delete',
+  can_approve:'Approve',
+  can_export: 'Export'
 };
-var PM_ACTION_TITLES = {
-  can_create: 'Create', can_read: 'Read', can_update: 'Update', can_delete: 'Delete',
-  can_approve: 'Approve', can_export: 'Export',
-  can_read_observation: 'Read Observation', can_write_mgmt_response: 'Write Management Response',
-  can_create_action_plan: 'Create Action Plan', can_update_action_plan: 'Update Action Plan',
-  can_delegate: 'Delegate', can_view_rounds: 'View Rounds'
-};
-var PM_MODULE_NAMES = {
-  WORK_PAPER: 'Work Paper', ACTION_PLAN: 'Action Plan', AUDITEE_RESPONSE: 'Auditee Response',
-  USER: 'User Mgmt', CONFIG: 'System Config', AI_ASSIST: 'AI Assist',
-  AUDIT_WORKBENCH: 'Audit Workbench', REPORT: 'Reports', BACKUP: 'Backup', AUDIT_LOG: 'Audit Log'
-};
+
+var PM_ACTION_ORDER = ['view','create','update','delete','approve','export',
+  'can_read','can_create','can_update','can_delete','can_approve','can_export'];
+
 var PM_MODULE_ORDER = [
-  'WORK_PAPER', 'ACTION_PLAN', 'AUDITEE_RESPONSE', 'USER', 'CONFIG',
-  'AI_ASSIST', 'AUDIT_WORKBENCH', 'REPORT', 'BACKUP', 'AUDIT_LOG'
+  'WORK_PAPERS','ACTION_PLANS','AUDITEE_RESPONSE','USERS','REPORT',
+  'CONFIG','NOTIFICATIONS','FILES','AI_ASSIST',
+  // legacy
+  'WORK_PAPER','ACTION_PLAN','USER','AUDIT_WORKBENCH','DASHBOARD','REPORT','BACKUP','AUDIT_LOG'
 ];
-var PM_ROLE_DISPLAY = {
-  SUPER_ADMIN: 'Head of Audit', SENIOR_AUDITOR: 'Sr. Auditor', AUDITOR: 'Auditor',
-  JUNIOR_STAFF: 'Audit Client', SENIOR_MGMT: 'Sr. Mgmt', UNIT_MANAGER: 'HoD',
-  BOARD_MEMBER: 'Board Member', EXTERNAL_AUDITOR: 'External'
-};
 
 function loadAccessControlDashboard() {
-  if (window.currentUser && !['SUPER_ADMIN', 'HEAD_OF_AUDIT'].includes(window.currentUser.role_code)) return;
+  if (window.currentUser && window.currentUser.role_code !== 'SUPER_ADMIN') return;
 
   if (_permMatrixData) {
     renderPermissionMatrix(_permMatrixData);
@@ -1088,7 +1105,7 @@ function renderPermissionMatrix(data) {
   var permRows = data.permissions || [];
   var roles    = data.roles    || [];
 
-  // Build lookup: permMap[module][role][action] = { is_allowed, scope }
+  // Build lookup: permMap[module][role][action] = is_allowed
   var permMap   = {};
   var moduleSet = [];
   var moduleActionCatalog = {};
@@ -1100,205 +1117,207 @@ function renderPermissionMatrix(data) {
     if (!permMap[row.module_code][row.role_code]) {
       permMap[row.module_code][row.role_code] = {};
     }
-    permMap[row.module_code][row.role_code][row.action_code] = {
-      is_allowed: (row.is_allowed == 1 || row.is_allowed === true),
-      scope: row.scope || 'ALL'
-    };
-    if (!moduleActionCatalog[row.module_code]) moduleActionCatalog[row.module_code] = {};
-    moduleActionCatalog[row.module_code][row.action_code] = true;
+    permMap[row.module_code][row.role_code][row.action_code] =
+      (row.is_allowed == 1 || row.is_allowed === true);
+    if (!moduleActionCatalog[row.module_code]) moduleActionCatalog[row.module_code] = [];
+    if (moduleActionCatalog[row.module_code].indexOf(row.action_code) === -1) {
+      moduleActionCatalog[row.module_code].push(row.action_code);
+    }
   });
 
-  // Sort modules by predefined order; append any extras
-  var sortedModules = PM_MODULE_ORDER.filter(function(m) { return !!permMap[m]; });
-  moduleSet.forEach(function(m) { if (sortedModules.indexOf(m) === -1) sortedModules.push(m); });
+  // Sort modules; deduplicate from PM_MODULE_ORDER then append extras
+  var seen = {};
+  var sortedModules = [];
+  PM_MODULE_ORDER.forEach(function(m) {
+    if (permMap[m] && !seen[m]) { seen[m] = true; sortedModules.push(m); }
+  });
+  moduleSet.forEach(function(m) {
+    if (!seen[m]) { seen[m] = true; sortedModules.push(m); }
+  });
+
+  // Sort action codes within each module by PM_ACTION_ORDER
+  sortedModules.forEach(function(mod) {
+    if (!moduleActionCatalog[mod] || moduleActionCatalog[mod].length === 0) {
+      moduleActionCatalog[mod] = ['view','create','update','delete','approve','export'];
+    } else {
+      moduleActionCatalog[mod].sort(function(a,b) {
+        var ia = PM_ACTION_ORDER.indexOf(a), ib = PM_ACTION_ORDER.indexOf(b);
+        if (ia === -1) ia = 999; if (ib === -1) ib = 999;
+        return ia - ib;
+      });
+    }
+  });
 
   var html = '';
 
-  // Banner
-  html += '<div class="alert alert-success d-flex align-items-center mb-4">';
-  html += '<i class="bi bi-shield-check fs-5 me-2 flex-shrink-0"></i>';
-  html += '<div><strong>Live Permission Editor.</strong> Changes to permissions take effect immediately.</div>';
+  // ── SECTION A: Permission Matrix ──
+  html += '<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">';
+  html += '<h5 class="mb-0" style="border-left:4px solid #1a365d;padding-left:12px;">Access Control</h5>';
+  html += '<div class="d-flex align-items-center gap-3">';
+  html += '<span class="badge bg-success px-3 py-2"><i class="bi bi-lightning-fill me-1"></i>Changes save instantly</span>';
+  html += '<span id="pmLastSaved" class="text-muted small" style="display:none;"></span>';
+  html += '</div>';
   html += '</div>';
 
-  // Section A: Permission Matrix
-  html += '<h5 class="mb-3" style="border-left:4px solid #1a365d;padding-left:12px;">Permission Matrix</h5>';
-  html += '<p class="text-muted small mb-3">Toggle each permission on/off. The scope badge (ALL / OWN / DEPARTMENT / AFFILIATE) appears when at least one action is enabled — click it to cycle through scope values.</p>';
   html += '<div class="table-responsive mb-5" style="overflow-x:auto;">';
-  html += '<table class="table table-bordered table-sm align-middle" id="permMatrixTable" style="min-width:900px;">';
+  html += '<table class="table table-bordered table-sm align-middle" id="permMatrixTable" style="min-width:800px;">';
 
-  // Header row
+  // Header row: Module/Action col + one col per role
   html += '<thead class="table-light"><tr>';
-  html += '<th style="position:sticky;left:0;z-index:3;background:#f8f9fa;min-width:145px;white-space:nowrap;">Module</th>';
+  html += '<th style="position:sticky;left:0;z-index:3;background:#f8f9fa;min-width:180px;white-space:nowrap;">Module / Action</th>';
   roles.forEach(function(role) {
-    var display = PM_ROLE_DISPLAY[role.role_code] || role.role_name;
-    html += '<th class="text-center" style="min-width:115px;">';
-    html += '<div class="fw-bold small">' + escapeHtml(display) + '</div>';
-    html += '<code style="font-size:0.65em;color:#888;">' + escapeHtml(role.role_code) + '</code>';
+    var isSA = (role.role_code === 'SUPER_ADMIN');
+    html += '<th class="text-center" style="min-width:100px;' + (isSA ? 'background:#fdf6d3;' : '') + '">';
+    html += '<div class="fw-bold small">' + escapeHtml(role.role_name || role.role_code) + '</div>';
+    html += '<code style="font-size:0.62em;color:#888;">' + escapeHtml(role.role_code) + '</code>';
+    if (isSA) {
+      html += '<div><span class="badge mt-1" style="background:#E5B81B;color:#1a365d;font-size:0.6em;padding:2px 6px;">FULL ACCESS</span></div>';
+    }
     html += '</th>';
   });
   html += '</tr></thead><tbody>';
 
   sortedModules.forEach(function(mod) {
-    html += '<tr>';
+    var moduleName = PM_MODULE_DISPLAY[mod] || mod;
+    var actions    = moduleActionCatalog[mod];
 
-    // Sticky module label
-    html += '<td style="position:sticky;left:0;z-index:2;background:#fff;white-space:nowrap;vertical-align:middle;">';
-    html += '<div class="fw-semibold small">' + escapeHtml(PM_MODULE_NAMES[mod] || mod) + '</div>';
-    html += '<code style="font-size:0.62em;color:#adb5bd;">' + escapeHtml(mod) + '</code>';
+    // Module subheader row (grey)
+    html += '<tr style="background:#e9ecef;">';
+    html += '<td colspan="' + (roles.length + 1) + '" style="position:sticky;left:0;background:#e9ecef;z-index:2;padding:4px 12px;">';
+    html += '<strong class="small text-dark">' + escapeHtml(moduleName) + '</strong>';
+    html += '<code class="ms-2" style="font-size:0.6em;color:#6c757d;">' + escapeHtml(mod) + '</code>';
     html += '</td>';
+    html += '</tr>';
 
-    roles.forEach(function(role) {
-      var cellPerms   = (permMap[mod] && permMap[mod][role.role_code]) || {};
-      var actionCodes = Object.keys(moduleActionCatalog[mod] || {});
-      if (actionCodes.length === 0) {
-        actionCodes = ['can_create', 'can_read', 'can_update', 'can_delete', 'can_approve', 'can_export'];
-      }
+    // One row per action
+    actions.forEach(function(ac) {
+      var actionLabel = PM_ACTION_DISPLAY[ac] || ac;
+      html += '<tr>';
+      html += '<td style="position:sticky;left:0;z-index:2;background:#fff;padding-left:24px;white-space:nowrap;">';
+      html += '<span class="small text-muted">' + escapeHtml(actionLabel) + '</span>';
+      html += '</td>';
 
-      // Scope badge: scope of first allowed action
-      var cellScope  = null;
-      var hasAllowed = false;
-      actionCodes.forEach(function(ac) {
-        if (cellPerms[ac].is_allowed && !hasAllowed) {
-          hasAllowed = true;
-          cellScope  = cellPerms[ac].scope || 'ALL';
-        }
-      });
+      roles.forEach(function(role) {
+        var isSA      = (role.role_code === 'SUPER_ADMIN');
+        var cellPerms = (permMap[mod] && permMap[mod][role.role_code]) || {};
+        var isAllowed = cellPerms[ac] === true;
+        var cellId    = 'pm_cell_' + mod + '_' + role.role_code + '_' + ac;
 
-      html += '<td style="padding:5px 6px;vertical-align:top;">';
-
-      if (actionCodes.length === 0) {
-        html += '<span class="text-muted" style="font-size:0.75em;">—</span>';
-      } else {
-        // Toggle switches
-        html += '<div class="d-flex flex-wrap gap-1 mb-1">';
-        actionCodes.forEach(function(ac) {
-          var p   = cellPerms[ac] || { is_allowed: false, scope: 'ALL' };
+        html += '<td class="text-center" id="' + escapeHtml(cellId) + '" style="padding:6px;' +
+                (isSA ? 'background:#fffdf0;' : '') + '">';
+        if (isSA) {
+          // SUPER_ADMIN: disabled, always checked, gold color
+          html += '<input type="checkbox" class="form-check-input" checked disabled';
+          html += ' style="cursor:not-allowed;opacity:0.5;accent-color:#E5B81B;">';
+        } else {
           var tid = 'pt_' + mod + '_' + role.role_code + '_' + ac;
-          var lbl = PM_ACTION_LABELS[ac] || ac;
-          var ttl = PM_ACTION_TITLES[ac] || ac;
-          html += '<div class="d-flex flex-column align-items-center" style="min-width:30px;">';
-          html += '<div class="form-check form-switch p-0 d-flex justify-content-center">';
+          html += '<div class="d-inline-flex align-items-center gap-1">';
           html += '<input class="form-check-input perm-toggle" type="checkbox" role="switch"';
           html += ' id="' + escapeHtml(tid) + '"';
-          if (p.is_allowed) html += ' checked';
+          if (isAllowed) html += ' checked';
           html += ' data-mod="'    + escapeHtml(mod)            + '"';
           html += ' data-role="'   + escapeHtml(role.role_code) + '"';
           html += ' data-action="' + escapeHtml(ac)             + '"';
-          html += ' title="'       + escapeHtml(ttl)            + '"';
-          html += ' onchange="onPermToggle(this)" style="cursor:pointer;margin:0;">';
+          html += ' data-cellid="' + escapeHtml(cellId)         + '"';
+          html += ' onchange="onPermToggle(this)" style="cursor:pointer;">';
+          html += '<span class="pm-spinner d-none spinner-border spinner-border-sm text-primary" style="width:12px;height:12px;border-width:2px;"></span>';
           html += '</div>';
-          html += '<span class="text-muted" style="font-size:0.6em;line-height:1.1;">' + escapeHtml(lbl) + '</span>';
-          html += '</div>';
-        });
-        html += '</div>';
+        }
+        html += '</td>';
+      });
 
-        // Scope badge (Section C)
-        var scColor = PM_SCOPE_COLORS[cellScope] || '#6c757d';
-        html += '<span class="scope-badge badge"';
-        html += ' data-mod="'   + escapeHtml(mod)            + '"';
-        html += ' data-role="'  + escapeHtml(role.role_code) + '"';
-        html += ' data-scope="' + escapeHtml(cellScope || 'ALL') + '"';
-        html += ' onclick="onScopeBadgeClick(this)"';
-        html += ' title="Click to cycle scope"';
-        html += ' style="cursor:pointer;background:' + scColor + ';font-size:0.62em;padding:2px 5px;';
-        html += hasAllowed ? '' : 'display:none;';
-        html += '">';
-        html += escapeHtml(cellScope || 'ALL');
-        html += '</span>';
-      }
-
-      html += '</td>';
+      html += '</tr>';
     });
-
-    html += '</tr>';
   });
 
   html += '</tbody></table></div>';
 
-  // Section B: Role Overview (read-only reference)
-  html += '<h5 class="mb-3" style="border-left:4px solid #6c757d;padding-left:12px;">';
-  html += 'Role Overview';
-  html += '<span class="badge bg-secondary ms-2" style="font-size:0.62em;vertical-align:middle;font-weight:500;">for reference only</span>';
+  // ── SECTION B: Role Overview (collapsible, collapsed by default) ──
+  html += '<div class="mb-4">';
+  html += '<h5 class="mb-0" style="border-left:4px solid #6c757d;padding-left:12px;cursor:pointer;" onclick="_toggleRoleOverview()" id="roleOverviewToggle">';
+  html += '<i class="bi bi-chevron-right me-2" id="roleOverviewChevron"></i>';
+  html += 'Role Reference';
+  html += '<small class="text-muted ms-2 fw-normal" style="font-size:0.7em;">Expand to view role descriptions</small>';
   html += '</h5>';
-  html += '<div class="table-responsive mb-4"><table class="table table-bordered table-sm table-hover">';
+  html += '<div id="roleOverviewBody" style="display:none;margin-top:12px;">';
+  html += '<div class="table-responsive"><table class="table table-bordered table-sm table-hover">';
   html += '<thead class="table-light"><tr><th>Role Code</th><th>Display Name</th><th>Description</th><th>Access Path</th></tr></thead>';
   html += '<tbody>';
   roles.forEach(function(role) {
-    var display = PM_ROLE_DISPLAY[role.role_code] || role.role_name;
     html += '<tr>';
     html += '<td><code>' + escapeHtml(role.role_code) + '</code></td>';
-    html += '<td><strong>' + escapeHtml(display) + '</strong></td>';
+    html += '<td><strong>' + escapeHtml(role.role_name || role.role_code) + '</strong></td>';
     html += '<td class="small">' + escapeHtml(role.role_description || '') + '</td>';
     html += '<td class="small text-muted">' + escapeHtml(role.access_path || '') + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table></div>';
+  html += '</div>';
+  html += '</div>';
 
   document.getElementById('accessControlContent').innerHTML = html;
+}
+
+function _toggleRoleOverview() {
+  var body    = document.getElementById('roleOverviewBody');
+  var chevron = document.getElementById('roleOverviewChevron');
+  if (!body) return;
+  var expanded = body.style.display !== 'none';
+  body.style.display    = expanded ? 'none' : '';
+  if (chevron) chevron.className = expanded ? 'bi bi-chevron-right me-2' : 'bi bi-chevron-down me-2';
+}
+
+function _updateLastSaved() {
+  _lastSavedTime = new Date();
+  var el = document.getElementById('pmLastSaved');
+  if (!el) return;
+  el.style.display = '';
+  el.textContent = 'Last saved: ' + _lastSavedTime.toLocaleTimeString();
 }
 
 function onPermToggle(input) {
   var mod    = input.dataset.mod;
   var role   = input.dataset.role;
   var action = input.dataset.action;
+  var cellId = input.dataset.cellid;
   var newVal = input.checked;
-  input.disabled = true;
 
+  input.disabled = true;
+  var spinner = input.parentElement.querySelector('.pm-spinner');
+  if (spinner) spinner.classList.remove('d-none');
+
+  var token = sessionStorage.getItem('hass_audit_token');
   google.script.run
     .withSuccessHandler(function() {
       input.disabled = false;
+      if (spinner) spinner.classList.add('d-none');
       _permMatrixData = null;
-      showToast('Permission updated', 'success', 2000);
-      _syncScopeBadge(mod, role);
+      _updateLastSaved();
+      // Green flash on cell
+      var cell = document.getElementById(cellId);
+      if (cell) {
+        cell.style.transition = 'background 0.3s';
+        cell.style.background = '#d1fae5';
+        setTimeout(function() { cell.style.background = ''; }, 800);
+      }
     })
     .withFailureHandler(function(e) {
       input.disabled = false;
       input.checked  = !newVal;
+      if (spinner) spinner.classList.add('d-none');
+      // Red flash on cell
+      var cell = document.getElementById(cellId);
+      if (cell) {
+        cell.style.transition = 'background 0.3s';
+        cell.style.background = '#fee2e2';
+        setTimeout(function() { cell.style.background = ''; }, 800);
+      }
       showToast('Failed: ' + escapeHtml(e.message || 'Unknown error'), 'danger');
     })
     .updatePermissions(
       { role_code: role, module_code: mod, action_code: action, is_allowed: newVal },
-      sessionStorage.getItem('hass_audit_token')
+      token
     );
-}
-
-function onScopeBadgeClick(badge) {
-  var mod   = badge.dataset.mod;
-  var role  = badge.dataset.role;
-  var cur   = badge.dataset.scope || 'ALL';
-  var idx   = PM_SCOPE_CYCLE.indexOf(cur);
-  var next  = PM_SCOPE_CYCLE[(idx + 1) % PM_SCOPE_CYCLE.length];
-
-  badge.style.opacity       = '0.4';
-  badge.style.pointerEvents = 'none';
-
-  google.script.run
-    .withSuccessHandler(function() {
-      badge.dataset.scope       = next;
-      badge.textContent         = next;
-      badge.style.background    = PM_SCOPE_COLORS[next] || '#6c757d';
-      badge.style.opacity       = '';
-      badge.style.pointerEvents = '';
-      _permMatrixData = null;
-      showToast('Scope updated to ' + next, 'success', 2000);
-    })
-    .withFailureHandler(function(e) {
-      badge.style.opacity       = '';
-      badge.style.pointerEvents = '';
-      showToast('Scope update failed: ' + escapeHtml(e.message || 'Unknown error'), 'danger');
-    })
-    .updatePermissionScope(
-      { role_code: role, module_code: mod, scope: next },
-      sessionStorage.getItem('hass_audit_token')
-    );
-}
-
-function _syncScopeBadge(mod, role) {
-  var anyOn = false;
-  document.querySelectorAll('.perm-toggle[data-mod="' + mod + '"][data-role="' + role + '"]')
-    .forEach(function(t) { if (t.checked) anyOn = true; });
-  var badge = document.querySelector('.scope-badge[data-mod="' + mod + '"][data-role="' + role + '"]');
-  if (badge) badge.style.display = anyOn ? '' : 'none';
 }
 
 // Stubs — kept so any callers elsewhere do not throw
@@ -1310,6 +1329,8 @@ function renderPermissionsTable() {}
 function markPermissionChanged()  {}
 function selectRoleDashboard()    {}
 function renderRolePills()        {}
+function onScopeBadgeClick()      {}
+function _syncScopeBadge()        {}
 
 function rebuildIndexes() {
   if (!confirm('Rebuild all indexes? This may take a moment.')) return;

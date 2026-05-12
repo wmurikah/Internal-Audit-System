@@ -825,49 +825,65 @@ function setupNavigation(p) {
     return;
   }
 
-  // ── All other roles: permission-driven visibility ──
+  // ── All other roles: permission-driven visibility using navRules ──
 
-  // Work Paper creation
-  if (!p || !p.canCreateWorkPaper) {
+  // Dashboard (Reports landing page) — visible to ALL authenticated roles
+  document.getElementById('navReports')?.classList.remove('d-none');
+
+  // navRules: map each nav item to the DB permission that gates it.
+  // Read from _userPermissions which already maps DB perms to JS flags.
+  var _up = p || {};
+  var navRules = {
+    'Work Papers':     { allowed: _up.canViewWorkPapers || _up.canCreateWorkPaper },
+    'Send Queue':      { allowed: _up.canApproveWorkPaper },
+    'Action Plans':    { allowed: _up.canViewActionPlans },
+    'Reports':         { allowed: true },  // always visible
+    'User Management': { allowed: _up.canManageUsers },
+    'System Settings': { allowed: _up.canManageSettings },
+    'AI Assist':       { allowed: _up.canViewAIAssist }
+  };
+
+  // Apply rules to nav element IDs
+  var navIdMap = {
+    'Work Papers':     ['navWorkPapersMenu', 'navAuditMgmtSection'],
+    'Send Queue':      ['navSendQueue', 'navResponsesReview'],
+    'Action Plans':    [],  // action plans always shown in sidebar; sub-items below
+    'Reports':         ['navReports'],
+    'User Management': ['navUsers', 'navAdminSection'],
+    'System Settings': ['navSettings'],
+    'AI Assist':       ['navAnalytics', 'navInsightsSection']
+  };
+
+  Object.keys(navRules).forEach(function(label) {
+    var rule = navRules[label];
+    var ids  = navIdMap[label] || [];
+    ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (rule.allowed) {
+        el.classList.remove('d-none');
+      } else {
+        el.classList.add('d-none');
+      }
+    });
+  });
+
+  // Work Paper sub-items
+  if (!_up.canCreateWorkPaper) {
     document.getElementById('navNewWorkPaper')?.classList.add('d-none');
+    document.getElementById('navMyWorkPapers')?.classList.add('d-none');
   }
-
-  // Work Paper review/my items - requires approve permission
-  if (!p || !p.canReviewWorkPaper) {
+  if (!_up.canReviewWorkPaper) {
     document.getElementById('navPendingReview')?.classList.add('d-none');
   }
 
-  // Send Queue - only reviewers (approve permission) can batch-send to auditees
-  if (!p || !p.canApproveWorkPaper) {
-    document.getElementById('navSendQueue')?.classList.add('d-none');
-    document.getElementById('navResponsesReview')?.classList.add('d-none');
-  }
-  if (!p || !p.canCreateWorkPaper) {
-    document.getElementById('navMyWorkPapers')?.classList.add('d-none');
-  }
-
-  // Dashboard (Reports) - visible to ALL users regardless of role
-  document.getElementById('navReports')?.classList.remove('d-none');
-
-  // AI Assist - driven by AI_ASSIST module permission
-  if (!p || !p.canViewAIAssist) {
-    document.getElementById('navAnalytics')?.classList.add('d-none');
-  }
-
-  // User Management & Settings: SUPER_ADMIN only
-  if (role !== 'SUPER_ADMIN') {
-    document.getElementById('navUsers')?.classList.add('d-none');
-    document.getElementById('navSettings')?.classList.add('d-none');
-    document.getElementById('navAdminSection')?.classList.add('d-none');
-  }
-
-  // Audit Workbench - only visible to audit team roles
-  var auditWorkbenchRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
+  // Audit Workbench - visible to audit team roles only
+  var auditWorkbenchRoles = ['SENIOR_AUDITOR', 'AUDITOR'];
   if (auditWorkbenchRoles.indexOf(role) === -1) {
     document.getElementById('navAuditWorkbench')?.classList.add('d-none');
   }
 
-  // Auditee section: show My Observations for auditee-type roles
+  // Auditee section: My Observations for auditee-type roles
   var auditeeRoles = ['JUNIOR_STAFF', 'UNIT_MANAGER', 'SENIOR_MGMT'];
   if (auditeeRoles.includes(role)) {
     document.getElementById('navAuditeeSection')?.classList.remove('d-none');
@@ -878,22 +894,15 @@ function setupNavigation(p) {
     document.getElementById('navAuditeeMenu')?.classList.add('d-none');
   }
 
-  // Work Papers sidebar: only auditor roles
-  var wpFullRoles = ['SUPER_ADMIN', 'SENIOR_AUDITOR', 'AUDITOR'];
-  if (wpFullRoles.indexOf(role) === -1) {
-    document.getElementById('navAuditMgmtSection')?.classList.add('d-none');
-    document.getElementById('navWorkPapersMenu')?.classList.add('d-none');
-    document.getElementById('navMyWorkPapers')?.classList.add('d-none');
-    document.getElementById('navNewWorkPaper')?.classList.add('d-none');
-    document.getElementById('navPendingReview')?.classList.add('d-none');
-    document.getElementById('navSendQueue')?.classList.add('d-none');
-    document.getElementById('navResponsesReview')?.classList.add('d-none');
-  }
-
-  // Board Reports: visible for BOARD_MEMBER/BOARD, SUPER_ADMIN, SENIOR_MGMT, and UNIT_MANAGER
+  // Board Reports: visible for report-capable roles
   var boardReportRoles = ['BOARD_MEMBER', 'BOARD', 'SUPER_ADMIN', 'SENIOR_MGMT', 'UNIT_MANAGER'];
   if (boardReportRoles.indexOf(role) === -1) {
     document.getElementById('navBoardReports')?.classList.add('d-none');
+  }
+
+  // Admin section: hide completely if neither users nor settings are visible
+  if (!_up.canManageUsers && !_up.canManageSettings) {
+    document.getElementById('navAdminSection')?.classList.add('d-none');
   }
 }
 
