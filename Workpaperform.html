@@ -112,7 +112,6 @@
               <select class="form-select" id="wpAssignedAuditor" onchange="updateFormProgress()">
                 <option value="">Select Auditor...</option>
               </select>
-              <small class="text-muted">Assign an auditor to complete testing and evidence</small>
             </div>
           </div>
 
@@ -983,6 +982,8 @@ let selectedResponsible = [];
 let selectedCCRecipients = [];
 let uploadedEvidenceFiles = [];
 let actionPlanEvidenceFiles = {};
+// Pre-loaded user list for autocomplete — populated by loadUsersForForm()
+var _allUsers = [];
 
 // =============================================
 // SIMPLIFIED AUTOCOMPLETE - FIXED VERSION
@@ -1013,43 +1014,41 @@ function setupAutocomplete(inputId, suggestionsId, tagsId, hiddenId, dataSource)
       return;
     }
     
-    // Get data based on source
-    let data = [];
-    if (dataSource === 'auditees') {
-      // Keep Responsible field aligned with CC recipients source (same users sheet)
-      data = window.appDropdowns?.users || [];
-    } else {
-      data = window.appDropdowns?.users || [];
-    }
-    
-    // Filter
-    const filtered = data.filter(u => {
-      const nameMatch = (u.name || '').toLowerCase().includes(query);
-      const emailMatch = (u.email || '').toLowerCase().includes(query);
-      // Exclude already selected
-      const alreadySelected = selectedItems.some(s => s.id === u.id);
+    // Get data based on source — prefer _allUsers (pre-loaded), fallback to appDropdowns
+    var data = (_allUsers && _allUsers.length > 0)
+      ? _allUsers
+      : (window.appDropdowns && window.appDropdowns.users) || [];
+
+    // Filter — support both {full_name, user_id} (server) and {name, id} (legacy)
+    var filtered = data.filter(function(u) {
+      var uName = u.full_name || u.name || '';
+      var nameMatch = uName.toLowerCase().includes(query);
+      var emailMatch = (u.email || '').toLowerCase().includes(query);
+      var uId = u.user_id || u.id;
+      var alreadySelected = selectedItems.some(function(s) { return (s.user_id || s.id) === uId; });
       return (nameMatch || emailMatch) && !alreadySelected;
     }).slice(0, 10);
-    
+
     // Add custom email option for CC recipients
-    if (dataSource === 'emails' && query.includes('@') && !filtered.some(f => f.email === query)) {
-      filtered.push({ id: 'custom_' + Date.now(), email: query, name: query, isCustom: true });
+    if (dataSource === 'emails' && query.includes('@') && !filtered.some(function(f) { return f.email === query; })) {
+      filtered.push({ user_id: 'custom_' + Date.now(), id: 'custom_' + Date.now(), email: query, full_name: query, name: query, isCustom: true });
     }
-    
+
     if (filtered.length === 0) {
       suggestionsDiv.classList.remove('show');
       suggestionsDiv.style.display = 'none';
       return;
     }
-    
+
     // Render suggestions
-    suggestionsDiv.innerHTML = filtered.map((s, i) => `
-      <div class="autocomplete-suggestion" data-index="${i}">
-        <div class="suggestion-name">${escapeHtml(s.name || s.email)}</div>
-        ${s.email && !s.isCustom ? `<div class="suggestion-email">${escapeHtml(s.email)}</div>` : ''}
-        ${s.isCustom ? '<div class="suggestion-email"><em>Add as custom email</em></div>' : ''}
-      </div>
-    `).join('');
+    suggestionsDiv.innerHTML = filtered.map(function(s, i) {
+      var displayName = s.full_name || s.name || s.email;
+      return '<div class="autocomplete-suggestion" data-index="' + i + '">' +
+        '<div class="suggestion-name">' + escapeHtml(displayName) + '</div>' +
+        (s.email && !s.isCustom ? '<div class="suggestion-email">' + escapeHtml(s.email) + '</div>' : '') +
+        (s.isCustom ? '<div class="suggestion-email"><em>Add as custom email</em></div>' : '') +
+        '</div>';
+    }).join('');
     
     // Add click handlers to suggestions
     suggestionsDiv.querySelectorAll('.autocomplete-suggestion').forEach((el, idx) => {
@@ -1106,12 +1105,13 @@ function setupAutocomplete(inputId, suggestionsId, tagsId, hiddenId, dataSource)
   
   // Render tags function
   function renderTags() {
-    tagsDiv.innerHTML = selectedItems.map((s, i) => `
-      <span class="selected-tag">
-        ${escapeHtml(s.name || s.email)}
-        <span class="remove-tag" data-index="${i}">&times;</span>
-      </span>
-    `).join('');
+    tagsDiv.innerHTML = selectedItems.map(function(s, i) {
+      var displayName = s.full_name || s.name || s.email;
+      return '<span class="selected-tag">' +
+        escapeHtml(displayName) +
+        '<span class="remove-tag" data-index="' + i + '">&times;</span>' +
+        '</span>';
+    }).join('');
     
     // Add remove handlers
     tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
@@ -1129,12 +1129,12 @@ function setupAutocomplete(inputId, suggestionsId, tagsId, hiddenId, dataSource)
     });
   }
   
-  // Update hidden input
+  // Update hidden input — use user_id with fallback to id
   function updateHidden() {
     if (dataSource === 'auditees') {
-      hiddenInput.value = selectedItems.map(s => s.id).join(',');
+      hiddenInput.value = selectedItems.map(function(s) { return s.user_id || s.id; }).join(',');
     } else {
-      hiddenInput.value = selectedItems.map(s => s.email).join('\n');
+      hiddenInput.value = selectedItems.map(function(s) { return s.email; }).join('\n');
     }
   }
 }
@@ -1160,26 +1160,31 @@ function setupActionPlanOwnerAutocomplete(entry, index) {
       return;
     }
     
-    const users = window.appDropdowns?.users || [];
-    const filtered = users.filter(u => {
-      const nameMatch = (u.name || '').toLowerCase().includes(query);
-      const emailMatch = (u.email || '').toLowerCase().includes(query);
-      const alreadySelected = selectedOwners.some(s => s.id === u.id);
+    var users = (_allUsers && _allUsers.length > 0)
+      ? _allUsers
+      : ((window.appDropdowns && window.appDropdowns.users) || []);
+    var filtered = users.filter(function(u) {
+      var uName = u.full_name || u.name || '';
+      var nameMatch = uName.toLowerCase().includes(query);
+      var emailMatch = (u.email || '').toLowerCase().includes(query);
+      var uId = u.user_id || u.id;
+      var alreadySelected = selectedOwners.some(function(s) { return (s.user_id || s.id) === uId; });
       return (nameMatch || emailMatch) && !alreadySelected;
     }).slice(0, 10);
-    
+
     if (filtered.length === 0) {
       suggestionsDiv.classList.remove('show');
       suggestionsDiv.style.display = 'none';
       return;
     }
-    
-    suggestionsDiv.innerHTML = filtered.map((s, i) => `
-      <div class="autocomplete-suggestion" data-index="${i}">
-        <div class="suggestion-name">${escapeHtml(s.name)}</div>
-        <div class="suggestion-email">${escapeHtml(s.email)}</div>
-      </div>
-    `).join('');
+
+    suggestionsDiv.innerHTML = filtered.map(function(s, i) {
+      var dname = s.full_name || s.name || s.email;
+      return '<div class="autocomplete-suggestion" data-index="' + i + '">' +
+        '<div class="suggestion-name">' + escapeHtml(dname) + '</div>' +
+        '<div class="suggestion-email">' + escapeHtml(s.email || '') + '</div>' +
+        '</div>';
+    }).join('');
     
     suggestionsDiv.querySelectorAll('.autocomplete-suggestion').forEach((el, idx) => {
       el.addEventListener('click', function() {
@@ -1208,26 +1213,27 @@ function setupActionPlanOwnerAutocomplete(entry, index) {
   }
   
   function renderOwnerTags() {
-    tagsDiv.innerHTML = selectedOwners.map((s, i) => `
-      <span class="selected-tag">
-        ${escapeHtml(s.name)}
-        <span class="remove-tag" data-index="${i}">&times;</span>
-      </span>
-    `).join('');
-    
-    tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
+    tagsDiv.innerHTML = selectedOwners.map(function(s, i) {
+      var dname = s.full_name || s.name || s.email;
+      return '<span class="selected-tag">' +
+        escapeHtml(dname) +
+        '<span class="remove-tag" data-index="' + i + '">&times;</span>' +
+        '</span>';
+    }).join('');
+
+    tagsDiv.querySelectorAll('.remove-tag').forEach(function(el) {
       el.addEventListener('click', function() {
-        const idx = parseInt(this.dataset.index);
+        var idx = parseInt(this.dataset.index);
         selectedOwners.splice(idx, 1);
         renderOwnerTags();
         updateOwnerInputs();
       });
     });
   }
-  
+
   function updateOwnerInputs() {
-    idsInput.value = selectedOwners.map(s => s.id).join(',');
-    namesInput.value = selectedOwners.map(s => s.name).join(', ');
+    idsInput.value = selectedOwners.map(function(s) { return s.user_id || s.id; }).join(',');
+    namesInput.value = selectedOwners.map(function(s) { return s.full_name || s.name || s.email; }).join(', ');
   }
 }
 
@@ -1728,9 +1734,79 @@ function initWorkPaperForm(params) {
     yearSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
   }
 
-  // Initialize dropdowns
-  populateDropdown('wpAffiliate', window.appDropdowns?.affiliates || [], 'code', 'display', 'Select Affiliate');
-  populateDropdown('wpAuditArea', window.appDropdowns?.auditAreas || [], 'id', 'display', 'Select Audit Area');
+  // Initialize Affiliate dropdown — try cached data first, fallback to server call
+  (function loadAffiliateDropdown() {
+    var cached = (window.appDropdowns && window.appDropdowns.affiliates) || [];
+    var sel = document.getElementById('wpAffiliate');
+    if (cached.length > 0 && cached[0].affiliate_code) {
+      sel.innerHTML = '<option value="">Select Affiliate</option>';
+      cached.forEach(function(a) {
+        var opt = document.createElement('option');
+        opt.value = a.affiliate_code;
+        opt.textContent = a.affiliate_name + ' (' + a.affiliate_code + ')';
+        sel.appendChild(opt);
+      });
+    } else {
+      sel.innerHTML = '<option value="">Loading affiliates...</option>';
+      var tok = sessionStorage.getItem('hass_audit_token') || '';
+      google.script.run
+        .withSuccessHandler(function(affiliates) {
+          console.log('Affiliates received:', affiliates);
+          sel.innerHTML = '<option value="">Select Affiliate</option>';
+          (affiliates || []).forEach(function(a) {
+            var opt = document.createElement('option');
+            opt.value = a.affiliate_code;
+            opt.textContent = a.affiliate_name + ' (' + a.affiliate_code + ')';
+            sel.appendChild(opt);
+          });
+          if (window.appDropdowns) window.appDropdowns.affiliates = affiliates;
+        })
+        .withFailureHandler(function(e) {
+          console.error('Affiliates failed:', e);
+          sel.innerHTML = '<option value="">Select Affiliate</option>';
+        })
+        .getAffiliatesDropdownData(tok);
+    }
+  })();
+
+  // Initialize Audit Area dropdown — try cached data first, fallback to server call
+  (function loadAuditAreaDropdown() {
+    var cached = (window.appDropdowns && window.appDropdowns.auditAreas) || [];
+    var sel = document.getElementById('wpAuditArea');
+    if (cached.length > 0 && cached[0].area_id) {
+      sel.innerHTML = '<option value="">Select Audit Area</option>';
+      cached.forEach(function(a) {
+        var opt = document.createElement('option');
+        opt.value = a.area_id;
+        opt.textContent = a.area_name;
+        sel.appendChild(opt);
+      });
+      var subSel = document.getElementById('wpSubArea');
+      if (subSel) subSel.innerHTML = '<option value="">Select Sub Area</option>';
+    } else {
+      sel.innerHTML = '<option value="">Loading audit areas...</option>';
+      var tok = sessionStorage.getItem('hass_audit_token') || '';
+      google.script.run
+        .withSuccessHandler(function(areas) {
+          console.log('Audit areas received:', areas);
+          sel.innerHTML = '<option value="">Select Audit Area</option>';
+          (areas || []).forEach(function(a) {
+            var opt = document.createElement('option');
+            opt.value = a.area_id;
+            opt.textContent = a.area_name;
+            sel.appendChild(opt);
+          });
+          var subSel = document.getElementById('wpSubArea');
+          if (subSel) subSel.innerHTML = '<option value="">Select Sub Area</option>';
+          if (window.appDropdowns) window.appDropdowns.auditAreas = areas;
+        })
+        .withFailureHandler(function(e) {
+          console.error('Audit areas failed:', e);
+          sel.innerHTML = '<option value="">Select Audit Area</option>';
+        })
+        .getAuditAreasDropdownData(tok);
+    }
+  })();
 
   // Set default date
   document.getElementById('wpDate').value = new Date().toISOString().split('T')[0];
@@ -1743,7 +1819,14 @@ function initWorkPaperForm(params) {
     var auditors = window.appDropdowns?.auditors || [];
     auditorSelect.innerHTML = '<option value="">Select Auditor...</option>';
     auditors.forEach(function(a) {
-      auditorSelect.innerHTML += '<option value="' + a.id + '">' + a.name + ' (' + a.email + ')</option>';
+      var displayName = a.full_name || a.name
+        || ((a.first_name || '') + ' ' + (a.last_name || '')).trim()
+        || a.email;
+      var label = displayName + ' (' + (a.email || '') + ')';
+      var opt = document.createElement('option');
+      opt.value = a.user_id || a.id || '';
+      opt.textContent = label;
+      auditorSelect.appendChild(opt);
     });
   } else {
     assignSection.style.display = 'none';
@@ -1757,6 +1840,25 @@ function initWorkPaperForm(params) {
 
   // Apply role-based mandatory field indicators
   applyMandatoryFieldIndicators();
+
+  // Pre-load users for autocomplete — use appDropdowns if already populated, else fetch
+  (function loadUsersForForm() {
+    var cached = (window.appDropdowns && window.appDropdowns.users) || [];
+    if (cached.length > 0 && (cached[0].user_id || cached[0].full_name)) {
+      _allUsers = cached;
+    } else {
+      var tok = sessionStorage.getItem('hass_audit_token') || '';
+      google.script.run
+        .withSuccessHandler(function(users) {
+          _allUsers = users || [];
+          if (window.appDropdowns) window.appDropdowns.users = _allUsers;
+        })
+        .withFailureHandler(function(e) {
+          console.error('Users load failed:', e);
+        })
+        .getUsersForWorkPaper(tok);
+    }
+  })();
 
   // Setup autocomplete for Responsible and CC Recipients
   console.log('Setting up autocomplete fields...');
@@ -1807,14 +1909,46 @@ function initWorkPaperForm(params) {
 // FORM DATA & SUBMISSION
 // =============================================
 
-function loadSubAreas() {
-  const areaId = document.getElementById('wpAuditArea').value;
-  const subAreaSelect = document.getElementById('wpSubArea');
+function loadSubAreas(callback) {
+  var areaId = document.getElementById('wpAuditArea').value;
+  var subAreaSelect = document.getElementById('wpSubArea');
   subAreaSelect.innerHTML = '<option value="">Select Sub Area</option>';
-  if (!areaId || !window.appDropdowns?.subAreas) return;
-  window.appDropdowns.subAreas.filter(s => s.areaId === areaId).forEach(s => {
-    subAreaSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
-  });
+  if (!areaId) { if (callback) callback(); return; }
+
+  // Try cached data first (fix field names: area_id / sub_area_id / sub_area_name)
+  var cached = (window.appDropdowns && window.appDropdowns.subAreas) || [];
+  var matching = cached.filter(function(s) { return s.area_id === areaId && s.is_active != 0; });
+  if (matching.length > 0) {
+    matching.forEach(function(s) {
+      var opt = document.createElement('option');
+      opt.value = s.sub_area_id;
+      opt.textContent = s.sub_area_name;
+      subAreaSelect.appendChild(opt);
+    });
+    if (callback) callback();
+    return;
+  }
+
+  // Fallback: load from server
+  subAreaSelect.innerHTML = '<option value="">Loading sub areas...</option>';
+  var tok = sessionStorage.getItem('hass_audit_token') || '';
+  google.script.run
+    .withSuccessHandler(function(subs) {
+      subAreaSelect.innerHTML = '<option value="">Select Sub Area</option>';
+      (subs || []).forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.sub_area_id;
+        opt.textContent = s.sub_area_name;
+        subAreaSelect.appendChild(opt);
+      });
+      if (callback) callback();
+    })
+    .withFailureHandler(function(e) {
+      console.error('Sub areas failed:', e);
+      subAreaSelect.innerHTML = '<option value="">Select Sub Area</option>';
+      if (callback) callback();
+    })
+    .getSubAreasDropdownData(tok, areaId);
 }
 
 function autoFillFromSubArea() {
@@ -1881,15 +2015,21 @@ function autoFillFromSubArea() {
 }
 
 function autoFillFromSubAreaLocal() {
-  const subAreaId = document.getElementById('wpSubArea').value;
+  var subAreaId = document.getElementById('wpSubArea').value;
   if (!subAreaId) return false;
-  const subArea = window.appDropdowns?.subAreas?.find(s => s.id === subAreaId);
+  var subArea = (window.appDropdowns && window.appDropdowns.subAreas || [])
+    .find(function(s) { return (s.sub_area_id || s.id) === subAreaId; });
   if (!subArea) return false;
   var populated = false;
-  ['wpControlObjectives', 'wpRiskDesc', 'wpTestObj', 'wpTestSteps'].forEach((id, i) => {
-    const el = document.getElementById(id);
-    const val = [subArea.controlObjectives, subArea.riskDescription, subArea.testObjective, subArea.testingSteps][i];
-    if (el && !el.value && val) { el.value = val; populated = true; }
+  var fieldPairs = [
+    ['wpControlObjectives', subArea.control_objectives || subArea.controlObjectives],
+    ['wpRiskDesc',          subArea.risk_description   || subArea.riskDescription],
+    ['wpTestObj',           subArea.test_objective     || subArea.testObjective],
+    ['wpTestSteps',         subArea.testing_steps      || subArea.testingSteps]
+  ];
+  fieldPairs.forEach(function(pair) {
+    var el = document.getElementById(pair[0]);
+    if (el && !el.value && pair[1]) { el.value = pair[1]; populated = true; }
   });
   return populated;
 }
@@ -1911,7 +2051,12 @@ function loadWorkPaperForEdit(id) {
 function populateFormFromDraft(data) {
   if (data.year) document.getElementById('wpYear').value = data.year;
   if (data.affiliate_code) document.getElementById('wpAffiliate').value = data.affiliate_code;
-  if (data.audit_area_id) { document.getElementById('wpAuditArea').value = data.audit_area_id; loadSubAreas(); }
+  if (data.audit_area_id) {
+    document.getElementById('wpAuditArea').value = data.audit_area_id;
+    loadSubAreas(function() {
+      if (data.sub_area_id) document.getElementById('wpSubArea').value = data.sub_area_id;
+    });
+  }
   if (data.work_paper_date) document.getElementById('wpDate').value = data.work_paper_date;
   if (data.audit_period_from) document.getElementById('wpPeriodFrom').value = data.audit_period_from;
   if (data.audit_period_to) document.getElementById('wpPeriodTo').value = data.audit_period_to;
@@ -1947,8 +2092,10 @@ function populateForm(wp) {
   document.getElementById('wpYear').value = wp.year || '';
   document.getElementById('wpAffiliate').value = wp.affiliate_code || '';
   document.getElementById('wpAuditArea').value = wp.audit_area_id || '';
-  loadSubAreas();
-  setTimeout(() => document.getElementById('wpSubArea').value = wp.sub_area_id || '', 100);
+  var _wpSubAreaId = wp.sub_area_id || '';
+  loadSubAreas(function() {
+    if (_wpSubAreaId) document.getElementById('wpSubArea').value = _wpSubAreaId;
+  });
   document.getElementById('wpDate').value = formatDateInput(wp.work_paper_date);
   document.getElementById('wpPeriodFrom').value = formatDateInput(wp.audit_period_from);
   document.getElementById('wpPeriodTo').value = formatDateInput(wp.audit_period_to);
@@ -1974,21 +2121,24 @@ function populateForm(wp) {
     document.getElementById('wpAssignedAuditor').value = wp.assigned_auditor_id;
   }
 
-  // Populate responsible parties
-  const responsibleIds = (wp.responsible_ids || '').split(',').map(s => s.trim()).filter(Boolean);
+  // Populate responsible parties — support both {user_id, full_name} and {id, name}
+  var responsibleIds = (wp.responsible_ids || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
   selectedResponsible = [];
-  const users = window.appDropdowns?.users || [];
-  responsibleIds.forEach(id => {
-    const user = users.find(u => u.id === id);
+  var allUsersPool = (_allUsers && _allUsers.length > 0)
+    ? _allUsers
+    : ((window.appDropdowns && window.appDropdowns.users) || []);
+  responsibleIds.forEach(function(id) {
+    var user = allUsersPool.find(function(u) { return (u.user_id || u.id) === id; });
     if (user) selectedResponsible.push(user);
+    else selectedResponsible.push({ user_id: id, full_name: id, email: '' });
   });
   renderResponsibleTags();
 
   // Populate CC recipients
-  const ccEmails = (wp.cc_recipients || '').split('\n').map(s => s.trim()).filter(Boolean);
-  selectedCCRecipients = ccEmails.map(email => {
-    const user = users.find(u => u.email === email);
-    return user || { email: email, name: email };
+  var ccEmails = (wp.cc_recipients || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+  selectedCCRecipients = ccEmails.map(function(email) {
+    var user = allUsersPool.find(function(u) { return u.email === email; });
+    return user || { email: email, full_name: email, name: email };
   });
   renderCCRecipientsTags();
 
@@ -2216,37 +2366,39 @@ function getWPResponseStatusBadge(status) {
 }
 
 function renderResponsibleTags() {
-  const tagsDiv = document.getElementById('wpResponsibleTags');
-  const hiddenInput = document.getElementById('wpResponsibleIds');
-  
-  tagsDiv.innerHTML = selectedResponsible.map((s, i) => `
-    <span class="selected-tag">
-      ${escapeHtml(s.name || s.email)}
-      <span class="remove-tag" data-index="${i}">&times;</span>
-    </span>
-  `).join('');
-  
-  tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
+  var tagsDiv = document.getElementById('wpResponsibleTags');
+  var hiddenInput = document.getElementById('wpResponsibleIds');
+
+  tagsDiv.innerHTML = selectedResponsible.map(function(s, i) {
+    var dname = s.full_name || s.name || s.email;
+    return '<span class="selected-tag">' +
+      escapeHtml(dname) +
+      '<span class="remove-tag" data-index="' + i + '">&times;</span>' +
+      '</span>';
+  }).join('');
+
+  tagsDiv.querySelectorAll('.remove-tag').forEach(function(el) {
     el.addEventListener('click', function() {
-      const idx = parseInt(this.dataset.index);
+      var idx = parseInt(this.dataset.index);
       selectedResponsible.splice(idx, 1);
       renderResponsibleTags();
     });
   });
-  
-  hiddenInput.value = selectedResponsible.map(s => s.id).join(',');
+
+  hiddenInput.value = selectedResponsible.map(function(s) { return s.user_id || s.id; }).join(',');
 }
 
 function renderCCRecipientsTags() {
   const tagsDiv = document.getElementById('wpCCRecipientsTags');
   const hiddenInput = document.getElementById('wpCCRecipients');
   
-  tagsDiv.innerHTML = selectedCCRecipients.map((s, i) => `
-    <span class="selected-tag">
-      ${escapeHtml(s.name || s.email)}
-      <span class="remove-tag" data-index="${i}">&times;</span>
-    </span>
-  `).join('');
+  tagsDiv.innerHTML = selectedCCRecipients.map(function(s, i) {
+    var dname = s.full_name || s.name || s.email;
+    return '<span class="selected-tag">' +
+      escapeHtml(dname) +
+      '<span class="remove-tag" data-index="' + i + '">&times;</span>' +
+      '</span>';
+  }).join('');
   
   tagsDiv.querySelectorAll('.remove-tag').forEach(el => {
     el.addEventListener('click', function() {
@@ -2452,26 +2604,105 @@ function validateActionPlans() {
   return valid;
 }
 
+// =============================================
+// INLINE FORM VALIDATION (Issue 7)
+// =============================================
+
+function validateWorkPaperForm(forSubmit) {
+  var errors = [];
+  var role = (window.currentUser && window.currentUser.role_code) || '';
+  var isSA = (role === 'SUPER_ADMIN');
+
+  // Fields required for ALL roles on Save
+  var saveRequired = [
+    { id: 'wpAffiliate',        label: 'Affiliate' },
+    { id: 'wpAuditArea',        label: 'Audit Area' },
+    { id: 'wpObsTitle',         label: 'Observation Title' },
+    { id: 'wpRiskRating',       label: 'Risk Rating' },
+    { id: 'wpAssignedAuditor',  label: 'Assigned Auditor' }
+  ];
+
+  // Extra fields for Submit (non-SUPER_ADMIN)
+  var submitRequired = [
+    { id: 'wpSubArea',          label: 'Sub Area' },
+    { id: 'wpObsDesc',          label: 'Observation Description' },
+    { id: 'wpRecommendation',   label: 'Recommendation' }
+  ];
+
+  var fieldsToCheck = saveRequired.slice();
+  if (forSubmit && !isSA) {
+    submitRequired.forEach(function(f) { fieldsToCheck.push(f); });
+  }
+
+  fieldsToCheck.forEach(function(f) {
+    var el = document.getElementById(f.id);
+    if (!el) return;
+    var empty = !el.value || el.value.trim() === '';
+    if (empty) {
+      errors.push(f.label + ' is required');
+      el.style.borderColor = '#ef4444';
+    } else {
+      el.style.borderColor = '';
+    }
+  });
+
+  // Responsible parties check
+  if (!selectedResponsible || selectedResponsible.length === 0) {
+    errors.push('At least one Responsible Party is required');
+  }
+
+  return errors;
+}
+
+function showValidationErrors(errors) {
+  var existing = document.getElementById('wpValidationErrors');
+  if (existing) existing.remove();
+  if (!errors || !errors.length) return;
+
+  var div = document.createElement('div');
+  div.id = 'wpValidationErrors';
+  div.style.cssText =
+    'background:#fee2e2;color:#b91c1c;padding:12px 16px;' +
+    'border-radius:8px;margin-bottom:16px;font-size:13px;' +
+    'border:1px solid #fca5a5;';
+  div.innerHTML = '<strong>Please fix the following:</strong>' +
+    '<ul style="margin:8px 0 0 16px">' +
+    errors.map(function(e) { return '<li>' + e + '</li>'; }).join('') +
+    '</ul>';
+
+  var form = document.getElementById('workPaperForm') || document.querySelector('.work-paper-form');
+  if (form) form.insertBefore(div, form.firstChild);
+  div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearValidationErrors() {
+  var existing = document.getElementById('wpValidationErrors');
+  if (existing) existing.remove();
+  // Clear field highlights
+  ['wpAffiliate','wpAuditArea','wpObsTitle','wpRiskRating','wpAssignedAuditor',
+   'wpSubArea','wpObsDesc','wpRecommendation'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.borderColor = '';
+  });
+}
+
 async function saveWorkPaper(event) {
   event.preventDefault();
+  clearValidationErrors();
 
   if (document.querySelectorAll('.action-plan-entry').length > 0 && !validateActionPlans()) {
     showToast('Please fill in all required action plan fields', 'danger');
     return;
   }
 
-  const data = getFormData();
-
-  // Role-based validation on save
-  var role = window.currentUser?.role_code || '';
-  if (role !== 'SUPER_ADMIN') {
-    var saveMissing = validateWorkPaperFields(data, 'Draft', role);
-    if (saveMissing.length > 0) { showValidationError(saveMissing); return; }
-  } else {
-    // SUPER_ADMIN: validate only the 5 basic fields
-    var basicMissing = validateWorkPaperFields(data, 'Draft', 'SUPER_ADMIN');
-    if (basicMissing.length > 0) { showValidationError(basicMissing); return; }
+  // Inline validation with error div
+  var formErrors = validateWorkPaperForm(false);
+  if (formErrors.length > 0) {
+    showValidationErrors(formErrors);
+    return;
   }
+
+  const data = getFormData();
 
   const actionPlans = getActionPlansData();
   const isEdit = !!data.work_paper_id;
@@ -2589,24 +2820,24 @@ async function _triggerSendNow() {
 }
 
 async function saveAndSubmit() {
-  if (!document.getElementById('workPaperForm').checkValidity()) {
-    document.getElementById('workPaperForm').reportValidity();
-    return;
-  }
+  clearValidationErrors();
 
   if (document.querySelectorAll('.action-plan-entry').length > 0 && !validateActionPlans()) {
     showToast('Please fill in all required action plan fields', 'danger');
     return;
   }
 
-  const data = getFormData();
-
-  // Validate mandatory fields before submission (role-aware)
-  var missing = validateWorkPaperFields(data, 'Submitted');
-  if (missing.length > 0) { showValidationError(missing); return; }
+  // Inline validation with error div (submit = stricter check)
+  var submitErrors = validateWorkPaperForm(true);
+  if (submitErrors.length > 0) {
+    showValidationErrors(submitErrors);
+    return;
+  }
 
   // Evidence requirement for non-SUPER_ADMIN
   if (!checkEvidenceRequirement()) return;
+
+  const data = getFormData();
 
   const actionPlans = getActionPlansData();
 
@@ -2732,10 +2963,13 @@ function showFirstTimeNotice() {
 
   // Populate reference template from sub-area dropdown data
   var subAreaId = document.getElementById('wpSubArea').value;
-  var subArea = window.appDropdowns?.subAreas?.find(function(s) { return s.id === subAreaId; });
+  var subArea = (window.appDropdowns && window.appDropdowns.subAreas || [])
+    .find(function(s) { return (s.sub_area_id || s.id) === subAreaId; });
   if (subArea) {
-    document.getElementById('refControlObjectives').textContent = subArea.controlObjectives || '—';
-    document.getElementById('refTestObjective').textContent = subArea.testObjective || '—';
+    document.getElementById('refControlObjectives').textContent =
+      subArea.control_objectives || subArea.controlObjectives || '—';
+    document.getElementById('refTestObjective').textContent =
+      subArea.test_objective || subArea.testObjective || '—';
   }
 
   document.getElementById('firstTimeNotice').style.display = 'block';
