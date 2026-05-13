@@ -297,6 +297,73 @@ function updateDropdownOrder(params, user) {
   return { success: true, updated: updatedCount };
 }
 
+// ─────────────────────────────────────────────────────────────
+// Token-authenticated dropdown loaders for direct google.script.run calls
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Return active affiliates for the work paper form.
+ * Called directly via google.script.run — validates session token.
+ */
+function getAffiliatesDropdownData(token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  return tursoGetAll('06_Affiliates').filter(function(a) {
+    return a.is_active == 1;
+  }).sort(function(a, b) {
+    return (parseInt(a.display_order) || 0) - (parseInt(b.display_order) || 0);
+  });
+}
+
+/**
+ * Return active audit areas for the work paper form.
+ * Called directly via google.script.run — validates session token.
+ */
+function getAuditAreasDropdownData(token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  return tursoGetAll('07_AuditAreas').filter(function(a) {
+    return a.is_active == 1;
+  }).sort(function(a, b) {
+    return (parseInt(a.display_order) || 0) - (parseInt(b.display_order) || 0);
+  });
+}
+
+/**
+ * Return active sub areas filtered by audit area.
+ * Called directly via google.script.run — validates session token.
+ */
+function getSubAreasDropdownData(token, areaId) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  if (!areaId) return [];
+  return tursoGetAll('08_ProcessSubAreas').filter(function(s) {
+    return s.area_id === areaId && s.is_active == 1;
+  }).sort(function(a, b) {
+    return (parseInt(a.display_order) || 0) - (parseInt(b.display_order) || 0);
+  });
+}
+
+/**
+ * Return all active users for the work paper form autocomplete.
+ * Called directly via google.script.run — validates session token.
+ */
+function getUsersForWorkPaper(token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  return tursoGetAll('05_Users').filter(function(u) {
+    return u.is_active == 1;
+  }).map(function(u) {
+    return {
+      user_id: u.user_id,
+      full_name: u.full_name || ((u.first_name || '') + ' ' + (u.last_name || '')).trim() || u.email,
+      email: u.email,
+      role_code: u.role_code,
+      affiliate_code: u.affiliate_code || ''
+    };
+  });
+}
+
 /**
  * Save a config-based dropdown (risk ratings, control types, etc.).
  * @param {Object} params - { configKey: string, values: string[] }

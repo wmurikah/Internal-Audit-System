@@ -730,6 +730,19 @@ function routeAction(action, data, user) {
       }
       return clearAllCaches();
 
+    // ========== WORK PAPER FORM DROPDOWNS (all authenticated roles) ==========
+    case 'getAffiliatesDropdownData':
+      return getAffiliatesDropdownData(data.token || data.sessionToken);
+
+    case 'getAuditAreasDropdownData':
+      return getAuditAreasDropdownData(data.token || data.sessionToken);
+
+    case 'getSubAreasDropdownData':
+      return getSubAreasDropdownData(data.token || data.sessionToken, data.areaId);
+
+    case 'getUsersForWorkPaper':
+      return getUsersForWorkPaper(data.token || data.sessionToken);
+
     // ========== DROPDOWN MANAGEMENT (SUPER_ADMIN / SENIOR_AUDITOR only) ==========
     case 'getDropdownItems':
     case 'createDropdownItem':
