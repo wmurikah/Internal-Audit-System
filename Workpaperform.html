@@ -158,8 +158,11 @@
       <!-- Testing Panel -->
       <div class="tab-pane fade" id="panel-testing" role="tabpanel" aria-labelledby="tab-testing">
         <div class="card-body">
-          <h5 class="card-title mb-3">
+          <h5 class="card-title mb-3 d-flex align-items-center gap-2">
             <i class="bi bi-clipboard-check text-primary me-2"></i>Testing Information
+            <span id="autoFillTemplateBadge" class="badge bg-warning text-dark ms-1" style="display:none;font-size:0.7rem">
+              <i class="bi bi-magic me-1"></i>Auto-filled from template
+            </span>
           </h5>
           <p class="text-muted small mb-4">Document the audit testing methodology and procedures used.</p>
 
@@ -1952,13 +1955,50 @@ function loadSubAreas(callback) {
 }
 
 function autoFillFromSubArea() {
-  const subAreaId = document.getElementById('wpSubArea').value;
+  var subAreaId = document.getElementById('wpSubArea').value;
   if (!subAreaId) return;
 
-  const auditAreaId = document.getElementById('wpAuditArea').value;
-  const affiliateCode = document.getElementById('wpAffiliate').value;
+  var auditAreaId = document.getElementById('wpAuditArea').value;
+  var affiliateCode = document.getElementById('wpAffiliate').value;
+  var tok = sessionStorage.getItem('hass_audit_token');
 
-  // Try backend auto-populate (checks existing WPs first, then sub-area template)
+  // Step 1: fetch sub-area template from server for gold-highlight auto-fill
+  if (tok && subAreaId) {
+    google.script.run
+      .withSuccessHandler(function(template) {
+        if (!template) {
+          // No template — fall through to existing WP lookup
+          _autoFillFromExistingWP(auditAreaId, subAreaId, affiliateCode);
+          return;
+        }
+        var anyFilled = false;
+        anyFilled = autoFillField('wpControlObjectives', template.control_objectives) || anyFilled;
+        anyFilled = autoFillField('wpRiskDesc',          template.risk_description)   || anyFilled;
+        anyFilled = autoFillField('wpTestObj',           template.test_objective)     || anyFilled;
+        anyFilled = autoFillField('wpControlStandards',  template.control_standards)  || anyFilled;
+        anyFilled = autoFillSelect('wpControlClass', template.default_control_classification) || anyFilled;
+        anyFilled = autoFillSelect('wpControlType',  template.default_control_type)           || anyFilled;
+        anyFilled = autoFillSelect('wpControlFreq',  template.default_control_frequency)      || anyFilled;
+
+        if (anyFilled) {
+          var badge = document.getElementById('autoFillTemplateBadge');
+          if (badge) badge.style.display = 'inline-flex';
+          updateFormProgress();
+        }
+
+        // Also run existing-WP lookup for any remaining empty fields
+        _autoFillFromExistingWP(auditAreaId, subAreaId, affiliateCode);
+      })
+      .withFailureHandler(function() {
+        _autoFillFromExistingWP(auditAreaId, subAreaId, affiliateCode);
+      })
+      .getSubAreaTemplate(tok, subAreaId);
+  } else {
+    _autoFillFromExistingWP(auditAreaId, subAreaId, affiliateCode);
+  }
+}
+
+function _autoFillFromExistingWP(auditAreaId, subAreaId, affiliateCode) {
   if (auditAreaId && subAreaId) {
     apiCall('getAutoPopulateData', {
       auditAreaId: auditAreaId,
@@ -2000,18 +2040,38 @@ function autoFillFromSubArea() {
           updateFormProgress();
         }
       } else {
-        // No existing WP data — try local sub-area, or show first-time notice
         if (!autoFillFromSubAreaLocal()) {
           showFirstTimeNotice();
         }
       }
     }).catch(function() {
-      // Fallback to local sub-area data on error
       autoFillFromSubAreaLocal();
     });
   } else {
     autoFillFromSubAreaLocal();
   }
+}
+
+// Auto-fill a textarea/input only when currently empty; flash gold if filled.
+function autoFillField(elementId, value) {
+  var el = document.getElementById(elementId);
+  if (!el || el.value.trim() !== '' || !value) return false;
+  el.value = value;
+  el.style.transition = 'background 0.3s';
+  el.style.background = '#FFFDE7';
+  setTimeout(function() { el.style.background = ''; }, 1500);
+  return true;
+}
+
+// Auto-fill a <select> only when currently empty; flash gold if filled.
+function autoFillSelect(elementId, value) {
+  var el = document.getElementById(elementId);
+  if (!el || el.value || !value) return false;
+  el.value = value;
+  el.style.transition = 'background 0.3s';
+  el.style.background = '#FFFDE7';
+  setTimeout(function() { el.style.background = ''; }, 1500);
+  return true;
 }
 
 function autoFillFromSubAreaLocal() {

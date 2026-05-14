@@ -694,6 +694,29 @@ function routeAIAction(action, data, user) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// AI Settings — read from config table with cache
+// ─────────────────────────────────────────────────────────────
+
+function getAISettings() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('ai_config');
+  if (cached) {
+    try { return JSON.parse(cached); } catch(e) {}
+  }
+  var rows = tursoQuery_SQL(
+    "SELECT config_key, config_value FROM config " +
+    "WHERE config_key LIKE 'AI%' AND organization_id='GLOBAL'",
+    []
+  );
+  var settings = {};
+  rows.forEach(function(r) {
+    settings[r.config_key] = r.config_value;
+  });
+  cache.put('ai_config', JSON.stringify(settings), 300);
+  return settings;
+}
+
+// ─────────────────────────────────────────────────────────────
 // AI Auto-Evaluation of Auditee Responses
 // ─────────────────────────────────────────────────────────────
 
@@ -714,15 +737,20 @@ function evaluateAuditeeResponse(workPaperId, managementResponse, actionPlanIds,
     });
   }
 
-  var systemPrompt = 'You are an internal audit quality assurance reviewer. ' +
+  var aiSettings = getAISettings();
+  if (aiSettings.AI_EVALUATION_ENABLED === 'false') return null;
+
+  var evalModel = aiSettings.AI_MODEL || 'gemini-1.5-flash';
+  var evalMaxTokens = parseInt(aiSettings.AI_MAX_TOKENS || '1000', 10);
+  var systemPrompt = aiSettings.AI_SYSTEM_PROMPT ||
+    ('You are an internal audit quality assurance reviewer. ' +
     'Your task is to evaluate whether a management response and proposed action plans ' +
     'adequately address an audit observation. Be strict but fair. ' +
     'A response is inadequate if it: (1) does not acknowledge the observation, ' +
     '(2) provides vague or generic commitments without specific actions, ' +
     '(3) has no action plans or action plans with no due dates, ' +
     '(4) does not address the root cause identified in the recommendation, ' +
-    '(5) proposes timelines that are unreasonably long for the risk level. ' +
-    'Respond ONLY with JSON: {"adequate": true/false, "score": 0-100, "feedback": "specific explanation"}';
+    '(5) proposes timelines that are unreasonably long for the risk level.');
 
   var userPrompt = 'Evaluate this management response:\n\n' +
     'AUDIT OBSERVATION: ' + title + '\n' +
@@ -734,7 +762,7 @@ function evaluateAuditeeResponse(workPaperId, managementResponse, actionPlanIds,
     'Is this response adequate? Respond with JSON only.';
 
   try {
-    var aiResponse = callAI(userPrompt, systemPrompt, { temperature: 0.2, maxTokens: 500 });
+    var aiResponse = callAI(userPrompt, systemPrompt, { temperature: 0.2, maxTokens: evalMaxTokens });
 
     var _pt = (aiResponse.usage && (aiResponse.usage.prompt_tokens || aiResponse.usage.input_tokens)) || 0;
     var _ct = (aiResponse.usage && (aiResponse.usage.completion_tokens || aiResponse.usage.output_tokens)) || 0;
@@ -749,7 +777,7 @@ function evaluateAuditeeResponse(workPaperId, managementResponse, actionPlanIds,
     var jsonMatch = aiResponse.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     var parsed = JSON.parse(jsonMatch[0]);
-    var threshold = getConfigInt('AI_REJECTION_THRESHOLD', 50);
+    var threshold = parseInt(aiSettings.AI_REJECTION_THRESHOLD || '50', 10);
     return {
       autoReject: parsed.adequate === false && (parsed.score || 0) < threshold,
       feedback: parsed.feedback || 'Response does not adequately address the audit observation.',
