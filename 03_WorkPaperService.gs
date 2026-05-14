@@ -162,28 +162,16 @@ function getWorkPaper(workPaperId, userOrToken) {
     return { success: false, error: 'Work paper ID required' };
   }
 
-  // Fetch via tursoQuery_SQL so we can fall back if deleted_at column is absent
-  var rows;
-  try {
-    rows = tursoQuery_SQL(
-      'SELECT * FROM work_papers WHERE work_paper_id = ? AND deleted_at IS NULL',
-      [workPaperId]
-    );
-  } catch (sqlErr) {
-    if (String(sqlErr.message || '').indexOf('deleted_at') >= 0) {
-      rows = tursoQuery_SQL(
-        'SELECT * FROM work_papers WHERE work_paper_id = ?',
-        [workPaperId]
-      );
-    } else {
-      throw sqlErr;
-    }
-  }
+  var rows = tursoQuery_SQL(
+    'SELECT * FROM work_papers ' +
+    'WHERE work_paper_id = ? ' +
+    'AND deleted_at IS NULL',
+    [workPaperId]
+  );
 
   if (!rows || rows.length === 0) {
     return { success: false, error: 'Work paper not found' };
   }
-
   var wp = rows[0];
 
   // Role-based access check
@@ -219,13 +207,18 @@ function getWorkPaper(workPaperId, userOrToken) {
   wp.files        = getWorkPaperFiles(workPaperId);
   wp.revisions    = getWorkPaperRevisions(workPaperId);
 
-  var actionPlans = getActionPlansByWorkPaper(workPaperId) || [];
-  wp.actionPlans  = actionPlans;
+  var actionPlans = tursoQuery_SQL(
+    'SELECT * FROM action_plans ' +
+    'WHERE work_paper_id = ? ' +
+    'AND deleted_at IS NULL ' +
+    'ORDER BY created_at ASC',
+    [workPaperId]
+  );
 
   return sanitizeForClient({
     success:     true,
     workPaper:   wp,
-    actionPlans: actionPlans
+    actionPlans: actionPlans || []
   });
 }
 

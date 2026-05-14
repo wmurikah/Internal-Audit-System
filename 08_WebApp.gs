@@ -142,9 +142,10 @@ function doPost(e) {
     }
 
     // Strip sessionToken from data to prevent it leaking into business logic
+    const sessionToken = data.sessionToken;
     delete data.sessionToken;
 
-    const result = routeAction(action, data, user);
+    const result = routeAction(action, data, user, sessionToken);
     
     if (result === null || result === undefined) {
       console.error('doPost: routeAction returned null/undefined for action:', action);
@@ -166,7 +167,7 @@ function doPost(e) {
 /**
  * Route action to appropriate handler
  */
-function routeAction(action, data, user) {
+function routeAction(action, data, user, sessionToken) {
   switch (action) {
     // ========== AUTH ==========
     case 'ping':
@@ -229,7 +230,10 @@ function routeAction(action, data, user) {
 
     case 'getWorkPaper':
       try {
-        return getWorkPaper(data.workPaperId, user);
+        return getWorkPaper(
+          data.work_paper_id || data.id,
+          sessionToken || user
+        );
       } catch (wpErr) {
         console.error('getWorkPaper failed:', wpErr);
         return { success: false, error: wpErr.message };
@@ -1224,9 +1228,10 @@ function apiCall(action, data) {
 
     // Strip sessionToken from data to prevent it leaking into business logic / audit logs
     var cleanData = Object.assign({}, data);
+    const sessionToken = cleanData.sessionToken;
     delete cleanData.sessionToken;
 
-    const result = routeAction(action, cleanData, user);
+    const result = routeAction(action, cleanData, user, sessionToken);
 
     if (result === null || result === undefined) {
       console.error('apiCall: routeAction returned null/undefined for action:', action);
