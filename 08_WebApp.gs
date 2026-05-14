@@ -5,6 +5,8 @@ function doGet(e) {
   try {
     // Seed role_permissions table on first execution if empty
     try { seedRolePermissionsIfEmpty(); } catch(_) {}
+    // Ensure AI config keys exist in config table
+    try { ensureAIConfigKeys(); } catch(_) {}
 
     const page = e.parameter.page || 'login';
 
@@ -270,6 +272,17 @@ function routeAction(action, data, user) {
 
     case 'getAutoPopulateData':
       return getAutoPopulateData(data.auditAreaId, data.subAreaId, data.affiliateCode);
+
+    case 'getSubAreaTemplate':
+      return getSubAreaTemplate(data.token || data.sessionToken, data.subAreaId);
+
+    case 'saveSubAreaTemplate': {
+      const saTemplateRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR];
+      if (!saTemplateRoles.includes(user.role_code)) {
+        return { success: false, error: 'Permission denied' };
+      }
+      return saveSubAreaTemplate(data.token || data.sessionToken, data.subAreaId, data.templateData);
+    }
 
     case 'requestWorkPaperChange': {
       const auditRoles = [ROLES.SUPER_ADMIN, ROLES.SENIOR_AUDITOR, ROLES.AUDITOR];
@@ -645,6 +658,18 @@ function routeAction(action, data, user) {
 
     case 'getAnalyticsInsights':
       return getAnalyticsInsights(data.analyticsData, user);
+
+    case 'getAIConfig':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access denied' };
+      }
+      return { success: true, config: getAIConfig(data.token || data.sessionToken) };
+
+    case 'saveAIConfig':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Access denied' };
+      }
+      return saveAIConfig(data.token || data.sessionToken, data.updates);
 
     // ========== EMAIL (OUTLOOK / MICROSOFT GRAPH) ==========
     case 'getOutlookStatus':
@@ -2392,5 +2417,126 @@ function runAuthMigration2026May12() {
   try { Cache.remove('config_all'); } catch(e) {}
 
   console.log('Auth migration 2026-05-12 complete');
+  return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sub Area Template — read and write
+// ─────────────────────────────────────────────────────────────
+
+function getSubAreaTemplate(token, subAreaId) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  if (!subAreaId) return null;
+
+  var rows = tursoQuery_SQL(
+    'SELECT sub_area_id, sub_area_name, control_objectives, ' +
+    'risk_description, test_objective, control_standards, ' +
+    'default_control_classification, default_control_type, ' +
+    'default_control_frequency ' +
+    'FROM sub_areas WHERE sub_area_id = ?',
+    [subAreaId]
+  );
+  return rows.length ? rows[0] : null;
+}
+
+function saveSubAreaTemplate(token, subAreaId, templateData) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var user = getUserByIdCached(session.user_id);
+  if (!user || (user.role_code !== ROLES.SUPER_ADMIN &&
+                user.role_code !== ROLES.SENIOR_AUDITOR)) {
+    throw new Error('Only Head of Audit or Senior Auditor can edit sub area templates');
+  }
+  tursoQuery_SQL(
+    'UPDATE sub_areas SET ' +
+    'control_objectives = ?, risk_description = ?, ' +
+    'test_objective = ?, control_standards = ?, ' +
+    'default_control_classification = ?, ' +
+    'default_control_type = ?, ' +
+    'default_control_frequency = ?, ' +
+    'updated_at = ? ' +
+    'WHERE sub_area_id = ?',
+    [
+      templateData.control_objectives || null,
+      templateData.risk_description   || null,
+      templateData.test_objective     || null,
+      templateData.control_standards  || null,
+      templateData.default_control_classification || null,
+      templateData.default_control_type           || null,
+      templateData.default_control_frequency      || null,
+      new Date().toISOString(),
+      subAreaId
+    ]
+  );
+  return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────
+// AI Config — persisted in config table
+// ─────────────────────────────────────────────────────────────
+
+function ensureAIConfigKeys() {
+  var keys = [
+    ['AI_REJECTION_THRESHOLD',   '50',
+     'AI score below which auditee response is auto-rejected'],
+    ['AI_AUTO_APPROVE_THRESHOLD','80',
+     'AI score above which response is auto-approved'],
+    ['AI_MODEL',                 'gemini-1.5-flash',
+     'AI model used for response evaluation'],
+    ['AI_MAX_TOKENS',            '1000',
+     'Maximum tokens in AI response'],
+    ['AI_EVALUATION_ENABLED',    'true',
+     'Whether AI evaluation is active (true/false)'],
+    ['AI_SYSTEM_PROMPT',
+     'You are an internal audit assistant. Evaluate whether the auditee response adequately addresses the audit observation.',
+     'System prompt sent to AI for response evaluation']
+  ];
+  var now = new Date().toISOString();
+  keys.forEach(function(k) {
+    tursoQuery_SQL(
+      'INSERT OR IGNORE INTO config ' +
+      '(config_key, organization_id, config_value, description, updated_at) ' +
+      'VALUES (?,?,?,?,?)',
+      [k[0], 'GLOBAL', k[1], k[2], now]
+    );
+  });
+}
+
+function getAIConfig(token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var user = getUserByIdCached(session.user_id);
+  if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
+    throw new Error('Access denied');
+  }
+  var rows = tursoQuery_SQL(
+    "SELECT config_key, config_value, description " +
+    "FROM config WHERE config_key LIKE 'AI%' " +
+    "AND organization_id = 'GLOBAL' ORDER BY config_key",
+    []
+  );
+  return rows;
+}
+
+function saveAIConfig(token, updates) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var user = getUserByIdCached(session.user_id);
+  if (!user || user.role_code !== ROLES.SUPER_ADMIN) {
+    throw new Error('Access denied');
+  }
+  var now = new Date().toISOString();
+  Object.keys(updates).forEach(function(key) {
+    if (!key.startsWith('AI_')) return;
+    tursoQuery_SQL(
+      'UPDATE config SET config_value = ?, updated_at = ? ' +
+      "WHERE config_key = ? AND organization_id = 'GLOBAL'",
+      [String(updates[key]), now, key]
+    );
+  });
+  CacheService.getScriptCache().remove('ai_config');
+  logAuditEvent('UPDATE_AI_CONFIG', 'CONFIG', 'AI_SETTINGS',
+    null, updates, user.user_id, user.email);
   return { success: true };
 }

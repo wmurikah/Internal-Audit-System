@@ -225,6 +225,31 @@
           </div>
         </div>
       </div>
+
+      <!-- AI Evaluation Settings (persisted in config table) -->
+      <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-sliders me-2"></i>AI Evaluation Settings</span>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadAIEvalConfig()">
+            <i class="bi bi-arrow-repeat me-1"></i>Refresh
+          </button>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            These settings control how the AI evaluates auditee responses.
+            Values are stored in the database and survive all code deployments.
+          </p>
+          <div id="aiEvalConfigBody">
+            <div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div> Loading...</div>
+          </div>
+          <div class="mt-3" id="aiEvalConfigActions" style="display:none">
+            <button class="btn btn-primary" onclick="saveAIEvalConfig()">
+              <i class="bi bi-save me-1"></i>Save AI Settings
+            </button>
+            <span id="aiEvalConfigMsg" class="ms-3 text-muted small"></span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Notifications Tab -->
@@ -847,6 +872,7 @@ function loadSettings(params) {
   // Only load restricted tabs if SUPER_ADMIN
   if (role === 'SUPER_ADMIN') {
     loadAIConfig();
+    loadAIEvalConfig();
     loadSystemConfig();
     loadOutlookConfig();
     loadNotificationConfig();
@@ -1451,6 +1477,92 @@ function renderAIConfig() {
 
 function capitalizeFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// ─── AI Evaluation Settings (config table) ───────────────────────────────────
+
+var _aiEvalConfigRows = [];
+
+function loadAIEvalConfig() {
+  var tok = sessionStorage.getItem('hass_audit_token');
+  apiCall('getAIConfig', { token: tok }).then(function(r) {
+    if (!r.success) return;
+    _aiEvalConfigRows = r.config || [];
+    renderAIEvalConfig(_aiEvalConfigRows);
+  }).catch(function() {
+    document.getElementById('aiEvalConfigBody').innerHTML =
+      '<div class="alert alert-warning py-2">Unable to load AI evaluation settings.</div>';
+  });
+}
+
+var AI_EVAL_FIELD_LABELS = {
+  AI_AUTO_APPROVE_THRESHOLD: 'Auto-Approve Threshold (score 0–100)',
+  AI_EVALUATION_ENABLED:     'Evaluation Enabled (true / false)',
+  AI_MAX_TOKENS:             'Max Response Tokens',
+  AI_MODEL:                  'AI Model',
+  AI_REJECTION_THRESHOLD:    'Rejection Threshold (score 0–100)',
+  AI_SYSTEM_PROMPT:          'System Prompt'
+};
+
+function renderAIEvalConfig(rows) {
+  if (!rows || rows.length === 0) {
+    document.getElementById('aiEvalConfigBody').innerHTML =
+      '<div class="text-muted small">No AI evaluation settings found. They will be created on next app load.</div>';
+    return;
+  }
+  var html = '<div class="row g-3">';
+  rows.forEach(function(row) {
+    var label = AI_EVAL_FIELD_LABELS[row.config_key] || row.config_key;
+    var isLong = row.config_key === 'AI_SYSTEM_PROMPT';
+    html += '<div class="col-12">' +
+      '<label class="form-label fw-semibold mb-1">' + escHtml(label) + '</label>';
+    if (row.description) {
+      html += '<div class="text-muted small mb-1">' + escHtml(row.description) + '</div>';
+    }
+    if (isLong) {
+      html += '<textarea class="form-control form-control-sm" id="aiEval_' + row.config_key + '" rows="3">' +
+        escHtml(row.config_value || '') + '</textarea>';
+    } else {
+      html += '<input type="text" class="form-control form-control-sm" id="aiEval_' + row.config_key + '" value="' +
+        escHtml(row.config_value || '') + '">';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  document.getElementById('aiEvalConfigBody').innerHTML = html;
+  document.getElementById('aiEvalConfigActions').style.display = 'block';
+}
+
+function saveAIEvalConfig() {
+  var tok = sessionStorage.getItem('hass_audit_token');
+  var updates = {};
+  _aiEvalConfigRows.forEach(function(row) {
+    var el = document.getElementById('aiEval_' + row.config_key);
+    if (el) updates[row.config_key] = el.value;
+  });
+  var msg = document.getElementById('aiEvalConfigMsg');
+  msg.textContent = 'Saving...';
+  apiCall('saveAIConfig', { token: tok, updates: updates }).then(function(r) {
+    if (r.success) {
+      msg.textContent = 'Saved successfully.';
+      msg.className = 'ms-3 text-success small';
+      setTimeout(function() { msg.textContent = ''; }, 3000);
+    } else {
+      msg.textContent = r.error || 'Save failed.';
+      msg.className = 'ms-3 text-danger small';
+    }
+  }).catch(function() {
+    msg.textContent = 'Save failed.';
+    msg.className = 'ms-3 text-danger small';
+  });
+}
+
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function configureProvider(provider) {
