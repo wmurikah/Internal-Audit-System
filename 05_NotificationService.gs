@@ -600,15 +600,24 @@ function processEmailQueue() {
   }
   
   try {
-    var pending = tursoQuery_SQL(
-      'SELECT * FROM notification_queue WHERE status = ? AND deleted_at IS NULL ORDER BY created_at ASC',
-      ['pending']
-    );
-    if (!pending || pending.length === 0) { lock.releaseLock(); return { sent: 0, failed: 0, skipped: false }; }
-
     const now = new Date();
     const fromName = 'Internal Audit Notification';
     var batchSize = getConfigInt('EMAIL_BATCH_SIZE', 50);
+
+    var pending = tursoQuery_SQL(
+      "SELECT * FROM notification_queue " +
+      "WHERE status = 'pending' " +
+      "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) " +
+      "ORDER BY CASE priority " +
+      "  WHEN 'urgent' THEN 1 " +
+      "  WHEN 'normal' THEN 2 " +
+      "  WHEN 'low'    THEN 3 " +
+      "  ELSE 4 END, " +
+      "created_at ASC " +
+      "LIMIT ?",
+      [now.toISOString(), batchSize]
+    );
+    if (!pending || pending.length === 0) { lock.releaseLock(); return { sent: 0, failed: 0, skipped: false }; }
 
     let sentCount = 0;
     let failedCount = 0;
