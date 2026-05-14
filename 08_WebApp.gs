@@ -2370,7 +2370,7 @@ function getDashboardHtml(sessionToken) {
 
   const session = getSessionByToken(sessionToken);
   if (!session) {
-    throw new Error('Session invalid or expired — please log in again');
+    throw new Error('Session invalid or expired. Please log in again.');
   }
 
   const user = getUserByIdCached(session.user_id);

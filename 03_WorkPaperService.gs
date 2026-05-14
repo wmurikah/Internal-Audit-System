@@ -1468,7 +1468,7 @@ function requestWorkPaperChange(params, user) {
   var hoaUsers = allUsers.filter(function(u) { return u.roleCode === ROLES.SUPER_ADMIN; });
 
   // Queue notification to each HOA user
-  var subject = 'Change Requested: ' + wpRef + ' — ' + sanitizeInput(field);
+  var subject = 'Change Requested: ' + wpRef + ': ' + sanitizeInput(field);
   var body = 'A change has been requested by ' + (user.full_name || user.email) + '.\n\n' +
     'Work Paper: ' + wpRef + '\n' +
     'Observation: ' + obsTitle + '\n' +

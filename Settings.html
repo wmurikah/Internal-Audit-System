@@ -1496,11 +1496,11 @@ function loadAIEvalConfig() {
 }
 
 var AI_EVAL_FIELD_LABELS = {
-  AI_AUTO_APPROVE_THRESHOLD: 'Auto-Approve Threshold (score 0–100)',
+  AI_AUTO_APPROVE_THRESHOLD: 'Auto-Approve Threshold (score 0 to 100)',
   AI_EVALUATION_ENABLED:     'Evaluation Enabled (true / false)',
   AI_MAX_TOKENS:             'Max Response Tokens',
   AI_MODEL:                  'AI Model',
-  AI_REJECTION_THRESHOLD:    'Rejection Threshold (score 0–100)',
+  AI_REJECTION_THRESHOLD:    'Rejection Threshold (score 0 to 100)',
   AI_SYSTEM_PROMPT:          'System Prompt'
 };
 
@@ -3021,7 +3021,7 @@ function _rdRenderSubAreaRight() {
   var rightDiv = document.getElementById('rdSubAreaRight');
 
   var tableHtml = '<div class="d-flex justify-content-between align-items-center mb-3">' +
-    '<h6 class="mb-0">' + escapeHtml(area.area_name) + ' — Sub Areas <span class="badge bg-secondary ms-1">' + subs.length + '</span></h6>' +
+    '<h6 class="mb-0">' + escapeHtml(area.area_name) + ': Sub Areas <span class="badge bg-secondary ms-1">' + subs.length + '</span></h6>' +
     '<button class="btn btn-sm btn-primary" onclick="rdShowSubAreaModal(null)">' +
     '<i class="bi bi-plus-lg me-1"></i>Add Sub Area</button></div>' +
     '<div class="card"><div class="card-body p-0"><div class="table-responsive">' +

@@ -753,7 +753,7 @@ function _implRateColor(pct) {
 function _buildDelta(current, comparison, upIsGood) {
   if (comparison === null || comparison === undefined) return '';
   var diff = current - comparison;
-  if (diff === 0) return '<span style="color:#6b7280;font-size:0.75rem">— no change</span>';
+  if (diff === 0) return '<span style="color:#6b7280;font-size:0.75rem">no change</span>';
   var isUp = diff > 0;
   var arrow = isUp ? '▲' : '▼';
   var color;
@@ -769,7 +769,7 @@ function _buildDelta(current, comparison, upIsGood) {
 function _buildDeltaPP(current, comparison, upIsGood) {
   if (comparison === null || comparison === undefined) return '';
   var diff = current - comparison;
-  if (diff === 0) return '<span style="color:#6b7280;font-size:0.75rem">— no change</span>';
+  if (diff === 0) return '<span style="color:#6b7280;font-size:0.75rem">no change</span>';
   var isUp = diff > 0;
   var arrow = isUp ? '▲' : '▼';
   var color;
