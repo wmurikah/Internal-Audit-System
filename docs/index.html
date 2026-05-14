@@ -20,8 +20,8 @@
     .bar-wrap { width:200px; height:2px; background:rgba(255,255,255,0.15); border-radius:2px; overflow:hidden; }
     .bar { height:100%; width:30%; background:#E5B81B; border-radius:2px; animation:sweep 1.6s ease-in-out infinite; }
     @keyframes sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
-    .frame-wrap { position:fixed; top:-45px; left:0; right:0; bottom:0; }
-    iframe { width:100%; height:calc(100% + 45px); border:none; display:block; }
+    .frame-wrap { position:fixed; top:0; left:0; right:0; bottom:0; overflow:hidden; }
+    iframe { position:absolute; top:-45px; left:0; width:100%; height:calc(100% + 45px); border:none; display:block; }
   </style>
 </head>
 <body>
