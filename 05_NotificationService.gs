@@ -1136,7 +1136,7 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   var ctx = resolveAuditContext(workPapers);
   var contextLine = '';
   if (ctx.affiliateName && ctx.auditAreaName) {
-    contextLine = 'Below are audit observations from <strong>' + ctx.affiliateName + ' \u2013 ' + ctx.auditAreaName + '</strong> audit.';
+    contextLine = 'Below are audit observations from <strong>' + ctx.affiliateName + ' ' + ctx.auditAreaName + '</strong> audit.';
   } else if (ctx.affiliateName) {
     contextLine = 'Below are audit observations from <strong>' + ctx.affiliateName + '</strong> audit.';
   } else if (ctx.auditAreaName) {
@@ -1165,7 +1165,7 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
     });
   }
 
-  var subjectSuffix = ctx.auditAreaName ? ' \u2013 ' + ctx.auditAreaName : '';
+  var subjectSuffix = ctx.auditAreaName ? ': ' + ctx.auditAreaName : '';
   var subject = 'Audit Observations Assigned' + subjectSuffix;
 
   // Build email body with grouped observation/AP layout
@@ -1603,8 +1603,8 @@ function sendEvidenceReminders() {
     var hasDueToday = plans.some(function(ap) { return ap._reminderType === 'day_0'; });
     var primaryObsTitle = (plans[0] && plans[0]._observation_title) || 'Action Plan';
     var subject = hasDueToday
-      ? 'Reminder: Supporting Documentation Due \u2014 ' + primaryObsTitle
-      : 'Upcoming: Supporting Documentation Reminder \u2014 ' + primaryObsTitle + ' \u2014 Due by ' + new Date(plans[0].due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      ? 'Reminder: Supporting Documentation Due: ' + primaryObsTitle
+      : 'Upcoming: Supporting Documentation Reminder: ' + primaryObsTitle + ', Due by ' + new Date(plans[0].due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
     // Group APs by observation for the email
     var byObservation = {};
@@ -1757,9 +1757,9 @@ function sendOverdueEvidenceEscalation() {
     var primaryObs = plans[0]._observation_title || 'Action Plan';
     var subject;
     if (hasDay7) {
-      subject = 'Follow-Up: Action Plan Documentation Outstanding \u2014 ' + primaryObs;
+      subject = 'Follow-Up: Action Plan Documentation Outstanding: ' + primaryObs;
     } else {
-      subject = 'Follow-Up: Action Plan Documentation Pending \u2014 ' + primaryObs;
+      subject = 'Follow-Up: Action Plan Documentation Pending: ' + primaryObs;
     }
 
     // Build intro with appropriate tone
@@ -1936,7 +1936,7 @@ function sendBiweeklySummary() {
     apRows.push([entry[0], '<strong>' + entry[1] + '</strong>']);
   });
 
-  var subject = 'Internal Audit \u2014 Periodic Summary Report';
+  var subject = 'Internal Audit: Periodic Summary Report';
   var intro = 'Here is your biweekly audit summary as of <strong>' +
     new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) + '</strong>.' +
     '<br><br><strong>Work Papers (' + wpCounts.total + ' total):</strong>';
@@ -2385,11 +2385,11 @@ function sendBatchedAssignmentNotifications() {
       // Build subject
       var subject;
       if (assignmentItems.length > 0 && changeItems.length > 0) {
-        subject = 'Work Paper Notifications \u2014 ' + assignmentItems.length + ' new assignment(s), ' + changeItems.length + ' update(s)';
+        subject = 'Work Paper Notifications: ' + assignmentItems.length + ' new assignment(s), ' + changeItems.length + ' update(s)';
       } else if (assignmentItems.length > 0) {
-        subject = 'Work Papers Assigned to You \u2014 ' + assignmentItems.length + ' new assignment(s)';
+        subject = 'Work Papers Assigned to You: ' + assignmentItems.length + ' new assignment(s)';
       } else {
-        subject = 'Work Paper Updates \u2014 ' + changeItems.length + ' change(s) to your assigned work papers';
+        subject = 'Work Paper Updates: ' + changeItems.length + ' change(s) to your assigned work papers';
       }
 
       // Build intro
