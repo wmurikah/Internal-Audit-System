@@ -100,8 +100,10 @@ let currentWorkPaper = null;
 
 function loadWorkPaperView(params) {
   if (!params || !params.id) { navigateTo('work-papers'); return; }
+  var token = getSessionToken();
+  if (!token) { redirectToLogin('No session token'); return; }
   showLoading('Loading...');
-  apiCall('getWorkPaper', { workPaperId: params.id }).then(r => {
+  apiCall('getWorkPaper', { id: params.id }).then(r => {
     hideLoading();
     if (r && r.workPaper) { currentWorkPaper = r.workPaper; renderWorkPaperView(); }
     else { showToast((r && r.error) || 'Work paper not found', 'danger'); navigateTo('work-papers'); }
@@ -217,6 +219,8 @@ function renderWPFiles(files) {
 
 function submitWP(event) {
   if (!confirm('Submit this work paper for review?')) return;
+  var token = getSessionToken();
+  if (!token) { redirectToLogin('No session token'); return; }
   var btn = (event && event.target) ? event.target.closest('button') : document.querySelector('[onclick*="submitWP"]');
 
   // Validate mandatory fields before submission
@@ -243,6 +247,8 @@ function showReviewModal(action) {
 }
 
 function submitReview() {
+  var token = getSessionToken();
+  if (!token) { redirectToLogin('No session token'); return; }
   const action = document.getElementById('reviewAction').value;
   const comments = document.getElementById('reviewComments').value;
   var btn = document.querySelector('#reviewModal .btn-primary');

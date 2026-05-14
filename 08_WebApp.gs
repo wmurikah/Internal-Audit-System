@@ -442,10 +442,10 @@ function routeAction(action, data, user, sessionToken) {
       if (user.role_code !== ROLES.SUPER_ADMIN) {
         return { success: false, error: 'Only Head of Internal Audit can unlock accounts' };
       }
-      return unlockUser(data.userId, data.sessionToken);
+      return unlockUser(data.userId, sessionToken);
 
     case 'resetUserPasswordAdmin':
-      return resetUserPasswordAdmin(data.userId, data.sessionToken);
+      return resetUserPasswordAdmin(data.userId, sessionToken);
       
     // ========== REPORTS ==========
     case 'getAuditSummaryReport':
