@@ -1039,7 +1039,8 @@ function resetUserPassword(id) {
   var userName = targetUser ? targetUser.full_name : 'this user';
   if (!confirm('Reset password for ' + userName + '?')) return;
   showLoading('Resetting...');
-  apiCall('resetUserPasswordAdmin', { userId: id }).then(function(r) {
+  var tok = sessionStorage.getItem('hass_audit_token');
+  apiCall('resetUserPasswordAdmin', { userId: id, token: tok }).then(function(r) {
     hideLoading();
     if (r.success) {
       showTempPasswordModal(
