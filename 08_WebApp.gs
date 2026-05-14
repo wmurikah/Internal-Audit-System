@@ -232,7 +232,7 @@ function routeAction(action, data, user, sessionToken) {
       try {
         return getWorkPaper(
           data.work_paper_id || data.id,
-          sessionToken || user
+          sessionToken
         );
       } catch (wpErr) {
         console.error('getWorkPaper failed:', wpErr);
