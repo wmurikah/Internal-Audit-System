@@ -101,11 +101,11 @@ let currentWorkPaper = null;
 function loadWorkPaperView(params) {
   if (!params || !params.id) { navigateTo('work-papers'); return; }
   showLoading('Loading...');
-  apiCall('getWorkPaper', { workPaperId: params.id, includeRelated: true }).then(r => {
+  apiCall('getWorkPaper', { workPaperId: params.id }).then(r => {
     hideLoading();
-    if (r.workPaper) { currentWorkPaper = r.workPaper; renderWorkPaperView(); }
-    else { showToast('Not found', 'danger'); navigateTo('work-papers'); }
-  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+    if (r && r.workPaper) { currentWorkPaper = r.workPaper; renderWorkPaperView(); }
+    else { showToast((r && r.error) || 'Work paper not found', 'danger'); navigateTo('work-papers'); }
+  }).catch(() => { hideLoading(); showToast('Error loading work paper', 'danger'); });
 }
 
 function renderWorkPaperView() {
