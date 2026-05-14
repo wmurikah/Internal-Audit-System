@@ -229,7 +229,7 @@ function routeAction(action, data, user) {
 
     case 'getWorkPaper':
       try {
-        return { success: true, workPaper: getWorkPaper(data.workPaperId, data.includeRelated !== false) };
+        return getWorkPaper(data.workPaperId, user);
       } catch (wpErr) {
         console.error('getWorkPaper failed:', wpErr);
         return { success: false, error: wpErr.message };

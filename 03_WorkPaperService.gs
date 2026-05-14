@@ -138,34 +138,95 @@ function createWorkPaper(data, user) {
 }
 
 /**
- * Get work paper by ID
+ * Get work paper by ID — authenticated, RBAC-enforced.
+ * userOrToken: pass the user object (from routeAction) OR a raw session token
+ *              (for direct google.script.run callers).
+ * Returns { success, workPaper, actionPlans } so callers can check success
+ * rather than testing for a truthy workPaper.
  */
-function getWorkPaper(workPaperId, includeRelated) {
-  if (!workPaperId) return null;
+function getWorkPaper(workPaperId, userOrToken) {
+  // Resolve user from object or token
+  var user;
+  if (userOrToken && typeof userOrToken === 'object') {
+    user = userOrToken;
+  } else if (typeof userOrToken === 'string' && userOrToken) {
+    var session = getSessionByToken(userOrToken);
+    if (!session) return { success: false, error: 'SESSION_EXPIRED' };
+    user = getUserByIdCached(session.user_id);
+    if (!user) return { success: false, error: 'SESSION_EXPIRED' };
+  } else {
+    return { success: false, error: 'Authentication required' };
+  }
 
-  var workPaper = getWorkPaperById(workPaperId);
-  if (!workPaper) return null;
+  if (!workPaperId) {
+    return { success: false, error: 'Work paper ID required' };
+  }
 
+  // Fetch via tursoQuery_SQL so we can fall back if deleted_at column is absent
+  var rows;
+  try {
+    rows = tursoQuery_SQL(
+      'SELECT * FROM work_papers WHERE work_paper_id = ? AND deleted_at IS NULL',
+      [workPaperId]
+    );
+  } catch (sqlErr) {
+    if (String(sqlErr.message || '').indexOf('deleted_at') >= 0) {
+      rows = tursoQuery_SQL(
+        'SELECT * FROM work_papers WHERE work_paper_id = ?',
+        [workPaperId]
+      );
+    } else {
+      throw sqlErr;
+    }
+  }
+
+  if (!rows || rows.length === 0) {
+    return { success: false, error: 'Work paper not found' };
+  }
+
+  var wp = rows[0];
+
+  // Role-based access check
+  var canView = false;
+  if (user.role_code === ROLES.SUPER_ADMIN || user.role_code === ROLES.SENIOR_AUDITOR) {
+    canView = true;
+  } else if (user.role_code === ROLES.AUDITOR) {
+    canView = (wp.assigned_auditor_id === user.user_id ||
+               wp.prepared_by_id     === user.user_id);
+  } else {
+    canView = checkPermission(user.role_code, 'WORK_PAPERS', 'view');
+  }
+
+  if (!canView) {
+    return { success: false, error: 'Access denied' };
+  }
+
+  // Enrich with junction-table fields
   var wpResponsibles = tursoQuery_SQL(
     'SELECT user_id FROM work_paper_responsibles WHERE work_paper_id = ?',
     [workPaperId]
   );
-  workPaper.responsible_ids = wpResponsibles.map(function(r) { return r.user_id; }).join(',');
+  wp.responsible_ids = (wpResponsibles || []).map(function(r) { return r.user_id; }).join(',');
 
   var wpCcRows = tursoQuery_SQL(
     'SELECT email FROM work_paper_cc_recipients WHERE work_paper_id = ?',
     [workPaperId]
   );
-  workPaper.cc_recipients = wpCcRows.map(function(r) { return r.email; }).join(',');
+  wp.cc_recipients = (wpCcRows || []).map(function(r) { return r.email; }).join(',');
 
-  if (includeRelated) {
-    workPaper.requirements = getWorkPaperRequirements(workPaperId);
-    workPaper.files = getWorkPaperFiles(workPaperId);
-    workPaper.revisions = getWorkPaperRevisions(workPaperId);
-    workPaper.actionPlans = getActionPlansByWorkPaper(workPaperId);
-  }
+  // Always load related data (view always requests them)
+  wp.requirements = getWorkPaperRequirements(workPaperId);
+  wp.files        = getWorkPaperFiles(workPaperId);
+  wp.revisions    = getWorkPaperRevisions(workPaperId);
 
-  return sanitizeForClient(workPaper);
+  var actionPlans = getActionPlansByWorkPaper(workPaperId) || [];
+  wp.actionPlans  = actionPlans;
+
+  return sanitizeForClient({
+    success:     true,
+    workPaper:   wp,
+    actionPlans: actionPlans
+  });
 }
 
 /**
