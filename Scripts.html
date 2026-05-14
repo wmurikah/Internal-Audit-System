@@ -706,8 +706,12 @@ function silentRefreshInitData() {
         // Update in-memory state
         window.currentUser = result.user;
         if (result.permissions) {
+          var newPermHash = JSON.stringify(result.permissions);
           window.currentPermissions = result.permissions;
-          setupNavigation(result.permissions);
+          if (newPermHash !== window._lastPermHash) {
+            window._lastPermHash = newPermHash;
+            setupNavigation(result.permissions);
+          }
         }
         // Update cache
         const merged = { ...result, dropdowns: window.appDropdowns };
@@ -1140,8 +1144,9 @@ function apiCall(action, data) {
   }
 
   var promise = new Promise(function(resolve) {
-    var requestData = Object.assign({}, data || {}, {
-      sessionToken: sessionStorage.getItem('hass_audit_token') || window._hass_token || ''
+    var tok = sessionStorage.getItem('hass_audit_token') || window._hass_token || '';
+    var requestData = Object.assign({ token: tok }, data || {}, {
+      sessionToken: tok
     });
 
     google.script.run
