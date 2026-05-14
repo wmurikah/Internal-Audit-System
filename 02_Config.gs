@@ -100,11 +100,33 @@ const SCHEMAS = {
     'session_id', 'user_id', 'session_token_hash', 'created_at', 'expires_at',
     'ip_address', 'user_agent', 'is_valid'
   ],
-  NOTIFICATION_QUEUE: [
-    'notification_id', 'template_code', 'recipient_user_id', 'recipient_email',
-    'subject', 'body', 'module', 'record_id', 'status', 'scheduled_for',
-    'sent_at', 'error_message', 'created_at', 'batch_type', 'batch_data'
-  ],
+  NOTIFICATION_QUEUE: {
+    notification_id:     'TEXT PRIMARY KEY',
+    organization_id:     'TEXT',
+    batch_type:          'TEXT',
+    template_code:       'TEXT',
+    priority:            "TEXT CHECK(priority IN ('urgent','normal','low'))",
+    channel:             'TEXT',
+    recipient_user_id:   'TEXT',
+    recipient_email:     'TEXT',
+    recipient_name:      'TEXT',
+    cc_of_user_id:       'TEXT',
+    is_cc:               'INTEGER',
+    related_entity_type: 'TEXT',
+    related_entity_id:   'TEXT',
+    payload:             'TEXT',
+    rendered_subject:    'TEXT',
+    rendered_body:       'TEXT',
+    status:              'TEXT',
+    attempts:            'INTEGER',
+    max_attempts:        'INTEGER',
+    next_attempt_at:     'TEXT',
+    last_error:          'TEXT',
+    scheduled_for:       'TEXT',
+    created_at:          'TEXT',
+    sent_at:             'TEXT',
+    failed_at:           'TEXT'
+  },
   EMAIL_TEMPLATES: ['template_code', 'template_name', 'subject_template', 'body_template', 'is_active'],
   AUDITEE_RESPONSES: [
     'response_id', 'work_paper_id', 'round_number', 'response_type',
