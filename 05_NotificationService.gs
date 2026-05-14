@@ -620,8 +620,8 @@ function processEmailQueue() {
       if (scheduledFor && new Date(scheduledFor) > now) continue;
 
       const recipientEmail = row.recipient_email;
-      const subject = row.subject;
-      const body = row.body;
+      const subject = row.rendered_subject;
+      const body = row.rendered_body;
       const templateCode = row.template_code || '';
       const notifId = row.notification_id;
 
