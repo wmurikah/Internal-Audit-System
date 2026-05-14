@@ -1456,8 +1456,7 @@ function getDashboardDataV2(params, callerUser) {
                           callerUser.role_code === ROLES.UNIT_MANAGER ||
                           callerUser.role_code === ROLES.BOARD_MEMBER ||
                           callerUser.role_code === ROLES.EXTERNAL_AUDITOR;
-    var isAuditee       = callerUser.role_code === ROLES.JUNIOR_STAFF ||
-                          callerUser.role_code === ROLES.AUDITEE;
+    var isAuditee       = callerUser.role_code === ROLES.JUNIOR_STAFF;
 
     if (isAuditTeam)    return getFullDashboardData_(callerUser, isSuperOrSenior);
     if (isManagement)   return getManagementDashboardData_(callerUser);

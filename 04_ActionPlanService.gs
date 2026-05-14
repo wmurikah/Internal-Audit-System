@@ -647,7 +647,7 @@ function markAsImplemented(actionPlanId, implementationNotes, user) {
     var implParentWp = updated.work_paper_id ? getWorkPaperById(updated.work_paper_id) : null;
     var implData = {
       action_plan_id: actionPlanId,
-    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
+      organization_id: user.organization_id || actionPlan.organization_id || 'HASS',
       action_description: updated.action_description || '',
       implementer_name: user.full_name || '',
       implementation_notes: updated.implementation_notes || '',
@@ -742,7 +742,7 @@ function verifyImplementation(actionPlanId, action, comments, user) {
     var verifyActionText = action === 'approve' ? 'Verified' : action === 'reject' ? 'Rejected' : 'Returned for Revision';
     var verifyData = {
       action_plan_id: actionPlanId,
-    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
+      organization_id: user.organization_id || actionPlan.organization_id || 'HASS',
       action_description: updated.action_description || '',
       verifier_name: user.full_name || '',
       action: verifyActionText,
@@ -818,7 +818,7 @@ function hoaReview(actionPlanId, action, comments, user) {
     var hoaActionText = action === 'approve' ? 'Approved' : 'Rejected';
     var hoaReviewData = {
       action_plan_id: actionPlanId,
-    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
+      organization_id: user.organization_id || actionPlan.organization_id || 'HASS',
       action_description: updated.action_description || '',
       hoa_action: hoaActionText,
       comments: comments || '',
@@ -944,6 +944,9 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
     );
   });
 
+  // Save owner_ids before stripping from the write object
+  var newOwnerIdsParsed = parseIdList(updated.owner_ids);
+
   // Strip owner_ids/owner_names from updates object before writing to action_plans table
   delete updated.owner_ids;
   delete updated.owner_names;
@@ -965,7 +968,7 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
     var delegParentWp = updated.work_paper_id ? getWorkPaperById(updated.work_paper_id) : null;
     var delegData = {
       action_plan_id: actionPlanId,
-    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
+      organization_id: user.organization_id || actionPlan.organization_id || 'HASS',
       action_description: updated.action_description || '',
       delegator_name: user.full_name || '',
       delegation_notes: updated.delegation_notes || '',
@@ -973,8 +976,7 @@ function delegateActionPlan(actionPlanId, newOwnerIds, newOwnerNames, notes, use
       due_date: updated.due_date || '',
       risk_rating: updated.risk_rating || (delegParentWp ? delegParentWp.risk_rating : '')
     };
-    var delegOwnerIds = parseIdList(updated.owner_ids);
-    delegOwnerIds.forEach(function(ownerId) {
+    newOwnerIdsParsed.forEach(function(ownerId) {
       queueNotification({
         type: NOTIFICATION_TYPES.AP_DELEGATED,
         recipient_user_id: ownerId,
@@ -1078,7 +1080,7 @@ function addActionPlanHistory(actionPlanId, previousStatus, newStatus, comments,
   const history = {
     history_id: historyId,
     action_plan_id: actionPlanId,
-    organization_id: user.organization_id || workPaper.organization_id || 'HASS',
+    organization_id: user.organization_id || 'HASS',
     event_type: eventType || 'STATUS_CHANGE',
     previous_status: previousStatus || '',
     new_status: newStatus || '',

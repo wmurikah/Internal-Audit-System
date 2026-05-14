@@ -61,6 +61,168 @@ var NOTIFICATION_TYPES = {
  */
 var _userEmailCache = {};
 
+function row_(label, value) {
+  return '<tr><td style="padding:8px;background:#f5f5f5;' +
+    'font-weight:bold;width:35%">' + label + '</td>' +
+    '<td style="padding:8px">' + (value || '') + '</td></tr>';
+}
+
+function renderNotification_(type, params) {
+  var d = params.data || {};
+  var subject = '';
+  var body    = '';
+  var systemUrl = getSystemUrl();
+
+  var header = '<div style="font-family:Arial,sans-serif;max-width:600px">';
+  var footer = '<hr style="margin:24px 0;border:none;border-top:1px solid #eee">' +
+    '<p style="color:#666;font-size:12px">Hass Petroleum Group - Internal Audit Department<br>' +
+    'All replies go directly to <a href="mailto:audit@hasspetroleum.com">' +
+    'audit@hasspetroleum.com</a></p></div>';
+  var loginBtn = '<a href="' + systemUrl + '" style="display:inline-block;' +
+    'background:#1F2D5C;color:#ffffff;padding:12px 24px;border-radius:6px;' +
+    'text-decoration:none;font-weight:bold;margin:16px 0">Open Audit System</a>';
+
+  switch (type) {
+    case 'WP_ASSIGNMENT':
+      subject = 'Work Paper Assigned: ' + (d.observation_title || 'New Assignment');
+      body = header +
+        '<h2 style="color:#1F2D5C">Work Paper Assignment</h2>' +
+        '<p>A work paper has been assigned to you.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Reference',   d.work_paper_ref    || d.work_paper_id || '') +
+        row_('Observation', d.observation_title || '') +
+        row_('Risk Rating', d.risk_rating       || '') +
+        row_('Affiliate',   d.affiliate_code    || '') +
+        row_('Assigned by', d.assigned_by       || 'Head of Audit') +
+        '</table>' +
+        '<p>Please complete the testing documentation and submit for review.</p>' +
+        loginBtn + footer;
+      break;
+
+    case 'WP_STATUS_CHANGE':
+      subject = 'Work Paper ' + (d.new_status || 'Updated') +
+                ': ' + (d.observation_title || '');
+      body = header +
+        '<h2 style="color:#1F2D5C">Work Paper Status Update</h2>' +
+        '<p>A work paper status has changed.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Work Paper',  d.observation_title || d.work_paper_ref || '') +
+        row_('New Status',  d.new_status        || '') +
+        row_('Updated by',  d.updated_by        || '') +
+        row_('Comments',    d.comments          || '') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    case 'AP_DELEGATION':
+    case 'AP_DELEGATED':
+      subject = 'Action Plan Delegated to You: ' + (d.action_plan_title || d.action_description || '');
+      body = header +
+        '<h2 style="color:#1F2D5C">Action Plan Delegation</h2>' +
+        '<p>An action plan has been delegated to you.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Action Plan', d.action_plan_title || d.action_description || d.action_plan_id || '') +
+        row_('Due Date',    d.due_date          || '') +
+        row_('Delegated by',d.delegated_by      || d.delegator_name || '') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    case 'STALE_REMINDER':
+      subject = 'Reminder: Work Paper Awaiting Action';
+      body = header +
+        '<h2 style="color:#1F2D5C">Work Paper Reminder</h2>' +
+        '<p>A work paper assigned to you has been waiting for action.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Work Paper',  d.observation_title || d.work_paper_ref || '') +
+        row_('Days waiting',d.days_waiting      || '') +
+        row_('Status',      d.status            || '') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    case 'OVERDUE_REMINDER':
+      subject = 'Overdue: Action Plan Requires Attention';
+      body = header +
+        '<h2 style="color:#1F2D5C;color:#C62828">Overdue Action Plan</h2>' +
+        '<p>An action plan assigned to you is overdue.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Action Plan', d.action_plan_title || d.action_description || '') +
+        row_('Due Date',    d.due_date          || '') +
+        row_('Days overdue',d.days_overdue      || '') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    case 'RESPONSE_SUBMITTED':
+      subject = 'Response Submitted for Review: ' + (d.observation_title || '');
+      body = header +
+        '<h2 style="color:#1F2D5C">Auditee Response Submitted</h2>' +
+        '<p>An auditee has submitted a response for your review.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Work Paper',    d.observation_title || '') +
+        row_('Submitted by',  d.submitted_by      || '') +
+        row_('Round',         d.response_round    || '1') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    case 'RESPONSE_REVIEWED':
+      subject = 'Response Review Complete: ' + (d.observation_title || '');
+      body = header +
+        '<h2 style="color:#1F2D5C">Response Review Complete</h2>' +
+        '<p>Your response has been reviewed.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Work Paper', d.observation_title || '') +
+        row_('Decision',   d.decision          || '') +
+        row_('Comments',   d.comments          || '') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    case 'AP_IMPLEMENTED':
+      subject = 'Action Plan Marked as Implemented: ' + (d.observation_title || d.action_description || '');
+      body = header +
+        '<h2 style="color:#1F2D5C">Action Plan Implementation</h2>' +
+        '<p>An action plan has been marked as implemented and is awaiting verification.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Action Plan',   d.action_description || '') +
+        row_('Observation',   d.observation_title  || '') +
+        row_('Implemented by',d.implementer_name   || '') +
+        row_('Notes',         d.implementation_notes || '') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    case 'AP_VERIFIED':
+      subject = 'Action Plan ' + (d.action || 'Reviewed') + ': ' + (d.observation_title || '');
+      body = header +
+        '<h2 style="color:#1F2D5C">Action Plan Verification</h2>' +
+        '<p>An action plan has been reviewed by the auditor.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Action Plan',  d.action_description || '') +
+        row_('Decision',     d.action             || '') +
+        row_('Verified by',  d.verifier_name      || '') +
+        row_('Comments',     d.comments           || '') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    case 'AP_HOA_REVIEWED':
+      subject = 'HOA Review Complete: ' + (d.observation_title || '');
+      body = header +
+        '<h2 style="color:#1F2D5C">Head of Audit Review</h2>' +
+        '<p>A final review has been completed.</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+        row_('Action Plan',  d.action_description || '') +
+        row_('Decision',     d.hoa_action         || '') +
+        row_('Reviewed by',  d.reviewer_name      || '') +
+        row_('Comments',     d.comments           || '') +
+        '</table>' + loginBtn + footer;
+      break;
+
+    default:
+      subject = 'Audit System Notification';
+      body = header +
+        '<p>You have a new notification in the audit system.</p>' +
+        loginBtn + footer;
+  }
+
+  return { subject: subject, body: body };
+}
+
 /**
  * Universal notification queue function. ALL notifications go through this.
  * Writes a record to notification_queue; actual sending is done by the digest builder (Part 2).
@@ -82,6 +244,7 @@ function queueNotification(params) {
   try {
     // Look up recipient email (with session cache)
     var recipientEmail = _userEmailCache[params.recipient_user_id];
+    var recipientName = '';
     if (!recipientEmail) {
       var recipientUser = getUserById(params.recipient_user_id);
       if (!recipientUser || !recipientUser.email) {
@@ -93,11 +256,14 @@ function queueNotification(params) {
         return null;
       }
       recipientEmail = recipientUser.email;
+      recipientName = recipientUser.full_name || recipientEmail;
       _userEmailCache[params.recipient_user_id] = recipientEmail;
     }
 
     var notificationId = generateId('NOTIFICATION');
     var now = new Date();
+
+    var rendered = renderNotification_(params.type, params);
 
     var mainRow = {
       notification_id:      notificationId,
@@ -106,11 +272,16 @@ function queueNotification(params) {
       priority:             params.priority || 'normal',
       recipient_user_id:    params.recipient_user_id,
       recipient_email:      recipientEmail,
+      recipient_name:       params.recipient_name || recipientName || recipientEmail,
       is_cc:                params.cc ? 1 : 0,
       payload:              JSON.stringify(params.data || {}),
-      related_entity_type:  params.entityType || null,
-      related_entity_id:    params.entityId   || null,
+      related_entity_type:  params.related_entity_type || params.entityType || null,
+      related_entity_id:    params.related_entity_id   || params.entityId   || null,
+      rendered_subject:     rendered.subject,
+      rendered_body:        rendered.body,
       status:               'pending',
+      attempts:             0,
+      max_attempts:         5,
       created_at:           now.toISOString(),
       sent_at:              null
     };
@@ -2635,10 +2806,13 @@ function getPendingBatchNotificationCount() {
  * Note: GAS triggers use UTC. EAT = UTC+3.
  *       10:30 AM EAT = 7:30 AM UTC. We use atHour(7) which runs between 7–8 AM UTC.
  */
+/**
+ * @deprecated Trigger setup is now centralised in setupAllTriggers() (08_WebApp.gs).
+ * This stub exists only for backwards compatibility with any saved GAS editor bookmarks.
+ * Run setupAllTriggers() instead.
+ */
 function setupNotificationTriggers() {
   // Persist the web-app URL so that time-driven triggers can include it in emails.
-  // ScriptApp.getService().getUrl() only works when called from a user context,
-  // so we store it now while we have access.
   try {
     var webAppUrl = ScriptApp.getService().getUrl();
     if (webAppUrl) {
@@ -2649,78 +2823,7 @@ function setupNotificationTriggers() {
     console.warn('Could not store WEB_APP_URL:', e.message);
   }
 
-  // Remove existing triggers for these functions
-  const functionNames = [
-    'processEmailQueue',
-    'sendOverdueReminders',
-    'sendUpcomingDueReminders',
-    'sendWeeklySummary',
-    'sendBiweeklySummary',
-    'weeklyReminderRunner',
-    'dailyMaintenance',
-    'processBatchedDelegationNotifications',
-    'sendBatchedAssignmentNotifications'
-  ];
-
-  const triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(trigger => {
-    if (functionNames.includes(trigger.getHandlerFunction())) {
-      ScriptApp.deleteTrigger(trigger);
-    }
-  });
-
-  // Process email queue every 10 minutes
-  ScriptApp.newTrigger('processEmailQueue')
-    .timeBased()
-    .everyMinutes(10)
-    .create();
-
-  // Daily maintenance at 6 AM UTC (9 AM EAT) — updates overdue statuses, cleanups only
-  ScriptApp.newTrigger('dailyMaintenance')
-    .timeBased()
-    .atHour(6)
-    .everyDays(1)
-    .create();
-
-  // Process batched delegation notifications at 5 AM UTC (8 AM EAT) daily
-  ScriptApp.newTrigger('processBatchedDelegationNotifications')
-    .timeBased()
-    .atHour(5)
-    .everyDays(1)
-    .create();
-
-  // Weekly reminders on Monday at 7 AM UTC (~10:30 AM EAT)
-  // Runs both overdue and upcoming due reminders
-  ScriptApp.newTrigger('weeklyReminderRunner')
-    .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.MONDAY)
-    .atHour(7)
-    .create();
-
-  // Biweekly summary on Monday at 8 AM UTC (11 AM EAT)
-  // GAS doesn't support biweekly directly — we use weekly trigger + check week parity
-  ScriptApp.newTrigger('sendBiweeklySummary')
-    .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.MONDAY)
-    .atHour(8)
-    .create();
-
-  // Process batched WP assignment notifications every 30 minutes
-  var batchInterval = 30;
-  try {
-    var configInterval = getConfigValue('BATCH_NOTIFICATION_INTERVAL_MINUTES');
-    if (configInterval && !isNaN(parseInt(configInterval))) {
-      batchInterval = parseInt(configInterval);
-    }
-  } catch (e) { /* use default */ }
-
-  ScriptApp.newTrigger('sendBatchedAssignmentNotifications')
-    .timeBased()
-    .everyMinutes(batchInterval)
-    .create();
-
-  console.log('Notification triggers configured (batch interval: ' + batchInterval + ' min)');
-  return { success: true };
+  return setupAllTriggers();
 }
 
 /**

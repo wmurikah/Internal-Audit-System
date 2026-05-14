@@ -1492,20 +1492,24 @@ function setupAllTriggers() {
   ScriptApp.newTrigger('runScheduledMaintenance')
     .timeBased().everyDays(1).atHour(6).create();
 
-  // 3. Weekly summary — Monday 8 AM
-  ScriptApp.newTrigger('sendWeeklySummary')
+  // 3. Weekly runner — Monday 8 AM
+  ScriptApp.newTrigger('weeklyReminderRunner')
     .timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
 
-  // 4. Cache warming — every 6 hours
+  // 4. Batch delegation — every 30 minutes
+  ScriptApp.newTrigger('processBatchedDelegationNotifications')
+    .timeBased().everyMinutes(30).create();
+
+  // 5. Cache warming — every 6 hours
   ScriptApp.newTrigger('warmAllCaches')
     .timeBased().everyHours(6).create();
 
-  // 5. Keep warm — every 5 minutes
+  // 6. Keep warm — every 5 minutes
   ScriptApp.newTrigger('keepWarm')
     .timeBased().everyMinutes(5).create();
 
-  console.log('All 5 triggers created');
-  return { success: true, message: '5 triggers created' };
+  console.log('All 6 triggers created');
+  return { success: true, message: '6 triggers created' };
 }
 
 /**
