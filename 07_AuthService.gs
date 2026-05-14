@@ -715,21 +715,34 @@ function resetPassword(userId, adminUser) {
 
   tursoQuery_SQL(
     'INSERT INTO notification_queue ' +
-    '(notification_id, organization_id, recipient_user_id, ' +
-    'recipient_email, batch_type, subject, body_html, body_text, ' +
-    'status, priority, created_at) ' +
-    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    '(notification_id, organization_id, batch_type, channel, ' +
+    'priority, recipient_user_id, recipient_email, recipient_name, ' +
+    'related_entity_type, related_entity_id, ' +
+    'rendered_subject, rendered_body, payload, ' +
+    'status, attempts, max_attempts, created_at) ' +
+    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [
       generateId('NOTIF'),
       user.organization_id || 'HASS',
+      'PASSWORD_RESET',
+      'email',
+      'normal',
       user.user_id,
       user.email,
-      'PASSWORD_RESET',
+      user.full_name || user.email,
+      'USER',
+      user.user_id,
       'Password Reset - Hass Petroleum Audit System',
       resetHtml,
-      resetPlain,
+      JSON.stringify({
+        user_id:    user.user_id,
+        email:      user.email,
+        full_name:  user.full_name,
+        batch_type: 'PASSWORD_RESET'
+      }),
       'pending',
-      'normal',
+      0,
+      5,
       new Date().toISOString()
     ]
   );
@@ -894,21 +907,34 @@ function createUser(userData, adminUser) {
 
   tursoQuery_SQL(
     'INSERT INTO notification_queue ' +
-    '(notification_id, organization_id, recipient_user_id, ' +
-    'recipient_email, batch_type, subject, body_html, body_text, ' +
-    'status, priority, created_at) ' +
-    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    '(notification_id, organization_id, batch_type, channel, ' +
+    'priority, recipient_user_id, recipient_email, recipient_name, ' +
+    'related_entity_type, related_entity_id, ' +
+    'rendered_subject, rendered_body, payload, ' +
+    'status, attempts, max_attempts, created_at) ' +
+    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [
       generateId('NOTIF'),
       user.organization_id || 'HASS',
+      'WELCOME',
+      'email',
+      'normal',
       user.user_id,
       user.email,
-      'WELCOME',
+      user.full_name || user.email,
+      'USER',
+      user.user_id,
       welcomeSubject,
       welcomeHtml,
-      welcomePlain,
+      JSON.stringify({
+        user_id:    user.user_id,
+        email:      user.email,
+        full_name:  user.full_name,
+        batch_type: 'WELCOME'
+      }),
       'pending',
-      'normal',
+      0,
+      5,
       new Date().toISOString()
     ]
   );
@@ -1120,21 +1146,34 @@ function forgotPassword(email) {
 
   tursoQuery_SQL(
     'INSERT INTO notification_queue ' +
-    '(notification_id, organization_id, recipient_user_id, ' +
-    'recipient_email, batch_type, subject, body_html, body_text, ' +
-    'status, priority, created_at) ' +
-    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    '(notification_id, organization_id, batch_type, channel, ' +
+    'priority, recipient_user_id, recipient_email, recipient_name, ' +
+    'related_entity_type, related_entity_id, ' +
+    'rendered_subject, rendered_body, payload, ' +
+    'status, attempts, max_attempts, created_at) ' +
+    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [
       generateId('NOTIF'),
       user.organization_id || 'HASS',
+      'FORGOT_PASSWORD',
+      'email',
+      'normal',
       user.user_id,
       user.email,
-      'FORGOT_PASSWORD',
+      user.full_name || user.email,
+      'USER',
+      user.user_id,
       'Password Reset - Hass Petroleum Audit System',
       forgotHtml,
-      forgotPlain,
+      JSON.stringify({
+        user_id:    user.user_id,
+        email:      user.email,
+        full_name:  user.full_name,
+        batch_type: 'FORGOT_PASSWORD'
+      }),
       'pending',
-      'normal',
+      0,
+      5,
       new Date().toISOString()
     ]
   );
