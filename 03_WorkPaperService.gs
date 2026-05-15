@@ -533,10 +533,33 @@ function getWorkPapersRaw(filters, user) {
     if (user) {
       const roleCode = user.role_code;
 
-      // JUNIOR_STAFF (Audit Client), SENIOR_MGMT, UNIT_MANAGER: NO ACCESS to Work Papers module
-      // They interact with observations via Path 2 (AuditeeFindings/AuditeeResponse)
-      if (roleCode === ROLES.JUNIOR_STAFF || roleCode === ROLES.SENIOR_MGMT || roleCode === ROLES.UNIT_MANAGER) {
+      // SENIOR_MGMT: no access to Work Papers module
+      if (roleCode === ROLES.SENIOR_MGMT) {
         match = false;
+      }
+
+      // AUDITOR: only papers they are assigned to or prepared — no affiliate restriction
+      // (A SUPER_ADMIN can assign an auditor to papers from any affiliate)
+      if (roleCode === ROLES.AUDITOR) {
+        const assignedId  = row[colMap['assigned_auditor_id']];
+        const preparedById = row[colMap['prepared_by_id']];
+        if (assignedId !== user.user_id && preparedById !== user.user_id) {
+          match = false;
+        }
+      }
+
+      // UNIT_MANAGER and JUNIOR_STAFF: auditee-side view — affiliate + sent/approved statuses only
+      if (roleCode === ROLES.UNIT_MANAGER || roleCode === ROLES.JUNIOR_STAFF) {
+        const auditeeViewable = ['Sent to Auditee', 'Response Received', 'Response Reviewed', 'Approved'];
+        if (!auditeeViewable.includes(row[colMap['status']])) {
+          match = false;
+        }
+        if (user.affiliate_code) {
+          const userAffiliates = parseIdList(user.affiliate_code);
+          if (!userAffiliates.includes(row[colMap['affiliate_code']])) {
+            match = false;
+          }
+        }
       }
 
       // BOARD_MEMBER and EXTERNAL_AUDITOR can only see approved/sent work papers
@@ -547,7 +570,14 @@ function getWorkPapersRaw(filters, user) {
         }
       }
 
-      if (user.affiliate_code && roleCode !== ROLES.SUPER_ADMIN && roleCode !== ROLES.SENIOR_AUDITOR) {
+      // Affiliate filter for remaining roles (excludes SUPER_ADMIN, SENIOR_AUDITOR who see all;
+      // AUDITOR who uses assigned-to filter; UNIT_MANAGER/JUNIOR_STAFF who filter above)
+      if (user.affiliate_code &&
+          roleCode !== ROLES.SUPER_ADMIN &&
+          roleCode !== ROLES.SENIOR_AUDITOR &&
+          roleCode !== ROLES.AUDITOR &&
+          roleCode !== ROLES.UNIT_MANAGER &&
+          roleCode !== ROLES.JUNIOR_STAFF) {
         const userAffiliates = parseIdList(user.affiliate_code);
         if (!userAffiliates.includes(row[colMap['affiliate_code']])) {
           match = false;

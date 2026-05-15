@@ -67,6 +67,7 @@ function row_(label, value) {
     '<td style="padding:8px">' + (value || '') + '</td></tr>';
 }
 
+// TODO: load from email_templates table when templates are seeded
 function renderNotification_(type, params) {
   var d = params.data || {};
   var subject = '';

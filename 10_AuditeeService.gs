@@ -277,6 +277,7 @@ function saveDraftResponse(workPaperId, data, user) {
  * Submit the auditee's formal response.
  * Creates an auditee_responses record and updates the work paper.
  */
+// TODO: write to auditee_responses table for full round-by-round audit trail
 function submitAuditeeResponse(workPaperId, data, user) {
   if (!user) throw new Error('User required');
   if (!workPaperId) throw new Error('Work paper ID required');
