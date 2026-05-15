@@ -945,13 +945,33 @@ function renderUsers() {
     return;
   }
 
-  tbody.innerHTML = filtered.map(u => `
+  const selfId = window.currentUser?.user_id;
+  tbody.innerHTML = filtered.map(u => {
+    const active = isActiveUser(u);
+    const isSelf = u.user_id === selfId;
+    const pillBg    = active ? '#dcfce7' : '#fee2e2';
+    const pillColor = active ? '#166534' : '#991b1b';
+    const pillTitle = active ? 'Click to deactivate' : 'Click to activate';
+    const pillLabel = active ? 'Active' : 'Inactive';
+    const toggleClick = isSelf
+      ? ''
+      : `onclick="toggleUserStatus('${u.user_id}', ${!active})"`;
+
+    const statusCell = isSelf
+      ? `<span style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;background:${pillBg};color:${pillColor};">${pillLabel}</span>`
+      : `<span class="status-pill" style="cursor:pointer;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;background:${pillBg};color:${pillColor};" ${toggleClick} title="${pillTitle}">${pillLabel}</span>`;
+
+    const toggleMenuItem = isSelf ? '' : (active
+      ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger" href="javascript:void(0)" onclick="toggleUserStatus('${u.user_id}', false)"><i class="bi bi-person-x me-2"></i>Deactivate</a></li>`
+      : `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-success" href="javascript:void(0)" onclick="toggleUserStatus('${u.user_id}', true)"><i class="bi bi-person-check me-2"></i>Activate</a></li>`);
+
+    return `
     <tr>
-      <td>${escapeHtml(u.full_name || '-')}</td>
+      <td class="user-name-cell">${escapeHtml(u.full_name || '-')}</td>
       <td>${escapeHtml(u.email || '-')}</td>
       <td><span class="badge bg-secondary">${escapeHtml((window.appDropdowns?.roles || []).find(r => r.code === u.role_code)?.name || u.role_code || '-')}</span></td>
       <td>${u.affiliate_code || '-'}</td>
-      <td><span class="badge ${isActiveUser(u) ? 'bg-success' : 'bg-secondary'}">${isActiveUser(u) ? 'Active' : 'Inactive'}</span></td>
+      <td>${statusCell}</td>
       <td class="small text-muted">${u.last_login ? formatDate(u.last_login) : 'Never'}</td>
       <td>
         <div class="dropdown">
@@ -959,12 +979,12 @@ function renderUsers() {
           <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="javascript:void(0)" onclick="editUser('${u.user_id}')"><i class="bi bi-pencil me-2"></i>Edit</a></li>
             <li><a class="dropdown-item" href="javascript:void(0)" onclick="resetUserPassword('${u.user_id}')"><i class="bi bi-key me-2"></i>Reset Password</a></li>
-            ${isActiveUser(u) ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger" href="javascript:void(0)" onclick="deactivateUser('${u.user_id}')"><i class="bi bi-person-x me-2"></i>Deactivate</a></li>` : ''}
+            ${toggleMenuItem}
           </ul>
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function filterUsers() { renderUsers(); }
@@ -1094,13 +1114,52 @@ function showTempPasswordModal(title, userName, tempPassword, userEmail) {
 }
 
 function deactivateUser(id) {
-  if (!confirm('Deactivate this user?')) return;
-  showLoading('Processing...');
-  apiCall('deactivateUser', { userId: id }).then(r => {
-    hideLoading();
-    if (r.success) { showToast('User deactivated', 'success'); loadUsers(); }
-    else showToast(r.error || 'Error', 'danger');
-  }).catch(() => { hideLoading(); showToast('Error', 'danger'); });
+  toggleUserStatus(id, false);
+}
+
+function toggleUserStatus(userId, makeActive) {
+  var pill = event && event.target ? event.target : null;
+  var userName = (pill && pill.closest('tr'))
+    ? (pill.closest('tr').querySelector('.user-name-cell')?.textContent || 'this user')
+    : (usersData.find(function(u) { return u.user_id === userId; })?.full_name || 'this user');
+  var action = makeActive ? 'activate' : 'deactivate';
+
+  if (!confirm('Are you sure you want to ' + action + ' ' + userName + '?')) return;
+
+  if (pill && pill.classList.contains('status-pill')) {
+    pill.style.opacity = '0.5';
+    pill.style.pointerEvents = 'none';
+  } else {
+    pill = null;
+  }
+
+  apiCall('toggleUserStatus', { userId: userId, makeActive: makeActive })
+    .then(function(result) {
+      if (result.success) {
+        if (pill) {
+          pill.textContent = makeActive ? 'Active' : 'Inactive';
+          pill.style.background    = makeActive ? '#dcfce7' : '#fee2e2';
+          pill.style.color         = makeActive ? '#166534' : '#991b1b';
+          pill.style.opacity       = '1';
+          pill.style.pointerEvents = 'auto';
+          pill.setAttribute('onclick',
+            'toggleUserStatus(\'' + userId + '\',' + !makeActive + ')');
+          pill.title = makeActive ? 'Click to deactivate' : 'Click to activate';
+        }
+        var u = usersData.find(function(u) { return u.user_id === userId; });
+        if (u) u.is_active = makeActive ? 1 : 0;
+        showToast((result.userName || userName) + ' has been ' +
+          (makeActive ? 'activated' : 'deactivated'), 'success');
+        if (!pill) loadUsers();
+      } else {
+        if (pill) { pill.style.opacity = '1'; pill.style.pointerEvents = 'auto'; }
+        showToast(result.error || 'Status change failed', 'danger');
+      }
+    })
+    .catch(function(e) {
+      if (pill) { pill.style.opacity = '1'; pill.style.pointerEvents = 'auto'; }
+      showToast((e && e.message) || 'Status change failed', 'danger');
+    });
 }
 
 // ==================== Access Control — Live Permission Matrix ====================

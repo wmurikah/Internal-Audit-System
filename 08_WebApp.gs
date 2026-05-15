@@ -444,6 +444,12 @@ function routeAction(action, data, user, sessionToken) {
       }
       return unlockUser(data.userId, sessionToken);
 
+    case 'toggleUserStatus':
+      if (user.role_code !== ROLES.SUPER_ADMIN) {
+        return { success: false, error: 'Only Head of Internal Audit can change user status' };
+      }
+      return toggleUserStatus(data.userId, data.makeActive, sessionToken);
+
     case 'resetUserPasswordAdmin':
       return resetUserPasswordAdmin(data.userId, sessionToken);
       
