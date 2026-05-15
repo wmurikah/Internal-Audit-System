@@ -1297,9 +1297,22 @@ function resetUserPasswordAdmin(userId, token) {
       '<div style="font-family:Arial,sans-serif;max-width:600px">' +
       '<h2 style="color:#1F2D5C">Password Reset</h2>' +
       '<p>Dear ' + (user.full_name || user.email) + ',</p>' +
-      '<p>Your password has been reset by the system administrator. ' +
-      'Please use your new temporary password to log in and change ' +
-      'it immediately.</p>' +
+      '<p>Your password has been reset by the system ' +
+      'administrator. Use the temporary password below ' +
+      'to log in. You will be required to change it ' +
+      'on first login.</p>' +
+      '<div style="background:#f3f4f6;border-radius:8px;' +
+      'padding:16px;margin:16px 0;text-align:center;">' +
+      '<p style="margin:0 0 8px;font-size:12px;color:#6b7280;' +
+      'text-transform:uppercase;letter-spacing:0.05em;">' +
+      'Temporary Password</p>' +
+      '<p style="margin:0;font-family:monospace;font-size:22px;' +
+      'font-weight:bold;color:#1F2D5C;letter-spacing:0.15em;">' +
+      tempPassword +
+      '</p></div>' +
+      '<p style="color:#dc2626;font-size:12px;margin-top:8px;">' +
+      'Do not share this email. This password must be ' +
+      'changed immediately after login.</p>' +
       '<a href="' + getSystemUrl() + '" style="display:inline-block;' +
       'background:#1F2D5C;color:#fff;padding:12px 24px;' +
       'border-radius:6px;text-decoration:none;font-weight:bold;' +

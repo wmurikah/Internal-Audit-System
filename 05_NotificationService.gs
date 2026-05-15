@@ -3062,25 +3062,15 @@ function formatWelcomeEmailHtml(opts) {
 '          <td style="padding:32px 36px;" class="email-content">' +
 '            <p style="margin:0 0 16px 0; color:#1d1d1f; font-size:16px; font-weight:600; font-family:system-ui,-apple-system,sans-serif;">Dear ' + (opts.firstName || 'Colleague') + ',</p>' +
 '            <p style="margin:0 0 20px 0; color:#424245; font-size:14px; line-height:1.75; font-family:system-ui,-apple-system,sans-serif;">' +
-'              Your account has been created for the Hass Petroleum Internal Audit System. Access to the system has been granted. Please use the credentials below to log in and change your password on first access.</p>' +
+'              Your account has been created for the Hass Petroleum Internal Audit System. Use the temporary password below to log in. You will be required to change it on first login.</p>' +
+'            <p style="margin:0 0 4px 0; color:#6b7280; font-size:12px; font-family:system-ui,-apple-system,sans-serif;">Login email: <strong style="color:#1d1d1f;">' + opts.email + '</strong></p>' +
 '            <!-- CREDENTIALS BOX -->' +
-'            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc; border-radius:10px; border:1px solid #e5e7eb; margin:0 0 24px 0;" class="cred-table">' +
-'              <tr>' +
-'                <td style="padding:20px 24px;">' +
-'                  <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
-'                    <tr>' +
-'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:system-ui,-apple-system,sans-serif; width:120px;">Email</td>' +
-'                      <td style="padding:6px 0; color:#1d1d1f; font-size:14px; font-weight:600; font-family:system-ui,-apple-system,sans-serif;">' + opts.email + '</td>' +
-'                    </tr>' +
-'                    <tr><td colspan="2" style="padding:0;"><div style="height:1px; background-color:#e5e7eb; margin:6px 0;"></div></td></tr>' +
-'                    <tr>' +
-'                      <td style="padding:6px 0; color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-family:system-ui,-apple-system,sans-serif;">Password</td>' +
-'                      <td style="padding:6px 0; color:#1d1d1f; font-size:14px; font-weight:600; font-family:\'Courier New\',monospace; letter-spacing:1px;">' + opts.tempPassword + '</td>' +
-'                    </tr>' +
-'                  </table>' +
-'                </td>' +
-'              </tr>' +
-'            </table>' +
+'            <div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;text-align:center;">' +
+'              <p style="margin:0 0 8px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;font-family:system-ui,-apple-system,sans-serif;">Temporary Password</p>' +
+'              <p style="margin:0;font-family:monospace;font-size:22px;font-weight:bold;color:#1F2D5C;letter-spacing:0.15em;">' + opts.tempPassword + '</p>' +
+'            </div>' +
+'            <p style="color:#dc2626;font-size:12px;margin-top:8px;margin-bottom:24px;font-family:system-ui,-apple-system,sans-serif;">' +
+'              Do not share this email. This password must be changed immediately after login.</p>' +
 '            <!-- CTA BUTTON -->' +
 '            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">' +
 '              <tr>' +
