@@ -469,27 +469,20 @@ function getUserByIdCached(userId) {
 }
 
 function getCurrentUser() {
-  try {
-    const email = Session.getActiveUser().getEmail();
-
-    if (!email) {
-      return null;
-    }
-
-    const user = getUserByEmailCached(email);
-
-    if (!user || !isActive(user.is_active)) {
-      return null;
-    }
-
-    return user;
-  } catch (e) {
-    console.error('getCurrentUser error:', e);
-    return null;
-  }
+  // Always return null — GAS Session.getActiveUser() returns the GAS runtime account,
+  // not the audit system user. Auth must go through token validation.
+  return null;
 }
 
 function createSession(user) {
+  // Delete expired sessions for this user before creating a new one to prevent accumulation
+  try {
+    tursoQuery_SQL(
+      'DELETE FROM sessions WHERE user_id = ? AND expires_at < ?',
+      [user.user_id, new Date().toISOString()]
+    );
+  } catch (e) { console.warn('Pre-session cleanup failed (non-fatal):', e.message); }
+
   const sessionId = generateId('SESSION');
   const sessionToken = generateSecureToken(getAuthConfig().TOKEN_LENGTH);
   const now = new Date();
@@ -1099,6 +1092,7 @@ function deactivateUser(userId, adminUser) {
   };
 }
 
+// TODO: use password_reset_tokens table instead of modifying the user row directly
 function forgotPassword(email) {
   if (!email) {
     return { success: false, error: 'Email is required' };

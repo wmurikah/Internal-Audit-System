@@ -4,19 +4,12 @@ function getDashboardData(user) {
   console.log('getDashboardData called for user:', user ? user.email : 'null');
 
   try {
-    // Attempt to get user from session if not provided
     if (!user) {
-      try {
-        const email = Session.getActiveUser().getEmail();
-        user = getUserByEmail(email);
-      } catch (e) {
-        console.error('Error getting user from session:', e);
-        return { 
-          success: false, 
-          error: 'User not found', 
-          errorDetail: 'Failed to retrieve user from session: ' + e.message 
-        };
-      }
+      return {
+        success: false,
+        error: 'User not found',
+        errorDetail: 'No user provided — session token may have expired.'
+      };
     }
 
     if (!user) {
