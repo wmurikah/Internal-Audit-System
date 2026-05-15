@@ -1321,10 +1321,10 @@ function resetUserPasswordAdmin(userId, token) {
       'If you did not request this reset, contact your administrator ' +
       'immediately.</p>' +
       '<hr style="margin:24px 0;border:none;border-top:1px solid #eee">' +
-      '<p style="color:#666;font-size:12px">Hass Petroleum Group - ' +
-      'Internal Audit Department<br>All replies go directly to ' +
-      '<a href="mailto:audit@hasspetroleum.com">' +
-      'audit@hasspetroleum.com</a></p></div>',
+      '<p style="color:#666;font-size:12px">Hass Petroleum Group - Internal Audit Department<br>' +
+      'All replies go directly to ' +
+      '<a href="mailto:audit@hasspetroleum.com" style="color:#1F2D5C">audit@hasspetroleum.com</a>' +
+      '</p></div>',
       JSON.stringify({ reset_by: admin.full_name, user_email: user.email }),
       'pending',
       0,

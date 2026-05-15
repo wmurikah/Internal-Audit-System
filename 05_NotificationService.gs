@@ -24,9 +24,8 @@ function getReplyToEmail() {
   return _cachedReplyToEmail;
 }
 
-// Parses getReplyToEmail() into an array of trimmed, non-empty address strings.
 function getReplyToEmailList() {
-  return getReplyToEmail().split(',').map(function(e) { return e.trim(); }).filter(Boolean);
+  return 'audit@hasspetroleum.com';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -77,8 +76,9 @@ function renderNotification_(type, params) {
   var header = '<div style="font-family:Arial,sans-serif;max-width:600px">';
   var footer = '<hr style="margin:24px 0;border:none;border-top:1px solid #eee">' +
     '<p style="color:#666;font-size:12px">Hass Petroleum Group - Internal Audit Department<br>' +
-    'All replies go directly to <a href="mailto:audit@hasspetroleum.com">' +
-    'audit@hasspetroleum.com</a></p></div>';
+    'All replies go directly to ' +
+    '<a href="mailto:audit@hasspetroleum.com" style="color:#1F2D5C">audit@hasspetroleum.com</a>' +
+    '</p></div>';
   var loginBtn = '<a href="' + systemUrl + '" style="display:inline-block;' +
     'background:#1F2D5C;color:#ffffff;padding:12px 24px;border-radius:6px;' +
     'text-decoration:none;font-weight:bold;margin:16px 0">Open Audit System</a>';
@@ -426,14 +426,8 @@ function sendEmailViaOutlook(recipientEmail, subject, htmlBody, ccEmails, replyT
     }
   }
 
-  // Wire reply-to addresses into the Graph API message object.
-  var replyToAddresses = (replyTo ? String(replyTo).split(',') : getReplyToEmailList())
-    .map(function(e) { return e.trim(); }).filter(Boolean);
-  if (replyToAddresses.length > 0) {
-    message.replyTo = replyToAddresses.map(function(addr) {
-      return { emailAddress: { address: addr } };
-    });
-  }
+  // Always reply-to the central audit inbox.
+  message.replyTo = [{ emailAddress: { address: 'audit@hasspetroleum.com' } }];
 
   var payload = {
     message: message,
@@ -482,7 +476,7 @@ function sendEmail(recipientEmail, subject, body, htmlBody, ccEmails, fromName, 
     subject: subject,
     body: body,
     name: fromName || 'Hass Audit',
-    replyTo: replyTo || getReplyToEmail(),
+    replyTo: 'audit@hasspetroleum.com',
     htmlBody: htmlBody
   };
   if (ccEmails) {
@@ -988,7 +982,7 @@ function formatEmailHtml(subject, body) {
 '          <td style="padding:16px 36px;" class="email-footer-inner">' +
 '            <p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
 '              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
-'            <p style="margin:0; color:#86868b; font-size:10px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
+'            <p style="color:#666;font-size:12px">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1F2D5C">audit@hasspetroleum.com</a></p>' +
 '          </td>' +
 '        </tr>' +
 '      </table>' +
@@ -1112,7 +1106,7 @@ function formatTableEmailHtml(subject, intro, headers, rows, outro) {
 '          <td style="padding:16px 36px;" class="email-footer-inner">' +
 '            <p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
 '              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
-'            <p style="margin:0; color:#86868b; font-size:10px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
+'            <p style="color:#666;font-size:12px">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1F2D5C">audit@hasspetroleum.com</a></p>' +
 '          </td>' +
 '        </tr>' +
 '      </table>' +
@@ -1366,7 +1360,7 @@ function sendBatchedAuditeeNotification(workPapers, auditeeEmail, auditeeUserId,
   // Footer
   var footerHtml = '<p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,sans-serif; text-align:center; line-height:1.5;">' +
     '&copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
-    '<p style="margin:0; color:#86868b; font-size:10px; font-family:system-ui,-apple-system,sans-serif; text-align:center;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>';
+    '<p style="color:#666;font-size:12px">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1F2D5C">audit@hasspetroleum.com</a></p>';
 
   // Assemble full email HTML
   var htmlBody = '<!DOCTYPE html>' +
@@ -2762,7 +2756,7 @@ function _buildBatchedWPEmailHtml(subject, intro, sectionsHtml, outro) {
 '          <td style="padding:16px 36px;" class="email-footer-inner">' +
 '            <p style="margin:0 0 4px 0; color:#86868b; font-size:11px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center; line-height:1.5;">' +
 '              &copy; ' + year + ' Hass Petroleum &middot; Internal Audit</p>' +
-'            <p style="margin:0; color:#86868b; font-size:10px; font-family:system-ui,-apple-system,Arial,Helvetica,sans-serif; text-align:center;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
+'            <p style="color:#666;font-size:12px">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1F2D5C">audit@hasspetroleum.com</a></p>' +
 '          </td>' +
 '        </tr>' +
 '      </table>' +
@@ -3103,7 +3097,7 @@ function formatWelcomeEmailHtml(opts) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
+'                  <p style="color:#666;font-size:12px">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1F2D5C">audit@hasspetroleum.com</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
@@ -3229,7 +3223,7 @@ function formatPasswordResetEmailHtml(opts) {
 '                <td align="center">' +
 '                  <p style="margin:0 0 4px 0; color:#9ca3af; font-size:11px; font-family:system-ui,-apple-system,sans-serif; line-height:1.5;">' +
 '                    &copy; ' + year + ' Hass Petroleum &middot; Internal Audit Department</p>' +
-'                  <p style="margin:0; color:#9ca3af; font-size:10px; font-family:system-ui,-apple-system,sans-serif;">All replies go directly to ' + getReplyToEmailList().map(function(addr) { return '<a href="mailto:' + addr + '" style="color:#1a73e8; text-decoration:underline;">' + addr + '</a>'; }).join(', ') + '</p>' +
+'                  <p style="color:#666;font-size:12px">All replies go directly to <a href="mailto:audit@hasspetroleum.com" style="color:#1F2D5C">audit@hasspetroleum.com</a></p>' +
 '                </td>' +
 '              </tr>' +
 '            </table>' +
