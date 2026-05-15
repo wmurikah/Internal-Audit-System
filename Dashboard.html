@@ -252,6 +252,10 @@ body.is-loading * {
 // Audit Workbench functions (formerly Dashboard)
 let dashboardCharts = {};
 
+function getSessionToken() {
+  return sessionStorage.getItem('hass_audit_token') || '';
+}
+
 function loadAuditWorkbench() {
   showLoading('Loading audit workbench...');
   showTableSkeleton('recentActivityTable', 4, 5);
@@ -780,8 +784,15 @@ function setButtonLoading(btn, isLoading) {
 }
 
 function runAction(action, data, token, onSuccess, onError, btn) {
+  var tok = getSessionToken();
+  if (!tok) {
+    if (typeof redirectToLogin === 'function') redirectToLogin('No session token');
+    return;
+  }
   setLoading(true);
   if (btn) setButtonLoading(btn, true);
+
+  var enrichedData = Object.assign({}, data || {}, { sessionToken: tok });
 
   google.script.run
     .withSuccessHandler(function(result) {
@@ -800,7 +811,7 @@ function runAction(action, data, token, onSuccess, onError, btn) {
         else if (typeof showToast === 'function') showToast('Error: ' + msg, 'error');
       }
     })
-    .apiCall(action, data, token);
+    .apiCall(action, enrichedData);
 }
 
 function showTableSkeleton(tableBodyId, cols, rows) {

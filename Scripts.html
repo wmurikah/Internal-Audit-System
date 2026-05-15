@@ -374,7 +374,7 @@ function initApp() {
   // TIER 3: API fallback (first visit ever, or all caches empty)
   // This is the slow path - should rarely happen
   // -----------------------------------------------
-  const sessionToken = sessionStorage.getItem('hass_audit_token') || window._hass_token || '';
+  const sessionToken = getSessionToken();
 
   // Guard: no token at all → redirect immediately, no point making a doomed API call
   if (!sessionToken) {
@@ -690,7 +690,7 @@ function refreshPermissionsQuick() {
 
 // Silent refresh: update cached data without blocking UI
 function silentRefreshInitData() {
-  const sessionToken = sessionStorage.getItem('hass_audit_token') || '';
+  const sessionToken = getSessionToken();
 
   google.script.run
     .withSuccessHandler(function(result) {
@@ -948,7 +948,7 @@ function loadAuditeeFindingCounts() {
       }
     })
     .withFailureHandler(function() { /* non-fatal */ })
-    .apiCall('getAuditeeFindingCounts', {});
+    .apiCall('getAuditeeFindingCounts', { sessionToken: getSessionToken() });
 }
 
 // Navigation
@@ -1144,7 +1144,7 @@ function apiCall(action, data) {
   }
 
   var promise = new Promise(function(resolve) {
-    var tok = sessionStorage.getItem('hass_audit_token') || window._hass_token || '';
+    var tok = getSessionToken();
     var requestData = Object.assign({ token: tok }, data || {}, {
       sessionToken: tok
     });
@@ -1383,7 +1383,7 @@ function populateMultiSelect(id, items, valueField, textField) {
 function handleLogout() {
   if (!confirm('Are you sure you want to sign out?')) return;
 
-  const token = sessionStorage.getItem('hass_audit_token') || window._hass_token || '';
+  const token = getSessionToken();
 
   // Clear all caches and redirect immediately for fast UX
   LocalStore.clear();
@@ -1694,7 +1694,7 @@ function uploadFile() {
         hideLoading();
         showToast('Upload error: ' + (error?.message || 'Unknown error'), 'danger');
       })
-      .uploadFileToDrive(file.name, file.type, base64, null, sessionStorage.getItem('hass_audit_token') || '');
+      .uploadFileToDrive(file.name, file.type, base64, null, getSessionToken());
   };
 
   reader.onerror = function() {

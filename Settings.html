@@ -1005,6 +1005,8 @@ function populateAffiliateDropdown(elementId, affiliates) {
 }
 
 function saveUser() {
+  var token = getSessionToken();
+  if (!token) { redirectToLogin('No session token'); return; }
   const id = document.getElementById('userFormId').value;
   const data = {
     full_name: document.getElementById('userFormName').value,
@@ -1038,9 +1040,10 @@ function resetUserPassword(id) {
   var targetUser = usersData.find(function(u) { return u.user_id === id; });
   var userName = targetUser ? targetUser.full_name : 'this user';
   if (!confirm('Reset password for ' + userName + '?')) return;
+  var token = getSessionToken();
+  if (!token) { redirectToLogin('No session token'); return; }
   showLoading('Resetting...');
-  var tok = sessionStorage.getItem('hass_audit_token');
-  apiCall('resetUserPasswordAdmin', { userId: id, token: tok }).then(function(r) {
+  apiCall('resetUserPasswordAdmin', { userId: id }).then(function(r) {
     hideLoading();
     if (r.success) {
       showTempPasswordModal(
@@ -1159,7 +1162,8 @@ function loadAccessControlDashboard() {
     return;
   }
 
-  var token = sessionStorage.getItem('hass_audit_token');
+  var token = getSessionToken();
+  if (!token) { redirectToLogin('No session token'); return; }
   google.script.run
     .withSuccessHandler(function(data) {
       _permMatrixData = data;
@@ -1359,7 +1363,14 @@ function onPermToggle(input) {
   var spinner = input.parentElement.querySelector('.pm-spinner');
   if (spinner) spinner.classList.remove('d-none');
 
-  var token = sessionStorage.getItem('hass_audit_token');
+  var token = getSessionToken();
+  if (!token) {
+    input.disabled = false;
+    input.checked = !newVal;
+    if (spinner) spinner.classList.add('d-none');
+    redirectToLogin('No session token');
+    return;
+  }
   google.script.run
     .withSuccessHandler(function() {
       input.disabled = false;
@@ -1485,8 +1496,7 @@ function capitalizeFirst(str) {
 var _aiEvalConfigRows = [];
 
 function loadAIEvalConfig() {
-  var tok = sessionStorage.getItem('hass_audit_token');
-  apiCall('getAIConfig', { token: tok }).then(function(r) {
+  apiCall('getAIConfig', {}).then(function(r) {
     if (!r.success) return;
     _aiEvalConfigRows = r.config || [];
     renderAIEvalConfig(_aiEvalConfigRows);
@@ -1535,7 +1545,8 @@ function renderAIEvalConfig(rows) {
 }
 
 function saveAIEvalConfig() {
-  var tok = sessionStorage.getItem('hass_audit_token');
+  var token = getSessionToken();
+  if (!token) { redirectToLogin('No session token'); return; }
   var updates = {};
   _aiEvalConfigRows.forEach(function(row) {
     var el = document.getElementById('aiEval_' + row.config_key);
@@ -1543,7 +1554,7 @@ function saveAIEvalConfig() {
   });
   var msg = document.getElementById('aiEvalConfigMsg');
   msg.textContent = 'Saving...';
-  apiCall('saveAIConfig', { token: tok, updates: updates }).then(function(r) {
+  apiCall('saveAIConfig', { updates: updates }).then(function(r) {
     if (r.success) {
       msg.textContent = 'Saved successfully.';
       msg.className = 'ms-3 text-success small';
