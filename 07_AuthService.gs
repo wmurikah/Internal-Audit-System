@@ -1274,6 +1274,52 @@ function resetUserPasswordAdmin(userId, token) {
   logAuditEvent('ADMIN_PASSWORD_RESET', 'USER', userId,
     null, null, admin.user_id, admin.email);
 
+  tursoQuery_SQL(
+    'INSERT INTO notification_queue ' +
+    '(notification_id, organization_id, batch_type, channel, ' +
+    'priority, recipient_user_id, recipient_email, recipient_name, ' +
+    'related_entity_type, related_entity_id, ' +
+    'rendered_subject, rendered_body, payload, ' +
+    'status, attempts, max_attempts, created_at) ' +
+    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [
+      generateId('NOTIF'),
+      user.organization_id || 'HASS',
+      'PASSWORD_RESET',
+      'email',
+      'urgent',
+      user.user_id,
+      user.email,
+      user.full_name || user.email,
+      'USER',
+      user.user_id,
+      'Your password has been reset',
+      '<div style="font-family:Arial,sans-serif;max-width:600px">' +
+      '<h2 style="color:#1F2D5C">Password Reset</h2>' +
+      '<p>Dear ' + (user.full_name || user.email) + ',</p>' +
+      '<p>Your password has been reset by the system administrator. ' +
+      'Please use your new temporary password to log in and change ' +
+      'it immediately.</p>' +
+      '<a href="' + getSystemUrl() + '" style="display:inline-block;' +
+      'background:#1F2D5C;color:#fff;padding:12px 24px;' +
+      'border-radius:6px;text-decoration:none;font-weight:bold;' +
+      'margin:16px 0">Log In Now</a>' +
+      '<p style="color:#666;font-size:13px;margin-top:16px">' +
+      'If you did not request this reset, contact your administrator ' +
+      'immediately.</p>' +
+      '<hr style="margin:24px 0;border:none;border-top:1px solid #eee">' +
+      '<p style="color:#666;font-size:12px">Hass Petroleum Group - ' +
+      'Internal Audit Department<br>All replies go directly to ' +
+      '<a href="mailto:audit@hasspetroleum.com">' +
+      'audit@hasspetroleum.com</a></p></div>',
+      JSON.stringify({ reset_by: admin.full_name, user_email: user.email }),
+      'pending',
+      0,
+      5,
+      now
+    ]
+  );
+
   return {
     success:      true,
     tempPassword: tempPassword,
