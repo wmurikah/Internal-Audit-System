@@ -1364,4 +1364,36 @@ function unlockUser(userId, token) {
   return { success: true };
 }
 
+function toggleUserStatus(userId, makeActive, token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var admin = getUserByIdCached(session.user_id);
+  if (!admin || admin.role_code !== ROLES.SUPER_ADMIN) {
+    throw new Error('Only Head of Audit can change user status');
+  }
+  if (admin.user_id === userId) {
+    throw new Error('You cannot deactivate your own account');
+  }
+  var user = getUserByIdCached(userId);
+  if (!user) throw new Error('User not found');
+
+  tursoUpdate('05_Users', userId, {
+    is_active:  makeActive ? 1 : 0,
+    updated_at: new Date().toISOString()
+  });
+  invalidateUserCache(user.email, userId);
+
+  logAuditEvent(
+    makeActive ? 'ACTIVATE_USER' : 'DEACTIVATE_USER',
+    'USER', userId, null, null,
+    admin.user_id, admin.email
+  );
+
+  return {
+    success:   true,
+    is_active: makeActive ? 1 : 0,
+    userName:  user.full_name
+  };
+}
+
 // sanitizeForClient() is defined in 01_Core.gs (canonical)
