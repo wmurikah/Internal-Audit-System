@@ -602,17 +602,17 @@ function renderDueThisWeek(count) {
     return;
   }
 
-  apiCall('getActionPlans', { filters: { limit: 10 } })
-    .then(result => {
-      const actionPlans = result.actionPlans || result.data || [];
+  apiRead('getActionPlans', { filters: { limit: 10 } }, getSessionToken(),
+    function(result) {
+      var actionPlans = result.actionPlans || result.data || [];
       if (actionPlans.length > 0) {
-        const today = new Date();
-        const weekEnd = new Date(today);
+        var today = new Date();
+        var weekEnd = new Date(today);
         weekEnd.setDate(weekEnd.getDate() + 7);
 
-        const dueItems = actionPlans.filter(ap => {
+        var dueItems = actionPlans.filter(function(ap) {
           if (!ap.due_date) return false;
-          const due = new Date(ap.due_date);
+          var due = new Date(ap.due_date);
           return due >= today && due <= weekEnd;
         });
 
@@ -621,24 +621,23 @@ function renderDueThisWeek(count) {
           return;
         }
 
-        let html = '';
-        dueItems.slice(0, 5).forEach(ap => {
-          const apId = ap.action_plan_id || ap.id;
-          html += `
-            <li class="list-group-item d-flex justify-content-between align-items-center" onclick="viewItem('ACTION_PLAN', '${apId}')" style="cursor:pointer;">
-              <span class="text-truncate" style="max-width: 180px;">${escapeHtml(ap.action_description || apId)}</span>
-              <span class="badge bg-warning text-dark">${formatDate(ap.due_date)}</span>
-            </li>
-          `;
+        var html = '';
+        dueItems.slice(0, 5).forEach(function(ap) {
+          var apId = ap.action_plan_id || ap.id;
+          html += '<li class="list-group-item d-flex justify-content-between align-items-center" onclick="viewItem(\'ACTION_PLAN\', \'' + apId + '\')" style="cursor:pointer;">' +
+            '<span class="text-truncate" style="max-width: 180px;">' + escapeHtml(ap.action_description || apId) + '</span>' +
+            '<span class="badge bg-warning text-dark">' + formatDate(ap.due_date) + '</span>' +
+            '</li>';
         });
         list.innerHTML = html;
       } else {
         list.innerHTML = '<li class="list-group-item text-center text-muted py-3">No items due</li>';
       }
-    })
-    .catch(() => {
+    },
+    function() {
       list.innerHTML = '<li class="list-group-item text-center text-muted py-3">Could not load items</li>';
-    });
+    }
+  );
 }
 
 function renderAttentionSection(data, wp, ap) {
@@ -845,6 +844,67 @@ function runAction(action, data, token, onSuccess, onError, btn) {
       }
     })
     .apiCall(action, enrichedData);
+}
+
+// ── Worker API helpers ──────────────────────────────────────────────────────
+
+var WORKER_API = '/api/call';
+
+function apiRead(action, data, token, onSuccess, onError, btn) {
+  // Use Worker API for reads (KV-cached)
+  setLoading(true);
+  if (btn) setButtonLoading(btn, true);
+
+  fetch(WORKER_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: action,
+      data:   data   || {},
+      token:  token  || getSessionToken()
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(result) {
+    setLoading(false);
+    if (btn) setButtonLoading(btn, false);
+    if (result && result.error === 'SESSION_EXPIRED') {
+      redirectToLogin('Session expired');
+      return;
+    }
+    if (onSuccess) onSuccess(result);
+  })
+  .catch(function(err) {
+    setLoading(false);
+    if (btn) setButtonLoading(btn, false);
+    if (onError) onError(err);
+    else showError('Request failed: ' + err.message);
+  });
+}
+
+function apiWrite(action, data, token, onSuccess, onError, btn) {
+  // Always goes directly to GAS — no caching
+  runAction(action, data, token, onSuccess, onError, btn);
+}
+
+function invalidateCache(action) {
+  var invalidationMap = {
+    'createWorkPaper':   ['getWorkPapers', 'getDashboardDataV2'],
+    'updateWorkPaper':   ['getWorkPapers', 'getWorkPaper'],
+    'submitWorkPaper':   ['getWorkPapers', 'getDashboardDataV2'],
+    'approveWorkPaper':  ['getWorkPapers', 'getDashboardDataV2'],
+    'createActionPlan':  ['getActionPlans'],
+    'createUser':        ['getUsers'],
+    'toggleUserStatus':  ['getUsers'],
+    'updatePermissions': ['getPermissionMatrix'],
+  };
+  var toInvalidate = invalidationMap[action] || [];
+  if (!toInvalidate.length) return;
+  fetch('/api/invalidate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keys: toInvalidate })
+  }).catch(function() {});
 }
 
 function showTableSkeleton(tableBodyId, cols, rows) {
