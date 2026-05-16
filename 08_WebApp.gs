@@ -203,10 +203,13 @@ function routeAction(action, data, user, sessionToken) {
     // ========== INIT ==========
     case 'getInitData':
       return getInitData(data.sessionToken);
-    
+
+    case 'getDashboardInitData':
+      return getDashboardInitData(data.token || sessionToken);
+
     case 'getInitDataLight':
       return getInitDataLight(user);
-    
+
     case 'getDropdowns':
       return getDropdownDataCached();
       
@@ -1510,9 +1513,9 @@ function setupAllTriggers() {
   ScriptApp.newTrigger('warmAllCaches')
     .timeBased().everyHours(6).create();
 
-  // 6. Keep warm — every 5 minutes
+  // 6. Keep warm — every 2 minutes (reduces cold-start probability)
   ScriptApp.newTrigger('keepWarm')
-    .timeBased().everyMinutes(5).create();
+    .timeBased().everyMinutes(2).create();
 
   console.log('All 6 triggers created');
   return { success: true, message: '6 triggers created' };
@@ -1534,6 +1537,36 @@ function listTriggers() {
 }
 
 // sanitizeForClient() is defined in 01_Core.gs (canonical)
+
+/**
+ * FIX 5: Single GAS call that returns user, permissions, and init bundle.
+ * Cloudflare-hosted dashboard.html calls this instead of loading 706KB from GAS.
+ */
+function getDashboardInitData(token) {
+  var session = getSessionByToken(token);
+  if (!session) throw new Error('SESSION_EXPIRED');
+  var user = getUserByIdCached(session.user_id);
+  if (!user || !isActive(user.is_active)) throw new Error('SESSION_EXPIRED');
+  var perms = getPermissionsCached(user.role_code);
+  var bundle = {};
+  try { bundle = getInitBundle_(user); } catch(e) { console.warn('getInitBundle_ failed:', e.message); }
+  return sanitizeForClient({
+    success:     true,
+    user: {
+      user_id:                  user.user_id,
+      email:                    user.email,
+      full_name:                user.full_name,
+      role_code:                user.role_code,
+      role_name:                getRoleName(user.role_code),
+      affiliate_code:           user.affiliate_code || '',
+      department:               user.department_id || user.department || '',
+      must_change_password:     user.must_change_password === 1 || user.must_change_password === true,
+      privacy_consent_accepted: user.privacy_consent_accepted || 0
+    },
+    permissions: perms,
+    initBundle:  bundle
+  });
+}
 
 /**
  * DIAGNOSTIC FUNCTION

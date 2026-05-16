@@ -246,6 +246,23 @@ body.is-loading * {
 .btn-loading.btn-light::after { border-top-color: #E5B81B; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+.skeleton-cell {
+  height: 14px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px;
+}
+.stat-skeleton {
+  display: inline-block;
+  width: 48px; height: 28px;
+  background: linear-gradient(90deg, #e8ecf4 25%, #d0d8ea 50%, #e8ecf4 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+  vertical-align: middle;
+}
 </style>
 
 <script>
@@ -257,6 +274,22 @@ function getSessionToken() {
 }
 
 function loadAuditWorkbench() {
+  // FIX 2+3: Pre-fill stat cards from login bundle (0ms) before server responds
+  try {
+    var _b = JSON.parse(sessionStorage.getItem('hass_init_bundle') || 'null');
+    if (_b && _b.dashboardCounts) {
+      var c = _b.dashboardCounts;
+      document.getElementById('statTotalWP').textContent      = c.total     || 0;
+      document.getElementById('statPendingReview').textContent = c.submitted || 0;
+    } else {
+      // FIX 3: Show skeleton for stat cards while data loads
+      ['statTotalWP','statPendingReview','statTotalAP','statOverdue'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = '<span class="stat-skeleton"></span>';
+      });
+    }
+  } catch(e) {}
+
   showLoading('Loading audit workbench...');
   showTableSkeleton('recentActivityTable', 4, 5);
 

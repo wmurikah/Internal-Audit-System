@@ -424,7 +424,22 @@ function applyInitData(result) {
     affiliates: [], auditAreas: [], subAreas: [],
     users: [], auditees: [], auditors: [], roles: []
   };
-  
+
+  // FIX 2: Pre-populate dropdowns from initBundle stored at login (0ms wait)
+  try {
+    var _bundle = JSON.parse(sessionStorage.getItem('hass_init_bundle') || 'null');
+    if (_bundle) {
+      if (_bundle.affiliates && _bundle.affiliates.length > 0 &&
+          (!window.appDropdowns.affiliates || window.appDropdowns.affiliates.length === 0)) {
+        window.appDropdowns.affiliates = _bundle.affiliates;
+      }
+      if (_bundle.auditAreas && _bundle.auditAreas.length > 0 &&
+          (!window.appDropdowns.auditAreas || window.appDropdowns.auditAreas.length === 0)) {
+        window.appDropdowns.auditAreas = _bundle.auditAreas;
+      }
+    }
+  } catch(e) {}
+
   // Has dropdowns? Mark as loaded
   if (result.dropdowns && Object.keys(result.dropdowns).length > 2) {
     window.loadingState.dropdowns = true;

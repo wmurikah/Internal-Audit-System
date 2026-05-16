@@ -77,7 +77,13 @@
         localStorage.setItem('hass_expiry', expiry.toString());
         loader.style.opacity = '1';
         loader.style.display = 'flex';
-        frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(d.token);
+        // FIX 5: Serve dashboard from Cloudflare (static) instead of GAS (706KB)
+        // dashboard.html reads the token and calls getDashboardInitData(token) once.
+        if (typeof window._USE_STATIC_DASHBOARD !== 'undefined' && window._USE_STATIC_DASHBOARD) {
+          frame.src = '/dashboard.html?token=' + encodeURIComponent(d.token);
+        } else {
+          frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(d.token);
+        }
       }
 
       if (d.type === 'HASS_LOGOUT') {

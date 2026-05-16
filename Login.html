@@ -1604,6 +1604,13 @@
       var token = response.sessionToken || response.session_token || '';
       window._hass_token = token;
       sessionStorage.setItem('hass_audit_token', token);
+
+      // Store init bundle for instant dashboard hydration (FIX 2)
+      if (response.initBundle) {
+        try {
+          sessionStorage.setItem('hass_init_bundle', JSON.stringify(response.initBundle));
+        } catch(e) {}
+      }
       try {
         if (response.user && response.user.full_name) {
           updateGreetingWithName(response.user.full_name.split(' ')[0]);
