@@ -1,6 +1,6 @@
 name = "hassaudit"
-compatibility_date = "2026-05-15"
-main = "docs/_worker.js"
+compatibility_date = "2026-05-16"
+main = "src/worker.js"
 assets = { directory = "./docs" }
 
 kv_namespaces = [
