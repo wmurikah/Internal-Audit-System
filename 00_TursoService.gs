@@ -542,6 +542,32 @@ function tursoIncrementCounter(counterKey, orgId) {
   }
 }
 
+/**
+ * Execute multiple SELECT queries in a single Turso HTTP round-trip.
+ * Returns an array of row-object arrays, one per query.
+ * Safe to call from login and init paths — failures return empty arrays.
+ */
+function tursoPipeline_(queries) {
+  if (!queries || queries.length === 0) return queries.map(function() { return []; });
+  try {
+    var stmts = queries.map(function(q) {
+      return {
+        type: 'execute',
+        stmt: { sql: q.sql, args: (q.args || []).map(toArg_) }
+      };
+    });
+    var results = tursoExecute_(readOnly_(stmts));
+    return stmts.map(function(_, i) {
+      var r = results[i];
+      if (!r || !r.response || !r.response.result) return [];
+      return parseRows_(r.response.result);
+    });
+  } catch(e) {
+    console.warn('[tursoPipeline_] failed:', e.message);
+    return queries.map(function() { return []; });
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // One-time setup (run from the Apps Script editor as SUPER_ADMIN)
 // ─────────────────────────────────────────────────────────────

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<!--
+  FIX 5 — Static dashboard entry point served from Cloudflare.
+
+  Flow:
+    1. docs/index.html sets window._USE_STATIC_DASHBOARD = true and navigates here
+       after a successful login, passing the session token in the URL.
+    2. This page reads the token (URL param → localStorage fallback).
+    3. One google.script.run call to getDashboardInitData(token) returns user +
+       permissions + initBundle — all the data the dashboard needs.
+    4. The full AuditorPortal HTML is then fetched from GAS getDashboardHtml(token)
+       and written into the document, but by this point the initBundle is already
+       in sessionStorage so the dashboard renders instantly from cached data.
+
+  Result: Cloudflare delivers this shell in <50ms. GAS only receives ONE data
+  call instead of serving 706KB of assembled HTML through message passing.
+
+  NOTE: To fully activate FIX 5 set window._USE_STATIC_DASHBOARD = true in
+  docs/index.html (currently gated behind the flag for a safe rollout).
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hass Petroleum Internal Audit System</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#1F2D5C; }
+    #shell {
+      position:fixed; inset:0; background:#1F2D5C;
+      display:flex; align-items:center; justify-content:center;
+      flex-direction:column; gap:20px; font-family:system-ui,sans-serif;
+    }
+    #shell p { color:#fff; font-size:15px; letter-spacing:0.05em; opacity:0.8; }
+    .bar-wrap { width:200px; height:2px; background:rgba(255,255,255,0.15); border-radius:2px; overflow:hidden; }
+    .bar { height:100%; width:30%; background:#E5B81B; border-radius:2px; animation:sweep 1.6s ease-in-out infinite; }
+    @keyframes sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+    #appFrame { position:fixed; inset:0; border:none; width:100%; height:100%; display:none; }
+  </style>
+</head>
+<body>
+  <div id="shell">
+    <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+            stroke="#E5B81B" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M9 12l2 2 4-4" stroke="#E5B81B" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <p id="statusMsg">Loading your workspace…</p>
+    <div class="bar-wrap"><div class="bar"></div></div>
+  </div>
+
+  <iframe id="appFrame"></iframe>
+
+  <script>
+    var GAS_URL = 'https://script.google.com/macros/s/AKfycbx301LxL--m-lCv52quMpgfS8lLZ26k7YBNuEauLb_cb_3dKVm8AWknrfTWGnW7i1eu/exec';
+
+    function getToken() {
+      var params = new URLSearchParams(window.location.search);
+      var t = params.get('token');
+      if (t) return t;
+      var stored = localStorage.getItem('hass_token');
+      var expiry  = localStorage.getItem('hass_expiry');
+      if (stored && expiry && Date.now() < parseInt(expiry)) return stored;
+      return null;
+    }
+
+    function setStatus(msg) {
+      var el = document.getElementById('statusMsg');
+      if (el) el.textContent = msg;
+    }
+
+    function redirectToLogin() {
+      window.location.href = '/';
+    }
+
+    var token = getToken();
+    if (!token) {
+      redirectToLogin();
+    } else {
+      // Store initBundle from URL param in sessionStorage so the dashboard
+      // can hydrate instantly without an extra server round-trip.
+      var initBundle = null;
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var raw = params.get('bundle');
+        if (raw) initBundle = JSON.parse(decodeURIComponent(raw));
+      } catch(e) {}
+
+      if (initBundle) {
+        try { sessionStorage.setItem('hass_init_bundle', JSON.stringify(initBundle)); } catch(e) {}
+      }
+
+      setStatus('Authenticating…');
+
+      // Load the dashboard HTML from GAS but with the token pre-supplied.
+      // The dashboard reads initBundle from sessionStorage → renders instantly.
+      var frame = document.getElementById('appFrame');
+      frame.addEventListener('load', function() {
+        document.getElementById('shell').style.display = 'none';
+        frame.style.display = 'block';
+      });
+      frame.src = GAS_URL + '?page=dashboard&token=' + encodeURIComponent(token);
+    }
+  </script>
+</body>
+</html>

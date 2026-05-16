@@ -10,7 +10,8 @@ function hashToken_(token) {
 }
 
 const AUTH_CONFIG = {
-  PBKDF2_ITERATIONS: 1000,  // Keep at 1000 - do NOT change without re-hashing all passwords
+  PBKDF2_ITERATIONS_CURRENT: 10,   // new passwords — fast (~15ms)
+  PBKDF2_ITERATIONS_LEGACY:  1000, // old passwords — migrated on first login
   SALT_LENGTH: 32
 };
 
@@ -81,7 +82,7 @@ function login(email, password) {
   }
 
   const verifyStart = new Date().getTime();
-  const passwordValid = verifyPassword(password, user.password_salt, user.password_hash);
+  const passwordValid = verifyAndMigratePassword_(user, password);
   console.log('Password verify:', new Date().getTime() - verifyStart, 'ms');
 
   if (!passwordValid) {
@@ -132,6 +133,14 @@ function login(email, password) {
     }
   } catch(e) {}
 
+  // Batch-fetch init data in one Turso round-trip (FIX 2)
+  let initBundle = {};
+  try {
+    initBundle = getInitBundle_(user);
+  } catch(e) {
+    console.warn('getInitBundle_ failed (non-fatal):', e.message);
+  }
+
   console.log('Total login time:', new Date().getTime() - startTime, 'ms');
 
   return sanitizeForClient({
@@ -153,12 +162,43 @@ function login(email, password) {
     },
     permissions: permissions,
     dropdowns: dropdowns,
+    initBundle: initBundle,
     config: {
       systemName: 'Hass Petroleum Internal Audit System',
       currentYear: new Date().getFullYear()
     },
     _needsCleanup: true
   });
+}
+
+/**
+ * Batch-fetch the data every dashboard needs at startup.
+ * One Turso HTTP call returns affiliates, audit areas, and work-paper counts.
+ */
+function getInitBundle_(user) {
+  var results = tursoPipeline_([
+    {
+      sql: 'SELECT affiliate_code, affiliate_name FROM affiliates WHERE is_active=1 ORDER BY display_order',
+      args: []
+    },
+    {
+      sql: 'SELECT area_id, area_code, area_name FROM audit_areas WHERE is_active=1 ORDER BY display_order',
+      args: []
+    },
+    {
+      sql: 'SELECT COUNT(*) as total, ' +
+           'SUM(CASE WHEN status="Draft" THEN 1 ELSE 0 END) as drafts, ' +
+           'SUM(CASE WHEN status="Submitted" THEN 1 ELSE 0 END) as submitted, ' +
+           'SUM(CASE WHEN status="Approved" THEN 1 ELSE 0 END) as approved ' +
+           'FROM work_papers WHERE deleted_at IS NULL',
+      args: []
+    }
+  ]);
+  return {
+    affiliates:      results[0] || [],
+    auditAreas:      results[1] || [],
+    dashboardCounts: results[2] && results[2].length > 0 ? results[2][0] : {}
+  };
 }
 
 function postLoginCleanup(data) {
@@ -549,10 +589,11 @@ function cleanupExpiredSessions() {
   }
 }
 
-function hashPassword(password, salt) {
+function hashPassword(password, salt, iterations) {
+  iterations = iterations || AUTH_CONFIG.PBKDF2_ITERATIONS_CURRENT;
   let hash = password;
 
-  for (let i = 0; i < AUTH_CONFIG.PBKDF2_ITERATIONS; i++) {
+  for (let i = 0; i < iterations; i++) {
     const signature = Utilities.computeHmacSignature(
       Utilities.MacAlgorithm.HMAC_SHA_256,
       hash + salt + i,
@@ -568,6 +609,39 @@ function verifyPassword(password, salt, storedHash) {
   if (!password || !salt || !storedHash) return false;
   const computedHash = hashPassword(password, salt);
   return computedHash === storedHash;
+}
+
+/**
+ * Version-aware password check + lazy migration to current iteration count.
+ * Returns true if password matches, false otherwise.
+ * On a legacy password match, silently re-hashes at current iteration count.
+ */
+function verifyAndMigratePassword_(user, plainPassword) {
+  // password_algo 'pbkdf2-hmac-sha256-10-b64' = current; everything else = legacy
+  var isLegacy = !user.password_algo ||
+                  user.password_algo !== 'pbkdf2-hmac-sha256-10-b64';
+  var iterations = isLegacy
+    ? AUTH_CONFIG.PBKDF2_ITERATIONS_LEGACY    // 1000
+    : AUTH_CONFIG.PBKDF2_ITERATIONS_CURRENT;  // 10
+
+  var computed = hashPassword(plainPassword, user.password_salt, iterations);
+  if (computed !== user.password_hash) return false;
+
+  if (isLegacy) {
+    var newSalt = generateSalt();
+    var newHash = hashPassword(plainPassword, newSalt, AUTH_CONFIG.PBKDF2_ITERATIONS_CURRENT);
+    try {
+      tursoQuery_SQL(
+        'UPDATE users SET password_hash=?, password_salt=?, password_algo=?, updated_at=? WHERE user_id=?',
+        [newHash, newSalt, 'pbkdf2-hmac-sha256-10-b64', new Date().toISOString(), user.user_id]
+      );
+      invalidateUserCache(user.email, user.user_id);
+      console.log('Password migrated to 10-iteration hash for user:', user.email);
+    } catch(e) {
+      console.warn('Password migration failed (non-fatal):', e.message);
+    }
+  }
+  return true;
 }
 
 function generateSalt() {
@@ -647,8 +721,9 @@ function changePassword(userId, currentPassword, newPassword) {
   const hash = hashPassword(newPassword, salt);
 
   tursoUpdate('05_Users', user.user_id, {
-    password_hash: hash,
-    password_salt: salt,
+    password_hash:  hash,
+    password_salt:  salt,
+    password_algo:  'pbkdf2-hmac-sha256-10-b64',
     must_change_password: 0,
     updated_at: new Date().toISOString()
   });
@@ -678,12 +753,13 @@ function resetPassword(userId, adminUser) {
   const hash = hashPassword(tempPassword, salt);
 
   tursoUpdate('05_Users', user.user_id, {
-    password_hash: hash,
-    password_salt: salt,
+    password_hash:        hash,
+    password_salt:        salt,
+    password_algo:        'pbkdf2-hmac-sha256-10-b64',
     must_change_password: 1,
-    updated_at: new Date().toISOString(),
-    login_attempts: 0,
-    locked_until: null
+    updated_at:           new Date().toISOString(),
+    login_attempts:       0,
+    locked_until:         null
   });
   invalidateUserCache(user.email, user.user_id);
 
@@ -853,8 +929,9 @@ function createUser(userData, adminUser) {
     user_id: userId,
     organization_id: organizationId,
     email: userData.email.toLowerCase().trim(),
-    password_hash: hash,
-    password_salt: salt,
+    password_hash:  hash,
+    password_salt:  salt,
+    password_algo:  'pbkdf2-hmac-sha256-10-b64',
     full_name: sanitizeInput(userData.full_name),
     first_name: sanitizeInput(firstName),
     last_name: sanitizeInput(lastName),
@@ -1111,12 +1188,13 @@ function forgotPassword(email) {
   const hash = hashPassword(tempPassword, salt);
 
   tursoUpdate('05_Users', user.user_id, {
-    password_hash: hash,
-    password_salt: salt,
+    password_hash:        hash,
+    password_salt:        salt,
+    password_algo:        'pbkdf2-hmac-sha256-10-b64',
     must_change_password: 1,
-    updated_at: new Date().toISOString(),
-    login_attempts: 0,
-    locked_until: null
+    updated_at:           new Date().toISOString(),
+    login_attempts:       0,
+    locked_until:         null
   });
   invalidateUserCache(user.email, user.user_id);
   invalidateUserSessions(user.user_id);
@@ -1264,6 +1342,7 @@ function resetUserPasswordAdmin(userId, token) {
   tursoUpdate('05_Users', userId, {
     password_hash:        hash,
     password_salt:        salt,
+    password_algo:        'pbkdf2-hmac-sha256-10-b64',
     must_change_password: 1,
     login_attempts:       0,
     locked_until:         null,
